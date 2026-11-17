@@ -1,4 +1,3 @@
-using System.Globalization;
 using Ome.Engine.Model;
 
 namespace Ome.Engine.Vm;
@@ -99,40 +98,32 @@ public sealed partial class VirtualMachine
         => IndexRefused(ins, "surface slot", slot, GfxState.SurfaceRecordCount, IndexTest.Unchecked);
 
     /// <summary>
-    /// For a handler whose native test of an index has not been read (docs/backlog.md, "Native index tests for 28
-    /// ops"): null when the operand at <paramref name="argument"/> (1-based) lies in its table, 0 to
-    /// <paramref name="length"/> - 1, or, with no length, is not negative. Otherwise the message of the はい/いいえ
-    /// script-error box the handler raises, naming the op, the argument and its value: はい skips the instruction and
-    /// いいえ ends the run. The warning names the operand as well.
+    /// Native's surfaces, 0 to 999, as the movie ops (`0x20f`, `0x236`, `0x241`, `0x23a`, `0x23f`, `0x246`) and the
+    /// thumbnail surface (`0x1ae` operand 3, `0x1af` operand 3) index them: no test in either image, so the port halts
+    /// where native would read or write another context field as a pointer (`engine-re.md`, "The 28 ops' native
+    /// tests").
     /// </summary>
-    private AgeBoxMessage? UnclassifiedIndex(Instruction ins, int argument, string what, int? length)
-    {
-        long index = Read(ins.Args[argument - 1]);
-        if (index >= 0 && (length is not { } count || index < count)) return null;
-        string op = OpcodeName(ins.Opcode), position = Number(argument), value = Number(index);
-        if (length is { } n)
-        {
-            _waits.ReportWarning($"{At(ins)}: {what} {index} is outside 0..{n - 1}");
-            return AgeBoxMessage.Keyed(AgeBoxText.IndexOutOfRange, op, position, value, $"0..{n - 1}");
-        }
-        _waits.ReportWarning($"{At(ins)}: {what} {index} is negative");
-        return AgeBoxMessage.Keyed(AgeBoxText.IndexNegative, op, position, value);
-    }
+    private StepResult? MovieSurfaceSlotRefused(Instruction ins, long slot)
+        => IndexRefused(ins, "surface slot", slot, GfxState.SurfaceRecordCount, IndexTest.Unchecked);
 
-    /// <summary><see cref="UnclassifiedIndex"/> for a surface slot, 0 to 999.</summary>
-    private AgeBoxMessage? UnclassifiedSurfaceSlot(Instruction ins, int argument)
-        => UnclassifiedIndex(ins, argument, "surface slot", GfxState.SurfaceRecordCount);
+    /// <summary>
+    /// Native's transition surfaces, 0 to 999, as `0x21`, `0x22`, `0x24`, `0x25` (both), `0x27` and `0x28` reach them
+    /// through `screen_transition_begin` → `gfx_surface_get_size` in the shipped draw mode: tested below 1000
+    /// unsigned and traced 「関数：GetTextureSize エラー：不正なtexture %d」, the transition continuing with size
+    /// 0×0 (`engine-re.md`, "The 28 ops' native tests").
+    /// </summary>
+    private StepResult? TransitionSurfaceSlotRefused(Instruction ins, long slot)
+        => IndexRefused(ins, "surface slot", slot, GfxState.SurfaceRecordCount,
+                       IndexTest.Traced("関数：GetTextureSize エラー：不正なtexture ", 1000));
 
-    /// <summary><see cref="UnclassifiedIndex"/> for an ADV text layout, 0 to 9.</summary>
-    private AgeBoxMessage? UnclassifiedLayoutSlot(Instruction ins, int argument)
-        => UnclassifiedIndex(ins, argument, "layout slot", AdvTextHistory.LayoutCount);
-
-    /// <summary><see cref="UnclassifiedIndex"/> for a numbered save's slot, which names a file (SAVE00.DAT on) and has
-    /// no upper bound.</summary>
-    private AgeBoxMessage? UnclassifiedSaveSlot(Instruction ins, int argument)
-        => UnclassifiedIndex(ins, argument, "save slot", null);
-
-    private static string Number(long value) => value.ToString(CultureInfo.InvariantCulture);
+    /// <summary>
+    /// Native's draw-string surfaces (`0x204`, `0x205`), the bound draw surface (`0x1fb` operand 2) and the indicator
+    /// surfaces (`0x73`/`0x2bc` operand 4): no test at use — `draw_string_to_surface` and the composite-time
+    /// `gfx_object_blit_d3d9` index `[gfx+0xa590+slot*4]` unchecked, gated only on the entry being non-null — so the
+    /// port halts (`engine-re.md`, "The 28 ops' native tests").
+    /// </summary>
+    private StepResult? DrawSurfaceSlotRefused(Instruction ins, long slot)
+        => IndexRefused(ins, "surface slot", slot, GfxState.SurfaceRecordCount, IndexTest.Unchecked);
 
     private string OpcodeName(int opcode)
         => _t.TryGetDefinition(opcode, out OpcodeDefinition definition) ? definition.CanonicalLabel : "?";

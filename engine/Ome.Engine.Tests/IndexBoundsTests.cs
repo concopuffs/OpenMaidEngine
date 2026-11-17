@@ -106,21 +106,28 @@ public sealed class IndexBoundsTests
         cases.Add(0x8, 1, 5, Past.AsksYesNo, "この階層にはファイルが読み込まれていません．Depth=5");
         cases.Add(0x1d3, 4, -1, Past.Halts, "history record -1 is negative");
         cases.Add(0x1d4, 4, -1, Past.Halts, "history record -1 is negative");
-        // Handlers whose native test has not been read.
-        foreach (int op in new[] { 0x72, 0x80, 0x2bc })
-            cases.Add(op, 1, 10, Past.AsksYesNo, "の第1引数 10 " + LayoutRange);
+        // The 28 read tests (engine-re.md, "The 28 ops' native tests", 2026-11-17).
+        // Transition and size surface ops: gfx_surface_get_size tests below 1000 unsigned and traces.
         foreach ((int op, int argument) in new[] { (0x21, 1), (0x22, 1), (0x24, 1), (0x25, 1), (0x25, 2), (0x27, 1),
-                                                   (0x28, 1), (0x73, 4), (0x2bc, 4), (0x1fb, 2), (0x204, 1),
-                                                   (0x205, 1), (0x208, 1), (0x20f, 2), (0x236, 2), (0x241, 2),
-                                                   (0x23a, 2), (0x23f, 2), (0x246, 1), (0x1ae, 3), (0x1af, 3) })
-        {
-            cases.Add(op, argument, 1000, Past.AsksYesNo, $"の第{argument}引数 1000 " + SurfaceRange);
-            if (op != 0x208) cases.Add(op, argument, -1, Past.AsksYesNo, $"の第{argument}引数 -1 " + SurfaceRange);
-        }
-        cases.Add(0x208, 1, -2, Past.AsksYesNo, "の第1引数 -2 " + SurfaceRange);
+                                                   (0x28, 1), (0x208, 1) })
+            cases.Add(op, argument, 1000, Past.Traces, "関数：GetTextureSize エラー：不正なtexture ");
+        // Slot -1 at op 0x208 (HIDEWIN's op 0x215 answer) reads 0 x 0 with the same trace.
+        cases.Add(0x208, 1, -1, Past.Traces, "関数：GetTextureSize エラー：不正なtexture ");
+        // Draw-string, bound-draw, indicator and thumbnail surfaces: no test at use; the port halts.
+        foreach ((int op, int argument) in new[] { (0x73, 4), (0x2bc, 4), (0x1fb, 2), (0x204, 1), (0x205, 1),
+                                                   (0x1ae, 3), (0x1af, 3) })
+            cases.Add(op, argument, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
+        // Movie surface ops: no test; the port halts.
+        foreach ((int op, int argument) in new[] { (0x20f, 2), (0x236, 2), (0x241, 2), (0x23a, 2), (0x23f, 2),
+                                                   (0x246, 1) })
+            cases.Add(op, argument, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
+        // Layout slots: no test (0x80 stores any value; the indicator workers read or write through the pointer).
+        foreach (int op in new[] { 0x72, 0x80, 0x2bc })
+            cases.Add(op, 1, 10, Past.Halts, "layout slot 10 is outside 0..9");
+        // Save slots: no test — any value only names a file, and the run goes on through the save native.
         foreach ((int op, int argument) in new[] { (0x19e, 2), (0x19f, 2), (0x1a0, 2), (0x1a1, 2), (0x1ab, 2),
                                                    (0x1ac, 2), (0x1ac, 3), (0x1ae, 2), (0x1af, 2) })
-            cases.Add(op, argument, -1, Past.AsksYesNo, $"の第{argument}引数 -1 が負の値です．");
+            cases.Add(op, argument, -1, Past.Continues, "");
         return cases;
     }
 

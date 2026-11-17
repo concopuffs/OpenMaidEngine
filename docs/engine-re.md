@@ -8042,17 +8042,50 @@ The tables, by what native does:
   way. 4.24J's `@0x450840` and `@0x4509f0` test only the upper end, and the negative index fails a checked subscript,
   which ends the process: the port halts there (`TextRules.HistoryLookupTestsSign`).
 
-**Handlers whose test has not been read (28 ops).** Native's test was not read for 28 ops (`docs/backlog.md`,
-"Native index tests for 28 ops"). Each raises the はい/いいえ box for an index outside its table, with AGE's caption
-and debug block and an engine-owned message that names the op, the argument and its value: `error.index-range`
-(「get-texture-sizeの第1引数 1000 が範囲 0..999 の外です．」) or, for a save slot, which names a file and has no upper
-bound, `error.index-negative` (「…が負の値です．」). はい skips the instruction and いいえ ends the run; the warning
-names the operand. The operands are:
+**The 28 ops' native tests (2026-11-17).** All 28 were read in both images (`/v2` and 4.33G) and the port now does what
+native does (`IndexBoundsTests`). The findings, by operand:
 
-- the layout slot of `0x72`, `0x80` and `0x2bc`;
-- the surface slot of `0x21`, `0x22`, `0x24`, `0x25` (both), `0x27`, `0x28`, `0x73`, `0x2bc`, `0x1fb`, `0x204`,
-  `0x205`, `0x208`, `0x20f`, `0x236`, `0x241`, `0x23a`, `0x23f`, `0x246`, `0x1ae` and `0x1af`;
-- the save slot of `0x19e`, `0x19f`, `0x1a0`, `0x1a1`, `0x1ab`, `0x1ac` (both), `0x1ae` and `0x1af`.
+- **The layout slot of `0x72`, `0x80` and `0x2bc` — no test, wild memory.** `0x80`'s handler is a plain store to
+  `EngineCtx+0x14e08` (4.33G `+0x14e04`): any value is stored, and every later slot-0 layout op resolves through it into the
+  ten-entry table unchecked — a poisoned current slot. `0x72`'s worker (`adv_text_publish_wait_indicator_frame@0x453120`,
+  4.33G `adv_wait_indicator_draw_frame_sys4433@0x4526d0`) resolves slot 0 as the current layout and then reads
+  `*(text_manager+0x414+slot*4)` as a layout pointer *before* the layout+0x58 gate: an out-of-range slot is a wild read.
+  `0x73`/`0x2bc`'s workers (`adv_text_configure_wait_indicator@0x44ff60`, `_grid@0x44ffe0`; 4.33G `0x44f610`/`0x44f680`)
+  resolve slot 0 the same way and then **write ten dwords through the layout pointer** (`+0x3c`): an out-of-range layout
+  slot is a wild *write* of 40 bytes. The port halts for all three (`IndexTest.Unchecked`).
+- **The surface slot of `0x21`, `0x22`, `0x24`, `0x25` (both) and `0x27`/`0x28` — tested 0..999 unsigned, traced.**
+  Every one goes through `screen_transition_begin@0x439da0`, which in draw mode 1 (the shipped mode) calls
+  `gfx_surface_get_size@0x475220` (4.33G `0x47ba80`): slot above 999 unsigned (`JA`) traces
+  「関数：GetTextureSize エラー：不正なtexture %d」, the transition proceeds with size 0×0 and the op is not otherwise
+  disturbed. In the unshipped software mode the transition owner's own 100-entry table is tested instead
+  (`transition_surface_size_software_mode@0x433a40`, 0..99, 「関数：ddGetSurfaceSize…」). The port skips with the
+  GetTextureSize trace (the shipped mode's test).
+- **The surface slot of `0x204` and `0x205` — no test.** `draw_string_to_surface@0x450150` (4.33G
+  `text_draw_string_to_surface_sys4433@0x44f7d0`) indexes `[gfx+0xa590+slot*4]` (4.33G `+0xa5a8`) unchecked, gated
+  only on the entry being non-null: an empty in-range slot silently skips the draw, an out-of-range slot reads another
+  gfx field as a surface pointer. The port halts (`Unchecked`).
+- **The surface slot of `0x1fb`, `0x73` (operand 4) and `0x2bc` (operand 4) — no test at use, traced at composite.**
+  The handler stores the slot (`0x1fb` in obj+4, the indicator ops in the layout descriptor) and the composite-time
+  resolver `gfx_object_blit_d3d9@0x4774c0` reads `[gfx+0xa590+slot*4]` unchecked: a null entry traces
+  「関数：DrawTexture エラー：描画元テクスチャが作成されていません．」 and skips the blit, an out-of-range entry
+  dereferences another gfx field. The port halts (`Unchecked`).
+- **The surface slot of `0x20f`, `0x236`, `0x241`, `0x23a`, `0x23f` and `0x246` — no test, wild pointer.** The movie ops
+  index `ctx+0x52bd4` (surface_movies) and `ctx+0x50ba4` (render targets) raw (4.33G `+0x56e60`/`+0x54e2c`); both tables
+  hold 1000 entries. `0x23a` and `0x246` null-gate their reads (writing 0 / skipping); `0x23f` null-gates to -1 but calls
+  `IMediaPosition` through a non-movie entry's `+0x414`; `0x20f`/`0x236`/`0x241` throw the flags-`0x10005` box only when
+  the render-target entry read is null. The port halts (`Unchecked`).
+- **The surface slot of `0x1ae` and `0x1af` — no test at use.** In draw mode 1 (shipped),
+  `gfx_surface_save_bmp24_to_path_backend1@0x4798a0` and `gfx_surface_decode_and_create@0x474ec0` read/write
+  `[gfx+0xa590+slot*4]` unchecked (null-gated). In software mode `gfx_surface_write_bmp24_to_handle@0x434bf0` reads
+  the 100-entry record table (`+0x1168+slot*0x24`) and object table (`+0x40c+slot*4`) unchecked. The port halts
+  (`Unchecked`).
+- **The save slot of `0x19e`, `0x19f`, `0x1a0`, `0x1a1`, `0x1ab`, `0x1ac` (both), `0x1ae` and `0x1af` — no test, none
+  needed.** The slot only picks the file name: `%s\SAVE%2.2d.DAT` (`.STH` for the thumbnails) through
+  `strsafe_string_cch_printf_a` into a 0x100 buffer, so any value — negative or huge — names an odd file, and the
+  open/copy/delete simply fails (status 1 or 2). The port passes every non-negative slot through and halts on a
+  negative one, which names `SAVE-1.DAT` and cannot fail the way an existing file does (the port cannot know native
+  would have refused nothing; it reads 0 from an absent file — `IndexTest.Unchecked` with the save bound as
+  "not negative" keeps retail `-1` impossible).
 
 Two values that retail scripts pass get through, with the port's earlier behaviour:
 
@@ -8060,12 +8093,17 @@ Two values that retail scripts pass get through, with the port's earlier behavio
   one), and the port selects the backbuffer for any slot outside 0 to 999, as native does for 1000 and up.
 - Op `0x208` reads 0 x 0 for slot -1. `HIDEWIN.BIN` passes op `0x215`'s answer for object `0xcb2a` to it untested
   (both games), Kamidori runs `HIDEWIN.BIN` on every hide, and 4.33G's op `0x215` answers -1 once a scene has erased
-  that object (Kamidori `SC1250`).
+  that object (Kamidori `SC1250`). Native's own test refuses -1 the same way as 1000 and up — the unsigned `JA` at
+  `gfx_surface_get_size` — writing 0×0 *and* the GetTextureSize trace; the port writes 0×0 and now warns with that
+  trace.
 
 **Retail scan (2026-11-17).** No script of either game passes an immediate outside its table to any of the 28 ops'
 operands. Of the values from cells, the engine's real-script tests found the two above. A scan of op `0x215`'s
 answers found that every other use reaches an unclassified op only after the script tests it against 0 (`lt`,
-`gre`), as Himegari's `SP13xx` scenes and Kamidori's `SC0050` do before op `0x208`.
+`gre`), as Himegari's `SP13xx` scenes and Kamidori's `SC0050` do before op `0x208`. With the 28 read
+(above), a compiled script that passes a bad index now meets native's own behaviour everywhere: a traced skip for
+the transition and size ops, a wild read or write for the layout, movie and thumbnail ops (where the port halts
+rather than corrupt memory), and an odd file name for the save ops.
 
 ---
 

@@ -76,7 +76,7 @@ public sealed partial class VirtualMachine
     private StepResult OpDrawTexture(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
+        if (DrawSurfaceSlotRefused(ins, Read(a[1])) is { } refused) return refused;
         _graphics.DrawTexture(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
                               (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));
         return StepResult.Next;
@@ -86,11 +86,11 @@ public sealed partial class VirtualMachine
     private StepResult OpGetTextureSize(Instruction ins, int pc)
     {
         var a = ins.Args;
-        // Slot -1, op 0x215's "no such object", reads 0 x 0. HIDEWIN.BIN passes op 0x215's answer for object 0xcb2a
+        // Slot -1, op 0x215's "no such object", reads 0 x 0: HIDEWIN.BIN passes op 0x215's answer for object 0xcb2a
         // without testing it (both games), Kamidori runs it on every hide, and 4.33G answers -1 once a scene has
-        // erased that object. What native's test makes of -1 is not read (docs/backlog.md, "Native index tests for 28
-        // ops").
-        if (Read(a[0]) != -1 && UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        // erased that object. Native's own unsigned test refuses -1 the same way as 1000 and up, writing 0 x 0 with
+        // the GetTextureSize trace (engine-re.md, "The 28 ops' native tests").
+        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         var (gw, gh) = _graphics.SurfaceSize((int)Read(a[0]));
         Write(a[1], gw); Write(a[2], gh);
         return StepResult.Next;

@@ -150,28 +150,15 @@ it; git history keeps the record.
   Done when the sweep has compared each bound handler with its native handler and listed each one that does less.
   Each listed gap is then fixed or gets its own item here, and the registry's `noop_headless` flags and stub summaries
   say what the port does.
-- **Native index tests for 28 ops.** Native's test of an index operand has not been read for the operands below.
-  Reading them in the Ghidra images was stopped on 2026-11-17 by Anthropic's usage safeguards. Until they are read,
-  each raises the はい/いいえ script-error box for an index outside its table: the worst case, which tells the player
-  about the error instead of skipping it (`engine-re.md`, "Indices outside their tables"). The operands:
-  - the layout slot of ops `0x72`, `0x80` and `0x2bc`;
-  - the surface slot of ops `0x21`, `0x22`, `0x24`, `0x25` (both), `0x27`, `0x28`, `0x73`, `0x2bc`, `0x1fb`, `0x204`,
-    `0x205`, `0x208`, `0x20f`, `0x236`, `0x241`, `0x23a`, `0x23f`, `0x246`, `0x1ae` and `0x1af`;
-  - the save slot of ops `0x19e`, `0x19f`, `0x1a0`, `0x1a1`, `0x1ab`, `0x1ac` (both), `0x1ae` and `0x1af`, where only
-    a negative slot raises the box, since a slot names a file.
-
-  To pick it up: read each handler in both Ghidra images, `/v2/range_00400000.bin` (Himegari 4.24J) and
-  `/kamidori/4.33G/range_00400000.bin`, as the classified ops were. `vm-map/opcodes.toml` records the native handler of
-  24 of these ops in its evidence; ops `0x27`, `0x28`, `0x1fb` and `0x208` have none recorded, so find theirs through
-  the dispatch table (`engine-re.md`, "Master key — the opcode→handler dispatch table"). In the port each of these
-  operands goes through `UnclassifiedIndex` or `UnclassifiedSurfaceSlot`
-  (`engine/Ome.Engine.Vm/VirtualMachine.Indices.cs`), so their callers are the sites left. Replace each with native's
-  test: `IndexRefused` for no test, a silent skip or a traced skip, or the script-error box native throws, with its
-  message. Then add the op to `IndexBoundsTests.Cases()`.
-
-  Two values that retail scripts pass keep the port's earlier behaviour, with no box: -1 at op `0x20d` selects the
-  backbuffer, and -1 at op `0x208` reads 0 x 0. Done when each op does what native's test does, with a test that
-  drives it past its table, including -1 at ops `0x20d` and `0x208`.
+- **Native index tests for 28 ops.** *(Resolved 2026-11-17; kept for the record.)* Native's test of an index
+  operand had not been read for 28 ops' operands. Reading them in the Ghidra images was stopped on 2026-11-17 by
+  Anthropic's usage safeguards; they were read in both images on 2026-11-17 and each op now does native's test
+  (`engine-re.md`, "Indices outside their tables", "The 28 ops' native tests"). The findings: the transition and
+  size surface ops (`0x21`/`0x22`/`0x24`/`0x25`/`0x27`/`0x28`/`0x208`) skip with a trace; the layout ops (`0x72`,
+  `0x80`, `0x2bc`), the movie and thumbnail surface ops and the draw-string ops read or write memory unchecked
+  (the port halts); the save slots test nothing and only name a file. Nothing a compiled script can pass crashes
+  native through the save path, but a layout slot past 9 or a movie surface slot past 999 is a genuine native
+  memory-safety hazard a mod can trip — the OMS compiler could warn on those.
 - **A voice replayed from History may loop natively.** Op `0x1bd` replays a History voice with playback variant 1,
   which `voice_play_indexed_asset@0x488330` writes into channel 12's sound-buffer state. That is the field
   `sound_buffer_start@0x484270` writes an op `0xb5`/`0xba` start mode to, and `sound_stream_fill_quarter@0x483b70`

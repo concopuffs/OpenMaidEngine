@@ -71,7 +71,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetDefaultGfxObjectSlot(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedLayoutSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.History.SelectCurrentLayout((int)Read(a[0])); return StepResult.Next;
     }
 

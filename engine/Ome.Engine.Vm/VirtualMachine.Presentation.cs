@@ -69,7 +69,7 @@ public sealed partial class VirtualMachine
     private StepResult OpFadeSurfaceInFromBlack(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         // Begin (mode 0) fills 0x20 with black; under fast-forward the handler finalizes on the surface instead.
         if (AdvFastForwardActive) MarkScratchIfFinalizeFills(Read(a[0]));
         else MarkLegacyTransitionScratchWritten();
@@ -84,7 +84,7 @@ public sealed partial class VirtualMachine
     private StepResult OpFadeSurfaceOutToBlack(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         MarkLegacyTransitionScratchWritten();   // begin (mode 1) or, under fast-forward, finalize(-1) fills 0x20
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
         _waits.FadeSurfaceWithBlack(
@@ -97,7 +97,7 @@ public sealed partial class VirtualMachine
     private StepResult OpFadeSurfaceOutToWhite(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         MarkLegacyTransitionScratchWritten();   // begin (mode 3) or, under fast-forward, finalize(-1) fills 0x20
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
         _waits.FadeSurfaceToWhite(
@@ -110,8 +110,8 @@ public sealed partial class VirtualMachine
     private StepResult OpCrossfadeSurfaces(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if ((UnclassifiedSurfaceSlot(ins, 1) ?? UnclassifiedSurfaceSlot(ins, 2)) is { } error)
-            return YesNoScriptError(error, pc);
+        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
+        if (TransitionSurfaceSlotRefused(ins, Read(a[1])) is { } targetRefused) return targetRefused;
         // Mode 4 never touches 0x20; under fast-forward the handler finalizes on the target.
         if (AdvFastForwardActive) MarkScratchIfFinalizeFills(Read(a[1]));
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
@@ -124,7 +124,7 @@ public sealed partial class VirtualMachine
     private StepResult OpRevealSurfaceStriped(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         // pattern_surface_transition_begin/_tick draw the surface itself; with a valid selector but no divisions
         // or under fast-forward, the handler finalizes on the surface.
         if (Read(a[3]) is >= 0 and <= 4 && (AdvFastForwardActive || Read(a[2]) <= 0))
@@ -141,7 +141,7 @@ public sealed partial class VirtualMachine
     private StepResult OpRevealSurfaceStaggeredStrips(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         if (Read(a[3]) is >= 0 and <= 4 && (AdvFastForwardActive || Read(a[2]) <= 0))
             MarkScratchIfFinalizeFills(Read(a[0]));
         _waits.RevealSurfaceWithPattern(

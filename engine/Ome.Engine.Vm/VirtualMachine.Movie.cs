@@ -13,7 +13,7 @@ public sealed partial class VirtualMachine
     private StepResult OpPlayModalMovieToSurface(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
+        if (MovieSurfaceSlotRefused(ins, Read(a[1])) is { } refused) return refused;
         long resourceId = Read(a[0]);
         int surfaceSlot = (int)Read(a[1]);
         // Modal and non-modal paths share packed resolution and retained-surface composition.
@@ -30,7 +30,7 @@ public sealed partial class VirtualMachine
     private StepResult OpPlayMovieToSurface(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
+        if (MovieSurfaceSlotRefused(ins, Read(a[1])) is { } refused) return refused;
         long resourceId = Read(a[0]);
         int surfaceSlot = (int)Read(a[1]);
         // Graph construction is synchronous. Keep the existing created surface blank during that
@@ -50,7 +50,7 @@ public sealed partial class VirtualMachine
     private StepResult OpPlayMovieToSurfaceAtPosition(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
+        if (MovieSurfaceSlotRefused(ins, Read(a[1])) is { } refused) return refused;
         long resourceId = Read(a[0]);
         int surfaceSlot = unchecked((int)Read(a[1]));
         long? stopTimeMs = _movies.PlayToSurfaceAtPosition(
@@ -65,7 +65,7 @@ public sealed partial class VirtualMachine
     private StepResult OpQuerySurfaceStopTimeMs(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
+        if (MovieSurfaceSlotRefused(ins, Read(a[1])) is { } refused) return refused;
         int surfaceSlot = (int)Read(a[1]);
         if (!Gfx.TryGetMovieStopTime(surfaceSlot, out long? stopTimeMs))
         {
@@ -88,7 +88,7 @@ public sealed partial class VirtualMachine
     private StepResult OpQueryMovieSurfaceActive(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
+        if (MovieSurfaceSlotRefused(ins, Read(a[1])) is { } refused) return refused;
         Write(a[0], _movies.IsSurfaceActive((int)Read(a[1])) ? 1 : 0); return StepResult.Next;
     }
 
@@ -96,7 +96,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetMoviePlaybackRate(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (MovieSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         int surfaceSlot = unchecked((int)Read(a[0]));
         // The native handler checks the CMovieToTexture surface pointer before dereferencing
         // IMediaPosition. The port's movie metadata entry is the equivalent live graph marker.

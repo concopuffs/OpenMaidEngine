@@ -19,7 +19,6 @@ public sealed partial class VirtualMachine
     private StepResult OpSaveNumberedSlot(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSaveSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
         Write(a[0], _saves.SaveNumbered(unchecked((int)Read(a[1])), _saveRecords));
         // Lua scripting spec §11: a mod's state that did not serialize under --lua-errors halt ends the run once the
         // save is written.
@@ -35,7 +34,6 @@ public sealed partial class VirtualMachine
     private StepResult OpLoadNumberedSlotDataOnly(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSaveSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
         if (!TryLoadNumberedState(unchecked((int)Read(a[1])), restoreHistory: false))
             Write(a[0], 1);
         else
@@ -52,7 +50,6 @@ public sealed partial class VirtualMachine
     private StepResult OpLoadNumberedSlotAndResume(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSaveSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
         if (!TryLoadNumberedState(unchecked((int)Read(a[1])), restoreHistory: true))
         {
             Write(a[0], 1);
@@ -110,7 +107,6 @@ public sealed partial class VirtualMachine
     private StepResult OpQueryNumberedSaveMetadata(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSaveSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
         int result = _saves.QueryNumbered(unchecked((int)Read(a[1])), out NativeSaveMetadata? metadata);
         if (result == 0 && metadata != null)
         {
@@ -130,7 +126,6 @@ public sealed partial class VirtualMachine
     private StepResult OpDeleteNumberedSave(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSaveSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
         Write(a[0], _saves.DeleteNumbered(unchecked((int)Read(a[1]))));
         return StepResult.Next;
     }
@@ -139,8 +134,6 @@ public sealed partial class VirtualMachine
     private StepResult OpCopyNumberedSave(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if ((UnclassifiedSaveSlot(ins, 2) ?? UnclassifiedSaveSlot(ins, 3)) is { } error)
-            return YesNoScriptError(error, pc);
         Write(a[0], _saves.CopyNumbered(unchecked((int)Read(a[1])), unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
@@ -156,8 +149,7 @@ public sealed partial class VirtualMachine
     private StepResult OpWriteNumberedSaveThumbnail(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if ((UnclassifiedSaveSlot(ins, 2) ?? UnclassifiedSurfaceSlot(ins, 3)) is { } error)
-            return YesNoScriptError(error, pc);
+        if (DrawSurfaceSlotRefused(ins, Read(a[2])) is { } refused) return refused;
         Write(a[0], _saves.WriteThumbnail(_graphics, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
@@ -166,8 +158,7 @@ public sealed partial class VirtualMachine
     private StepResult OpLoadNumberedSaveThumbnail(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if ((UnclassifiedSaveSlot(ins, 2) ?? UnclassifiedSurfaceSlot(ins, 3)) is { } error)
-            return YesNoScriptError(error, pc);
+        if (DrawSurfaceSlotRefused(ins, Read(a[2])) is { } refused) return refused;
         Write(a[0], _saves.LoadThumbnail(_graphics, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }

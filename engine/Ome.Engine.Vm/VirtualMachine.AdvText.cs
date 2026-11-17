@@ -222,7 +222,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
-        if (UnclassifiedSurfaceSlot(ins, 4) is { } error) return YesNoScriptError(error, pc);
+        if (DrawSurfaceSlotRefused(ins, Read(a[3])) is { } surfaceRefused) return surfaceRefused;
         _text.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
@@ -234,8 +234,8 @@ public sealed partial class VirtualMachine
     private StepResult OpConfigureAdvWaitIndicatorGrid(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if ((UnclassifiedLayoutSlot(ins, 1) ?? UnclassifiedSurfaceSlot(ins, 4)) is { } error)
-            return YesNoScriptError(error, pc);
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
+        if (DrawSurfaceSlotRefused(ins, Read(a[3])) is { } surfaceRefused) return surfaceRefused;
         _text.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
@@ -275,7 +275,7 @@ public sealed partial class VirtualMachine
     private StepResult OpDrawString(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (DrawSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         int surface = (int)Read(a[0]), x = (int)Read(a[1]), y = (int)Read(a[2]);
         string text = ReadStr(a[3]);
         _text.DrawStringToSurface(surface, x, y, text, _text.Style, Present(text, ins, a[3]));
@@ -286,7 +286,7 @@ public sealed partial class VirtualMachine
     private StepResult OpDrawFormattedInteger(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
+        if (DrawSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         int x = (int)Read(a[1]);
         string text = FormatIntegerForSurface(
             ref x, unchecked((int)Read(a[3])), (int)Read(a[4]), (int)Read(a[5]));
@@ -424,7 +424,9 @@ public sealed partial class VirtualMachine
     /// <summary>
     /// Native's ten ADV text layouts (text_manager+0x414, adv_text_layouts_allocate@0x44f6d0). No op tests a layout
     /// slot: slot 0 selects the current layout, and every other slot indexes the table (docs/engine-re.md, "Indices
-    /// outside their tables").
+    /// outside their tables"). The wait-indicator workers read (`0x72`) or write ten dwords (`0x73`, `0x2bc`)
+    /// through `layout[slot]`, and `0x80` stores any value as the current layout, so the port halts past 9 where
+    /// native would touch memory through a wild layout pointer.
     /// </summary>
     private StepResult? LayoutSlotRefused(Instruction ins, long slot)
         => IndexRefused(ins, "layout slot", slot, AdvTextHistory.LayoutCount, IndexTest.Unchecked);
