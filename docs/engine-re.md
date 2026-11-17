@@ -8105,6 +8105,26 @@ answers found that every other use reaches an unclassified op only after the scr
 the transition and size ops, a wild read or write for the layout, movie and thumbnail ops (where the port halts
 rather than corrupt memory), and an odd file name for the save ops.
 
+**The layout primitive, proven on native AGE (2026-11-17).** An append-catalog `AUTO` record compiled from
+OMS (`oms-append`, selector 2) drove both halves on the scratch install:
+
+- **Crash.** `configure_adv_wait_indicator` with layout slot `0x10` — one past the ten-entry table, so the
+  worker fetched `text_manager+0x454` as the layout pointer — raised AGE's structured-exception dialog:
+  `C0000005 (ACCESS_VIOLATION) … FILE=AUTO ADDRESS=0 LINE=-1 COMMAND=115(-) DEPTH=37
+  EXEC_ADDRESS=44FFD6 MODE=WRITE`, the faulting instruction inside `adv_text_configure_wait_indicator`
+  (COMMAND 115 = op 0x73). はい continued the boot through SEH; いいえ would end it. A script can crash
+  native AGE from bytecode alone, caught by the engine's own handler.
+- **Controlled write.** Slot `0xFBD0` — `(EngineCtx+0x53c94 − (EngineCtx+0x14940+0x414))/4`, so the fetched
+  dword is `ctx+0x53c94`, the int-global bank pointer itself — wrote the ten-dword indicator descriptor
+  through that pointer: `bank+0x3c..+0x60`, int cells 15..24. A control run (the same record without the
+  op) saved slot 88; the POC run saved slot 89; `save-diff --section int-global` showed exactly cells
+  15..24 changed, the last two holding the same dword — the worker's duplicated `frame_period` field
+  (`local_8` and `local_4` both take operand 10), the descriptor's signature. So the primitive is a
+  script-chosen-offset, script-valued 40-byte write: the slot picks where the pointer is fetched from, and
+  the operand dwords are the data. Composed with the bank pointer (or any other known dword the engine
+  holds at a fixed offset), it is a write-what-where reachable purely from bytecode; the port halts
+  rather than reproduce it, and an OMS compiler warning on layout slots past 9 would keep mods clear of it.
+
 ---
 
 ## Native walls backlog (targets for this loop)

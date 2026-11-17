@@ -158,7 +158,58 @@ it; git history keeps the record.
   `0x80`, `0x2bc`), the movie and thumbnail surface ops and the draw-string ops read or write memory unchecked
   (the port halts); the save slots test nothing and only name a file. Nothing a compiled script can pass crashes
   native through the save path, but a layout slot past 9 or a movie surface slot past 999 is a genuine native
-  memory-safety hazard a mod can trip — the OMS compiler could warn on those.
+  memory-safety hazard a mod can trip — the OMS compiler could warn on those. **Proven on native AGE
+  2026-11-17** (`engine-re.md`, "The layout primitive, proven on native AGE"): an OMS-compiled append record
+  with layout slot `0x10` crashes native AGE (ACCESS_VIOLATION in `adv_text_configure_wait_indicator`,
+  MODE=WRITE), and slot `0xFBD0` lands a controlled ten-dword write in the int-global bank, confirmed by a
+  `save-diff` of two native saves — the layout-slot primitive is a script-chosen write-what-where. Follow-up
+  worth considering: an OMS compiler warning for layout slots outside 0..9 (and movie surface slots outside
+  0..999) so mods cannot trip it unknowingly.
+
+  **Cleanup steps (a re-read of both images on 2026-11-17 verifying `b2614d58` found the summary above overstates
+  "skip with a trace" and left four mismatches; the /v2 and 4.33G Ghidra plate comments are already corrected and
+  saved, the rest is open):**
+  - **The transition ops (`0x21`, `0x22`, `0x24`, `0x25`, `0x27`, `0x28`) do not skip.** `gfx_surface_get_size`'s
+    `> 999 unsigned` refusal writes the GetTextureSize trace but does **not** stop the op: `screen_transition_begin`
+    stores the slot (`+0x1fc0`) and `gfx_object_blit_d3d9` (`/v2`) / `gfx_draw_surface_through_sprite` (4.33G) reads
+    `[gfx+0xa590+slot*4]` (4.33G `+0xa5a8`) **unchecked** — at begin (modes 1/3/4), on every `screen_transition_tick`,
+    and in `screen_transition_finalize` for slot ≥ 0. So an out-of-range slot is trace **then wild read**, not a traced
+    skip. Ops `0x27`/`0x28` go through `pattern_surface_transition_begin@0x43c4a0` / `_tick@0x43cdb0`, **not**
+    `screen_transition_begin` as the commit says; same unchecked blit of the stored slot. Both images agree. By the
+    port's own rule (a read outside a table halts) the port should **halt**, not skip — but the port currently halts
+    anyway via `TransitionSurfaceSlotRefused`'s `Unchecked`/`Traced` path, so re-check that each transition op still
+    reaches `Halts`, and fix `engine-re.md`'s "skip with a trace" wording and the `IndexBoundsTests` `Past.Traces` rows
+    for `0x21`/`0x22`/`0x24`/`0x25`/`0x27`/`0x28` (they belong under `Halts`, with the fast-forward and finalize
+    exceptions noted). Exceptions native keeps: under fast-forward `0x22`/`0x24` never touch the slot, and finishing
+    with a negative slot is safe for `0x21`/`0x25`/`0x27`/`0x28`.
+  - **Op `0x208` regressed.** `TransitionSurfaceSlotRefused` now returns **before** `GetTextureSize` writes its two
+    outputs; native writes `0×0` even on the refusal. So the `-1` `HIDEWIN.BIN` passes now leaves the width/height
+    globals **stale**, where before `b2614d58` it got `0×0`. `engine-re.md` ("The 28 ops' native tests") says the port
+    writes `0×0`, which is now false. No test reads the outputs — add one (the `0x208` case must assert the out
+    globals are `0`, not just `Past.Traces`).
+  - **Negative save slots differ.** Native names a normal file `SAVE-01.DAT` (`%s\SAVE%2.2d.DAT`) and the save
+    succeeds; the port's `NativeDatStore.NumberedFileName` throws `ArgumentOutOfRangeException` on `slot < 0`, so
+    `SaveNumbered` returns `1` (failed). `engine-re.md`'s save-slot bullet contradicts itself and the code: it says the
+    port halts, writes the filename as `SAVE-1.DAT`, and claims CreateFileA fails. Decide the faithful behaviour (match
+    native's odd-filename success, or keep the guard and document it) and make the doc, the code and a test agree.
+  - **Op `0x1af` (thumbnail load) opens the file first.** Native opens the `.STH` with `OPEN_EXISTING` **before** it
+    reads the surface slot: a missing file returns `1` and the slot is never touched. The port halts on an
+    out-of-range slot regardless. Order the port's check after the load's file-open, or note the divergence in
+    `engine-re.md` and the test.
+  - **Housekeeping.** (a) The item is marked *resolved* but still here; AGENTS.md says delete a resolved item in the
+    change that resolves it — do that once the four mismatches above are closed. (b) The summary smuggles a new idea
+    (an OMS compile-time warning) — promote it to its own item (below). (c) Dead since `b2614d58`: the
+    `error.index-range` / `error.index-negative` keys (`AgeBoxText.cs`, `en.json`), the `SurfaceRange` / `LayoutRange`
+    test constants, and the stale `IndexBoundsTests` class comment ("A handler whose native test has not been read
+    raises the はい/いいえ box"). (d) The `MEMORY.md` index cites `2614d58`; the real hash is `b2614d58`.
+- **Warn at compile time on an out-of-range table slot.** A re-read of the 28 ops (above) confirmed native does **not**
+  bounds-check several table indices, so a compiled script that passes a layout slot past 9, or a movie/surface slot
+  past 999, makes the **native** engine read or write memory through an unchecked table index — controlled-offset, and
+  for the layout write ops (`0x73`, `0x2bc`: ten dwords of operand data through `*(text_manager+0x414+slot*4)+0x3c`)
+  controlled-data. It is a local hazard (a player must run an untrusted mod on the original engine) and the OME port is
+  immune (it halts), but a published OMS toolkit lowers the bar to emit such a script. Done when the OMS compiler
+  refuses or warns on an immediate layout/surface/movie slot outside its table, with the native memory-safety reason
+  in the message, and `docs/modding/` notes the native hazard and that the port guards against it.
 - **A voice replayed from History may loop natively.** Op `0x1bd` replays a History voice with playback variant 1,
   which `voice_play_indexed_asset@0x488330` writes into channel 12's sound-buffer state. That is the field
   `sound_buffer_start@0x484270` writes an op `0xb5`/`0xba` start mode to, and `sound_stream_fill_quarter@0x483b70`
