@@ -34,9 +34,12 @@ public sealed partial class Graphics
     /// <param name="canvas">The logical screen. Slot 0 begins as it; a canvas of 0 × 0 leaves slot 0 empty.</param>
     /// <param name="timeline"><c>--timeline-log</c>'s writer.</param>
     /// <param name="print">Where diagnostics go (a failed decode).</param>
+    /// <param name="decodedImageBudgetBytes">The bytes of decoded catalog images kept (<see
+    /// cref="DecodedImageBudgetBytes"/> by default).</param>
     public Graphics(ResourceMap? resources, FrameClock clock, Sys4LogicalCanvas canvas, TimelineLog? timeline = null,
-                    Action<string>? print = null)
+                    Action<string>? print = null, long decodedImageBudgetBytes = DecodedImageBudgetBytes)
     {
+        _images = new ByteBudgetCache<int, RgbaImage?>(decodedImageBudgetBytes);
         _res = resources;
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         _timeline = timeline;

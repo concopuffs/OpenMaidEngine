@@ -12,7 +12,13 @@ public readonly record struct SurfaceTexture(RgbaImage Image, string Name, int A
 // method here, doing the record (GfxState) and the pixels in native's order.
 public sealed partial class Graphics
 {
-    private readonly Dictionary<int, RgbaImage?> _images = new();        // packed catalog id -> decoded pixels
+    /// <summary>The bytes of decoded catalog images the native keeps by default. A surface holds only its resource id
+    /// and each frame resolves the pixels, so the images drawn lately stay and the rest are decoded again when next
+    /// drawn. What the frame being lowered draws stays even past the budget. Native AGE keeps a surface's pixels until
+    /// the surface is released.</summary>
+    public const long DecodedImageBudgetBytes = 256L << 20;
+
+    private readonly ByteBudgetCache<int, RgbaImage?> _images;            // packed catalog id -> decoded pixels
     // Mutable AGE surfaces are published by replacing immutable RgbaImage snapshots, so a renderer can finish reading
     // an old frame while the VM prepares a copied-rectangle update.
     private readonly Dictionary<int, RgbaImage> _surfaceImages = new();
@@ -375,15 +381,22 @@ public sealed partial class Graphics
         _images.Clear();
     }
 
+    /// <summary>The bytes and count of the decoded catalog images the native keeps.</summary>
+    public long DecodedImageBytes => _images.Bytes;
+    public int DecodedImageCount => _images.Count;
+
     private RgbaImage? Decode(AssetEntry asset)
     {
-        if (_images.TryGetValue(asset.PackedId, out var cached)) return cached;
-        try { return _images[asset.PackedId] = _res!.DecodeTexture(asset); }
+        if (_images.TryGet(asset.PackedId, out var cached)) return cached;
+        RgbaImage? image;
+        try { image = _res!.DecodeTexture(asset); }
         catch (System.Exception e)
         {
             _print($"AGF decode failed {asset.Name}: {e.Message}");
-            _images[asset.PackedId] = null;
-            return null;
+            image = null;
         }
+        _images.Set(asset.PackedId, image, image?.Pixels.LongLength ?? 0);
+        _images.Trim();
+        return image;
     }
 }

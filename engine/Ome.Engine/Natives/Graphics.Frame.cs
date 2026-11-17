@@ -31,6 +31,8 @@ public sealed partial class Graphics
     public FrameDescription LowerFrame(long nowMs, PerformanceFrameLog? perf = null,
                                        Dictionary<long, string>? decisions = null)
     {
+        // The images this frame resolves stay in the decoded-image cache past its budget; it trims at the end.
+        _images.BeginFrame();
         int buffer = _nextFrame;
         _nextFrame ^= 1;
         FrameDescription frame = _frames[buffer] ??= new FrameDescription { Width = _screenWidth, Height = _screenHeight };
@@ -74,6 +76,7 @@ public sealed partial class Graphics
         }
         else LowerObjects(_frameObjects, frame.Items, perf, decisions);
         perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocated);
+        _images.Trim();
         return frame;
     }
 

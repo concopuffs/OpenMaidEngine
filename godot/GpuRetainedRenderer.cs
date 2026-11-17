@@ -22,15 +22,28 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         public required ImageTexture Texture;
         public required int Width;
         public required int Height;
-        // The pixels the upload came from. A static asset's decoded image is one instance until the graphics native
-        // forgets it (a language switch), so another instance under the same key is the newer file.
-        public required byte[] SourcePixels;
+        // The pixels the upload came from, held weakly so the cache does not keep an image the graphics native has
+        // let go. A static asset's decoded image is one instance until the native drops it (past its budget, or a
+        // language switch), so another instance under the same key is that file decoded again, or the newer one.
+        public required WeakReference<byte[]> SourcePixels;
+
+        public bool IsFrom(byte[] pixels) => SourcePixels.TryGetTarget(out byte[]? source) && ReferenceEquals(source, pixels);
     }
+
+    /// <summary>The bytes of uploaded textures kept between frames. Past it, those no frame has drawn lately go: a
+    /// released surface's, a finished movie's, an asset off the screen, which is uploaded again when next drawn.</summary>
+    public const long TextureBudgetBytes = 256L << 20;
+
+    /// <summary>The tint materials kept between frames (each counts as one): an effect that steps a tint makes one per
+    /// step.</summary>
+    public const long MaterialBudget = 256;
 
     private readonly Node2D _stage;
     private readonly List<Sprite2D> _items = new(1024);
-    private readonly Dictionary<(int AssetId, long ColorKey, long DynamicKey), CachedTexture> _textures = new();
-    private readonly Dictionary<(long Tint, int Strength, BlendKind Blend), ShaderMaterial> _lerpMaterials = new();
+    private readonly ByteBudgetCache<(int AssetId, long ColorKey, long DynamicKey), CachedTexture> _textures =
+        new(TextureBudgetBytes, (_, cached) => cached.Texture.Dispose());
+    private readonly ByteBudgetCache<(long Tint, int Strength, BlendKind Blend), ShaderMaterial> _lerpMaterials =
+        new(MaterialBudget, (_, material) => material.Dispose());
     private readonly CanvasItemMaterial _alphaMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Mix };
     private readonly CanvasItemMaterial _additiveMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Add };
     private readonly ImageTexture _whiteTexture;
@@ -58,6 +71,12 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
     {
         if (frame.ScreenTransition != null) return false;
         List<FrameItem> items = frame.Items;
+        if (!frame.AppendLayers)
+        {
+            // An appended frame adds to the one before it, whose sprites still show that frame's textures.
+            _textures.BeginFrame();
+            _lerpMaterials.BeginFrame();
+        }
 
         BeginFrame(frame.AppendLayers, Perf);
         // A frame that starts clean shows its background colour under the items, as the reference clears to it.
@@ -87,6 +106,8 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         }
         FrameStats stats = EndFrame();
         Perf?.RecordGpu(stats.DrawItems, stats.TextureUploads, stats.TextureUploadTicks);
+        _textures.Trim();
+        _lerpMaterials.Trim();
         return true;
     }
 
@@ -218,7 +239,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         // again when its pixels are another array: a dynamic surface's next sample, or a static asset decoded again
         // after a language switch (so a frame lowered before the switch cannot leave the old file cached).
         var key = (assetId, colorKey, dynamic ? dynamicKey : 0);
-        if (!_textures.TryGetValue(key, out var cached))
+        if (!_textures.TryGet(key, out var cached))
         {
             byte[] pixels = PreparePixels(source.Pixels, colorKey);
             using var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, pixels);
@@ -231,12 +252,11 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
                 Texture = texture,
                 Width = source.Width,
                 Height = source.Height,
-                SourcePixels = source.Pixels,
+                SourcePixels = new WeakReference<byte[]>(source.Pixels),
             };
-            _textures.Add(key, cached);
+            _textures.Set(key, cached, TextureBytes(source));
         }
-        else if (!ReferenceEquals(cached.SourcePixels, source.Pixels) ||
-                 cached.Width != source.Width || cached.Height != source.Height)
+        else if (!cached.IsFrom(source.Pixels) || cached.Width != source.Width || cached.Height != source.Height)
         {
             byte[] pixels = PreparePixels(source.Pixels, colorKey);
             using var image = Image.CreateFromData(source.Width, source.Height, false, Image.Format.Rgba8, pixels);
@@ -245,16 +265,22 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
                 cached.Texture.Update(image);
             else
             {
+                // A sprite that still shows the old texture keeps its own reference to it.
+                ImageTexture old = cached.Texture;
                 cached.Texture = ImageTexture.CreateFromImage(image);
+                old.Dispose();
                 cached.Width = source.Width;
                 cached.Height = source.Height;
+                _textures.Set(key, cached, TextureBytes(source));
             }
             _textureUploadTicks += System.Diagnostics.Stopwatch.GetTimestamp() - started;
             _textureUploads++;
-            cached.SourcePixels = source.Pixels;
+            cached.SourcePixels = new WeakReference<byte[]>(source.Pixels);
         }
         return cached.Texture;
     }
+
+    private static long TextureBytes(RgbaImage source) => (long)source.Width * source.Height * 4;
 
     private static byte[] PreparePixels(byte[] source, long colorKey)
     {
@@ -271,7 +297,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         if (!multiplyTint && tintStrength > 0)
         {
             var key = (tint & 0x00ff_ffff, tintStrength, blend);
-            if (!_lerpMaterials.TryGetValue(key, out var material))
+            if (!_lerpMaterials.TryGet(key, out var material))
             {
                 material = new ShaderMaterial
                 {
@@ -282,7 +308,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
                     ((tint >> 8) & 0xff) / 255f,
                     (tint & 0xff) / 255f));
                 material.SetShaderParameter("ome_strength", tintStrength / 255f);
-                _lerpMaterials.Add(key, material);
+                _lerpMaterials.Set(key, material, 1);
             }
             return material;
         }
@@ -309,17 +335,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
     /// <summary>Drops the uploads of static assets, so the next frame uploads what the asset store serves now: a
     /// language switch changes which file an asset id stands for (localization spec §12). A sprite that still shows
     /// one keeps its own reference until it is drawn again.</summary>
-    public void ForgetStaticTextures()
-    {
-        var keys = new List<(int AssetId, long ColorKey, long DynamicKey)>();
-        foreach (var key in _textures.Keys)
-            if (key.DynamicKey == 0) keys.Add(key);
-        foreach (var key in keys)
-        {
-            _textures[key].Texture.Dispose();
-            _textures.Remove(key);
-        }
-    }
+    public void ForgetStaticTextures() => _textures.RemoveWhere(key => key.DynamicKey == 0);
 
     public void Dispose()
     {
@@ -332,12 +348,10 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         _whiteTexture.Dispose();
         _alphaMaterial.Dispose();
         _additiveMaterial.Dispose();
-        foreach (var material in _lerpMaterials.Values) material.Dispose();
-        foreach (var texture in _textures.Values) texture.Texture.Dispose();
+        _lerpMaterials.Clear();
+        _textures.Clear();
         _lerpShader.Dispose();
         _additiveLerpShader.Dispose();
         _items.Clear();
-        _textures.Clear();
-        _lerpMaterials.Clear();
     }
 }

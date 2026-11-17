@@ -199,12 +199,6 @@ Gaps the 2026-11-10 codebase review found and the fixes that followed it left op
   architecture item that engine layering milestone 12 closed. Done when the handlers that index with an operand are
   listed, one helper takes the index and its table's length and halts with the handler's name and the index, and a
   test drives each listed handler past its end.
-- **The port's image and texture caches never evict.** The graphics native's `_images`
-  (`engine/Ome.Engine/Natives/Graphics.Surfaces.cs`), `ReferenceRenderer._pixelCache`
-  (`engine/Ome.Engine/Hosting/ReferenceRenderer.cs`) and `GpuRetainedRenderer`'s `_textures` and `_lerpMaterials` keep
-  every entry for the session: about 1.9 MB of RAM per 800×600 image, and again in VRAM. A long session grows without
-  bound. Done when each cache has a bound or a release point (a scene change, a released surface) and a long driven
-  session shows flat memory.
 - **Unknown launch flags are ignored.** Flags are parsed across `Main._Ready`, `AssetLaunchOptions`,
   `GameProfileSelection`, `WindowLaunchOptions`, mod linking, screenshots and the port options, each by its own
   lookup, so a misspelt flag is silently ignored. Since 2026-11-10 `--seed`, `--speed` and `--sleep-scale` reject a

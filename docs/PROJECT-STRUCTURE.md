@@ -533,6 +533,9 @@ retained graphics without making `Model` depend on `Hosting`.
 `engine/Ome.Engine.Devices/Model/RgbaImage.cs` owns the format-independent packed RGBA image transported between
 SYS4 decoders, host surfaces, renderers, persistence, and tests; consumers do not depend on `Sys4` merely to exchange
 decoded pixels.
+`engine/Ome.Engine/Model/ByteBudgetCache.cs` bounds the pixel caches of the graphics native (decoded images), the
+reference renderer (colour-keyed pixels) and Godot's GPU renderer (uploaded textures, tint materials): past its budget
+the least recently used entries go, never those of the frame being drawn.
 `engine/Ome.Engine/Model/SurfaceContracts.cs` owns neutral surface fill/copy requests and the black-fade direction
 shared by VM presentation, graphics hosts, Godot, and tests.
 `engine/Ome.Engine/Model/InputContracts.cs` owns neutral ADV auto-wait state and fullwidth text-edit request/result

@@ -2516,7 +2516,9 @@ Op `0x1f9` loads its AGF synchronously, inside the op, in these steps:
    It then constructs the surface and uploads the pixels through the surface's virtual `+0x1c`.
 4. `asset_handle_close@0x44f610` unlocks the entry (`asset_handle_unlock@0x44f000`) and closes the handle.
 
-Native keeps no decoded image, so loading the same AGF again costs as much as the first time.
+Native keeps no decoded image, so loading the same AGF again costs as much as the first time. The port keeps the
+images it drew lately, up to `Graphics.DecodedImageBudgetBytes` (256 MiB), and decodes the others again when they
+are next loaded or drawn; its renderers bound their uploads the same way (`ByteBudgetCache`).
 
 A Frida probe timed each op with `QueryPerformanceCounter`, hooking AGE.EXE functions only. It ran on the
 `himegari-effect-waits.steps` run from boot to SC0000's page 14. The port times are op `0x1f9`'s

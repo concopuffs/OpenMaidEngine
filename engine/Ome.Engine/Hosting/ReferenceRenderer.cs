@@ -22,10 +22,19 @@ public sealed class ReferenceRenderer
     // front end, which avoids a read-back per item.
     private readonly byte[] _pixels;
     private byte[] _transitionSourcePixels = [];
-    // Source: the decoded pixels the entry was prepared from. A static asset's decoded image is one instance until the
-    // graphics native forgets it (a language switch), so another instance under the same key is the newer file.
-    private sealed record CachedPixels(int Width, int Height, byte[] Rgba, byte[] Source);
-    private readonly Dictionary<(int AssetId, long Key), CachedPixels> _pixelCache = new();
+    // A static asset's pixels with its colour key baked in. Source: the decoded pixels the entry was prepared from,
+    // held weakly so the cache does not keep an image the graphics native has let go. A static asset's decoded image is
+    // one instance until the native drops it (past its budget, or a language switch), so another instance under the
+    // same key is that file decoded again, or the newer one.
+    private sealed record CachedPixels(int Width, int Height, byte[] Rgba, WeakReference<byte[]> Source)
+    {
+        public bool IsFrom(byte[] pixels) => Source.TryGetTarget(out byte[]? source) && ReferenceEquals(source, pixels);
+    }
+
+    /// <summary>The bytes of colour-keyed pixels the renderer keeps between frames.</summary>
+    public const long PreparedPixelBudgetBytes = 64L << 20;
+
+    private readonly ByteBudgetCache<(int AssetId, long Key), CachedPixels> _pixelCache = new(PreparedPixelBudgetBytes);
 
     public ReferenceRenderer(Sys4LogicalCanvas canvas)
     {
@@ -52,6 +61,7 @@ public sealed class ReferenceRenderer
     /// over it.</summary>
     public void Draw(FrameDescription frame)
     {
+        _pixelCache.BeginFrame();
         long phase = Perf != null ? PerformanceFrameLog.Timestamp() : 0;
         FrameScreenTransition? screen = frame.ScreenTransition;
         if (screen != null || !frame.PreserveExistingPixels)
@@ -69,6 +79,7 @@ public sealed class ReferenceRenderer
         }
         else DrawItems(frame.Items);
         Perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocated);
+        _pixelCache.Trim();
     }
 
     /// <summary>Draw <paramref name="items"/> into <paramref name="destination"/> by this renderer's rules, with nothing
@@ -124,8 +135,8 @@ public sealed class ReferenceRenderer
         }
     }
 
-    // Blit one texture item's rectangle. Static source pixels are cached per (assetId, colorKey): on first use, texels
-    // matching the colour key are made transparent (native bakes the key at load — engine-re.md §Blend). Mode 0 uses
+    // Blit one texture item's rectangle. Static source pixels with a colour key are cached per (assetId, colorKey): on
+    // first use, texels matching the key are made transparent (native bakes the key at load — engine-re.md §Blend). Mode 0 uses
     // the tint strength to move texel RGB toward the tint. Mode 1 uses packed RGB modulation and SRCALPHA/ONE additive
     // composition; black source pixels therefore contribute nothing.
     private void BlitLayer(in FrameItem item)
@@ -139,10 +150,11 @@ public sealed class ReferenceRenderer
         RgbaImage decoded = item.Pixels!;
         int sourceWidth, sourceHeight;
         byte[] sourcePixels;
-        if (item.Dynamic)
+        if (item.Dynamic || !BlendMath.HasColorKey(item.ColorKey))
         {
-            // Decoder samples replace the pixels of one retained surface. Never enter them in the static cache.
-            // Clone only when applying a key so the decoder-owned newest-frame buffer remains untouched.
+            // Pixels without a key are drawn as decoded, so nothing is kept for them. Decoder samples replace the
+            // pixels of one retained surface: never enter them in the static cache, and clone only when applying a
+            // key so the decoder-owned newest-frame buffer remains untouched.
             sourceWidth = decoded.Width;
             sourceHeight = decoded.Height;
             sourcePixels = decoded.Pixels;
@@ -155,16 +167,12 @@ public sealed class ReferenceRenderer
         else
         {
             var cacheKey = (item.AssetId, item.ColorKey);
-            if (!_pixelCache.TryGetValue(cacheKey, out var cached) || !ReferenceEquals(cached.Source, decoded.Pixels))
+            if (!_pixelCache.TryGet(cacheKey, out var cached) || !cached.IsFrom(decoded.Pixels))
             {
-                byte[] pixels = decoded.Pixels;
-                if (BlendMath.HasColorKey(item.ColorKey))
-                {
-                    pixels = (byte[])pixels.Clone();
-                    BakeColorKey(pixels, item.ColorKey);
-                }
-                cached = new CachedPixels(decoded.Width, decoded.Height, pixels, decoded.Pixels);
-                _pixelCache[cacheKey] = cached;
+                byte[] pixels = (byte[])decoded.Pixels.Clone();
+                BakeColorKey(pixels, item.ColorKey);
+                cached = new CachedPixels(decoded.Width, decoded.Height, pixels, new WeakReference<byte[]>(decoded.Pixels));
+                _pixelCache.Set(cacheKey, cached, pixels.LongLength);
             }
             sourceWidth = cached.Width;
             sourceHeight = cached.Height;
