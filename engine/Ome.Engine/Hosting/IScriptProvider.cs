@@ -8,6 +8,14 @@ public interface IScriptProvider
     /// <summary>The script for this id, or null if the id maps to no known script.</summary>
     Script? GetById(long id);
 
+    /// <summary>Why <see cref="GetById"/> found no script for an id, as AGE's resource open words it
+    /// (asset_open_indexed_entry@0x44f390), for the script loader's 再試行/キャンセル box; null when the port cannot
+    /// say what AGE would do (the VM halts). A provider with no file table of its own says the file number is not
+    /// valid.</summary>
+    AgeBoxMessage? LoadFailure(long id)
+        => AgeBoxMessage.Keyed(AgeBoxText.FileNumberInvalid,
+                               unchecked((int)id).ToString(System.Globalization.CultureInfo.InvariantCulture));
+
     /// <summary>Resolve a fixed engine callback filename such as CALLBACK_LOAD.BIN. Only the base catalog's names, as
     /// AGE's own lookups by name.</summary>
     Script? GetByName(string name) => null;

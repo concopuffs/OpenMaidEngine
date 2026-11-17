@@ -5,7 +5,8 @@ namespace Ome.Engine.Model;
 
 /// <summary>
 /// The text of the boxes AGE itself shows (localization spec §11): the interpreter error boxes (中止/再試行/無視,
-/// age_show_message_box@0x409370 mode 7; はい/いいえ, mode 5) and the diagnostic box of op 0x1b4. Each string has a
+/// age_show_message_box@0x409370 mode 7; はい/いいえ, mode 5; the fatal box, mode 1), the script loader's 再試行/キャンセル
+/// box (mode 3) and the diagnostic box of op 0x1b4. Each string has a
 /// key, as the shell's tables have. <see cref="Japanese"/> is AGE's own wording; the VM composes every box with it, so
 /// the driver, the timeline and a halt reason read what native shows. The shell's tables (Ome.Engine.Frontend's
 /// ShellStrings) take these keys into their Japanese table and translate them, and a host presents a box in its
@@ -27,6 +28,17 @@ public static class AgeBoxText
     public const string Ignore = "error.ignore";
     public const string Yes = "error.yes";
     public const string No = "error.no";
+    public const string Ok = "error.ok";
+    public const string Cancel = "error.cancel";
+    /// <summary>The fatal box's caption (mode 1).</summary>
+    public const string FatalCaption = "error.fatal.caption";
+    /// <summary>The line the fatal box opens with.</summary>
+    public const string FatalHeading = "error.fatal";
+    /// <summary>The fatal box's closing lines: the program ends.</summary>
+    public const string FatalEnd = "error.fatal.end";
+    /// <summary>The 再試行/キャンセル box's question (mode 3).</summary>
+    public const string PromptAgain = "error.prompt.again";
+    public const string PromptCancel = "error.prompt.cancel";
     /// <summary>A callback registered by one script dispatched while another runs: <c>{0}</c> is the running
     /// script, <c>{1}</c> the owner.</summary>
     public const string DepthMismatch = "error.depth";
@@ -45,6 +57,17 @@ public static class AgeBoxText
     /// <summary>A negative index where there is no upper bound (a numbered save's slot): <c>{0}</c> is the op,
     /// <c>{1}</c> the argument's number and <c>{2}</c> its value.</summary>
     public const string IndexNegative = "error.index-negative";
+    /// <summary>Op 0x3 past native's interpreter frames: <c>{0}</c> is their number (40).</summary>
+    public const string ScriptDepthLimit = "error.depth-limit";
+    /// <summary>A resource id past the file table (asset_open_indexed_entry): <c>{0}</c> is the id.</summary>
+    public const string FileNumberInvalid = "error.file-number";
+    /// <summary>A file that does not open: <c>{0}</c> is its name, <c>{1}</c> the Windows error code.</summary>
+    public const string FileOpenFailed = "error.file-open";
+    /// <summary>A resource id whose high byte names no mounted append catalog: <c>{0}</c> is the selector.</summary>
+    public const string AppendCatalogMissing = "error.append-catalog";
+    /// <summary>A resource id past its append catalog: <c>{0}</c> is the name native gives it (ERROR), <c>{1}</c> the
+    /// index.</summary>
+    public const string AppendFileOpenFailed = "error.append-open";
 
     /// <summary>AGE's wording, by key. <see cref="DebugLocation"/> takes the file, the address in hex, the source
     /// line, the command name, the opcode and the depth.</summary>
@@ -64,6 +87,13 @@ public static class AgeBoxText
         [Ignore] = "無視(&I)",
         [Yes] = "はい(&Y)",
         [No] = "いいえ(&N)",
+        [Ok] = "OK",
+        [Cancel] = "キャンセル",
+        [FatalCaption] = "続行不可能なエラーが発生しました",
+        [FatalHeading] = "[続行不可能なエラー]",
+        [FatalEnd] = "これ以上プログラムを実行できません．\nプログラムを終了します．",
+        [PromptAgain] = "もう一度実行しますか？",
+        [PromptCancel] = "キャンセル：プログラムを終了します．",
         [DepthMismatch] = "Depth が不正です {0} != {1}",
         [BadArgument] = "{0}の引数が不正です．",
         [RandomBoundZero] = "RANDOMの最大値が0になっています．",
@@ -71,54 +101,78 @@ public static class AgeBoxText
         [WaveLoadFailed] = "WAVファイル {0} の読み込みに失敗しました",
         [IndexOutOfRange] = "{0}の第{1}引数 {2} が範囲 {3} の外です．",
         [IndexNegative] = "{0}の第{1}引数 {2} が負の値です．",
+        [ScriptDepthLimit] = "ファイルの階層が深すぎます．最大は{0}です．",
+        [FileNumberInvalid] = "ファイル番号 {0} は不正な値です．",
+        [FileOpenFailed] = "{0} を開くことが出来ません．\nERROR CODE = {1}",
+        [AppendCatalogMissing] = "拡張ファイル情報ファイル {0} は読み込まれていません．",
+        [AppendFileOpenFailed] = "拡張ファイル {0} を開くことが出来ません．{1}",
     };
 
-    /// <summary>A box's buttons' keys, in its order: 中止, 再試行, 無視 (mode 7); はい, いいえ (mode 5); none for the
-    /// diagnostic box, whose only button is the system's OK.</summary>
+    /// <summary>A box's buttons' keys, in its order: 中止, 再試行, 無視 (mode 7); はい, いいえ (mode 5); 再試行, キャンセル
+    /// (mode 3); OK (mode 1); none for the diagnostic box, whose only button is the system's OK.</summary>
     public static IReadOnlyList<string> ButtonKeys(AgeBoxButtons buttons) => buttons switch
     {
         AgeBoxButtons.AbortRetryIgnore => [Abort, Retry, Ignore],
         AgeBoxButtons.YesNo => [Yes, No],
+        AgeBoxButtons.RetryCancel => [Retry, Cancel],
+        AgeBoxButtons.Fatal => [Ok],
         _ => [],
     };
 
     /// <summary>What each of a box's buttons does, in <see cref="ButtonKeys"/>' order: native's box returns 1 (exit),
     /// 2 (retry) or 4 (ignore), and the main loop's policy at 0x412689 acts on that. Mode 5 maps IDYES to 4 and IDNO to
-    /// 1 (age_show_message_box at 0x4095b7; driven 2026-11-16).</summary>
+    /// 1 (age_show_message_box at 0x4095b7; driven 2026-11-16).
+    /// The script loader's mode-3 box returns 2 for 再試行 and opens the script again, and anything else ends the engine
+    /// (script_frame_load_resource@0x40e980); the fatal box's OK ends it.</summary>
     public static IReadOnlyList<ScriptErrorChoice> ButtonChoices(AgeBoxButtons buttons) => buttons switch
     {
         AgeBoxButtons.AbortRetryIgnore => [ScriptErrorChoice.Abort, ScriptErrorChoice.Retry, ScriptErrorChoice.Ignore],
         AgeBoxButtons.YesNo => [ScriptErrorChoice.Ignore, ScriptErrorChoice.Abort],
+        AgeBoxButtons.RetryCancel => [ScriptErrorChoice.Retry, ScriptErrorChoice.Abort],
+        AgeBoxButtons.Fatal => [ScriptErrorChoice.Abort],
         _ => [],
     };
+
+    /// <summary>A box's caption key: 続行不可能なエラーが発生しました for the fatal box, エラーが発生しました for the
+    /// rest.</summary>
+    public static string CaptionKey(AgeBoxButtons buttons)
+        => buttons == AgeBoxButtons.Fatal ? FatalCaption : Caption;
 
     /// <summary>A key's Japanese text.</summary>
     public static string JapaneseText(string key) => Japanese.TryGetValue(key, out string? text) ? text : key;
 
     /// <summary>
     /// A box's body as native lays it out (the "%s%s" body of age_show_message_box): the message, a blank line, the
-    /// debug block and, for an error box, a blank line and the prompt that names its buttons. <paramref name="text"/>
-    /// gives each key's text in the presenting language.
+    /// debug block and, for an error box, a blank line and the prompt that names its buttons. The fatal box opens with
+    /// its heading and closes with the lines that say the program ends (0x5707d0). The 再試行/キャンセル box has no
+    /// debug block: AGE's only one, the script loader's, is shown without the 0x10000 flag (0x570650).
+    /// <paramref name="text"/> gives each key's text in the presenting language.
     /// </summary>
     public static string Compose(AgeBoxParts parts, Func<string, string> text)
     {
         AgeBoxLocation at = parts.Location;
-        var body = new StringBuilder(parts.Message.Text(text))
-            .Append("\n\n").Append(text(DebugHeading)).Append('\n')
-            .Append(Format(text(DebugLocation),
-                [at.File, at.Address.ToString("X", CultureInfo.InvariantCulture), Number(at.Line), at.Command,
-                 Number(at.Opcode), Number(at.Depth)]))
-            .Append('\n');
-        IReadOnlyList<string> lines = parts.Buttons switch
+        var body = new StringBuilder();
+        if (parts.Buttons == AgeBoxButtons.Fatal) body.Append(text(FatalHeading)).Append("\n\n");
+        body.Append(parts.Message.Text(text));
+        if (parts.Buttons != AgeBoxButtons.RetryCancel)
+            body.Append("\n\n").Append(text(DebugHeading)).Append('\n')
+                .Append(Format(text(DebugLocation),
+                    [at.File, at.Address.ToString("X", CultureInfo.InvariantCulture), Number(at.Line), at.Command,
+                     Number(at.Opcode), Number(at.Depth)]))
+                .Append('\n');
+        if (parts.Buttons == AgeBoxButtons.Fatal)
+            return body.Append("\n\n").Append(text(FatalEnd)).Append('\n').ToString();
+        (string Question, IReadOnlyList<string> Lines) prompt = parts.Buttons switch
         {
-            AgeBoxButtons.AbortRetryIgnore => [PromptAbort, PromptRetry, PromptIgnore],
-            AgeBoxButtons.YesNo => [PromptYes, PromptNo],
-            _ => [],
+            AgeBoxButtons.AbortRetryIgnore => (Prompt, [PromptAbort, PromptRetry, PromptIgnore]),
+            AgeBoxButtons.YesNo => (Prompt, [PromptYes, PromptNo]),
+            AgeBoxButtons.RetryCancel => (PromptAgain, [PromptRetry, PromptCancel]),
+            _ => (Prompt, []),
         };
-        if (lines.Count > 0)
+        if (prompt.Lines.Count > 0)
         {
-            body.Append("\n\n").Append(text(Prompt)).Append("\n\n");
-            foreach (string line in lines) body.Append(text(line)).Append('\n');
+            body.Append("\n\n").Append(text(prompt.Question)).Append("\n\n");
+            foreach (string line in prompt.Lines) body.Append(text(line)).Append('\n');
         }
         return body.ToString();
     }
@@ -171,4 +225,10 @@ public enum AgeBoxButtons
     /// <summary>The error box for flags 0x10005 (mode 5, style 0x14, MB_YESNO | MB_ICONHAND): はい continues past the
     /// command, いいえ ends the program.</summary>
     YesNo,
+    /// <summary>The script loader's box (mode 3, style 0x15, MB_RETRYCANCEL | MB_ICONHAND, without the debug block):
+    /// 再試行 opens the script again, キャンセル ends the program.</summary>
+    RetryCancel,
+    /// <summary>The fatal box for flags 0x10001 (mode 1, style 0x10, MB_OK | MB_ICONHAND, captioned
+    /// 続行不可能なエラーが発生しました): OK ends the program.</summary>
+    Fatal,
 }

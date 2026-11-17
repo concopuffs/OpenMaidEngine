@@ -51,8 +51,13 @@ public sealed partial class VirtualMachine
             _sink.Emit(TraceEvent.CallScript(id, null));   // stub mode: notify only, no child pushed
             return StepResult.Next;
         }
+        // op_0x3_call_script@0x41bc90 tests the depth first: a 41st frame throws
+        // 「ファイルの階層が深すぎます．最大は40です．」 with flags 0x10001, the fatal box.
+        if (_depth >= NativeScriptFrames)
+            FatalScriptError(AgeBoxMessage.Keyed(AgeBoxText.ScriptDepthLimit,
+                NativeScriptFrames.ToString(System.Globalization.CultureInfo.InvariantCulture)), pc);
         if (_depth >= _o.CallDepthCap) { HaltReason ??= "call-depth-exceeded"; return StepResult.Halt; }
-        var child = _provider.GetById(id);
+        var child = LoadScript(id, pc);
         _sink.Emit(TraceEvent.CallScript(id, child?.Name));
         if (child == null) { HaltReason ??= $"callscript-unresolved:0x{id:x}"; return StepResult.Halt; }
         var entry = child.IndexByOffset.TryGetValue(0, out var ci) ? ci : 0;
@@ -106,6 +111,26 @@ public sealed partial class VirtualMachine
     /// <summary>Native's script frames, 0 to 39 (EngineCtx's frame table, 0x1e dwords each).</summary>
     private const int ScriptFrameSlots = 40;
 
+    /// <summary>The frames op 0x3 nests to: native's frame table, with the root in frame 0.</summary>
+    private const int NativeScriptFrames = ScriptFrameSlots;
+
+    /// <summary>
+    /// The script a call-script id names, as script_frame_load_resource@0x40e980 opens it for ops 0x3 and 0x6. It
+    /// catches the resource open's error and shows it in a 再試行/キャンセル box (age_show_message_box mode 3, without
+    /// the debug block): 再試行 opens the script again, and キャンセル makes the op throw Command_Exit_Exception(2), which
+    /// ends the engine as 中止 does. Null when the provider cannot say what AGE would do: the caller halts.
+    /// </summary>
+    private Script? LoadScript(long id, int pc)
+    {
+        while (true)
+        {
+            if (_provider!.GetById(id) is { } script) return script;
+            if (_provider.LoadFailure(id) is not { } failure) return null;
+            if (ShowScriptError(failure, pc, AgeBoxButtons.RetryCancel) != ScriptErrorChoice.Retry)
+                throw new ScriptErrorException();
+        }
+    }
+
     // 0x06 (script_id, frame_slot), slots 0..39. op_0x6_preload_script_slot@0x41bdb0 makes the slot the current frame
     // before its signed test: a slot above 39 throws a fatal box (flags 0x10001) whose context is read from the frame
     // outside the table, and a negative slot passes and loads below it.
@@ -121,7 +146,7 @@ public sealed partial class VirtualMachine
             HaltReason ??= $"preloaded-script-provider-unavailable:0x{id:x}";
             return StepResult.Halt;
         }
-        var script = _provider.GetById(id);
+        var script = LoadScript(id, pc);
         if (script == null)
         {
             HaltReason ??= $"preloaded-script-unresolved:0x{id:x}";

@@ -23,11 +23,11 @@ public static class ShellBoxes
     /// the VM did not build) keeps its text.</summary>
     public static (string Caption, string Text) Present(DiagnosticMessage message, ShellStrings strings)
         => message.Parts is { } parts
-            ? (strings[AgeBoxText.Caption], AgeBoxText.Compose(parts, key => strings[key]))
+            ? (strings[AgeBoxText.CaptionKey(parts.Buttons)], AgeBoxText.Compose(parts, key => strings[key]))
             : (message.Caption, message.Text);
 
-    /// <summary>An error box's buttons as <paramref name="strings"/> labels them: 中止, 再試行, 無視, or はい,
-    /// いいえ.</summary>
+    /// <summary>An error box's buttons as <paramref name="strings"/> labels them: 中止, 再試行, 無視; はい, いいえ;
+    /// 再試行, キャンセル; or OK.</summary>
     public static IReadOnlyList<string> ErrorButtons(AgeBoxButtons buttons, ShellStrings strings)
         => AgeBoxText.ButtonKeys(buttons).Select(key => strings[key]).ToList();
 }

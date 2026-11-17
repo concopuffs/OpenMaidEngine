@@ -934,7 +934,8 @@ public sealed partial class VirtualMachine
 
     /// <summary>An AGE box in AGE's wording, with its parts for a front end that presents it in another language.</summary>
     private static DiagnosticMessage AgeBox(AgeBoxParts parts)
-        => new(AgeBoxText.JapaneseText(AgeBoxText.Caption), AgeBoxText.Compose(parts, AgeBoxText.JapaneseText), parts);
+        => new(AgeBoxText.JapaneseText(AgeBoxText.CaptionKey(parts.Buttons)),
+               AgeBoxText.Compose(parts, AgeBoxText.JapaneseText), parts);
 
     private AgeBoxLocation DiagnosticLocation(Instruction instruction)
     {
@@ -980,6 +981,15 @@ public sealed partial class VirtualMachine
             _ => throw new ScriptErrorException(),
         };
 
+    /// <summary>A script error native throws with flags 0x10001 while the instruction at <paramref name="pc"/> runs:
+    /// the fatal box (age_show_message_box mode 1, 続行不可能なエラーが発生しました), whose OK ends the program (the
+    /// main loop's policy at 0x412689 exits for any answer but 2 and 4).</summary>
+    private void FatalScriptError(AgeBoxMessage error, int pc)
+    {
+        ShowScriptError(error, pc, AgeBoxButtons.Fatal);
+        throw new ScriptErrorException();
+    }
+
     /// <summary>"Depth が不正です <running> != <owner>": a callback registered by one script is dispatched while
     /// another runs (native throws flags 0x10007 from each guard).</summary>
     private AgeBoxMessage DepthError(Script owner)
@@ -997,7 +1007,8 @@ public sealed partial class VirtualMachine
 
     // age_show_message_box@0x409370 mode 7 (the errors the interpreter throws with flags 0x10007): body "%s%s"
     // followed by the prompt (AgeBoxText.Prompt…), MessageBoxA style 0x112 (abort/retry/ignore); mode 5 (flags
-    // 0x10005): the same body with a yes/no prompt, style 0x14.
+    // 0x10005): the same body with a yes/no prompt, style 0x14; mode 3 (the script loader's): retry/cancel, style 0x15;
+    // mode 1 (flags 0x10001): the fatal box, OK only, style 0x10. An answer the box has no button for ends the run.
     private ScriptErrorChoice ShowScriptError(AgeBoxMessage error, int coordinateIndex,
                                               AgeBoxButtons buttons = AgeBoxButtons.AbortRetryIgnore)
     {
@@ -1007,7 +1018,9 @@ public sealed partial class VirtualMachine
         _instructionRaisedScriptError = true;   // its after hooks do not fire (Lua scripting spec §7.1)
         RefuseScriptErrorInModCall(text);
         ScriptErrorChoice choice = _waits.ShowScriptError(message);
-        if (choice is ScriptErrorChoice.Retry or ScriptErrorChoice.Ignore) return choice;
+        if (choice is ScriptErrorChoice.Retry or ScriptErrorChoice.Ignore
+            && AgeBoxText.ButtonChoices(buttons).Contains(choice))
+            return choice;
         ScriptError = message;
         HaltReason ??= "script-error: " + text;
         return ScriptErrorChoice.Abort;

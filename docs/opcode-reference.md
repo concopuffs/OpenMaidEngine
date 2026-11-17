@@ -1111,6 +1111,12 @@ Native mechanism (dispatch table `handler(op)=ctx[0x26c93+op]`, op 0x03 -> FUN_0
      supplies mounted record-zero ids dynamically.
 Companion op 0x8f `call` is INTRA-script (a local JSR), not cross-script -- see its entry.
 This also names the whole call graph statically (build/games/<game>/callscript-names.json).
+Errors (2026-11-17, driven on 4.24J): a call from frame 39 shows the fatal box
+「ファイルの階層が深すぎます．最大は40です．」 (flags 0x10001, OK ends the program); an id the resource open
+refuses shows the loader's 再試行/キャンセル box with its message (「ファイル番号 n は不正な値です．」 and the
+rest), where 再試行 opens it again and キャンセル ends the program. The port shows both; it halts for a high
+byte of 0x80 and up and for a record that is not a script. See docs/engine-re.md, "The frame limit and load
+failures".
 
 
 ### 0x5 `ret` (ret, argc 0)
@@ -1134,7 +1140,7 @@ This also names the whole call graph statically (build/games/<game>/callscript-n
 - **depended on by:** 0x8
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x6`; scope=Himegari SYS4422. Ghidra /v2: op_0x6_preload_script_slot@0x41bdb0 fetches script_id and frame_slot, saves the current context index, selects frame_slot, rejects values above 39, calls script_frame_load_resource(ctx+0x54fe8, script_id), restores the caller index, and throws on load failure. SYSTEM4's only three sites preload ATSEEK.BIN (0x337f) into slot 0x1d, SETROUTE.BIN (0x3380) into 0x1e, and MVSEEK.BIN (0x3381) into 0x1f before INIT2.
 
-Implemented as persistent VM-owned preloaded slots containing the resolved script id and one reusable ExecFrame. Replacing a slot allocates a fresh frame/local bank; invalid slots, absent providers, and unresolved scripts halt diagnostically. Root scene reload clears the slots before SYSTEM4 registers them again.
+Implemented as persistent VM-owned preloaded slots containing the resolved script id and one reusable ExecFrame. Replacing a slot allocates a fresh frame/local bank; invalid slots and absent providers halt diagnostically. An id the resource open refuses shows the loader's 再試行/キャンセル box as op 0x3's does (docs/engine-re.md, "The frame limit and load failures"). Root scene reload clears the slots before SYSTEM4 registers them again.
 
 ### 0x8 `call-preloaded-script-slot` (call-preloaded-script-slot, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)

@@ -59,6 +59,35 @@ public sealed class EngineTextTests
     }
 
     [Fact]
+    public void TheLoadersRetryCancelBoxAndTheFatalBoxComposeAgesBodies()
+    {
+        // Mode 3 (format 0x570650), shown by script_frame_load_resource without the debug block; mode 1 (0x5707d0).
+        var at = new AgeBoxLocation("SC0000.BIN", 0x40, -1, "-", 3, 39);
+        var load = new AgeBoxParts(AgeBoxMessage.Keyed(AgeBoxText.FileNumberInvalid, "9999"), at,
+                                   AgeBoxButtons.RetryCancel);
+        var fatal = new AgeBoxParts(AgeBoxMessage.Keyed(AgeBoxText.ScriptDepthLimit, "40"), at, AgeBoxButtons.Fatal);
+        ShellStrings en = ShellStrings.Load("en");
+
+        Assert.Equal("ファイル番号 9999 は不正な値です．\n\nもう一度実行しますか？\n\n"
+                     + "再試行：もう一度このコマンドを実行します．\n        (ただし正常に動作しない場合があります)\n"
+                     + "キャンセル：プログラムを終了します．\n",
+                     AgeBoxText.Compose(load, AgeBoxText.JapaneseText));
+        Assert.Equal("[続行不可能なエラー]\n\nファイルの階層が深すぎます．最大は40です．\n\nデバック情報：\n"
+                     + "FILE=SC0000.BIN ADDRESS=40 LINE=-1 COMMAND=-(3) DEPTH=39\n"
+                     + "\n\nこれ以上プログラムを実行できません．\nプログラムを終了します．\n",
+                     AgeBoxText.Compose(fatal, AgeBoxText.JapaneseText));
+        Assert.Equal(["再試行(&R)", "キャンセル"], ShellBoxes.ErrorButtons(AgeBoxButtons.RetryCancel, ShellStrings.Japanese));
+        Assert.Equal(["&Retry", "Cancel"], ShellBoxes.ErrorButtons(AgeBoxButtons.RetryCancel, en));
+        Assert.Equal(["OK"], ShellBoxes.ErrorButtons(AgeBoxButtons.Fatal, en));
+        Assert.Equal([ScriptErrorChoice.Retry, ScriptErrorChoice.Abort],
+                     AgeBoxText.ButtonChoices(AgeBoxButtons.RetryCancel));
+        Assert.Equal([ScriptErrorChoice.Abort], AgeBoxText.ButtonChoices(AgeBoxButtons.Fatal));
+        var message = new DiagnosticMessage("", "", fatal);
+        Assert.Equal("An unrecoverable error occurred", ShellBoxes.Present(message, en).Caption);
+        Assert.Equal("続行不可能なエラーが発生しました", ShellBoxes.Present(message, ShellStrings.Japanese).Caption);
+    }
+
+    [Fact]
     public void TheShellPresentsAgesBoxesInItsLanguageAndTheMessageKeepsTheJapanese()
     {
         var message = new DiagnosticMessage(AgeBoxText.JapaneseText(AgeBoxText.Caption),

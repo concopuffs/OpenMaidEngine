@@ -8,7 +8,9 @@ using Godot;
 /// Godot presentation of AGE's interpreter error boxes, captioned エラーが発生しました: age_show_message_box@0x409370
 /// mode 7, MessageBoxA style 0x112 (MB_ABORTRETRYIGNORE | MB_ICONHAND | MB_DEFBUTTON2), whose default button is
 /// 再試行, and mode 5, style 0x14 (MB_YESNO | MB_ICONHAND), whose default is はい. Like the Win32 boxes, neither has a
-/// cancel and the ✕ is disabled: only the answers dismiss them.
+/// cancel and the ✕ is disabled: only the answers dismiss them. The script loader's mode 3, style 0x15
+/// (MB_RETRYCANCEL | MB_ICONHAND), and the fatal box, mode 1, style 0x10 (MB_OK | MB_ICONHAND, captioned
+/// 続行不可能なエラーが発生しました), have a cancel answer, キャンセル or OK: the ✕ and Esc give it, as in Win32.
 /// <para>The box shows the shell's language (localization spec §11: <see cref="ShellBoxes"/>); the drive protocol
 /// lists it in AGE's Japanese, and its buttons answer to the Japanese, the English and the shown labels.</para>
 /// <para>Drawn as Windows 10 draws these boxes for AGE (<see cref="Win32Dialog"/>): a white message area with the
@@ -21,23 +23,33 @@ public partial class ScriptErrorDialog : Win32Dialog
     // One box's buttons. MessageBoxA labels its buttons in the Windows UI language. AgeBoxText's are Japanese Windows'
     // labels, which the box's own text names; the driver also accepts English Windows' labels. FromRight is each
     // button's left edge, in px from the client's right edge, as captured.
+    // Cancel is the answer the ✕ and Esc give ('\0' in Mnemonics: the button has none), null where they do nothing.
     private sealed record Kind(string[] Japanese, string[] English, char[] Mnemonics, ScriptErrorChoice[] Choices,
-                               int[] FromRight, int Default);
+                               int[] FromRight, int Default, ScriptErrorChoice? Cancel = null);
 
     private static readonly Kind AbortRetryIgnore = Create(AgeBoxButtons.AbortRetryIgnore,
         ["&Abort", "&Retry", "&Ignore"], ['A', 'R', 'I'], [255, 173, 90], defaultButton: 1);    // MB_DEFBUTTON2
     private static readonly Kind YesNo = Create(AgeBoxButtons.YesNo,
         ["&Yes", "&No"], ['Y', 'N'], [172, 90], defaultButton: 0);
+    // Not captured from AGE: laid out as the captured two-button box, and the one button where its right one is.
+    private static readonly Kind RetryCancel = Create(AgeBoxButtons.RetryCancel,
+        ["&Retry", "Cancel"], ['R', '\0'], [172, 90], defaultButton: 0, cancel: ScriptErrorChoice.Abort);
+    private static readonly Kind Fatal = Create(AgeBoxButtons.Fatal,
+        ["OK"], ['\0'], [90], defaultButton: 0, cancel: ScriptErrorChoice.Abort);
 
     private static Kind Create(AgeBoxButtons buttons, string[] english, char[] mnemonics, int[] fromRight,
-                               int defaultButton)
+                               int defaultButton, ScriptErrorChoice? cancel = null)
         => new([.. System.Linq.Enumerable.Select(AgeBoxText.ButtonKeys(buttons), AgeBoxText.JapaneseText)], english,
-               mnemonics, [.. AgeBoxText.ButtonChoices(buttons)], fromRight, defaultButton);
+               mnemonics, [.. AgeBoxText.ButtonChoices(buttons)], fromRight, defaultButton, cancel);
 
     private static (Kind Kind, AgeBoxButtons Buttons) KindOf(DiagnosticMessage message)
-        => message.Parts?.Buttons == AgeBoxButtons.YesNo
-            ? (YesNo, AgeBoxButtons.YesNo)
-            : (AbortRetryIgnore, AgeBoxButtons.AbortRetryIgnore);
+        => message.Parts?.Buttons switch
+        {
+            AgeBoxButtons.YesNo => (YesNo, AgeBoxButtons.YesNo),
+            AgeBoxButtons.RetryCancel => (RetryCancel, AgeBoxButtons.RetryCancel),
+            AgeBoxButtons.Fatal => (Fatal, AgeBoxButtons.Fatal),
+            _ => (AbortRetryIgnore, AgeBoxButtons.AbortRetryIgnore),
+        };
 
     // Captured layout (client coordinates): the icon at (21,23), the text at (62,23) wrapped at 254 px, 28 px
     // right of the text, 23 px under it; a 40 px button strip with 75×23 buttons 7 px below its top.
@@ -62,7 +74,7 @@ public partial class ScriptErrorDialog : Win32Dialog
 
     private ScriptErrorDialog(DiagnosticMessage message, Kind kind, string caption, IReadOnlyList<string> buttons,
                               (Win32StaticText Text, Vector2I Client, int White) layout)
-        : base(caption, layout.Client, closeEnabled: false)
+        : base(caption, layout.Client, closeEnabled: kind.Cancel != null)
     {
         _message = message;
         _kind = kind;
@@ -116,23 +128,34 @@ public partial class ScriptErrorDialog : Win32Dialog
         _buttons[_kind.Default].GrabFocus();
     }
 
-    // The buttons' mnemonics answer at once, as in the Win32 box: each label's '&' letter (A, R and I, or Y and N, in
-    // Japanese and English). Enter, Space, Tab and the arrows reach the focused button through Godot's focus handling.
+    // The buttons' mnemonics answer at once, as in the Win32 box: each label's '&' letter (A, R and I, Y and N, or R,
+    // in Japanese and English). Esc gives a box's cancel answer. Enter, Space, Tab and the arrows reach the focused
+    // button through Godot's focus handling.
     private void OnWindowInput(InputEvent e)
     {
         if (e is not InputEventKey { Pressed: true, Echo: false } key) return;
+        if (key.Keycode == Key.Escape && _kind.Cancel is { } cancel)
+        {
+            Complete(cancel);
+            SetInputAsHandled();
+            return;
+        }
         for (int i = 0; i < _kind.Choices.Length; i++)
         {
             char mnemonic = MenuItem.MnemonicOf(_buttonTexts[i]) ?? _kind.Mnemonics[i];
-            if ((long)key.Keycode != char.ToUpperInvariant(mnemonic)) continue;
+            if (mnemonic == '\0' || (long)key.Keycode != char.ToUpperInvariant(mnemonic)) continue;
             Complete(_kind.Choices[i]);
             SetInputAsHandled();
             return;
         }
     }
 
-    // MB_ABORTRETRYIGNORE and MB_YESNO have no cancel answer: the ✕ is disabled.
-    protected override void OnCloseButton() { }
+    // MB_ABORTRETRYIGNORE and MB_YESNO have no cancel answer: the ✕ is disabled. MB_RETRYCANCEL's and MB_OK's give
+    // キャンセル and OK.
+    protected override void OnCloseButton()
+    {
+        if (_kind.Cancel is { } cancel) Complete(cancel);
+    }
 
     /// <summary>The dialog as the drive protocol lists it: in AGE's Japanese, whatever the shell shows.</summary>
     public System.Text.Json.Nodes.JsonObject Describe()

@@ -665,6 +665,25 @@ local JSR; only `0x03` loads another script.
 pushes an `ExecFrame`, runs the child, and resumes its caller. This is the same mechanism needed for the
 natural root described below; an out-of-band scene-name registry is not required.
 
+**The frame limit and load failures (2026-11-17).** `op_0x3_call_script@0x41bc90` tests the current frame first: a
+call from frame 39 (the table holds 0 to 39, the root in frame 0) throws 「ファイルの階層が深すぎます．最大は40です．」 with
+flags `0x10001`. `age_show_message_box@0x409370` shows that as mode 1, the fatal box: caption
+「続行不可能なエラーが発生しました」, body `0x5707d0` (「[続行不可能なエラー]」, the message and the debug block, then
+「これ以上プログラムを実行できません．プログラムを終了します．」), style `0x10` (OK only), and the program ends. The
+resource open's errors (above) reach the loader, `script_frame_load_resource@0x40e980`, which catches them for ops
+`0x3` and `0x6` and shows the message in a mode-3 box: caption 「エラーが発生しました」, body `0x570650`
+(「もう一度実行しますか？」, then 再試行 and キャンセル each explained), style `0x15` (MB_RETRYCANCEL), and no debug block.
+再試行 opens the script again; キャンセル makes the op throw `Command_Exit_Exception`, which ends the program. The
+messages, from `asset_open_indexed_entry@0x44f390`: 「ファイル番号 n は不正な値です．」 for a base id past the table,
+「拡張ファイル情報ファイル n は読み込まれていません．」 for a high byte that names no mounted catalog, 「拡張ファイル ERROR
+を開くことが出来ません．n」 for an index past that catalog, and 「name を開くことが出来ません．\nERROR CODE = 2」 for a
+record whose file opens neither loose nor from its archive. Driven on 4.24J with a mod whose patch runs op `0x3` on file
+number 99999, and with a script that runs itself: both boxes, their text, buttons and styles, and 再試行 asking again,
+キャンセル and OK ending AGE with exit code 0. The port shows the same boxes (`AgeBoxButtons.Fatal` and `RetryCancel`;
+`IScriptProvider.LoadFailure` gives the message, `Sys4ScriptProvider` from the catalogs), and its own `CallDepthCap`
+(64) now lies past native's limit. It still halts where it cannot follow AGE: a high byte of `0x80` and up, which
+reads below native's table of catalogs, and a record that is not a script, which fails the loader's header check.
+
 #### Natural boot and New Game control spine (B0, 2026-07-20)
 
 SYSTEM4 is the long-lived script root and the game's actual scene coordinator. Its initial path establishes
@@ -7926,7 +7945,7 @@ its table. For an index outside the table, a native handler does one of four thi
 | No test, or a test that lets the index through: a signed `i < n` passes a negative index, and a test that admits one past the table's end passes that index | The handler would read or write outside native's table, which the port cannot reproduce. The run halts: `index-out-of-range: SCRIPT@0xOFF handler (op 0xNN): what N is outside 0..M, …` |
 | A test that skips the op without a word | The op is skipped |
 | A test that skips the op and writes a host trace (`…の引数が不正です．`, `関数：dsPlay エラー：…`) | The op is skipped, with a warning that carries native's trace |
-| A test that throws a script error | The same box (`age_show_message_box@0x409370`): flags `0x10007` the 中止/再試行/無視 box (mode 7), flags `0x10005` the はい/いいえ box (mode 5; はい goes on to the next instruction, as the policy at `0x412689` does with its answer 4, and いいえ ends the run), flags `0x10001` a fatal box (mode 1) |
+| A test that throws a script error | The same box (`age_show_message_box@0x409370`): flags `0x10007` the 中止/再試行/無視 box (mode 7), flags `0x10005` the はい/いいえ box (mode 5; はい goes on to the next instruction, as the policy at `0x412689` does with its answer 4, and いいえ ends the run), flags `0x10001` the fatal box (mode 1, 「続行不可能なエラーが発生しました」, OK only, which ends the run) |
 
 The script-error box is an error's path, not the op's: `tools/opcode_flow.py` gives an op neither `waits` nor a
 `leaves` fact for it, and a Lua script call refuses the box before it waits.
@@ -8011,7 +8030,8 @@ The tables, by what native does:
     `0x10c` translates the scan code through its 256-entry table unchecked: both halt past the table.
   - Op `0x97`: `input_hotspot_poll_bound_action_callback` tests the action's low five bits, so action 39 answers
     action 7, and a negative action never fires.
-- **Script frames, 0 to 39** (`EngineCtx`'s frame table, `0x1e` dwords each). Op `0x6`
+- **Script frames, 0 to 39** (`EngineCtx`'s frame table, `0x1e` dwords each). Op `0x3` throws the fatal box for a
+  call from frame 39 (「ファイルの階層が深すぎます．最大は40です．」; "The frame limit and load failures"). Op `0x6`
   (`op_0x6_preload_script_slot@0x41bdb0`) makes the slot the current frame before its signed test: a slot above 39
   throws a fatal box (flags `0x10001`) whose context is read from the frame outside the table, and a negative slot
   passes and loads below it. Both halt. Op `0x8` (`op_0x8_call_preloaded_script_slot@0x41bf00`) reads the slot's
