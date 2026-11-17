@@ -160,6 +160,15 @@ it; git history keeps the record.
   - the save slot of ops `0x19e`, `0x19f`, `0x1a0`, `0x1a1`, `0x1ab`, `0x1ac` (both), `0x1ae` and `0x1af`, where only
     a negative slot raises the box, since a slot names a file.
 
+  To pick it up: read each handler in both Ghidra images, `/v2/range_00400000.bin` (Himegari 4.24J) and
+  `/kamidori/4.33G/range_00400000.bin`, as the classified ops were. `vm-map/opcodes.toml` records the native handler of
+  24 of these ops in its evidence; ops `0x27`, `0x28`, `0x1fb` and `0x208` have none recorded, so find theirs through
+  the dispatch table (`engine-re.md`, "Master key — the opcode→handler dispatch table"). In the port each of these
+  operands goes through `UnclassifiedIndex` or `UnclassifiedSurfaceSlot`
+  (`engine/Ome.Engine.Vm/VirtualMachine.Indices.cs`), so their callers are the sites left. Replace each with native's
+  test: `IndexRefused` for no test, a silent skip or a traced skip, or the script-error box native throws, with its
+  message. Then add the op to `IndexBoundsTests.Cases()`.
+
   Two values that retail scripts pass keep the port's earlier behaviour, with no box: -1 at op `0x20d` selects the
   backbuffer, and -1 at op `0x208` reads 0 x 0. Done when each op does what native's test does, with a test that
   drives it past its table, including -1 at ops `0x20d` and `0x208`.
