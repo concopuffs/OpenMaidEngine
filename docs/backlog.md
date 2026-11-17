@@ -163,6 +163,15 @@ it; git history keeps the record.
   Two values that retail scripts pass keep the port's earlier behaviour, with no box: -1 at op `0x20d` selects the
   backbuffer, and -1 at op `0x208` reads 0 x 0. Done when each op does what native's test does, with a test that
   drives it past its table, including -1 at ops `0x20d` and `0x208`.
+- **A voice replayed from History may loop natively.** Op `0x1bd` replays a History voice with playback variant 1,
+  which `voice_play_indexed_asset@0x488330` writes into channel 12's sound-buffer state. That is the field
+  `sound_buffer_start@0x484270` writes an op `0xb5`/`0xba` start mode to, and `sound_stream_fill_quarter@0x483b70`
+  rewinds the decoder at the end of the sound whenever it is nonzero (`engine-re.md`, "Channels 10 to 12" and "SC0000
+  native SFX / BGM-fade family"). So natively the replayed voice may play again from its start until something stops
+  or replaces it. No native run has listened past a replayed voice's end. The port plays every voice once and only
+  keeps the variant (`Audio.VoicePlaybackVariant`; `engine-re.md`, "Retained History record model and lifetime",
+  calls its meaning unproven). Done when native is driven past the end of a History replay, with channel 12's state
+  read while it runs, and the port plays variant 1 as native does, with `engine-re.md`'s passage saying which.
 
 ## Robustness
 
