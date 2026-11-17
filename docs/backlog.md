@@ -272,8 +272,10 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 - **Overlapping registry arrays.** `globals_build.py --lint` reports 2 Himegari and 39 Kamidori pairs of
   overlapping arrays. Classify each as a deliberate sub-view or a size error, since element names depend on it
   (OMS spec §11.3, §13).
-- **Compiler warnings.** The §8.2 warnings (recursion with bound parameters, string/number mixing, a wait inside an
-  `atomic` body) need a warning channel and, for the type-based ones, a type checker (OMS spec §16, gate 2 C3).
+- **Compiler warnings.** Two of the five §8.2 warnings are missing: an implicit string↔number conversion, which needs
+  a type checker, and an `atomic` body that contains a wait (OMS spec §8.2). The compiler reports the other three
+  through `OmsWarning`: an opcode no corpus executes, a division by a constant zero, and a recursive call over bound
+  parameters. Done when both are reported, each with a test.
 - **Whole-script rebuilds drift saves.** `oms-compile` re-derives T1/T2/T3, so old saves can drift on a rebuilt
   scene. Fragments keep tables stable and are the save-safe route; a `replace/` script built from edited source does
   not. Done when whole-script compiles can keep the base's table order (for example from the sidecar).
@@ -282,6 +284,16 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   `example.prologue`.
 - **Allocator residue (optional).** The remaining temporary-slot overrides (OMS spec §13) and Kamidori's explicit
   `L[0x0]` in `place_scene_background` (394 sidecars) only matter for sidecar-free byte identity.
+- **The `extended` compile mode.** The language design gives each target a mode (OMS spec §3.3). Under `extended` a
+  unit may use engine extension opcodes, at `0x10000` and above, through a generated `abi.ome` module (§9.4); its new
+  scripts get virtual identities the engine owns; and its unpinned globals live in engine-owned, namespaced mod state
+  (§9.2). None of it is built. `Ome.Script` has no mode, and a manifest's `target = "extended"` only marks a package
+  that the port alone runs (`ManifestReader`, `ModeCheck`). The loader spec leaves the mode out of version 1 (its §1)
+  and does not list it as future work (its §12). Lua has since taken most of its purpose: mod state is `maid.state`,
+  and logic beyond the AGE ABI is a handler. Still without a route: bytecode that calls the engine or a Lua function
+  (Lua spec §16, "Calling Lua from bytecode"), and how mod state that OMS can reach would meet the save (OMS spec
+  §13, "Extended mod-state model and its save interplay"). Done when a design note settles which of the three parts
+  are still wanted beside Lua, and each one kept is built with a gate while each one dropped is recorded as dropped.
 
 ## Mod loader and modding
 
@@ -303,6 +315,17 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   and no conflict is reported. Spec §10.2 does not cover it. Done when the design picks a rule (the applier
   relocates each plan's unpinned locals above the previous plan's, or the linker reports overlapping live ranges)
   and a two-mod test shows it.
+- **An inserted instruction does not name its mod.** For code a patch inserted, a Lua frame, a handler's error report
+  and the trace give the offset in the linked script and every mod that patched that script, not the one mod that
+  inserted the instruction (Lua spec §8.1, "Positions"). The applier knows the owner (`OmsPatchProvenance.Plan`); the
+  link cache keeps only where the base instructions went (`ScriptOffsetMap`). Done when the cache keeps each inserted
+  run's owner, and `vm.frame`, an error report and `--lua-trace` name that mod, with a test over two mods that patch
+  one script.
+- **Package size limits are provisional.** A package may hold 65,536 entries, 1 GiB an entry and 8 GiB in all, and no
+  entry may expand past 1 MiB at over 200:1 (`PackageLimits`; loader spec §11). They were set before any real package
+  existed, to admit a full voice or CG replacement and stop a decompression bomb, and the spec says to revisit them
+  once real packages exist. Done when a package of that size has been built and loaded, with its link time and memory
+  noted, and the limits are kept or changed on that evidence.
 - **A dev mod that stops the title's idle opening movie.** Kamidori's title leaves for `OP.BIN` once its idle
   count `L[0x29]` passes 100 while sound channel `0xb` is silent (`TITLE@0xd7`..`0xf1`). Callback slot `0xa`
   (`label_254`), the slot `dispatch-joy-callbacks` runs when no action is held, adds one every other 50 ms mouse
@@ -319,6 +342,14 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   - declarative data patches;
   - mod merging;
   - precompiled new scripts.
+- **Accepted future work** in the Lua scripting design (`superpowers/specs/2026-11-10-lua-scripting-design.md` §16).
+  The UI and settings items below are two of its entries; the others are kept there only:
+  - Lua that waits, and queued script calls;
+  - calling Lua from bytecode (see also the `extended` compile mode, under Open Maid Script);
+  - `maid.audio` and `maid.assets`, and profile state;
+  - write groups and pattern selectors;
+  - hooks on another mod's code (with the loader's mod-owned sites, above);
+  - a debugger, and outside capabilities.
 - **A devkit for mod authors.** Writing a mod takes the command line and the port's flags: `omp check`, `build`,
   `export`, `explain` and `lua-stubs`, the `omp text` commands, `oms-patch --fingerprint` and `oms-decompile`, and in
   the port `--mod`, `--lua-dev` (the writes a mod does not declare), `--lua-trace`, `--lua-reload`, `--text-log`, the
