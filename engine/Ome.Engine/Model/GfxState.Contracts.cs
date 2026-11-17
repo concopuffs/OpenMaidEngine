@@ -115,7 +115,7 @@ public sealed record GfxPersistenceSnapshot(
 /// A mode-0 color which has passed through op 0x202, and mode 1, use <paramref name="Alpha"/> as opacity.
 /// <paramref name="MultiplyTint"/> selects the latter compositor path.</summary>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
-                                           int SrcX, int SrcY, int W, int H, int DstX, int DstY,
+                                           int SrcX, int SrcY, int W, int H, double DstX, double DstY,
                                            TransformState Transform, RotationCycleState Rotation,
                                            int Alpha, long Tint, int TintStrength, BlendKind Blend,
                                            bool MultiplyTint,

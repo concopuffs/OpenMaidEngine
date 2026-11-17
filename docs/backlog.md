@@ -134,22 +134,6 @@ it; git history keeps the record.
 
   Done when each mode reveals its strips or clip mask as native draws them, checked frame by frame against native
   with `drive.py` at a low `speed`.
-- **Float operands.** Two gaps in how the VM reads a float-form operand (an inline float, a float global or a float
-  local), found by milestone 0 of the engine layering spec (`superpowers/specs/2026-11-12-engine-layering-design.md`,
-  §13):
-  - 4.33G reads op `0x1fd`'s x, y and z scale as floats (`vm_operand_fetch_float`; `vm-map/opcodes.toml`
-    `access_by_abi`), and Kamidori's `ALLMAP@0x5d9` and `SAVE@0xcad` pass the float immediate 37.5 (`0x42160000`)
-    for x and y. The two sites scale a full-size image into the 384×216 save thumbnail, on the branch taken when the
-    source image is not thumbnail-sized. The port reads them with the integer accessor, which gives the float's raw
-    bits (1,108,738,048), so that thumbnail is scaled by about eleven million percent. The other 23 opcodes the
-    revision diff marks for float access see only integer forms in both corpora, which both builds read alike.
-  - The integer accessor itself: native's `vm_operand_fetch` truncates a float form toward zero (`engine-re.md`, "VM
-    value, array and call semantics relevant to compilation"); `VirtualMachine.Read` returns its raw bits. No integer-read operand in either corpus is a float form,
-    so nothing shows it yet.
-
-  Done when op `0x1fd` reads its scale operands as floats under 4.33G (a handler variant bound by the build, spec
-  §7.2), the integer accessor truncates float forms, and a Kamidori save whose thumbnail takes that branch matches
-  native's (`SAVExx.STH`).
 - **Kamidori: History leaves different objects in a save.** `kamidori-history-after-load.steps` saves slot No.003
   after opening and closing History on SC0000's first name-plate page. Native's `SAVE03.DAT` and the port's differ
   under `save-diff` in 29 gfx records (2026-11-12): field `+0x14` of objects `0xd6d8`–`0xd6ef` is 53 natively and

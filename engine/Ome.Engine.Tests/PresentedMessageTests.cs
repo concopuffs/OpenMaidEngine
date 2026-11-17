@@ -155,7 +155,7 @@ public class PresentedMessageTests
     /// <summary>The left of each glyph object a SYS4433 page in aspect mode 1 draws: <paramref name="text"/>, presented
     /// as <paramref name="presented"/> when it is given, with glyphs 13 pixels wide for a single-byte CP932 code and 30
     /// for a double-byte one.</summary>
-    private static int[] AspectLefts(string text, string? presented)
+    private static double[] AspectLefts(string text, string? presented)
     {
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
         Ome.Engine.Model.Script script = ScriptAssembler.Assemble(table, "SC0100",
@@ -181,8 +181,8 @@ public class PresentedMessageTests
         // The reference 激 is 30 wide, so a single-byte character takes a 15-pixel cell and a double-byte one 30,
         // whatever its glyph's own advance; Ⅰ is double-byte in CP932. The same text drawn as source and as a
         // translation lands on the same cells.
-        int[] source = AspectLefts("Wil Ⅰ", presented: null);
-        Assert.Equal([0, 15, 30, 45, 60], source.Select(left => left - source[0]));
+        double[] source = AspectLefts("Wil Ⅰ", presented: null);
+        Assert.Equal([0.0, 15.0, 30.0, 45.0, 60.0], source.Select(left => left - source[0]));
         Assert.Equal(source, AspectLefts("ウィル", presented: "Wil Ⅰ"));
     }
 

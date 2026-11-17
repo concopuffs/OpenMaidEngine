@@ -5700,7 +5700,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "gfx-set-scale-current"
 category = "draw"
-summary = "(handle)(scale_x_percent)(scale_y_percent)(scale_z_percent) — immediately replace the retained object's current scale matrix at obj+0x6c. The handler divides each integer operand by 100.0 before calling matrix4_make_scale; this is distinct from 0x21e's delayed one-shot target scale."
+summary = "(handle)(scale_x_percent)(scale_y_percent)(scale_z_percent) — immediately replace the retained object's current scale matrix at obj+0x6c. The handler divides each scale operand by 100.0 before calling matrix4_make_scale; SYS4422 reads them as integers, SYS4433 as floats (Kamidori's SAVE@0xcad and ALLMAP@0x5d9 pass 37.5). This is distinct from 0x21e's delayed one-shot target scale."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]

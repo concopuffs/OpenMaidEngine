@@ -37,7 +37,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetScaleCycle(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetScaleCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
+        Gfx.SetScaleCycle(Read(a[0]), Read(a[1]), (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4)));
         return StepResult.Next;
     }
 
@@ -45,7 +45,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetTranslationCycle(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetTranslationCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
+        Gfx.SetTranslationCycle(Read(a[0]), Read(a[1]), (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4)));
         return StepResult.Next;
     }
 
@@ -76,7 +76,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         Gfx.SetTranslationChannel(Read(a[0]), Read(a[1]), Read(a[2]),
-            (Read(a[3]), Read(a[4]), Read(a[5]))); return StepResult.Next;
+            (ReadNumber(ins, 3), ReadNumber(ins, 4), ReadNumber(ins, 5))); return StepResult.Next;
     }
 
     // 0x21e (handle)(delay)(duration)(sx%)(sy%)(sz%)
@@ -84,7 +84,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         Gfx.SetScaleChannel(Read(a[0]), Read(a[1]), Read(a[2]),
-            (Read(a[3]), Read(a[4]), Read(a[5]))); return StepResult.Next;
+            (ReadNumber(ins, 3), ReadNumber(ins, 4), ReadNumber(ins, 5))); return StepResult.Next;
     }
 
     // 0x21f (handle)(delay)(duration)(axis x/y/z)(angle deg)
@@ -92,13 +92,13 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         Gfx.SetRotationChannel(Read(a[0]), Read(a[1]), Read(a[2]),
-            (Read(a[3]), Read(a[4]), Read(a[5])), Read(a[6])); return StepResult.Next;
+            (ReadNumber(ins, 3), ReadNumber(ins, 4), ReadNumber(ins, 5)), ReadNumber(ins, 6)); return StepResult.Next;
     }
 
     private StepResult OpAnimStart(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetRotationCycle(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4]))); return StepResult.Next;
+        Gfx.SetRotationCycle(Read(a[0]), Read(a[1]), (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4))); return StepResult.Next;
     }
 
     // 0x238 (duration) — global, non-blocking (host advances it per-frame)

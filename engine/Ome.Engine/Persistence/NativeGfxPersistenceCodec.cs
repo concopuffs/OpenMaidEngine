@@ -156,8 +156,8 @@ public static class NativeGfxPersistenceCodec
             Visible = (flags & 1) != 0,
             SourceSlot = ReadInt(raw, 4),
             SrcRect = (left, top, right - left, bottom - top),
-            V18 = ReadLongVector(raw, 0x18),
-            V24 = ReadLongVector(raw, 0x24),
+            V18 = ReadVector(raw, 0x18),
+            V24 = ReadVector(raw, 0x24),
             StaticColorMode = ReadInt(raw, 0x30),
             OneShotStartMs = DecodeNativeStart(ReadInt(raw, 0x34)),
             ColorDelayMs = ReadInt(raw, 0x38),
@@ -177,7 +177,7 @@ public static class NativeGfxPersistenceCodec
             ScaleCurrent = ReadScale(raw, 0x6c),
             ScaleTarget = ReadScale(raw, 0xac),
             TranslationCurrent = ReadMatrixTranslation(raw, 0x16c),
-            V16c = ReadLongMatrixTranslation(raw, 0x16c),
+            V16c = ReadMatrixTranslation(raw, 0x16c),
             TranslationTarget = ReadMatrixTranslation(raw, 0x1ac),
             RotationCurrent = (
                 ReadFloat(raw, 0x1ec), ReadFloat(raw, 0x1f0), ReadFloat(raw, 0x1f4),
@@ -202,7 +202,7 @@ public static class NativeGfxPersistenceCodec
             SrcFrameCount = Math.Max(1, ReadInt(raw, 0x238)),
             SrcColumns = Math.Max(1, ReadInt(raw, 0x23c)),
             ColorTarget = unchecked((uint)ReadInt(raw, 0x240)),
-            RotationAxis = ReadLongVector(raw, 0x244),
+            RotationAxis = ReadVector(raw, 0x244),
             ScaleCycleTarget = ReadScale(raw, 0x250),
             TranslationCycleTarget = ReadMatrixTranslation(raw, 0x290),
             OneShotAnimationControlFlags = unchecked((uint)ReadInt(raw, 0x2d0)),
@@ -268,21 +268,21 @@ public static class NativeGfxPersistenceCodec
         WriteFloat(raw, offset + 0x3c, 1);
     }
 
-    private static void WriteVector(Span<byte> raw, int offset, (long X, long Y, long Z) vector)
+    private static void WriteVector(Span<byte> raw, int offset, (double X, double Y, double Z) vector)
     {
         WriteVectorComponent(raw, offset, vector.X);
         WriteVectorComponent(raw, offset + 4, vector.Y);
         WriteVectorComponent(raw, offset + 8, vector.Z);
     }
 
-    private static (long X, long Y, long Z) ReadLongVector(ReadOnlySpan<byte> raw, int offset)
+    private static (double X, double Y, double Z) ReadVector(ReadOnlySpan<byte> raw, int offset)
         => (ReadVectorComponent(raw, offset), ReadVectorComponent(raw, offset + 4),
             ReadVectorComponent(raw, offset + 8));
 
-    // Native anchor, position, and cyclic axis fields are float32, although the VM exposes
-    // integer vector queries. Early Himegari port saves wrote int32 here; their nonzero small
-    // coordinates decode as subnormals (negative ones as NaNs). Accept those old records,
-    // then normalize on write. Never apply that compatibility interpretation to SYS4433.
+    // Native anchor, position, and cyclic axis fields are float32. Early Himegari port saves wrote
+    // int32 here; their nonzero small coordinates decode as subnormals (negative ones as NaNs).
+    // Accept those old records, then normalize on write. Never apply that compatibility
+    // interpretation to SYS4433.
     private static bool IsLegacyIntegerVector(ReadOnlySpan<byte> raw, int offset)
     {
         float value = ReadFloat(raw, offset);
@@ -290,15 +290,11 @@ public static class NativeGfxPersistenceCodec
             && (!float.IsFinite(value) || float.IsSubnormal(value));
     }
 
-    private static long ReadVectorComponent(ReadOnlySpan<byte> raw, int offset)
-        => IsLegacyIntegerVector(raw, offset) ? ReadInt(raw, offset) : (long)ReadFloat(raw, offset);
+    private static double ReadVectorComponent(ReadOnlySpan<byte> raw, int offset)
+        => IsLegacyIntegerVector(raw, offset) ? ReadInt(raw, offset) : ReadFloat(raw, offset);
 
-    private static void WriteVectorComponent(Span<byte> raw, int offset, long value)
-    {
-        // Keep imported fractional bits while the integer-facing semantic value is unchanged.
-        if (!IsLegacyIntegerVector(raw, offset) && ReadVectorComponent(raw, offset) == value) return;
-        WriteFloat(raw, offset, value);
-    }
+    private static void WriteVectorComponent(Span<byte> raw, int offset, double value)
+        => WriteFloat(raw, offset, value);
 
     private static void WriteTranslationMatrix(
         Span<byte> raw, int offset, (double X, double Y, double Z) translation)
@@ -312,12 +308,6 @@ public static class NativeGfxPersistenceCodec
         WriteFloat(raw, offset + 0x38, translation.Z);
         WriteFloat(raw, offset + 0x3c, 1);
     }
-
-    private static (long X, long Y, long Z) ReadLongMatrixTranslation(
-        ReadOnlySpan<byte> raw, int offset)
-        => ((long)ReadFloat(raw, offset + 0x30),
-            (long)ReadFloat(raw, offset + 0x34),
-            (long)ReadFloat(raw, offset + 0x38));
 
     private static (double X, double Y, double Z) ReadMatrixTranslation(
         ReadOnlySpan<byte> raw, int offset)

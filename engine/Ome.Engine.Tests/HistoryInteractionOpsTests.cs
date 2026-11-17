@@ -311,9 +311,9 @@ public class HistoryInteractionOpsTests
             .ToArray();
         Assert.Equal(new[]
         {
-            (0xd2faL, 768, 121), (0xd2fbL, 768, 179), (0xd2fcL, 768, 237),
-            (0xd2fdL, 768, 295), (0xd2feL, 768, 353), (0xd2ffL, 768, 411),
-            (0xd300L, 768, 549),
+            (0xd2faL, 768.0, 121.0), (0xd2fbL, 768.0, 179.0), (0xd2fcL, 768.0, 237.0),
+            (0xd2fdL, 768.0, 295.0), (0xd2feL, 768.0, 353.0), (0xd2ffL, 768.0, 411.0),
+            (0xd300L, 768.0, 549.0),
         }, historyButtons.Select(render => (render.Handle, render.DstX, render.DstY)).ToArray());
 
         var visibleRows = host.HistoryRenders

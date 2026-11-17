@@ -8,7 +8,8 @@ public sealed partial class GfxState
         // beyond the port's semantic model. Preserve the decoded bytes so a native load/save round trip
         // does not erase state that the port has not modeled yet; known fields are patched by the codec.
         public byte[]? NativePersistenceRecord;
-        public (long X, long Y, long Z) V18, V24, V16c;
+        // Native float32 fields (obj+0x18, +0x24, the translation of +0x16c); SYS4422 sets them from integers.
+        public (double X, double Y, double Z) V18, V24, V16c;
         public long Color = 0xffffffff; // native gfx_object_init_default obj+0x60: identity packed ARGB
         public bool HasColor;   // true once op 0x202/0x203 set a color/alpha modulation on this object
         public long StaticColorMode; // op 0x203 operand 2 -> obj+0x30; mode 2 is transition alpha/identity
@@ -80,7 +81,7 @@ public sealed partial class GfxState
 
         // Op 0x234 is a separate cyclic rotation channel (period obj+0x228, axis obj+0x244..0x24c).
         public long RotationPeriodMs;
-        public (long X, long Y, long Z) RotationAxis;
+        public (double X, double Y, double Z) RotationAxis;
         public bool RotationEnabled;
         public long RotationStartMs = -1;
 
@@ -127,19 +128,19 @@ public sealed partial class GfxState
     }
 
 
-    public void SetObjectAnchor(long handle, (long X, long Y, long Z) anchor)
+    public void SetObjectAnchor(long handle, (double X, double Y, double Z) anchor)
     {
         GetOrCreate(handle).V18 = anchor;
     }
 
-    public void SetObjectPosition(long handle, (long X, long Y, long Z) position)
+    public void SetObjectPosition(long handle, (double X, double Y, double Z) position)
     {
         GetOrCreate(handle).V24 = position;
     }
 
     /// <summary>Op 0x229: reset the embedded range transform, select [first, first+count), and set its
     /// anchor/pivot. This does not create or mutate an ordinary retained object.</summary>
-    public void SetRangeTransform(long first, long count, (long X, long Y, long Z) anchor)
+    public void SetRangeTransform(long first, long count, (double X, double Y, double Z) anchor)
     {
         _scene.RangeTransformFirst = first;
         _scene.RangeTransformCount = System.Math.Max(0, count);
@@ -148,7 +149,7 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x22a: immediately replace the embedded range transform's current scale.</summary>
-    public void SetRangeScaleCurrent((long X, long Y, long Z) percent)
+    public void SetRangeScaleCurrent((double X, double Y, double Z) percent)
     {
         _scene.RangeTransform.TransformMarked = true;   // owner+0x490, the embedded record's +0x68
         _scene.RangeTransform.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
@@ -156,7 +157,7 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x22c: immediately replace the embedded range transform's current translation.</summary>
-    public void SetRangeTranslationCurrent((long X, long Y, long Z) translation)
+    public void SetRangeTranslationCurrent((double X, double Y, double Z) translation)
     {
         _scene.RangeTransform.TransformMarked = true;
         _scene.RangeTransform.TranslationCurrent = translation;
@@ -164,7 +165,7 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x22d: arm the range transform's delayed one-shot scale target.</summary>
-    public void SetRangeScaleChannel(long delayMs, long durationMs, (long X, long Y, long Z) percent)
+    public void SetRangeScaleChannel(long delayMs, long durationMs, (double X, double Y, double Z) percent)
     {
         _scene.RangeTransform.TransformMarked = true;
         _scene.RangeTransform.ScaleDelayMs = delayMs;
@@ -177,7 +178,7 @@ public sealed partial class GfxState
 
     /// <summary>Op 0x22e: arm the range transform's delayed one-shot axis-angle rotation target.</summary>
     public void SetRangeRotationChannel(long delayMs, long durationMs,
-                                        (long X, long Y, long Z) axis, long angleDegrees)
+                                        (double X, double Y, double Z) axis, double angleDegrees)
     {
         _scene.RangeTransform.TransformMarked = true;
         _scene.RangeTransform.RotationDelayMs = delayMs;
@@ -192,7 +193,7 @@ public sealed partial class GfxState
     /// translation target. FIELD uses this channel to pan the world while its ordinary minimap object
     /// runs a matching op-0x220 translation.</summary>
     public void SetRangeTranslationChannel(long delayMs, long durationMs,
-                                           (long X, long Y, long Z) target)
+                                           (double X, double Y, double Z) target)
     {
         _scene.RangeTransform.TransformMarked = true;
         _scene.RangeTransform.TranslationDelayMs = delayMs;

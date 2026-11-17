@@ -45,7 +45,7 @@ public sealed partial class VirtualMachine : IInterpreterAccess
 
     CellValue IInterpreterAccess.ReadOperand(Operand operand) => operand.Type switch
     {
-        T_FLOAT or T_GFLOAT or T_LFLOAT => CellValue.Float(CellRules.ReadFloat(Read(operand))),
+        T_FLOAT or T_GFLOAT or T_LFLOAT => CellValue.Float(CellRules.ReadFloat(FloatBits(operand))),
         T_STR or T_GSTR or T_GSTRPTR or T_LSTR or T_LSTRPTR => CellValue.String(ReadStr(operand)),
         _ => CellValue.Integer(CellRules.ReadInteger(Read(operand))),
     };
@@ -55,7 +55,7 @@ public sealed partial class VirtualMachine : IInterpreterAccess
         switch (value.Kind)
         {
             case CellKind.String: WriteStr(operand, value.Text ?? ""); break;
-            case CellKind.Float: Write(operand, CellRules.FloatBits(value.Number)); break;
+            case CellKind.Float: WriteFloat(operand, (float)value.Number); break;
             default: Write(operand, (long)value.Number); break;
         }
     }

@@ -23,6 +23,7 @@ public sealed partial class VirtualMachine
     private readonly Script _s;
     private readonly OpcodeTable _t;
     private readonly Handler?[] _handlers;   // _t's opcodes bound to their handlers (VirtualMachine.Handlers.cs)
+    private readonly ulong[] _floatOperands; // per opcode, bit i: _t's ABI reads or writes operand i as a float
     // The input and waits native (Ome.Engine/Natives/InputAndWaits*.cs), or a stand-in whose waits return at once.
     private readonly IInputAndWaits _waits;
     private readonly SkipAndAuto _skip;
@@ -190,7 +191,7 @@ public sealed partial class VirtualMachine
                           TextManager? text = null, Scripting? scripting = null)
     {
         ArgumentNullException.ThrowIfNull(waits);
-        _s = s; _t = t; _handlers = BindHandlers(t); _o = o ?? new VmOptions(); _provider = provider;
+        _s = s; _t = t; _handlers = BindHandlers(t); _floatOperands = FloatOperandMasks(t); _o = o ?? new VmOptions(); _provider = provider;
         // Lua scripting spec §10: with Lua in the stack, the waits refuse while a handler's script call runs.
         _waits = scripting is { Setup.Stack.HasLua: true } ? new ModCallWaits(waits, this) : waits;
         // Composition hands over the native its time device belongs to; tests and tools that give none get one over
@@ -541,30 +542,161 @@ public sealed partial class VirtualMachine
         return true;
     }
 
+    /// <summary>An operand's integer value, as native's integer accessor (vm_operand_fetch) reads it: a float form is
+    /// truncated toward zero (<see cref="NativeTruncate"/>), and a string is parsed by <c>atol</c>
+    /// (<see cref="NativeAtol"/>). The types that accessor throws on (string references, and those the port has no
+    /// cell for) halt the VM, as they end native's script with an error (docs/engine-re.md, "VM value, array and call
+    /// semantics").</summary>
     private long Read(Operand op) => op.Type switch
     {
         T_IMM => op.Value,
+        T_FLOAT => NativeTruncate(BitConverter.Int32BitsToSingle(unchecked((int)op.Value))),
+        T_STR or T_GSTR or T_LSTR => NativeAtol(ReadStr(op)),
         T_GINT => ReadGlobal((int)op.Value),
-        T_GFLOAT => _memory.Float((int)op.Value),
+        T_GFLOAT or T_LFLOAT => NativeTruncate(BitConverter.Int32BitsToSingle(unchecked((int)FloatBits(op)))),
         T_GPTR => _memory.Integer(GlobalPointer((int)op.Value)),
         T_LINT => Gi(_cur.Locals.I, (int)op.Value),
-        T_LFLOAT => Gi(_cur.Locals.F, (int)op.Value),
         T_LPTR => ReadIntCell(Ga(_cur.Locals.P, (int)op.Value)),
-        _ => op.Value,
+        _ => throw RejectedOperand(op, "read"),
     };
 
+    /// <summary>Stores an integer as native's integer accessor (vm_operand_write) does: into an integer cell or what an
+    /// integer reference names, and as <c>(float)value</c> into a float cell. Native throws on any other destination
+    /// (an immediate, a string), and so does this.</summary>
     private void Write(Operand op, long val)
     {
         switch (op.Type)
         {
             case T_GINT: _memory.SetInteger((int)op.Value, val); break;
-            case T_GFLOAT: _memory.SetFloat((int)op.Value, val); break;
+            case T_GFLOAT: _memory.SetFloat((int)op.Value, NativeFloatBits(unchecked((int)val))); break;
             case T_GPTR: _memory.SetInteger(GlobalPointer((int)op.Value), val); break;
             case T_LINT: _cur.Locals.I[(int)op.Value] = val; break;
-            case T_LFLOAT: _cur.Locals.F[(int)op.Value] = val; break;
+            case T_LFLOAT: _cur.Locals.F[(int)op.Value] = NativeFloatBits(unchecked((int)val)); break;
             case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)op.Value), val); break;
+            default: throw RejectedOperand(op, "write");
         }
     }
+
+    /// <summary>An operand's value as SYS4433's float accessor (vm_operand_fetch_float) reads it: a float form as is, an
+    /// integer converted, and a string parsed by <c>atof</c> (<see cref="NativeAtof"/>).</summary>
+    private float ReadFloat(Operand op) => op.Type switch
+    {
+        T_FLOAT or T_GFLOAT or T_LFLOAT => BitConverter.Int32BitsToSingle(unchecked((int)FloatBits(op))),
+        T_STR or T_GSTR or T_LSTR => (float)NativeAtof(ReadStr(op)),
+        _ => unchecked((int)Read(op)),
+    };
+
+    /// <summary>Stores a float as SYS4433's float accessor (vm_operand_write_float) does: its bits into a float cell,
+    /// and truncated toward zero into an integer cell or what an integer reference names.</summary>
+    private void WriteFloat(Operand op, float value)
+    {
+        switch (op.Type)
+        {
+            case T_GFLOAT: _memory.SetFloat((int)op.Value, FloatToBits(value)); break;
+            case T_LFLOAT: _cur.Locals.F[(int)op.Value] = FloatToBits(value); break;
+            case T_GINT or T_GPTR or T_LINT or T_LPTR: Write(op, NativeTruncate(value)); break;
+            default: throw RejectedOperand(op, "write");
+        }
+    }
+
+    /// <summary>The bits a float form holds: the immediate's, or the float cell's. Formatting and Lua read them as the
+    /// float they are.</summary>
+    private long FloatBits(Operand op) => op.Type switch
+    {
+        T_FLOAT => op.Value,
+        T_GFLOAT => _memory.Float((int)op.Value),
+        T_LFLOAT => Gi(_cur.Locals.F, (int)op.Value),
+        _ => throw new ArgumentException($"operand type {op.Type} is not a float form", nameof(op)),
+    };
+
+    /// <summary>Operand <paramref name="index"/> of <paramref name="ins"/> as its handler reads a number: through the
+    /// float accessor where this ABI's contract says <c>read-float</c> (<see cref="OpcodeDefinition.FloatOperands"/>),
+    /// else through the integer one. SYS4433's transform family reads its vectors this way, SYS4422's as integers.</summary>
+    private double ReadNumber(Instruction ins, int index)
+        => IsFloatOperand(ins, index) ? ReadFloat(ins.Args[index]) : Read(ins.Args[index]);
+
+    /// <summary>Stores a number into operand <paramref name="index"/> as its handler does: through the float accessor
+    /// where this ABI's contract says <c>write-float</c>, else truncated through the integer one.</summary>
+    private void WriteNumber(Instruction ins, int index, double value)
+    {
+        if (IsFloatOperand(ins, index)) WriteFloat(ins.Args[index], (float)value);
+        else Write(ins.Args[index], NativeTruncate(value));
+    }
+
+    private bool IsFloatOperand(Instruction ins, int index)
+        => (uint)ins.Opcode < (uint)_floatOperands.Length && (_floatOperands[ins.Opcode] & (1UL << index)) != 0;
+
+    private static ulong[] FloatOperandMasks(OpcodeTable table)
+    {
+        int size = 0;
+        foreach (OpcodeDefinition definition in table.Entries)
+            if (definition.FloatOperands.Count > 0) size = Math.Max(size, definition.Opcode + 1);
+        var masks = new ulong[size];
+        foreach (OpcodeDefinition definition in table.Entries)
+            foreach (int operand in definition.FloatOperands)
+                if (operand is >= 0 and < 64) masks[definition.Opcode] |= 1UL << operand;
+        return masks;
+    }
+
+    /// <summary>Native's float-to-integer conversion (<c>__ftol2_sse</c>, cvttsd2si): toward zero, and the integer
+    /// indefinite 0x80000000 for NaN or a value outside int32.</summary>
+    internal static int NativeTruncate(double value)
+        => double.IsNaN(value) || value <= int.MinValue - 1.0 || value >= int.MaxValue + 1.0
+            ? int.MinValue
+            : (int)value;
+
+    private static long FloatToBits(float value) => BitConverter.SingleToInt32Bits(value);
+
+    /// <summary>A float cell's bits for <c>(float)value</c>, as vm_operand_write stores an integer there.</summary>
+    private static long NativeFloatBits(int value) => FloatToBits(value);
+
+    /// <summary>The CRT's <c>atol</c> as AGE links it (VS2005: <c>strtol(text, NULL, 10)</c>): leading white space, a
+    /// sign, then ASCII digits, clamped to int32. Anything else reads 0.</summary>
+    internal static long NativeAtol(string text)
+    {
+        int i = SkipCWhiteSpace(text, 0);
+        bool negative = false;
+        if (i < text.Length && text[i] is '+' or '-') negative = text[i++] == '-';
+        long magnitude = 0;
+        for (; i < text.Length && text[i] is >= '0' and <= '9'; i++)
+            magnitude = Math.Min(magnitude * 10 + (text[i] - '0'), (long)int.MaxValue + 1);
+        return Math.Clamp(negative ? -magnitude : magnitude, int.MinValue, int.MaxValue);
+    }
+
+    /// <summary>The CRT's <c>atof</c>: leading white space, then the longest decimal number (a sign, digits with an
+    /// optional point, an optional exponent). Anything else reads 0.</summary>
+    internal static double NativeAtof(string text)
+    {
+        int start = SkipCWhiteSpace(text, 0);
+        int i = start;
+        if (i < text.Length && text[i] is '+' or '-') i++;
+        int digits = 0;
+        for (; i < text.Length && text[i] is >= '0' and <= '9'; i++) digits++;
+        if (i < text.Length && text[i] == '.')
+            for (i++; i < text.Length && text[i] is >= '0' and <= '9'; i++) digits++;
+        if (digits == 0) return 0;
+        int end = i;
+        if (i < text.Length && text[i] is 'e' or 'E')
+        {
+            int exponent = i + 1;
+            if (exponent < text.Length && text[exponent] is '+' or '-') exponent++;
+            int exponentEnd = exponent;
+            while (exponentEnd < text.Length && text[exponentEnd] is >= '0' and <= '9') exponentEnd++;
+            if (exponentEnd > exponent) end = exponentEnd;
+        }
+        return double.Parse(text.AsSpan(start, end - start), System.Globalization.NumberStyles.Float,
+                            System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>The C locale's white space (isspace): space, tab, line feed, vertical tab, form feed, carriage return.</summary>
+    private static int SkipCWhiteSpace(string text, int i)
+    {
+        while (i < text.Length && (text[i] == ' ' || text[i] is >= '\t' and <= '\r')) i++;
+        return i;
+    }
+
+    private static VmHaltException RejectedOperand(Operand op, string access)
+        => new($"operand-type-rejected:{access}:type 0x{op.Type:x}");
 
     /// <summary>A string operand as native's read-string accessors give it (vm_operand_read_string_buffer,
     /// vm_operand_read_std_string): text as stored, and a number formatted (itoa, floats "%lf") and then
@@ -580,7 +712,7 @@ public sealed partial class VirtualMachine
         T_IMM or T_GINT or T_GPTR or T_LINT or T_LPTR => AsciiToFullwidth(
             unchecked((int)Read(op)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
         T_FLOAT or T_GFLOAT or T_LFLOAT => AsciiToFullwidth(
-            BitConverter.Int32BitsToSingle(unchecked((int)Read(op)))
+            BitConverter.Int32BitsToSingle(unchecked((int)FloatBits(op)))
                 .ToString("F6", System.Globalization.CultureInfo.InvariantCulture)),
         _ => "",
     };
@@ -787,7 +919,7 @@ public sealed partial class VirtualMachine
         if (IsStr(operand)) return ReadStr(operand);
         if (operand.Type is T_FLOAT or T_GFLOAT or T_LFLOAT)
         {
-            float value = BitConverter.Int32BitsToSingle(unchecked((int)Read(operand)));
+            float value = BitConverter.Int32BitsToSingle(unchecked((int)FloatBits(operand)));
             return value.ToString("F6", System.Globalization.CultureInfo.InvariantCulture);
         }
         return unchecked((int)Read(operand))

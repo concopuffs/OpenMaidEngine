@@ -800,7 +800,7 @@ public sealed partial class GfxState
                 (objectRangeTransform != null && rangeTimeVarying);
             if (drawsNothing) continue;   // an empty native source rect draws no pixels
             list.Add(new RenderObject(handle, resId, ck, srcX, srcY, w, h,
-                                      (int)o.V24.X, (int)o.V24.Y,
+                                      o.V24.X, o.V24.Y,
                                       new TransformState(scale.X, scale.Y, scale.Z,
                                                          translation.X, translation.Y, translation.Z,
                                                          o.V18.X, o.V18.Y, o.V18.Z,

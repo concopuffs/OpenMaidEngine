@@ -45,8 +45,8 @@ public class SceneReloadTests
             "_modCalls", "_modCallStepsEnd", "_modCallBudget",
             // The wait callbacks running, where a Lua reload waits: a callback puts it back as it returns or unwinds.
             "_waitCallbacks",
-            // The handler table.
-            "_handlers",
+            // The handler table, and which operands the ABI reads as floats.
+            "_handlers", "_floatOperands",
             // A wait's flags, set and cleared within the wait; no wait runs at a reload.
             "_advTextWaitPolling", "_advInputPollPageless", "_advWaitCoroutineYieldRequested", "_hiddenWindowWaiting",
             "_hiddenWindowWheelTriggers",

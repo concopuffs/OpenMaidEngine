@@ -1822,7 +1822,7 @@ Port (2026-11-07): MovieSurfaceRegistry.Release drops the slot's movie binding w
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
 - **semantic status:** investigated
-- **summary:** (handle)(scale_x_percent)(scale_y_percent)(scale_z_percent) — immediately replace the retained object's current scale matrix at obj+0x6c. The handler divides each integer operand by 100.0 before calling matrix4_make_scale; this is distinct from 0x21e's delayed one-shot target scale.
+- **summary:** (handle)(scale_x_percent)(scale_y_percent)(scale_z_percent) — immediately replace the retained object's current scale matrix at obj+0x6c. The handler divides each scale operand by 100.0 before calling matrix4_make_scale; SYS4422 reads them as integers, SYS4433 as floats (Kamidori's SAVE@0xcad and ALLMAP@0x5d9 pass 37.5). This is distinct from 0x21e's delayed one-shot target scale.
 - **operand access:** `1` read · `2` read (SYS4422) / read-float (SYS4433) · `3` read (SYS4422) / read-float (SYS4433) · `4` read (SYS4422) / read-float (SYS4433)
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high

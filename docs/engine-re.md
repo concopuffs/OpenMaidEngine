@@ -3046,8 +3046,9 @@ destinations, while Himegari has no decoded call site.
 
 Kamidori uses six parallel calls in each of `SC0600.BIN` and `SC2060.BIN`, querying presentation-object
 handles before deriving their next one-shot rotation targets. The portable VM exposes the current retained
-axis-angle independently of its target, truncates toward zero for these integer outputs, and preserves the
-missing-object outputs. Focused tests cover current-versus-target separation, positive and negative
+axis-angle independently of its target, writes each value as the build's accessor does (SYS4433 through the float
+writer, SYS4422 truncated toward zero; "VM value, array and call semantics" below), and preserves the missing-object
+outputs. Focused tests cover current-versus-target separation, positive and negative
 fractional truncation, and the missing-object contract.
 
 ### Retained graphics-object swap opcode `0x214` (2026-08-19)
@@ -7656,6 +7657,34 @@ run-state `0x400`. A strip button's new icon appears when the block closes, afte
 These facts define the core of a language that compiles to AGE bytecode (roadmap §3.3, "Decided language
 architecture"). They come from the `/v2` decompilation; the SYS4433 float accessors above are the only observed
 departure.
+
+**The port's accessors (2026-11-16).** `VirtualMachine.Read` and `Write` are native's generic pair: a float form reads
+truncated toward zero, with `__ftol2_sse`'s 0x80000000 for NaN or a value outside int32 (`NativeTruncate`; .NET's own
+conversion saturates instead); a string reads through `atol` (`NativeAtol`: C white space, a sign, ASCII digits,
+clamped as VS2005's `strtol` does); an integer stored into a float cell becomes `(float)value`. A type the native
+accessor throws on halts the script with `operand-type-rejected:read|write:type 0xN`, since native's throw ends it
+too; so do the SYS5-style vector types, which the port has no cells for and neither corpus uses. Before, `Read` returned a float form's raw bits and a string's operand value, and `Write` ignored a destination
+it had no cell for. `ReadFloat` and `WriteFloat` are SYS4433's float pair (`vm_operand_fetch_float@0x419c60`,
+`vm_operand_write_float@0x426c00`): float forms as they are, integers converted, strings through `atof`, and a float
+stored into an integer cell truncated.
+
+Which operands a handler reads or writes as floats is the registry's contract for the build's ABI, not a handler
+variant: `OpcodeTableJson` turns each operand whose `access` (or `access_by_abi` entry) is `read-float` or
+`write-float` into `OpcodeDefinition.FloatOperands`, and the transform handlers (the 21 SYS4433 opcodes `0x1fd`–`0x235`
+with float operands) read and write their vectors through `ReadNumber`/`WriteNumber`, which pick the pair from that
+set. One handler then serves both builds, SYS4422 reading the same operands as integers. This settles the question
+the engine layering spec left for this first variant (§7.2, milestone 1): builds do not override handler bindings for
+an operand read. The retained objects' anchor, position and rotation-axis vectors are doubles to match (native's
+float32 fields): the drawn position (`RenderObject.DstX`/`DstY`) keeps a fraction, and the gfx save codec reads and
+writes them as the floats they are.
+
+The case that showed the difference: Kamidori's `SAVE@0xcad` and `ALLMAP@0x5d9` scale a gallery CG into the 384×216
+save thumbnail with op `0x1fd` and the float 37.5, which the port read as its raw bits (a scale of about eleven
+million percent). That branch runs only when the gallery entry's save preview (`gallery_image_assets` column 1) is
+not thumbnail-sized, and no retail entry is: all 128 previews in the clean install (115 base, 13 in the appends) are
+384×216. With a loose `CGINIT.BIN` that gives entry 1 (CG `0x7b`, `EV101AA`) the full CG as its preview, a save on
+SC0000's first dialogue page (`SC0000@0x2666`) takes the branch on both targets, and the port's `SAVE01.STH` matches
+native's within 1 per channel (2026-11-16).
 
 **Values.**
 

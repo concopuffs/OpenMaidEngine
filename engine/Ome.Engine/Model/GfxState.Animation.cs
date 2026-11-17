@@ -212,8 +212,9 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x1fd: immediately replace the object's current scale matrix. Script operands are
-    /// integer percentages; native divides them by 100 before matrix4_make_scale at obj+0x6c.</summary>
-    public void SetCurrentScale(long handle, (long X, long Y, long Z) percent)
+    /// percentages (integers on SYS4422, floats on SYS4433); native divides them by 100 before matrix4_make_scale at
+    /// obj+0x6c.</summary>
+    public void SetCurrentScale(long handle, (double X, double Y, double Z) percent)
     {
         var o = GetOrCreate(handle);
         o.TransformMarked = true;
@@ -222,7 +223,7 @@ public sealed partial class GfxState
 
     /// <summary>Op 0x1fe: immediately replace the object's current axis-angle rotation matrix at
     /// obj+0xec. Axis components and angle are retained as native floating-point values.</summary>
-    public void SetCurrentRotation(long handle, (long X, long Y, long Z) axis, long angleDegrees)
+    public void SetCurrentRotation(long handle, (double X, double Y, double Z) axis, double angleDegrees)
     {
         var o = GetOrCreate(handle);
         o.TransformMarked = true;
@@ -231,7 +232,7 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x1ff: immediately replace the object's current translation matrix at obj+0x16c.</summary>
-    public void SetCurrentTranslation(long handle, (long X, long Y, long Z) translation)
+    public void SetCurrentTranslation(long handle, (double X, double Y, double Z) translation)
     {
         var o = GetOrCreate(handle);
         o.TransformMarked = true;
@@ -240,7 +241,7 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x21e: normalized scale target (100 = identity), with independent delay/duration.</summary>
-    public void SetScaleChannel(long handle, long delayMs, long durationMs, (long X, long Y, long Z) percent)
+    public void SetScaleChannel(long handle, long delayMs, long durationMs, (double X, double Y, double Z) percent)
     {
         var o = GetOrCreate(handle);
         // Native setters get-or-create first, then require object flag bit 0 (draw-bound/visible).
@@ -253,7 +254,7 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x220: absolute translation target, with independent delay/duration.</summary>
-    public void SetTranslationChannel(long handle, long delayMs, long durationMs, (long X, long Y, long Z) target)
+    public void SetTranslationChannel(long handle, long delayMs, long durationMs, (double X, double Y, double Z) target)
     {
         var o = GetOrCreate(handle);
         if (!o.Visible) return;
@@ -292,7 +293,7 @@ public sealed partial class GfxState
 
     /// <summary>Op 0x21f: delayed one-shot axis-angle rotation target, sharing obj+0x34's start timestamp.</summary>
     public void SetRotationChannel(long handle, long delayMs, long durationMs,
-                                   (long X, long Y, long Z) axis, long angleDegrees)
+                                   (double X, double Y, double Z) axis, double angleDegrees)
     {
         var o = GetOrCreate(handle);
         if (!o.Visible) return;
@@ -304,7 +305,7 @@ public sealed partial class GfxState
 
     /// <summary>Op 0x234: retain the cyclic rotation period and axis separately. Native interpolation uses
     /// frame-time retained-gfx owner+0xb550 (EngineCtx+0x51b64) and rotates through 360 degrees per period.</summary>
-    public void SetRotationCycle(long handle, long periodMs, (long X, long Y, long Z) axis)
+    public void SetRotationCycle(long handle, long periodMs, (double X, double Y, double Z) axis)
     {
         var o = GetOrCreate(handle);
         o.RotationPeriodMs = periodMs; o.RotationAxis = axis; o.RotationEnabled = periodMs > 0;
@@ -312,7 +313,7 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x233: cyclic identity-to-target scale, sampled with a triangular ping-pong phase.</summary>
-    public void SetScaleCycle(long handle, long periodMs, (long X, long Y, long Z) percent)
+    public void SetScaleCycle(long handle, long periodMs, (double X, double Y, double Z) percent)
     {
         var o = GetOrCreate(handle);
         o.ScaleCyclePeriodMs = periodMs;
@@ -323,7 +324,7 @@ public sealed partial class GfxState
 
     /// <summary>Op 0x235: cyclic identity-to-target translation, sampled with a triangular
     /// ping-pong phase and composed after the sibling cyclic rotation.</summary>
-    public void SetTranslationCycle(long handle, long periodMs, (long X, long Y, long Z) target)
+    public void SetTranslationCycle(long handle, long periodMs, (double X, double Y, double Z) target)
     {
         var o = GetOrCreate(handle);
         o.TranslationCyclePeriodMs = periodMs;

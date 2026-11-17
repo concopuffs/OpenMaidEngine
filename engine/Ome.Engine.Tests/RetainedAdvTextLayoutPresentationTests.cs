@@ -75,7 +75,7 @@ public class RetainedAdvTextLayoutPresentationTests
         presentation.PublishThrough(gfx, 2);
 
         Assert.Equal(
-            new[] { (278, 94), (282, 139) },
+            new[] { (278.0, 94.0), (282.0, 139.0) },
             gfx.SnapshotVisibleObjects().Select(item => (item.DstX, item.DstY)));
     }
 

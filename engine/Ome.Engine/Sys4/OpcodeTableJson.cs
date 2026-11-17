@@ -84,6 +84,9 @@ public static class OpcodeTableJson
             {
                 Waits = waits,
                 Leaves = leaves,
+                FloatOperands = semantics.ValueKind == JsonValueKind.Object
+                    ? FloatOperands(semantics, abiId)
+                    : new HashSet<int>(),
             };
         }
 
@@ -132,6 +135,25 @@ public static class OpcodeTableJson
                     var other => throw new InvalidDataException($"opcode 0x{op:x}: leaves '{other}' is not a way to leave"),
                 };
         return (waits, leaves);
+    }
+
+    /// <summary>The operands (0-based) whose contract for <paramref name="abiId"/> is <c>read-float</c> or
+    /// <c>write-float</c>: an argument's <c>access_by_abi</c> entry for the ABI, else its <c>access</c>.</summary>
+    private static HashSet<int> FloatOperands(JsonElement semantics, string abiId)
+    {
+        var operands = new HashSet<int>();
+        if (!semantics.TryGetProperty("args", out JsonElement args)) return operands;
+        foreach (JsonElement arg in args.EnumerateArray())
+        {
+            JsonElement access = default;
+            bool found = arg.TryGetProperty("access_by_abi", out JsonElement byAbi)
+                         && byAbi.TryGetProperty(abiId, out access);
+            if (!found && !arg.TryGetProperty("access", out access)) continue;
+            foreach (JsonElement kind in access.EnumerateArray())
+                if (kind.GetString() is "read-float" or "write-float")
+                    operands.Add(arg.GetProperty("i").GetInt32() - 1);
+        }
+        return operands;
     }
 
     private static Dictionary<int, OpcodeDefinition> ResolveLayer(
@@ -209,7 +231,10 @@ public static class OpcodeTableJson
                     // The control facts are the handler's, which the canonical name selects: a replacement that keeps
                     // the name keeps them.
                     contracts[op] = inherited != null && replacement.CanonicalLabel == inherited.CanonicalLabel
-                        ? replacement with { Waits = inherited.Waits, Leaves = inherited.Leaves }
+                        ? replacement with
+                        {
+                            Waits = inherited.Waits, Leaves = inherited.Leaves, FloatOperands = inherited.FloatOperands,
+                        }
                         : replacement;
                 }
             }

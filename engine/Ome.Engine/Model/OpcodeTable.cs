@@ -63,6 +63,13 @@ public sealed record OpcodeDefinition(
     /// <summary>How the port's handler can leave; <see cref="OpcodeLeaves.None"/> with <see cref="Waits"/> null.</summary>
     public OpcodeLeaves Leaves { get; init; }
 
+    /// <summary>The operands (0-based) the table's ABI reads or writes as floats: those whose registry contract is
+    /// <c>read-float</c> or <c>write-float</c> for it (vm-map/opcodes.toml <c>access_by_abi</c>; SYS4433's transform
+    /// family). The others go through the integer accessors.</summary>
+    public IReadOnlySet<int> FloatOperands { get; init; } = NoOperands;
+
+    private static readonly IReadOnlySet<int> NoOperands = new HashSet<int>();
+
     public string CanonicalLabel => string.IsNullOrWhiteSpace(SemanticName) ? Label : SemanticName;
     public bool IsObservedBy(string profileId) => ObservedBy.Contains(profileId);
     public IReadOnlySet<string> EvidenceRevisions { get; } = SemanticEvidenceRevisions

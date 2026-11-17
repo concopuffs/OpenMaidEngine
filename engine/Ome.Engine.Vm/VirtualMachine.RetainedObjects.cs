@@ -34,7 +34,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         var v = Gfx.TryGet(Read(a[0]))?.V18 ?? default;
-        Write(a[1], v.X); Write(a[2], v.Y); Write(a[3], v.Z); return StepResult.Next;
+        WriteNumber(ins, 1, v.X); WriteNumber(ins, 2, v.Y); WriteNumber(ins, 3, v.Z); return StepResult.Next;
     }
 
     // 0x21a (handle)(outA)(outB)(outC) <- V24
@@ -42,21 +42,21 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         var v = Gfx.TryGet(Read(a[0]))?.V24 ?? default;
-        Write(a[1], v.X); Write(a[2], v.Y); Write(a[3], v.Z); return StepResult.Next;
+        WriteNumber(ins, 1, v.X); WriteNumber(ins, 2, v.Y); WriteNumber(ins, 3, v.Z); return StepResult.Next;
     }
 
     // 0x217 (handle)(a)(b)(c) -> V18
     private StepResult OpSetGfxGeom3(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetObjectAnchor(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return StepResult.Next;
+        Gfx.SetObjectAnchor(Read(a[0]), (ReadNumber(ins, 1), ReadNumber(ins, 2), ReadNumber(ins, 3))); return StepResult.Next;
     }
 
     // 0x219 (handle)(a)(b)(c) -> V24
     private StepResult OpSetGfxGeom3B(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetObjectPosition(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return StepResult.Next;
+        Gfx.SetObjectPosition(Read(a[0]), (ReadNumber(ins, 1), ReadNumber(ins, 2), ReadNumber(ins, 3))); return StepResult.Next;
     }
 
     // 0x80: default object slot substituted by native op 0x1d9
@@ -79,14 +79,14 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         Gfx.SetRangeTranslationChannel(Read(a[0]), Read(a[1]),
-            (Read(a[2]), Read(a[3]), Read(a[4]))); return StepResult.Next;
+            (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4))); return StepResult.Next;
     }
 
     // 0x229 (first)(count)(anchor x/y/z)
     private StepResult OpSetGfxRangeTransform(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetRangeTransform(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
+        Gfx.SetRangeTransform(Read(a[0]), Read(a[1]), (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4)));
         return StepResult.Next;
     }
 
@@ -94,21 +94,21 @@ public sealed partial class VirtualMachine
     private StepResult OpSetGfxRangeScaleCurrent(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetRangeScaleCurrent((Read(a[0]), Read(a[1]), Read(a[2]))); return StepResult.Next;
+        Gfx.SetRangeScaleCurrent((ReadNumber(ins, 0), ReadNumber(ins, 1), ReadNumber(ins, 2))); return StepResult.Next;
     }
 
     // 0x22c (tx)(ty)(tz)
     private StepResult OpSetGfxRangeTranslationCurrent(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetRangeTranslationCurrent((Read(a[0]), Read(a[1]), Read(a[2]))); return StepResult.Next;
+        Gfx.SetRangeTranslationCurrent((ReadNumber(ins, 0), ReadNumber(ins, 1), ReadNumber(ins, 2))); return StepResult.Next;
     }
 
     // 0x22d (delay)(duration)(sx%)(sy%)(sz%)
     private StepResult OpSetGfxRangeScaleTarget(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetRangeScaleChannel(Read(a[0]), Read(a[1]), (Read(a[2]), Read(a[3]), Read(a[4])));
+        Gfx.SetRangeScaleChannel(Read(a[0]), Read(a[1]), (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4)));
         return StepResult.Next;
     }
 
@@ -117,7 +117,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         Gfx.SetRangeRotationChannel(Read(a[0]), Read(a[1]),
-            (Read(a[2]), Read(a[3]), Read(a[4])), Read(a[5]));
+            (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4)), ReadNumber(ins, 5));
         return StepResult.Next;
     }
 
@@ -127,7 +127,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         if (Gfx.TryQueryTranslationCurrent(Read(a[1]), out var v))
         {
-            Write(a[2], (long)v.X); Write(a[3], (long)v.Y); Write(a[4], (long)v.Z);
+            WriteNumber(ins, 2, v.X); WriteNumber(ins, 3, v.Y); WriteNumber(ins, 4, v.Z);
             Write(a[0], 0);
         }
         else Write(a[0], 1);   // native missing-object path leaves output operands untouched
@@ -140,10 +140,10 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         if (Gfx.TryQueryRotationCurrent(Read(a[1]), out var v))
         {
-            // Native writes floats through the revision's destination helper. Both revisions
-            // truncate toward zero when these outputs target integer cells, as all corpus sites do.
-            Write(a[2], (long)v.X); Write(a[3], (long)v.Y); Write(a[4], (long)v.Z);
-            Write(a[5], (long)v.Angle); Write(a[0], 0);
+            // SYS4433 writes floats (vm_operand_write_float), SYS4422 integers. Both truncate toward zero
+            // into integer cells, which every corpus site passes.
+            WriteNumber(ins, 2, v.X); WriteNumber(ins, 3, v.Y); WriteNumber(ins, 4, v.Z);
+            WriteNumber(ins, 5, v.Angle); Write(a[0], 0);
         }
         else Write(a[0], 1);   // native missing-object path leaves output operands untouched
         return StepResult.Next;
@@ -153,21 +153,21 @@ public sealed partial class VirtualMachine
     private StepResult OpSetCurrentTranslation(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetCurrentTranslation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return StepResult.Next;
+        Gfx.SetCurrentTranslation(Read(a[0]), (ReadNumber(ins, 1), ReadNumber(ins, 2), ReadNumber(ins, 3))); return StepResult.Next;
     }
 
     // 0x1fd (handle)(sx%)(sy%)(sz%) -> current scale matrix
     private StepResult OpGfxSetScaleCurrent(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetCurrentScale(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3]))); return StepResult.Next;
+        Gfx.SetCurrentScale(Read(a[0]), (ReadNumber(ins, 1), ReadNumber(ins, 2), ReadNumber(ins, 3))); return StepResult.Next;
     }
 
     // 0x1fe (handle)(axis x/y/z)(angle degrees)
     private StepResult OpSetCurrentRotationAxisAngle(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Gfx.SetCurrentRotation(Read(a[0]), (Read(a[1]), Read(a[2]), Read(a[3])), Read(a[4]));
+        Gfx.SetCurrentRotation(Read(a[0]), (ReadNumber(ins, 1), ReadNumber(ins, 2), ReadNumber(ins, 3)), ReadNumber(ins, 4));
         return StepResult.Next;
     }
 
