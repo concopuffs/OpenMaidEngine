@@ -7349,6 +7349,14 @@ existing exact-copy route. This is a shared SYS4 graphics operation rather than 
 branch. Both revision handlers, workers, downsamplers, and enlargement helpers are renamed and commented in
 their Ghidra programs; both programs were saved.
 
+**The scratch surface (2026-11-17).** The mixed-direction path costs the script its slot 32. Both workers create a
+blank surface at slot `0x20` as large as the larger extent on each axis (`gfx_surface_create_blank_format0`, 4.24J
+`@0x47b770`, 4.33G `@0x481fb0`), which destroys any surface there and writes the record's resource id -1 and created
+flag 1, enlarge the source into it, shrink it into the destination, and then release it
+(`retained_gfx_release_surface`): slot 32 is left with no surface. The port does the same
+(`Graphics.ScaleCopySurfaceRect`). It decides on the requested rectangles, where native decides on the clipped ones;
+the two differ only for a rectangle that crosses a surface's edge. Retail never takes the path.
+
 ### Alternate-fill point-in-polygon -- opcode `0x147` (2026-08-19)
 
 SYS4422 `op_0x147_point_in_polygon@0x429b10` and SYS4433's matching handler at `0x42a960` implement

@@ -64,6 +64,36 @@ public class BattleFrontierOpsTests
         Assert.Equal(new byte[4], vm.Graphics.PixelAt(193, 0, 216));
     }
 
+    [Theory]
+    [InlineData(100, 50, 40, 100, true)]    // the width shrinks and the height grows
+    [InlineData(40, 100, 100, 50, true)]    // the width grows and the height shrinks
+    [InlineData(100, 50, 40, 20, false)]    // both shrink
+    [InlineData(40, 20, 100, 50, false)]    // both grow
+    public void ScaledSurfaceRectCopy_GoesThroughScratchSurface32WhenTheAxesDisagree(
+        int width, int height, int destinationWidth, int destinationHeight, bool throughScratch)
+    {
+        var table = Table();
+        var script = ScriptAssembler.Assemble(table, "SCALED_SURFACE_COPY", new List<(int, Operand[])>
+        {
+            (0x32, new[] { I(2), I(193), I(0), I(0), I(width), I(height),
+                            I(0), I(0), I(destinationWidth), I(destinationHeight) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var vm = new VirtualMachine(script, table, new RecordingWaits());
+        vm.Graphics.PublishSurfacePixels(2, GraphicsTestSupport.Image(width, height, (x, y) => [255, 0, 0, 255]));
+        vm.Graphics.CreateSurface(193, 120, 120);
+        vm.Graphics.CreateSurface(32, 10, 10);   // a script's surface in the scratch slot
+
+        vm.Run();
+
+        Assert.Equal(new byte[] { 255, 0, 0, 255 }, vm.Graphics.PixelAt(193, 0, 0));
+        Assert.Equal(new byte[] { 255, 0, 0, 255 },
+                     vm.Graphics.PixelAt(193, destinationWidth - 1, destinationHeight - 1));
+        // Native creates the scratch surface over slot 32 and releases it after the copy.
+        Assert.Equal(throughScratch ? (0, 0) : (10, 10), vm.Graphics.SurfaceSize(32));
+        Assert.Equal(-1, vm.Gfx.QueryField(32));
+    }
+
     [Fact]
     public void ScalarBattleHelpers_PreserveNativeSignedBehaviorAndStringAliasing()
     {

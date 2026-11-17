@@ -135,6 +135,42 @@ public sealed partial class Graphics
         });
     }
 
+    /// <summary>The scratch surface op 0x32's mixed-axis copy goes through (gfx_scale_copy_surface_rect@0x47c6c0).
+    /// </summary>
+    public const int ScaleCopyScratchSurface = 0x20;
+
+    /// <summary>
+    /// Op 0x32 (gfx_scale_copy_surface_rect@0x47c6c0; 4.33G the same): a scaled copy. When one axis grows and the
+    /// other shrinks, native goes through scratch surface 32: it creates a blank surface there as large as the larger
+    /// extent on each axis (gfx_surface_create_blank, which destroys any surface the slot held), enlarges the source
+    /// into it, shrinks it into the destination and releases it (retained_gfx_release_surface). Slot 32 is left with
+    /// no surface, its record's resource id -1 and its created flag 1, whatever a script kept there. Native decides on
+    /// its clipped rectangles; the port decides on the requested ones, which differ only for a rectangle that crosses
+    /// a surface's edge. Retail never takes this path: Kamidori's two calls only shrink.
+    /// </summary>
+    public void ScaleCopySurfaceRect(SurfaceRectCopy copy)
+    {
+        bool mixed = copy.Width > 0 && copy.Height > 0 && copy.DestinationWidth > 0 && copy.DestinationHeight > 0
+                     && (copy.DestinationWidth < copy.Width && copy.DestinationHeight > copy.Height
+                         || copy.DestinationWidth > copy.Width && copy.DestinationHeight < copy.Height);
+        if (!mixed || !CopyResolves(copy))
+        {
+            CopySurfaceRect(copy);
+            return;
+        }
+        CreateSurface(ScaleCopyScratchSurface, Math.Max(copy.Width, copy.DestinationWidth),
+                      Math.Max(copy.Height, copy.DestinationHeight));
+        CopySurfaceRect(copy);
+        ReleaseSurface(ScaleCopyScratchSurface);
+    }
+
+    // Whether both of a copy's surfaces are there: native traces a missing one and copies nothing.
+    private bool CopyResolves(SurfaceRectCopy copy)
+        => SurfacePixels(copy.SourceSurface) != null
+           && (SurfacePixels(copy.DestinationSurface) != null
+               || _slotDims.TryGetValue(copy.DestinationSurface, out var dimensions)
+                  && dimensions.W >= 0 && dimensions.H >= 0);
+
     /// <summary>Ops 0x207 and 0x32: a paired-clipped (0x207) or scaled (0x32) copy between surfaces.</summary>
     public void CopySurfaceRect(SurfaceRectCopy copy)
     {

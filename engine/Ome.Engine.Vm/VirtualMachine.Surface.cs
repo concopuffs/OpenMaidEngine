@@ -125,7 +125,7 @@ public sealed partial class VirtualMachine
         var a = ins.Args;
         if (SurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         if (SurfaceSlotRefused(ins, Read(a[1])) is { } refused2) return refused2;
-        _graphics.CopySurfaceRect(new SurfaceRectCopy(
+        _graphics.ScaleCopySurfaceRect(new SurfaceRectCopy(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
             (int)Read(a[8]), (int)Read(a[9])));
