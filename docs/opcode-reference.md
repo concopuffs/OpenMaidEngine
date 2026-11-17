@@ -509,7 +509,7 @@ The handler reads the same 0x20-byte string vector counted by opcode 0x2dc and s
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
 - **semantic status:** investigated
-- **summary:** (channel) — start the already-loaded channel once (logical loop=false). DirectSound publishes synchronously through Play(0,0,DSBPLAY_LOOPING); the low-level flag loops only the streaming ring, while decoder EOF stops logical playback.
+- **summary:** (channel) — start the already-loaded channel once (logical loop=false). DirectSound publishes synchronously through Play(0,0,DSBPLAY_LOOPING); the low-level flag loops only the streaming ring, while decoder EOF stops logical playback. Nothing starts while the sound effect route is off. Any of the manager's 13 channels starts: 11 holds the last BGM track and 12 the last voice, which play again from their start at their level (docs/engine-re.md, "Channels 10 to 12").
 - **operand access:** `1` read
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
@@ -564,7 +564,7 @@ Implemented: the audio native shares op 0xb7's retained-track/zero handling but 
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
 - **semantic status:** investigated
-- **summary:** (channel) — start the already-loaded sound-effect channel with logical loop mode 1; the streaming decoder rewinds at EOF until the channel is replaced or released.
+- **summary:** (channel) — start the already-loaded sound-effect channel with logical loop mode 1; the streaming decoder rewinds at EOF until the channel is replaced or released. Nothing starts while the sound effect route is off. As op 0xb5, any of the manager's 13 channels starts: 11 holds the last BGM track and 12 the last voice (docs/engine-re.md, "Channels 10 to 12").
 - **operand access:** `1` read
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high

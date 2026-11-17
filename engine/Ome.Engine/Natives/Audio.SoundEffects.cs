@@ -18,10 +18,22 @@ public sealed partial class Audio
         UpdateTimedWork();
     }
 
-    /// <summary>Ops 0xb5 (start mode 0, once) and 0xba (1, the decoder rewinds at the end): start a loaded
-    /// channel.</summary>
+    /// <summary>Ops 0xb5 (start mode 0, once) and 0xba (1, the decoder rewinds at the end): start a channel that holds
+    /// a sound (sfx_channel_start@0x4825d0, then sound_manager_start_channel@0x482f00; 4.33G the same). Nothing starts
+    /// while the sound effect route is off. The manager's channels go to 12: channel 11 is the BGM's and 12 the voice's,
+    /// whose sound plays again from its start; channel 10 never holds one.</summary>
     public void StartSoundEffect(int channel, int startMode)
     {
+        if (!SoundEffectRouteOn()) return;
+        switch (channel)
+        {
+            case BgmChannel:
+                StartBgmChannel(startMode);
+                return;
+            case VoiceChannel:
+                StartVoiceChannel(startMode);
+                return;
+        }
         if (!IsSoundEffectChannel(channel) || _soundEffectNames[channel] == null) return;
         _timeline?.Event("sfx-start", new() { ["channel"] = channel,
             ["start_mode"] = startMode, ["file"] = _soundEffectNames[channel] });
@@ -47,9 +59,19 @@ public sealed partial class Audio
         UpdateTimedWork();
     }
 
-    /// <summary>Whether a sound effect channel holds a sound (ops 0xb5 and 0xba trace a start of one that does not).
-    /// </summary>
-    public bool IsSoundEffectLoaded(int channel) => IsSoundEffectChannel(channel) && _soundEffectNames[channel] != null;
+    /// <summary>Whether a channel of the sound manager holds a sound: a sound effect's (0..9), the BGM's (11, the track
+    /// last played) or the voice's (12, the last voice). Ops 0xb5 and 0xba trace a start of one that does not.</summary>
+    public bool ChannelHoldsSound(int channel) => channel switch
+    {
+        BgmChannel => _bgmChannelClip != null,
+        VoiceChannel => _voiceLoaded,
+        _ => IsSoundEffectChannel(channel) && _soundEffectNames[channel] != null,
+    };
+
+    // sfx_channel_start@0x4825d0 starts nothing while the facade's route flag (+0x414, ctx+0x14438, which
+    // sound_set_sfx_route_enabled writes) is clear: an op 0xb5 or 0xba start, and a delayed start falling due.
+    private bool SoundEffectRouteOn()
+        => !_mixer.TryGetRouteEnabled((int)AudioMixerCategory.SoundEffect, out bool on) || on;
 
     /// <summary>The name of the sound effect a resource id names, as an error box gives it (the id when it names
     /// none).</summary>
@@ -92,7 +114,9 @@ public sealed partial class Audio
         {
             if (_scene.DelayedStarts[channel] is not { } start || now < start.DueMs) continue;
             _scene.DelayedStarts[channel] = null;
-            if (_soundEffectNames[channel] == null) continue;
+            // sfx_tick_delayed_starts@0x4827e0 clears the request before sfx_channel_start, so with the route off it
+            // is used up without playing.
+            if (_soundEffectNames[channel] == null || !SoundEffectRouteOn()) continue;
             _timeline?.Event("sfx-scheduled-start", new() { ["channel"] = channel,
                 ["start_mode"] = start.StartMode, ["file"] = _soundEffectNames[channel] });
             PlayChannel(channel, loop: start.StartMode != 0, NativeAudioVolume.ToDecibels(FullLevel));
@@ -105,8 +129,6 @@ public sealed partial class Audio
             if (start.HasValue) return true;
         return false;
     }
-
-    private void CancelDelayedSoundEffects() => Array.Clear(_scene.DelayedStarts);
 
     private static bool IsSoundEffectChannel(int channel) => (uint)channel < SoundEffectChannelCount;
 }

@@ -14,6 +14,10 @@ public sealed partial class Audio
     private sealed record DelayedVoice(AudioClip Clip, int PlaybackVariant, uint DelayMs, uint? StartMs);
 
     private int _voicePlaybackVariant;       // kept in channel 12's sound-buffer state by voice_play_indexed_asset
+    // Channel 12 holds the last voice: voice_play_indexed_asset decodes each one there, and only a decode replaces it
+    // (op 0x1bc and the Voice route only stop it). The level is the one the voice was given: 0 when muted.
+    private bool _voiceLoaded;
+    private int _voiceChannelLevel = FullLevel;
 
     /// <summary>The playback variant channel 12 last started with: 0 for a line (op 0xc4), 1 for a History replay
     /// (op 0x1bd). Its audible meaning is unproven; the port only keeps it.</summary>
@@ -108,9 +112,22 @@ public sealed partial class Audio
         (bool duckOnVoice, int duckPercent) = DuckSettings();
         if (duckOnVoice && (_scene.DuckControl & 1) == 0) BeginDuck(duckPercent);
         _voicePlaybackVariant = playbackVariant;
+        _voiceLoaded = true;
+        _voiceChannelLevel = muted ? 0 : FullLevel;
         _device.Load(VoiceChannel, AudioBus.Voice, clip);
-        PlayChannel(VoiceChannel, loop: false,
-            muted ? NativeAudioVolume.ToDecibels(0) : NativeAudioVolume.ToDecibels(FullLevel));
+        PlayChannel(VoiceChannel, loop: false, NativeAudioVolume.ToDecibels(_voiceChannelLevel));
+    }
+
+    // Ops 0xb5/0xba on channel 12: the voice the channel holds plays again from its start at its level, so a muted one
+    // stays muted. No duck begins: voice_bgm_duck_begin belongs to a voice op. The start mode goes to the buffer's field
+    // voice_play_indexed_asset writes the playback variant to, so it becomes the variant; the port plays it once, as it
+    // plays every voice.
+    private void StartVoiceChannel(int startMode)
+    {
+        if (!_voiceLoaded) return;
+        _timeline?.Event("sfx-start", new() { ["channel"] = VoiceChannel, ["start_mode"] = startMode });
+        _voicePlaybackVariant = startMode;
+        PlayChannel(VoiceChannel, loop: false, NativeAudioVolume.ToDecibels(_voiceChannelLevel));
     }
 
     /// <summary>sound:MusicFadeOnVoicePlaying (registered default 1) and sound:MusicFadeOnVoicePlayingVolume (50).</summary>

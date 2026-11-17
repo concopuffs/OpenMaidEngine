@@ -68,7 +68,8 @@ public class SceneReloadTests
         [
             // What plays keeps playing (a reset stops no channel and unloads none), with its BGM fade and duck.
             "_playing", "_playIds", "_lastPlayId", "_soundEffectNames", "_soundEffectResourceIds", "_voicePlaybackVariant",
-            "_bgmTrack", "_bgmLoop", "_bgmLoaded", "_bgmLevel", "_bgmChannelLevel", "_fade", "_duckActive",
+            "_voiceLoaded", "_voiceChannelLevel", "_bgmTrack", "_bgmLoop", "_bgmLoaded", "_bgmChannelClip",
+            "_bgmChannelLoaded", "_bgmLevel", "_bgmChannelLevel", "_fade", "_duckActive",
             "_duckReleaseArmed", "_duckRestoreLevel",
             // Whether anything is timed: the reset works it out again (UpdateTimedWork).
             "_timedWork",

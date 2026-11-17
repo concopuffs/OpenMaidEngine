@@ -17,7 +17,12 @@ public sealed partial class Audio
     private sealed record BgmFade(int From, int Target, int Steps, long StartMs, long DurationMs, bool Script);
 
     private long _bgmTrack;                  // EngineCtx.current_bgm_track_id: op 0xc0 and numbered saves
-    private bool _bgmLoaded;                 // channel 11 holds a track
+    private bool _bgmLoaded;                 // a track is live on channel 11
+    // The track last decoded on channel 11, and whether the device holds it. The DirectSound backend's stop
+    // (vtable 0x57977c +4, 0x468980) only stops the channel's buffer, and only a decode replaces it, so native's channel
+    // keeps the track after a stop; the port unloads the device and keeps the clip.
+    private AudioClip? _bgmChannelClip;
+    private bool _bgmChannelLoaded;
     private bool _bgmLoop;
     private int _bgmLevel = FullLevel;       // bgm object +0x420: the committed envelope level, basis points
     private int _bgmChannelLevel = FullLevel;   // the level channel 11 was last given (a fade step is not committed)
@@ -121,6 +126,8 @@ public sealed partial class Audio
         _bgmChannelLevel = FullLevel;
         _bgmLoaded = true;
         _bgmLoop = startMode != 0;
+        _bgmChannelClip = clip;
+        _bgmChannelLoaded = true;
         _device.Load(BgmChannel, AudioBus.Music, clip);
         PlayChannel(BgmChannel, _bgmLoop, NativeAudioVolume.ToDecibels(FullLevel));
     }
@@ -137,6 +144,7 @@ public sealed partial class Audio
         RestoreDuck();
         _fade = null;
         _bgmLoaded = false;
+        _bgmChannelLoaded = false;
         UnloadChannel(BgmChannel);
         _bgmLevel = FullLevel;
         _bgmChannelLevel = FullLevel;
@@ -193,7 +201,23 @@ public sealed partial class Audio
     {
         if (basisPoints == _bgmChannelLevel) return;
         _bgmChannelLevel = basisPoints;
-        if (_bgmLoaded) _device.SetVolume(BgmChannel, NativeAudioVolume.ToDecibels(basisPoints));
+        if (_bgmChannelLoaded) _device.SetVolume(BgmChannel, NativeAudioVolume.ToDecibels(basisPoints));
+    }
+
+    // Ops 0xb5/0xba on channel 11 (sound_buffer_start rewinds a buffer that has played): the track the channel holds
+    // plays again from its start, once or looping by the op's start mode, at the channel's level, also after a BGM stop.
+    // The BGM's own start mode, which the Music route plays the live track with, stays.
+    private void StartBgmChannel(int startMode)
+    {
+        if (_bgmChannelClip is not { } clip) return;
+        _timeline?.Event("sfx-start", new() { ["channel"] = BgmChannel, ["start_mode"] = startMode,
+            ["file"] = clip.Name });
+        if (!_bgmChannelLoaded)
+        {
+            _device.Load(BgmChannel, AudioBus.Music, clip);
+            _bgmChannelLoaded = true;
+        }
+        PlayChannel(BgmChannel, loop: startMode != 0, NativeAudioVolume.ToDecibels(_bgmChannelLevel));
     }
 
     // voice_bgm_duck_begin@0x406de0: at a voice start, unless a fade owns the envelope, keep the level to restore and

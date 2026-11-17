@@ -71,7 +71,8 @@ public sealed partial class Audio
                     PlayChannel(BgmChannel, _bgmLoop, NativeAudioVolume.ToDecibels(_bgmChannelLevel));
                 break;
             case AudioMixerCategory.SoundEffect when !enabled:
-                CancelDelayedSoundEffects();
+                // sound_set_sfx_route_enabled@0x408010 stops channels 0..9 and leaves their delayed starts, which the
+                // tick uses up without playing while the route stays off.
                 for (int channel = 0; channel < SoundEffectChannelCount; channel++) StopChannel(channel);
                 break;
             case AudioMixerCategory.Voice when !enabled:

@@ -11,6 +11,41 @@ using Xunit;
 public class SfxOpsTests
 {
     [Fact]
+    public void AStartOfAChannelThatHoldsNoSoundIsTracedForChannelsTenToTwelve()
+    {
+        // sound_manager_start_channel@0x482f00 traces 「データが読み込まれていません [n]」 for a channel with no buffer:
+        // channel 10 always, 11 and 12 until the first track and voice.
+        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        var script = ScriptAssembler.Assemble(table, "CHANNELS",
+            new List<(int, Operand[])>
+            {
+                (0xb5, new[] { new Operand(0, 10) }),
+                (0xb5, new[] { new Operand(0, 11) }),
+                (0xba, new[] { new Operand(0, 12) }),
+                (0xbf, new[] { new Operand(0, 24) }),
+                (0xc4, new[] { new Operand(0, 7) }),
+                (0xb5, new[] { new Operand(0, 11) }),
+                (0xba, new[] { new Operand(0, 12) }),
+                (0x2, Array.Empty<Operand>()),
+            }, Array.Empty<string>());
+        var rig = new AudioRig();
+        var waits = new RecordingWaits();
+        var vm = rig.Vm(script, table, waits);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(["[10]", "[11]", "[12]"],
+                     waits.Warnings.Where(w => w.Contains("データが読み込まれていません"))
+                                   .Select(w => w[w.LastIndexOf('[')..w.LastIndexOf(']')] + "]"));
+        // The track plays again at the level the voice ducked it to.
+        string ducked = RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(5000));
+        Assert.Equal(["play 11 bgm:24 loop 0.0dB", "play 12 voice:7 once 0.0dB", $"play 11 bgm:24 once {ducked}",
+                      "play 12 voice:7 once 0.0dB"],
+                     rig.Device.CommandsStartingWith("play"));
+    }
+
+    [Fact]
     public void ReassertingCurrentBgmPreservesPlaybackUntilTrackChangesOrStops()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);

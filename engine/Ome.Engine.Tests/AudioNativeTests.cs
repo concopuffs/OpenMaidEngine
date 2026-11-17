@@ -232,14 +232,94 @@ public class AudioNativeTests
     }
 
     [Fact]
-    public void TurningSoundEffectsOffCancelsTheirDelayedStarts()
+    public void WithTheSoundEffectRouteOffNothingStartsAndADelayedStartFallingDueIsUsedUp()
     {
+        // sfx_channel_start tests the route before the manager, and sfx_tick_delayed_starts clears a request first.
+        var rig = new AudioRig();
+        rig.Audio.LoadSoundEffect(40, 2);
+        rig.Audio.ScheduleSoundEffectStart(2, 0, 100);
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.SoundEffect, false));
+        rig.Audio.StartSoundEffect(2, 1);
+        Assert.False(rig.Audio.IsChannelPlaying(2));
+        rig.Advance(500);
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.SoundEffect, true));
+        rig.Advance(500);
+        Assert.Empty(rig.Device.CommandsStartingWith("play"));
+    }
+
+    [Fact]
+    public void ADelayedStartOutlivesTheSoundEffectRouteTurnedOffAndOnBeforeItFallsDue()
+    {
+        // sound_set_sfx_route_enabled only stops channels 0..9.
         var rig = new AudioRig();
         rig.Audio.LoadSoundEffect(40, 2);
         rig.Audio.ScheduleSoundEffectStart(2, 0, 100);
         Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.SoundEffect, false));
         Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.SoundEffect, true));
         rig.Advance(500);
+        Assert.Equal(["play 2 sfx:40 once 0.0dB"], rig.Device.CommandsStartingWith("play"));
+    }
+
+    [Fact]
+    public void ChannelElevenPlaysItsTrackAgainFromItsStartAlsoAfterTheBgmStops()
+    {
+        // The DirectSound backend's BGM stop only stops channel 11's buffer, which keeps the track.
+        var rig = new AudioRig();
+        Assert.False(rig.Audio.ChannelHoldsSound(Audio.BgmChannel));
+        rig.Audio.PlayBgm(5);
+        rig.Audio.FadeBgm(5000, 0);
+        rig.Device.Commands.Clear();
+
+        rig.Audio.StartSoundEffect(Audio.BgmChannel, 0);
+        string half = RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(5000));
+        Assert.Equal([$"play 11 bgm:5 once {half}"], rig.Device.Commands);
+        // The Music route plays the live track with the BGM's own start mode, not the op's.
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, false));
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, true));
+        Assert.Equal($"play 11 bgm:5 loop {half}", rig.Device.CommandsStartingWith("play")[^1]);
+
+        rig.Audio.StopBgm();
+        rig.Device.Commands.Clear();
+        rig.Audio.StartSoundEffect(Audio.BgmChannel, 1);
+        Assert.Equal(["load 11 Music bgm:5", "play 11 bgm:5 loop 0.0dB"], rig.Device.Commands);
+        Assert.True(rig.Audio.IsChannelPlaying(Audio.BgmChannel));
+        Assert.Equal(0, rig.Audio.CurrentBgmTrack);
+    }
+
+    [Fact]
+    public void ChannelTwelvePlaysTheLastVoiceAgainAtItsLevelWithTheOpsStartModeAsItsVariant()
+    {
+        var rig = new AudioRig();
+        rig.Audio.StartSoundEffect(Audio.VoiceChannel, 0);   // no voice yet
+        Assert.Empty(rig.Device.Commands);
+        rig.Audio.MuteNextVoice();
+        rig.Audio.PlayVoice(10);
+        rig.Audio.ResetMessageVoiceState();
+        rig.Device.Commands.Clear();
+
+        rig.Audio.StartSoundEffect(Audio.VoiceChannel, 1);
+
+        Assert.Equal([$"play 12 voice:10 once {RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(0))}"],
+                     rig.Device.Commands);
+        Assert.True(rig.Audio.IsVoicePlaying);
+        Assert.Equal(1, rig.Audio.VoicePlaybackVariant);
+    }
+
+    [Fact]
+    public void ChannelTenHoldsNothingAndTheSoundEffectRouteGatesElevenAndTwelve()
+    {
+        var rig = new AudioRig();
+        rig.Audio.PlayBgm(5);
+        rig.Audio.PlayVoice(10);
+        rig.Device.Commands.Clear();
+
+        Assert.False(rig.Audio.ChannelHoldsSound(10));
+        rig.Audio.StartSoundEffect(10, 0);
+        Assert.Empty(rig.Device.Commands);
+
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.SoundEffect, false));
+        rig.Audio.StartSoundEffect(Audio.BgmChannel, 0);
+        rig.Audio.StartSoundEffect(Audio.VoiceChannel, 0);
         Assert.Empty(rig.Device.CommandsStartingWith("play"));
     }
 

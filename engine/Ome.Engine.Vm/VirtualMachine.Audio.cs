@@ -134,16 +134,16 @@ public sealed partial class VirtualMachine
     }
 
     /// <summary>sound_manager_start_channel@0x482f00 starts any of its 13 channels and traces
-    /// 「関数：dsPlay エラー：不正なSound番号[n]です」 for the rest, unsigned. A sound effect channel with no sound is
-    /// traced too, while the sound effect route is on (sfx_channel_start@0x4825d0 returns before the manager when it
-    /// is off).</summary>
+    /// 「関数：dsPlay エラー：不正なSound番号[n]です」 for the rest, unsigned. A channel with no sound is traced too
+    /// (channel 10 always; 11 and 12 before the first track or voice), while the sound effect route is on
+    /// (sfx_channel_start@0x4825d0 returns before the manager when it is off).</summary>
     private StepResult? SoundStartRefused(Instruction ins, long channel)
     {
         if (IndexRefused(ins, "sound channel", channel, Audio.NativeChannelCount,
                          IndexTest.Traced($"関数：dsPlay エラー：不正なSound番号[{unchecked((int)channel)}]です",
                                           Audio.NativeChannelCount)) is { } refused)
             return refused;
-        if (channel < Audio.SoundEffectChannelCount && !_audio.IsSoundEffectLoaded((int)channel)
+        if (!_audio.ChannelHoldsSound((int)channel)
             && _audio.TryGetRouteEnabled((int)AudioMixerCategory.SoundEffect, out bool routed) && routed)
             _waits.ReportWarning($"{At(ins)}: sound channel {channel} holds no sound; skipped, as AGE skips it with "
                                  + $"the trace 「関数：dsPlay エラー：データが読み込まれていません [{channel}]」");

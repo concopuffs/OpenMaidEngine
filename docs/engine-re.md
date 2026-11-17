@@ -7976,9 +7976,25 @@ The tables, by what native does:
     takes is recorded in the ten-entry resource table unchecked, so 10 to 12 write into the voice facade after it,
     and a negative channel passes the decoder's signed test: both halt.
   - Ops `0xb5` and `0xba` (`sound_manager_start_channel@0x482f00`) start any of the 13 channels and trace
-    「関数：dsPlay エラー：不正なSound番号[n]です」 for the rest, unsigned. A sound effect channel with no sound is
-    traced too, while the sound effect route is on: 4.24J's `sfx_channel_start@0x4825d0` returns before the manager
-    when it is off.
+    「関数：dsPlay エラー：不正なSound番号[n]です」 for the rest, unsigned. A channel with no sound is traced too
+    (「関数：dsPlay エラー：データが読み込まれていません [n]」), while the sound effect route is on:
+    `sfx_channel_start@0x4825d0` (4.33G the same) starts nothing when it is off, op `0x2bf`'s delayed start included.
+    - **Channels 10 to 12 (2026-11-17).** Channel 11 is the BGM's under the DirectSound backend, which the
+      `sound:Music` state 2 selects (Himegari's default; `bgm_music_facade_ctor@0x4644b0`):
+      `bgm_dsound_backend_play@0x468ac0` decodes each track there, and its stop (`bgm_dsound_backend_stop@0x468980`)
+      only stops the buffer, so the channel keeps its last track after a BGM stop. Channel 12 is the voice's
+      (`voice_play_indexed_asset@0x488330`); op `0x1bc` and the Voice route only stop it. Only a decode replaces a
+      channel's buffer. `sound_buffer_start@0x484270` rewinds a buffer that has played, so a start plays the track or
+      voice again from its start, once or looping by the op's mode, and leaves the volume: a ducked or faded track keeps
+      its level, a muted voice stays muted. It writes the mode where `voice_play_indexed_asset` writes the playback
+      variant. Only op `0xb4 10`, which halts, decodes on channel 10. The port does the same (`Audio.StartSoundEffect`):
+      the BGM's own start mode, which the Music route plays the live track with, stays, and channel 12 plays once, as
+      every voice does in the port. No retail script passes these ops an immediate channel past 9 (ten Himegari op
+      `0xb5` sites and 22 Kamidori ones pass a cell).
+    - **The route.** `sound_set_sfx_route_enabled@0x408010` stops channels 0 to 9 and leaves their delayed starts,
+      which the tick uses up without playing while the route stays off (`sfx_tick_delayed_starts@0x4827e0` clears a
+      request before it calls `sfx_channel_start`). The port had cancelled them at once, and had started a sound effect
+      on its muted bus while the route was off; it now does as native does.
   - Op `0xb6` (`sfx_channel_release@0x482600`) clears the channel's resource-table entry whatever the channel, after
     `sound_buffer_destroy`'s signed test below 13: every channel outside 0 to 9 halts.
   - Op `0x2bf` (`sfx_set_delay@0x482720`) traces 「関数：SetDelay エラー：不正なSound番号です」 for 10 and up. Its
