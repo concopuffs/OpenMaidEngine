@@ -134,6 +134,7 @@ public sealed partial class VirtualMachine
     private StepResult OpShowText(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         ApplyReadTextSkip();
         foreach (var o in a)
         {
@@ -150,6 +151,7 @@ public sealed partial class VirtualMachine
         // op_0x196_handler@0x41f2a0 builds the base text like show-text with the ruby as the builder's third
         // argument. Unlike op 0x6e it does not re-read message:ReadTextSkip; whether it re-arms the glyph timer
         // is the build's rule (TextRules.FuriganaArmsGlyphTimer).
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         if (!ShowTextRun(ins, pc, a, a[1], ReadStr(a[2]))) return StepResult.Halt;
         return StepResult.Next;
     }
@@ -158,6 +160,7 @@ public sealed partial class VirtualMachine
     private StepResult OpDefineAdvTextLayout(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.History.DefineLayout((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]),
                                    (int)Read(a[3]), (int)Read(a[4]));
         // adv_text_layout_define@0x4550e0 (DrawMode 1) creates the layout's blank surface at
@@ -170,6 +173,7 @@ public sealed partial class VirtualMachine
     private StepResult OpResetAdvTextLayout(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         int requestedSlot = (int)Read(a[0]);
         _text.History.ResetLayout(requestedSlot);
         var layout = _text.History.GetLayoutSnapshot(requestedSlot);
@@ -190,6 +194,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextResetCursor(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.History.SetResetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
         return StepResult.Next;
     }
@@ -198,6 +203,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextCursor(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.History.SetCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
         _text.SetAdvTextCursor((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2])); return StepResult.Next;
     }
@@ -206,6 +212,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextBounds(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.History.SetBounds((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
         return StepResult.Next;
     }
@@ -214,6 +221,8 @@ public sealed partial class VirtualMachine
     private StepResult OpConfigureAdvWaitIndicator(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
+        if (UnclassifiedSurfaceSlot(ins, 4) is { } error) return YesNoScriptError(error, pc);
         _text.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
@@ -225,6 +234,8 @@ public sealed partial class VirtualMachine
     private StepResult OpConfigureAdvWaitIndicatorGrid(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if ((UnclassifiedLayoutSlot(ins, 1) ?? UnclassifiedSurfaceSlot(ins, 4)) is { } error)
+            return YesNoScriptError(error, pc);
         _text.ConfigureAdvWaitIndicator(new AdvWaitIndicatorConfig(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
@@ -252,6 +263,7 @@ public sealed partial class VirtualMachine
     private StepResult OpPublishAdvTextLayout(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         int requestedSlot = (int)Read(a[0]);
         AdvTextLayoutPresentationBinding binding =
             _text.History.GetPresentationBinding(requestedSlot);
@@ -263,6 +275,7 @@ public sealed partial class VirtualMachine
     private StepResult OpDrawString(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
         int surface = (int)Read(a[0]), x = (int)Read(a[1]), y = (int)Read(a[2]);
         string text = ReadStr(a[3]);
         _text.DrawStringToSurface(surface, x, y, text, _text.Style, Present(text, ins, a[3]));
@@ -273,6 +286,7 @@ public sealed partial class VirtualMachine
     private StepResult OpDrawFormattedInteger(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
         int x = (int)Read(a[1]);
         string text = FormatIntegerForSurface(
             ref x, unchecked((int)Read(a[3])), (int)Read(a[4]), (int)Read(a[5]));
@@ -361,6 +375,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextLayoutOrigin(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.History.SetLayoutOrigin((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
         return StepResult.Next;
     }
@@ -383,6 +398,7 @@ public sealed partial class VirtualMachine
     private StepResult OpEndTextLine(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         // The line break moves the layout's cursors; the wait indicator can follow the presented one.
         // Inside a presented message only the source cursor moves: the sentence draws its own breaks (§6.2).
         bool insideMessage = InsidePresentedMessage(pc);
@@ -405,17 +421,29 @@ public sealed partial class VirtualMachine
     }
 
     // 0x13a: (style)(surface)(atlas x/y)(digit w/h)
+    /// <summary>
+    /// Native's ten ADV text layouts (text_manager+0x414, adv_text_layouts_allocate@0x44f6d0). No op tests a layout
+    /// slot: slot 0 selects the current layout, and every other slot indexes the table (docs/engine-re.md, "Indices
+    /// outside their tables").
+    /// </summary>
+    private StepResult? LayoutSlotRefused(Instruction ins, long slot)
+        => IndexRefused(ins, "layout slot", slot, AdvTextHistory.LayoutCount, IndexTest.Unchecked);
+
+    /// <summary>Ops 0x13a, 0x2da and 0x23b test a glyph style below 11, unsigned, and trace CGNumber's argument error
+    /// for the rest (op_0x13a_register_numeric_glyph_style@0x421ab0). The ten styles are followed by the return-stack
+    /// table, which style 10 reads and writes.</summary>
+    private StepResult? GlyphStyleRefused(Instruction ins, int styleIndex)
+        => IndexRefused(ins, "glyph style", styleIndex, GfxState.NumericGlyphStyleCount,
+                        IndexTest.Traced(BadArgumentTrace("CGNumber"), 11));
+
     private StepResult OpRegisterNumericGlyphStyle(Instruction ins, int pc)
     {
         var a = ins.Args;
         int styleIndex = unchecked((int)Read(a[0]));
-        if (!Gfx.RegisterNumericGlyphStyle(styleIndex, unchecked((int)Read(a[1])),
-                unchecked((int)Read(a[2])), unchecked((int)Read(a[3])),
-                unchecked((int)Read(a[4])), unchecked((int)Read(a[5]))))
-        {
-            HaltReason ??= $"numeric-glyph-style-index-out-of-range:{styleIndex}";
-            return StepResult.Halt;
-        }
+        if (GlyphStyleRefused(ins, styleIndex) is { } refused) return refused;
+        Gfx.RegisterNumericGlyphStyle(styleIndex, unchecked((int)Read(a[1])),
+            unchecked((int)Read(a[2])), unchecked((int)Read(a[3])),
+            unchecked((int)Read(a[4])), unchecked((int)Read(a[5])));
         return StepResult.Next;
     }
 
@@ -423,14 +451,11 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int styleIndex = unchecked((int)Read(a[0]));
-        if (!Gfx.RegisterNumericGlyphStyle(styleIndex, unchecked((int)Read(a[1])),
-                unchecked((int)Read(a[2])), unchecked((int)Read(a[3])),
-                unchecked((int)Read(a[4])), unchecked((int)Read(a[5])),
-                unchecked((int)Read(a[6])), unchecked((int)Read(a[7]))))
-        {
-            HaltReason ??= $"numeric-glyph-style-index-out-of-range:{styleIndex}";
-            return StepResult.Halt;
-        }
+        if (GlyphStyleRefused(ins, styleIndex) is { } refused) return refused;
+        Gfx.RegisterNumericGlyphStyle(styleIndex, unchecked((int)Read(a[1])),
+            unchecked((int)Read(a[2])), unchecked((int)Read(a[3])),
+            unchecked((int)Read(a[4])), unchecked((int)Read(a[5])),
+            unchecked((int)Read(a[6])), unchecked((int)Read(a[7])));
         return StepResult.Next;
     }
 
@@ -439,15 +464,13 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int styleIndex = unchecked((int)Read(a[1]));
+        if (GlyphStyleRefused(ins, styleIndex) is { } refused) return refused;
+        // An unregistered style gets the same trace, before anything is erased.
         if (!Gfx.DrawDecimalGlyphs(Read(a[0]), styleIndex, unchecked((int)Read(a[2])),
                 unchecked((int)Read(a[3])), unchecked((int)Read(a[4])),
                 unchecked((int)Read(a[5])), unchecked((int)Read(a[6]))))
-        {
-            HaltReason ??= (uint)styleIndex >= 11
-                ? $"numeric-glyph-style-index-out-of-range:{styleIndex}"
-                : $"numeric-glyph-style-unregistered:{styleIndex}";
-            return StepResult.Halt;
-        }
+            _waits.ReportWarning($"{At(ins)}: glyph style {styleIndex} is not registered; skipped, as AGE skips it "
+                                 + $"with the trace 「{BadArgumentTrace("CGNumber")}」");
         return StepResult.Next;
     }
 
@@ -455,6 +478,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvWaitIndicatorHandle(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         int requestedSlot = (int)Read(a[0]);
         _text.History.SetWaitIndicatorObjectHandle(requestedSlot, Read(a[1]));
         AdvTextLayoutSnapshot layout =
@@ -469,6 +493,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetAdvTextObjectRange(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.History.SetTextObjectRange((int)Read(a[0]), Read(a[1]), Read(a[2]));
         return StepResult.Next;
     }

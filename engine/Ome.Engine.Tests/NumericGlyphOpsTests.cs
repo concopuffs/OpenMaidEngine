@@ -114,46 +114,6 @@ public class NumericGlyphOpsTests
     }
 
     [Fact]
-    public void InvalidOrUnregisteredStylesHaltInsteadOfSilentlyDroppingTheDraw()
-    {
-        var table = T();
-        var invalidRegistration = ScriptAssembler.Assemble(table, "BAD-NUMERIC-STYLE",
-            new List<(int, Operand[])>
-            {
-                (0x13a, new[] { I(11), I(1), I(0), I(0), I(8), I(12) }),
-                Exit(),
-            }, System.Array.Empty<string>());
-        var unregisteredDraw = ScriptAssembler.Assemble(table, "MISSING-NUMERIC-STYLE",
-            new List<(int, Operand[])>
-            {
-                (0x23b, new[] { I(1), I(0), I(7), I(0), I(0), I(1), I(0) }),
-                Exit(),
-            }, System.Array.Empty<string>());
-        var sys4433 = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433");
-        var invalidExtendedRegistration = ScriptAssembler.Assemble(
-            sys4433, "BAD-EXTENDED-NUMERIC-STYLE",
-            new List<(int, Operand[])>
-            {
-                (0x2da, new[] { I(11), I(1), I(0), I(0), I(8), I(12), I(1), I(1) }),
-                Exit(),
-            }, System.Array.Empty<string>());
-
-        var invalidVm = new VirtualMachine(invalidRegistration, table, new RecordingWaits());
-        var unregisteredVm = new VirtualMachine(unregisteredDraw, table, new RecordingWaits());
-        var invalidExtendedVm = new VirtualMachine(
-            invalidExtendedRegistration, sys4433, new RecordingWaits(),
-            build: EngineBuilds.Age433G);
-        invalidVm.Run();
-        unregisteredVm.Run();
-        invalidExtendedVm.Run();
-
-        Assert.Equal("numeric-glyph-style-index-out-of-range:11", invalidVm.HaltReason);
-        Assert.Equal("numeric-glyph-style-unregistered:0", unregisteredVm.HaltReason);
-        Assert.Equal("numeric-glyph-style-index-out-of-range:11", invalidExtendedVm.HaltReason);
-        Assert.Null(invalidExtendedVm.CompatibilityFailure);
-    }
-
-    [Fact]
     public void HalfByteStringLengthUsesNativeCp932BytesForLiteralAndLocalStrings()
     {
         var table = T();

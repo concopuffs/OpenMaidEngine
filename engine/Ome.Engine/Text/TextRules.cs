@@ -13,4 +13,9 @@ namespace Ome.Engine.Text;
 /// <param name="FuriganaArmsGlyphTimer">Whether op 0x196 re-arms the glyph timer (<c>ctx+0x5f630</c>) as op 0x6e
 /// does. 4.33G's handler does; 4.24J's op_0x196_handler@0x41f2a0 does not, so its ruby run keeps the previous run's
 /// reveal phase (docs/engine-re.md, "The reveal clock").</param>
-public sealed record TextRules(GlyphCoverageAlpha GlyphCoverage, RubyRule Ruby, bool FuriganaArmsGlyphTimer);
+/// <param name="HistoryLookupTestsSign">Whether ops 0x1d3 and 0x1d4 refuse a negative record index as they refuse one
+/// past the last record, finding nothing. 4.33G's text_history_find_typed_value@0x4501b0 and
+/// text_history_find_pair@0x450270 do; 4.24J's @0x450840 and @0x4509f0 test only the upper end, and the negative index
+/// fails a checked subscript, which ends the process (docs/engine-re.md, "Indices outside their tables").</param>
+public sealed record TextRules(GlyphCoverageAlpha GlyphCoverage, RubyRule Ruby, bool FuriganaArmsGlyphTimer,
+                               bool HistoryLookupTestsSign);

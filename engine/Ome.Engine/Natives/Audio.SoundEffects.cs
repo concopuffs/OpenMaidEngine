@@ -47,6 +47,16 @@ public sealed partial class Audio
         UpdateTimedWork();
     }
 
+    /// <summary>Whether a sound effect channel holds a sound (ops 0xb5 and 0xba trace a start of one that does not).
+    /// </summary>
+    public bool IsSoundEffectLoaded(int channel) => IsSoundEffectChannel(channel) && _soundEffectNames[channel] != null;
+
+    /// <summary>The name of the sound effect a resource id names, as an error box gives it (the id when it names
+    /// none).</summary>
+    public string SoundEffectName(long resourceId)
+        => _assets.SoundEffect(resourceId)?.Name
+           ?? resourceId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
     /// <summary>The resource each sound effect channel holds, for a numbered save (0 for none).</summary>
     public IReadOnlyList<long> SoundEffectResourceIds
     {

@@ -930,7 +930,7 @@ public sealed partial class VirtualMachine
 
     private DiagnosticMessage BuildDiagnosticMessage(Instruction instruction)
         => AgeBox(new AgeBoxParts(AgeBoxMessage.Script(_shell.PendingDiagnosticText), DiagnosticLocation(instruction),
-                                  Prompt: false));
+                                  AgeBoxButtons.Ok));
 
     /// <summary>An AGE box in AGE's wording, with its parts for a front end that presents it in another language.</summary>
     private static DiagnosticMessage AgeBox(AgeBoxParts parts)
@@ -967,11 +967,13 @@ public sealed partial class VirtualMachine
     /// A native interpreter error raised while the instruction at <paramref name="pc"/> executes (or, for the timed
     /// callback service, while the frame sits on it). Native's frame pc is still on that instruction, so it is the
     /// coordinate. Returns the instruction index to continue at. 再試行 restarts with the pc unchanged, so the
-    /// instruction runs again. 無視 adds the frame's last decoded instruction length, which for these handlers is the
-    /// instruction's own (op 0xcd sets it on entry; op 0xd5 sets 0, so its error repeats). 中止 ends the run.
+    /// instruction runs again. 無視 (and はい, for flags 0x10005's box) adds the frame's last decoded instruction length,
+    /// which for these handlers is the instruction's own (op 0xcd sets it on entry; op 0xd5 sets 0, so its error
+    /// repeats). 中止 (and いいえ) ends the run.
     /// </summary>
-    private int RaiseInstructionScriptError(AgeBoxMessage error, int pc, bool ignoreSkipsInstruction = true)
-        => ShowScriptError(error, pc) switch
+    private int RaiseInstructionScriptError(AgeBoxMessage error, int pc, bool ignoreSkipsInstruction = true,
+                                            AgeBoxButtons buttons = AgeBoxButtons.AbortRetryIgnore)
+        => ShowScriptError(error, pc, buttons) switch
         {
             ScriptErrorChoice.Retry => pc,
             ScriptErrorChoice.Ignore => ignoreSkipsInstruction ? pc + 1 : pc,
@@ -994,12 +996,14 @@ public sealed partial class VirtualMachine
                : string.Equals(a.Name, b.Name, StringComparison.OrdinalIgnoreCase));
 
     // age_show_message_box@0x409370 mode 7 (the errors the interpreter throws with flags 0x10007): body "%s%s"
-    // followed by the prompt (AgeBoxText.Prompt…), MessageBoxA style 0x112 (abort/retry/ignore).
-    private ScriptErrorChoice ShowScriptError(AgeBoxMessage error, int coordinateIndex)
+    // followed by the prompt (AgeBoxText.Prompt…), MessageBoxA style 0x112 (abort/retry/ignore); mode 5 (flags
+    // 0x10005): the same body with a yes/no prompt, style 0x14.
+    private ScriptErrorChoice ShowScriptError(AgeBoxMessage error, int coordinateIndex,
+                                              AgeBoxButtons buttons = AgeBoxButtons.AbortRetryIgnore)
     {
         string text = error.Text(AgeBoxText.JapaneseText);
         DiagnosticMessage message = AgeBox(new AgeBoxParts(error,
-            DiagnosticLocation(_cur.Script.Instructions[coordinateIndex]), Prompt: true));
+            DiagnosticLocation(_cur.Script.Instructions[coordinateIndex]), buttons));
         _instructionRaisedScriptError = true;   // its after hooks do not fire (Lua scripting spec §7.1)
         RefuseScriptErrorInModCall(text);
         ScriptErrorChoice choice = _waits.ShowScriptError(message);

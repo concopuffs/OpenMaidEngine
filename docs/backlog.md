@@ -150,20 +150,24 @@ it; git history keeps the record.
   Done when the sweep has compared each bound handler with its native handler and listed each one that does less.
   Each listed gap is then fixed or gets its own item here, and the registry's `noop_headless` flags and stub summaries
   say what the port does.
+- **Native index tests for 28 ops.** Native's test of an index operand has not been read for the operands below.
+  Reading them in the Ghidra images was stopped on 2026-11-17 by Anthropic's usage safeguards. Until they are read,
+  each raises the はい/いいえ script-error box for an index outside its table: the worst case, which tells the player
+  about the error instead of skipping it (`engine-re.md`, "Indices outside their tables"). The operands:
+  - the layout slot of ops `0x72`, `0x80` and `0x2bc`;
+  - the surface slot of ops `0x21`, `0x22`, `0x24`, `0x25` (both), `0x27`, `0x28`, `0x73`, `0x2bc`, `0x1fb`, `0x204`,
+    `0x205`, `0x208`, `0x20f`, `0x236`, `0x241`, `0x23a`, `0x23f`, `0x246`, `0x1ae` and `0x1af`;
+  - the save slot of ops `0x19e`, `0x19f`, `0x1a0`, `0x1a1`, `0x1ab`, `0x1ac` (both), `0x1ae` and `0x1af`, where only
+    a negative slot raises the box, since a slot names a file.
+
+  Two values that retail scripts pass keep the port's earlier behaviour, with no box: -1 at op `0x20d` selects the
+  backbuffer, and -1 at op `0x208` reads 0 x 0. Done when each op does what native's test does, with a test that
+  drives it past its table, including -1 at ops `0x20d` and `0x208`.
 
 ## Robustness
 
 Gaps the 2026-11-10 codebase review found and the fixes that followed it left open. None affects retail scripts.
 
-- **Each handler checks its own script-controlled indices.** A handler that indexes a table with an operand checks the
-  range itself, if at all, and no helper decides what happens past the end. Some halt with a reason that names the
-  index, five reasons in all (`bit-index-out-of-range`, `numeric-glyph-style-index-out-of-range`,
-  `preloaded-script-slot-out-of-range`, `keyboard-action-out-of-range`, `input-action-count-out-of-range`), as the
-  interpreter does for the pc (`pc-out-of-range`). Native checks some indices too (op `0x13a` admits styles 0 to 10).
-  Retail scripts pass valid indices; mod bytecode need not. The 2026-11-10 codebase review named this, in the
-  architecture item that engine layering milestone 12 closed. Done when the handlers that index with an operand are
-  listed, one helper takes the index and its table's length and halts with the handler's name and the index, and a
-  test drives each listed handler past its end.
 - **Unknown launch flags are ignored.** Flags are parsed across `Main._Ready`, `AssetLaunchOptions`,
   `GameProfileSelection`, `WindowLaunchOptions`, mod linking, screenshots and the port options, each by its own
   lookup, so a misspelt flag is silently ignored. Since 2026-11-10 `--seed`, `--speed` and `--sleep-scale` reject a

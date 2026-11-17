@@ -51,10 +51,13 @@ public sealed partial class GfxState
         public readonly int[] SurfaceRecordSnapshot = NewSurfaceRecordTable();
         // EngineCtx+0x14e08 (SYS4433 +0x14e04), op 0x80's: the reset's text_manager_initialize sets it to 1.
         public int DefaultObjectSlot = 1;
-        // Ops 0x13a and 0x2da's records. The reset zeroes records 0-9 and the return-stack table that index 10
-        // overlaps, so all eleven are clear after it.
-        public readonly NumericGlyphStyle[] NumericGlyphStyles = new NumericGlyphStyle[11];
+        // Ops 0x13a and 0x2da's records. The reset zeroes all ten.
+        public readonly NumericGlyphStyle[] NumericGlyphStyles = new NumericGlyphStyle[NumericGlyphStyleCount];
     }
+
+    /// <summary>Native's numeric glyph styles (ops 0x13a, 0x2da and 0x23b; EngineCtx+0x55180, ten records). Native's
+    /// test admits style 10, which lands in the return-stack table after them; the interpreter halts there.</summary>
+    public const int NumericGlyphStyleCount = 10;
 
     private Scene _scene = new(NewBootSurfaceRecordTable());
 

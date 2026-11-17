@@ -30,7 +30,9 @@ public sealed partial class Audio : IFastForwardListener
     public const int SoundEffectChannelCount = NativeNumberedSaveState.SoundEffectChannelCount;   // 0..9
     public const int BgmChannel = 11;
     public const int VoiceChannel = 12;
-    private const int ChannelCount = 13;
+    /// <summary>The sound manager's channels, 0 to 12: the sound effects', then the engine's own.</summary>
+    public const int NativeChannelCount = 13;
+    private const int ChannelCount = NativeChannelCount;
 
     private readonly IAudioDevice _device;
     private readonly IAudioAssets _assets;

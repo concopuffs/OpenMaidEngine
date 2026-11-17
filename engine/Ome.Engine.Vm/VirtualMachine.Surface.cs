@@ -22,6 +22,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetSurfacePersistenceFlags(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (SurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         Gfx.SetSurfacePersistenceFlags(unchecked((int)Read(a[0])), Read(a[1]));
         return StepResult.Next;
     }
@@ -30,6 +31,7 @@ public sealed partial class VirtualMachine
     private StepResult OpCreateTexture(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (SurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _graphics.CreateSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
         return StepResult.Next;
     }
@@ -38,6 +40,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetTexture(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (SurfaceSlotRefused(ins, Read(a[1])) is { } refused) return refused;
         long resourceId = Read(a[0]);
         if (_diagSetTexture)   // OME_DIAG_SETTEX: log the SLOT operand source (literal vs which global) — grey-BG slot dig
             System.Console.Error.WriteLine($"[settex] resId=0x{resourceId:x} slot={(int)Read(a[1])} " +
@@ -59,6 +62,7 @@ public sealed partial class VirtualMachine
     private StepResult OpLoadRawTextureSurface(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (SurfaceSlotRefused(ins, Read(a[1])) is { } refused) return refused;
         // Native shares 0x1f9's release/load/colorkey path, but constructs its mode-1
         // surface subclass. Both texture opcodes receive the same universal packed id;
         // the CPU compositor does not need the D3D subclass distinction.
@@ -72,6 +76,7 @@ public sealed partial class VirtualMachine
     private StepResult OpDrawTexture(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (UnclassifiedSurfaceSlot(ins, 2) is { } error) return YesNoScriptError(error, pc);
         _graphics.DrawTexture(Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
                               (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]));
         return StepResult.Next;
@@ -81,6 +86,11 @@ public sealed partial class VirtualMachine
     private StepResult OpGetTextureSize(Instruction ins, int pc)
     {
         var a = ins.Args;
+        // Slot -1, op 0x215's "no such object", reads 0 x 0. HIDEWIN.BIN passes op 0x215's answer for object 0xcb2a
+        // without testing it (both games), Kamidori runs it on every hide, and 4.33G answers -1 once a scene has
+        // erased that object. What native's test makes of -1 is not read (docs/backlog.md, "Native index tests for 28
+        // ops").
+        if (Read(a[0]) != -1 && UnclassifiedSurfaceSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
         var (gw, gh) = _graphics.SurfaceSize((int)Read(a[0]));
         Write(a[1], gw); Write(a[2], gh);
         return StepResult.Next;
@@ -90,6 +100,7 @@ public sealed partial class VirtualMachine
     private StepResult OpFillSurfaceRect(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (SurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _graphics.FillSurfaceRect(new SurfaceRectFill(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]), (int)Read(a[4]),
             (int)System.Math.Min(Read(a[5]), 255), Read(a[6]) & 0x00ff_ffff));
@@ -100,6 +111,8 @@ public sealed partial class VirtualMachine
     private StepResult OpCopySurfaceRect(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (SurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
+        if (SurfaceSlotRefused(ins, Read(a[1])) is { } refused2) return refused2;
         _graphics.CopySurfaceRect(new SurfaceRectCopy(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7])));
@@ -110,6 +123,8 @@ public sealed partial class VirtualMachine
     private StepResult OpScaleCopySurfaceRect(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (SurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
+        if (SurfaceSlotRefused(ins, Read(a[1])) is { } refused2) return refused2;
         _graphics.CopySurfaceRect(new SurfaceRectCopy(
             (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), (int)Read(a[3]),
             (int)Read(a[4]), (int)Read(a[5]), (int)Read(a[6]), (int)Read(a[7]),
@@ -121,6 +136,10 @@ public sealed partial class VirtualMachine
     private StepResult OpSelectRenderTarget(Instruction ins, int pc)
     {
         var a = ins.Args;
+        // The port selects the backbuffer for any slot outside 0..999: 1000 and up, as native does
+        // (vm-map/opcodes.toml), and -1, which both games' retail scripts pass (a Himegari save load and a Kamidori new
+        // game reach one). What native's test makes of -1 is not read (docs/backlog.md, "Native index tests for 28
+        // ops").
         Gfx.SelectRenderTarget(Read(a[0])); return StepResult.Next;
     }
 
@@ -134,6 +153,7 @@ public sealed partial class VirtualMachine
     private StepResult OpGfxElemRelease(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (SurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _graphics.ReleaseSurface((int)Read(a[0]));
         return StepResult.Next;
     }

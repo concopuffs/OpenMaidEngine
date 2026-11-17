@@ -4,7 +4,7 @@ namespace Ome.Engine.Frontend.Shell;
 
 /// <summary>
 /// The boxes the port draws for AGE and AGERC, in the shell's language (localization spec §11): AGE's interpreter
-/// error box and op 0x1b4's diagnostic box (<see cref="AgeBoxText"/>), and AGERC's name entry (command 10,
+/// error boxes and op 0x1b4's diagnostic box (<see cref="AgeBoxText"/>), and AGERC's name entry (command 10,
 /// INPUTNAME). Their Japanese is the original's, and the driver reads them in Japanese whatever is shown.
 /// </summary>
 public static class ShellBoxes
@@ -26,7 +26,8 @@ public static class ShellBoxes
             ? (strings[AgeBoxText.Caption], AgeBoxText.Compose(parts, key => strings[key]))
             : (message.Caption, message.Text);
 
-    /// <summary>The error box's buttons as <paramref name="strings"/> labels them: 中止, 再試行, 無視.</summary>
-    public static IReadOnlyList<string> ErrorButtons(ShellStrings strings)
-        => AgeBoxText.ButtonKeys.Select(key => strings[key]).ToList();
+    /// <summary>An error box's buttons as <paramref name="strings"/> labels them: 中止, 再試行, 無視, or はい,
+    /// いいえ.</summary>
+    public static IReadOnlyList<string> ErrorButtons(AgeBoxButtons buttons, ShellStrings strings)
+        => AgeBoxText.ButtonKeys(buttons).Select(key => strings[key]).ToList();
 }

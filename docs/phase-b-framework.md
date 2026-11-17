@@ -1374,7 +1374,8 @@ handler-addressable LIFO slots. They are constructed at VM scene entry, reconstr
 scene reload, and individually replaced by `0x137`; `0x138` pushes signed dwords and `0x139` pops in LIFO
 order. Empty pop writes success zero while preserving the prior value destination instead of leaking
 native's reused internal EngineCtx pointer. Slot 10 is intentionally independent logical state rather than
-AGE's adjacent numeric-glyph-table corruption.
+AGE's adjacent numeric-glyph-table corruption. (Superseded 2026-11-17: the VM keeps native's ten stacks, and slot
+10 halts the run; see `docs/engine-re.md`, "Indices outside their tables".)
 
 Three focused regressions cover independent LIFO ordering and signed values, reset plus empty-output
 behavior, safe slot 10, pre-reset availability, and root-reload lifetime. `CALLBACK_LOAD`'s shipped

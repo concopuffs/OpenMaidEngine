@@ -367,7 +367,7 @@ public class HotspotInputTests
         Assert.Equal(AgeBoxText.DepthMismatch, parts.Message.Key);
         Assert.Equal(new[] { "INNER", "OUTER" }, parts.Message.Args);
         Assert.Equal(new AgeBoxLocation("INNER", 3, -1, "-", 2, 1), parts.Location);
-        Assert.True(parts.Prompt);
+        Assert.Equal(AgeBoxButtons.AbortRetryIgnore, parts.Buttons);
         Assert.Equal(shown.Text, AgeBoxText.Compose(parts, AgeBoxText.JapaneseText));
     }
 
@@ -1069,23 +1069,6 @@ public class HotspotInputTests
         vm.Run();
 
         Assert.Equal(0x10, vm.Globals.GetValueOrDefault(0x168));
-    }
-
-    [Fact]
-    public void BitSet_RejectsNativeOutOfRangeIndex()
-    {
-        var table = OpcodeTableJson.Load(Paths.OpcodesJson);
-        var script = ScriptAssembler.Assemble(table, "BIT_RANGE", new List<(int, Operand[])>
-        {
-            (0x135, new[] { G(0x169), I(32) }),
-            (0x2, Array.Empty<Operand>()),
-        }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, table, new RecordingWaits());
-
-        vm.Run();
-
-        Assert.Equal("bit-index-out-of-range:32", vm.HaltReason);
-        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x169));
     }
 
     [Fact]

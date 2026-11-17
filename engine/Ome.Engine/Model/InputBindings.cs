@@ -70,6 +70,8 @@ public sealed class InputBindings
         _joystickButtons[buttonSlot] = physicalButton;
     }
 
+    /// <summary>Op 0x10b. Native's table holds 32 physical buttons and polling reads 0 and 1, so a mapping of another
+    /// button changes nothing.</summary>
     public void MapMouseButton(int buttonSlot, int physicalButton)
     {
         if ((uint)buttonSlot >= MaximumActions || (uint)physicalButton >= _mouseButtonSlots.Length) return;

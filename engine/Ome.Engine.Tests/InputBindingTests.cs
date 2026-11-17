@@ -150,22 +150,4 @@ public class InputBindingTests
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x701));
         Assert.Equal(1, vm.Globals.GetValueOrDefault(0x702));
     }
-
-    [Theory]
-    [InlineData(0xfe, "input-action-count-out-of-range:32")]
-    [InlineData(0x10c, "keyboard-action-out-of-range:32")]
-    public void NativeValidatedActionOperandsRejectThirtyTwo(int opcode, string expected)
-    {
-        Operand[] args = opcode == 0xfe ? new[] { I(32) } : new[] { I(32), I(0x2c) };
-        var script = ScriptAssembler.Assemble(Table, "INPUT_RANGE", new List<(int, Operand[])>
-        {
-            (opcode, args),
-            (0x2, Array.Empty<Operand>()),
-        }, Array.Empty<string>());
-        var vm = new VirtualMachine(script, Table, new RecordingWaits());
-
-        vm.Run();
-
-        Assert.Equal(expected, vm.HaltReason);
-    }
 }

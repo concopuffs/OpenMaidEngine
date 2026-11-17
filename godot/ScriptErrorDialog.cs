@@ -5,51 +5,69 @@ using Ome.Engine.Model;
 using Godot;
 
 /// <summary>
-/// Godot presentation of AGE's interpreter error box: age_show_message_box@0x409370 mode 7, MessageBoxA style
-/// 0x112 (MB_ABORTRETRYIGNORE | MB_ICONHAND | MB_DEFBUTTON2) captioned エラーが発生しました. 再試行 is the default
-/// button. Like the Win32 box, it has no cancel and its ✕ is disabled: only the three answers dismiss it.
+/// Godot presentation of AGE's interpreter error boxes, captioned エラーが発生しました: age_show_message_box@0x409370
+/// mode 7, MessageBoxA style 0x112 (MB_ABORTRETRYIGNORE | MB_ICONHAND | MB_DEFBUTTON2), whose default button is
+/// 再試行, and mode 5, style 0x14 (MB_YESNO | MB_ICONHAND), whose default is はい. Like the Win32 boxes, neither has a
+/// cancel and the ✕ is disabled: only the answers dismiss them.
 /// <para>The box shows the shell's language (localization spec §11: <see cref="ShellBoxes"/>); the drive protocol
 /// lists it in AGE's Japanese, and its buttons answer to the Japanese, the English and the shown labels.</para>
-/// <para>Drawn as Windows 10 draws that box for AGE (<see cref="Win32Dialog"/>): a white message area with the
+/// <para>Drawn as Windows 10 draws these boxes for AGE (<see cref="Win32Dialog"/>): a white message area with the
 /// IDI_HAND icon over a COLOR_BTNFACE button strip, in the system message font. The layout values were captured
-/// from AGE's box on 2026-11-04. Windows centres the box on the monitor; the port centres it on the game.</para>
+/// from AGE's boxes (mode 7 on 2026-11-04, mode 5 on 2026-11-16). Windows centres the box on the monitor; the port
+/// centres it on the game.</para>
 /// </summary>
 public partial class ScriptErrorDialog : Win32Dialog
 {
-    // MessageBoxA labels its buttons in the Windows UI language. AgeBoxText's are Japanese Windows' labels, which the
-    // box's own text names; the driver also accepts English Windows' labels.
-    private static readonly string[] JapaneseButtonTexts =
-        [.. System.Linq.Enumerable.Select(AgeBoxText.ButtonKeys, AgeBoxText.JapaneseText)];
-    private static readonly string[] EnglishButtonTexts = { "&Abort", "&Retry", "&Ignore" };
-    private static readonly char[] NativeMnemonics = { 'A', 'R', 'I' };
-    private static readonly ScriptErrorChoice[] Choices =
-        { ScriptErrorChoice.Abort, ScriptErrorChoice.Retry, ScriptErrorChoice.Ignore };
+    // One box's buttons. MessageBoxA labels its buttons in the Windows UI language. AgeBoxText's are Japanese Windows'
+    // labels, which the box's own text names; the driver also accepts English Windows' labels. FromRight is each
+    // button's left edge, in px from the client's right edge, as captured.
+    private sealed record Kind(string[] Japanese, string[] English, char[] Mnemonics, ScriptErrorChoice[] Choices,
+                               int[] FromRight, int Default);
+
+    private static readonly Kind AbortRetryIgnore = Create(AgeBoxButtons.AbortRetryIgnore,
+        ["&Abort", "&Retry", "&Ignore"], ['A', 'R', 'I'], [255, 173, 90], defaultButton: 1);    // MB_DEFBUTTON2
+    private static readonly Kind YesNo = Create(AgeBoxButtons.YesNo,
+        ["&Yes", "&No"], ['Y', 'N'], [172, 90], defaultButton: 0);
+
+    private static Kind Create(AgeBoxButtons buttons, string[] english, char[] mnemonics, int[] fromRight,
+                               int defaultButton)
+        => new([.. System.Linq.Enumerable.Select(AgeBoxText.ButtonKeys(buttons), AgeBoxText.JapaneseText)], english,
+               mnemonics, [.. AgeBoxText.ButtonChoices(buttons)], fromRight, defaultButton);
+
+    private static (Kind Kind, AgeBoxButtons Buttons) KindOf(DiagnosticMessage message)
+        => message.Parts?.Buttons == AgeBoxButtons.YesNo
+            ? (YesNo, AgeBoxButtons.YesNo)
+            : (AbortRetryIgnore, AgeBoxButtons.AbortRetryIgnore);
 
     // Captured layout (client coordinates): the icon at (21,23), the text at (62,23) wrapped at 254 px, 28 px
-    // right of the text, 23 px under it; a 40 px button strip with 75×23 buttons 7 px below its top, their left edges 255, 173 and 90 px from the client's right edge.
+    // right of the text, 23 px under it; a 40 px button strip with 75×23 buttons 7 px below its top.
     private const int TextLeft = 62, TextTop = 23, TextWrap = 254, TextRight = 28, TextBottom = 23;
     private const int StripHeight = 40, ButtonTop = 7, ButtonWidth = 75, ButtonHeight = 23;
-    private static readonly int[] ButtonFromRight = { 255, 173, 90 };
 
     private readonly DiagnosticMessage _message;
+    private readonly Kind _kind;
     private readonly IReadOnlyList<string> _buttonTexts;
-    private readonly Win32ClassicButton[] _buttons = new Win32ClassicButton[3];
+    private readonly Win32ClassicButton[] _buttons;
     private bool _completed;
 
     public event Action<ScriptErrorChoice>? Completed;
 
     public ScriptErrorDialog(DiagnosticMessage message, ShellStrings strings)
-        : this(message, ShellBoxes.Present(message, strings), ShellBoxes.ErrorButtons(strings)) { }
+        : this(message, KindOf(message), ShellBoxes.Present(message, strings), strings) { }
 
-    private ScriptErrorDialog(DiagnosticMessage message, (string Caption, string Text) shown, IReadOnlyList<string> buttons)
-        : this(message, shown.Caption, buttons, Layout(shown.Text)) { }
+    private ScriptErrorDialog(DiagnosticMessage message, (Kind Kind, AgeBoxButtons Buttons) kind,
+                              (string Caption, string Text) shown, ShellStrings strings)
+        : this(message, kind.Kind, shown.Caption, ShellBoxes.ErrorButtons(kind.Buttons, strings),
+               Layout(shown.Text, kind.Kind)) { }
 
-    private ScriptErrorDialog(DiagnosticMessage message, string caption, IReadOnlyList<string> buttons,
+    private ScriptErrorDialog(DiagnosticMessage message, Kind kind, string caption, IReadOnlyList<string> buttons,
                               (Win32StaticText Text, Vector2I Client, int White) layout)
         : base(caption, layout.Client, closeEnabled: false)
     {
         _message = message;
+        _kind = kind;
         _buttonTexts = buttons;
+        _buttons = new Win32ClassicButton[kind.Choices.Length];
         int width = layout.Client.X;
 
         Client.AddChild(new ColorRect
@@ -62,13 +80,13 @@ public partial class ScriptErrorDialog : Win32Dialog
         Client.AddChild(layout.Text);
 
         Win32Font font = Win32DialogStyle.MessageFont;
-        for (int i = 0; i < Choices.Length; i++)
+        for (int i = 0; i < kind.Choices.Length; i++)
         {
-            ScriptErrorChoice choice = Choices[i];
+            ScriptErrorChoice choice = kind.Choices[i];
             var button = new Win32ClassicButton(_buttonTexts[i], font)
             {
-                IsDefault = i == 1,     // MB_DEFBUTTON2
-                Position = new Vector2(width - ButtonFromRight[i], layout.White + ButtonTop),
+                IsDefault = i == kind.Default,
+                Position = new Vector2(width - kind.FromRight[i], layout.White + ButtonTop),
                 Size = new Vector2(ButtonWidth, ButtonHeight),
             };
             button.Pressed += () => Complete(choice);
@@ -79,14 +97,14 @@ public partial class ScriptErrorDialog : Win32Dialog
         WindowInput += OnWindowInput;
     }
 
-    private static (Win32StaticText, Vector2I, int) Layout(string text)
+    private static (Win32StaticText, Vector2I, int) Layout(string text, Kind kind)
     {
         var message = new Win32StaticText(text.TrimEnd('\n'), Win32DialogStyle.MessageFont, TextWrap);
         int textWidth = (int)Mathf.Ceil(message.ContentWidth) + 2;     // the static is 2 px wider than its widest line
         int textHeight = message.LineCount * Win32DialogStyle.MessageFont.LineHeight + 2;
         message.Size = new Vector2(textWidth, textHeight);
         int white = TextTop + Math.Max(textHeight, 32) + TextBottom;
-        int width = Math.Max(TextLeft + textWidth + TextRight, ButtonFromRight[0] + 15);
+        int width = Math.Max(TextLeft + textWidth + TextRight, kind.FromRight[0] + 15);
         return (message, new Vector2I(width, white + StripHeight), white);
     }
 
@@ -95,32 +113,32 @@ public partial class ScriptErrorDialog : Win32Dialog
         _completed = false;
         Vector2I window = NativeWindowSize(Size - new Vector2I(2, CaptionHeight + 2));
         PopupAtNativeWindow((client - window) / 2);
-        _buttons[1].GrabFocus();        // MB_DEFBUTTON2
+        _buttons[_kind.Default].GrabFocus();
     }
 
-    // The buttons' mnemonics answer at once, as in the Win32 box: each label's '&' letter (A, R and I in Japanese
-    // and English). Enter, Space, Tab and the arrows reach the focused button through Godot's focus handling.
+    // The buttons' mnemonics answer at once, as in the Win32 box: each label's '&' letter (A, R and I, or Y and N, in
+    // Japanese and English). Enter, Space, Tab and the arrows reach the focused button through Godot's focus handling.
     private void OnWindowInput(InputEvent e)
     {
         if (e is not InputEventKey { Pressed: true, Echo: false } key) return;
-        for (int i = 0; i < Choices.Length; i++)
+        for (int i = 0; i < _kind.Choices.Length; i++)
         {
-            char mnemonic = MenuItem.MnemonicOf(_buttonTexts[i]) ?? NativeMnemonics[i];
+            char mnemonic = MenuItem.MnemonicOf(_buttonTexts[i]) ?? _kind.Mnemonics[i];
             if ((long)key.Keycode != char.ToUpperInvariant(mnemonic)) continue;
-            Complete(Choices[i]);
+            Complete(_kind.Choices[i]);
             SetInputAsHandled();
             return;
         }
     }
 
-    // MB_ABORTRETRYIGNORE has no cancel answer: its ✕ is disabled.
+    // MB_ABORTRETRYIGNORE and MB_YESNO have no cancel answer: the ✕ is disabled.
     protected override void OnCloseButton() { }
 
     /// <summary>The dialog as the drive protocol lists it: in AGE's Japanese, whatever the shell shows.</summary>
     public System.Text.Json.Nodes.JsonObject Describe()
     {
         var buttons = new System.Text.Json.Nodes.JsonArray();
-        foreach (string text in JapaneseButtonTexts) buttons.Add(text);
+        foreach (string text in _kind.Japanese) buttons.Add(text);
         return new System.Text.Json.Nodes.JsonObject
         {
             ["title"] = _message.Caption, ["text"] = _message.Text, ["buttons"] = buttons,
@@ -132,13 +150,13 @@ public partial class ScriptErrorDialog : Win32Dialog
     public string? Press(string button)
     {
         string wanted = Normalize(button);
-        for (int i = 0; i < Choices.Length; i++)
+        for (int i = 0; i < _kind.Choices.Length; i++)
         {
-            if (Normalize(JapaneseButtonTexts[i]) != wanted && Normalize(JapaneseButtonTexts[i].Split('(')[0]) != wanted
-                && Normalize(EnglishButtonTexts[i]) != wanted && Normalize(_buttonTexts[i]) != wanted)
+            if (Normalize(_kind.Japanese[i]) != wanted && Normalize(_kind.Japanese[i].Split('(')[0]) != wanted
+                && Normalize(_kind.English[i]) != wanted && Normalize(_buttonTexts[i]) != wanted)
                 continue;
-            Complete(Choices[i]);
-            return JapaneseButtonTexts[i];
+            Complete(_kind.Choices[i]);
+            return _kind.Japanese[i];
         }
         return null;
     }

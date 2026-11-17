@@ -67,6 +67,8 @@ public sealed partial class VirtualMachine
     private StepResult OpRenderTextHistory(Instruction ins, int pc)
     {
         var a = ins.Args;
+        // The record index is tested (an index outside the records skips the op); the layout slot is not.
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         // Native History draws every record in the text manager's current style.
         _text.RenderHistoryGroup(Gfx, (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]));
         return StepResult.Next;
@@ -76,14 +78,28 @@ public sealed partial class VirtualMachine
     private StepResult OpRedrawRetainedTextGroup(Instruction ins, int pc)
     {
         var a = ins.Args;
+        // The record index is tested (an index outside the records skips the op); the layout slot is not.
+        if (LayoutSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         _text.RedrawGroup(Gfx, (int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), Read(a[3]), Read(a[4]));
         return StepResult.Next;
+    }
+
+    /// <summary>Ops 0x1d3 and 0x1d4 find nothing for a record index past the last record. A negative one is refused
+    /// the same way, or, where the build does not test its sign (<see cref="Text.TextRules.HistoryLookupTestsSign"/>),
+    /// ends the process in a checked subscript: the run halts.</summary>
+    private StepResult? NegativeHistoryRecordRefused(Instruction ins, long record)
+    {
+        if (record >= 0 || _rules.Text.HistoryLookupTestsSign) return null;
+        HaltReason ??= $"index-out-of-range: {At(ins)}: history record {record} is negative, where AGE's checked "
+                       + "subscript ends the process";
+        return StepResult.Halt;
     }
 
     // 0x1d3: operand 3 is accepted but ignored natively
     private StepResult OpFindTextHistoryValue(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (NegativeHistoryRecordRefused(ins, Read(a[3])) is { } refused) return refused;
         bool found = _text.History.TryFindMetadata((int)Read(a[3]), Read(a[4]), out long value);
         Write(a[0], found ? 1 : 0);
         Write(a[1], value);
@@ -94,6 +110,7 @@ public sealed partial class VirtualMachine
     private StepResult OpFindTextHistoryPair(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (NegativeHistoryRecordRefused(ins, Read(a[3])) is { } refused) return refused;
         _text.History.TryFindVoicePair((int)Read(a[3]), out long voiceId, out long voiceArgument);
         Write(a[0], voiceId);
         Write(a[1], voiceArgument);

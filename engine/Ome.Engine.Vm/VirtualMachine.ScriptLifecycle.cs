@@ -103,17 +103,19 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
-    // 0x06 (script_id, frame_slot), valid slots 0..39
+    /// <summary>Native's script frames, 0 to 39 (EngineCtx's frame table, 0x1e dwords each).</summary>
+    private const int ScriptFrameSlots = 40;
+
+    // 0x06 (script_id, frame_slot), slots 0..39. op_0x6_preload_script_slot@0x41bdb0 makes the slot the current frame
+    // before its signed test: a slot above 39 throws a fatal box (flags 0x10001) whose context is read from the frame
+    // outside the table, and a negative slot passes and loads below it.
     private StepResult OpPreloadScriptSlot(Instruction ins, int pc)
     {
         var a = ins.Args;
         long id = Read(a[0]);
-        int slot = unchecked((int)Read(a[1]));
-        if ((uint)slot >= 40)
-        {
-            HaltReason ??= $"preloaded-script-slot-out-of-range:{slot}";
-            return StepResult.Halt;
-        }
+        if (IndexRefused(ins, "frame slot", Read(a[1]), ScriptFrameSlots, IndexTest.Unchecked) is { } refused)
+            return refused;
+        int slot = (int)Read(a[1]);
         if (_provider == null)
         {
             HaltReason ??= $"preloaded-script-provider-unavailable:0x{id:x}";
@@ -130,21 +132,17 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
-    // 0x08 (frame_slot)
+    // 0x08 (frame_slot). op_0x8_call_preloaded_script_slot@0x41bf00 reads the slot's frame unchecked, and throws
+    // 「この階層にはファイルが読み込まれていません．Depth=n」 with flags 0x10005 for one no script was loaded into.
     private StepResult OpCallPreloadedScriptSlot(Instruction ins, int pc)
     {
         var a = ins.Args;
-        int slot = unchecked((int)Read(a[0]));
-        if ((uint)slot >= 40)
-        {
-            HaltReason ??= $"preloaded-script-slot-out-of-range:{slot}";
-            return StepResult.Halt;
-        }
+        if (IndexRefused(ins, "frame slot", Read(a[0]), ScriptFrameSlots, IndexTest.Unchecked) is { } refused)
+            return refused;
+        int slot = (int)Read(a[0]);
         if (!_scene.PreloadedScriptSlots.TryGetValue(slot, out var loaded))
-        {
-            HaltReason ??= $"preloaded-script-slot-empty:{slot}";
-            return StepResult.Halt;
-        }
+            return YesNoScriptError(AgeBoxMessage.Keyed(AgeBoxText.EmptyScriptSlot,
+                slot.ToString(System.Globalization.CultureInfo.InvariantCulture)), pc);
         if (_depth >= _o.CallDepthCap) { HaltReason ??= "call-depth-exceeded"; return StepResult.Halt; }
 
         CallScriptDispatches++;

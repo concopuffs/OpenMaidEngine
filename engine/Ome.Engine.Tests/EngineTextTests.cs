@@ -11,8 +11,8 @@ public sealed class EngineTextTests
 {
     private static readonly AgeBoxLocation At = new("INNER", 0x3, -1, "-", 2, 1);
 
-    private static AgeBoxParts DepthBox(bool prompt = true)
-        => new(AgeBoxMessage.Keyed(AgeBoxText.DepthMismatch, "INNER", "OUTER"), At, prompt);
+    private static AgeBoxParts DepthBox()
+        => new(AgeBoxMessage.Keyed(AgeBoxText.DepthMismatch, "INNER", "OUTER"), At, AgeBoxButtons.AbortRetryIgnore);
 
     private static EngineTextLayer Layer(string language, params (string Key, string Text)[] entries)
         => new(language, entries.ToDictionary(entry => entry.Key,
@@ -33,8 +33,29 @@ public sealed class EngineTextTests
             body);
         Assert.Equal("Debug\n\n\n\nFILE=SC0100 ADDRESS=2A43 LINE=-1 COMMAND=-(178) DEPTH=0\n",
                      AgeBoxText.Compose(new AgeBoxParts(AgeBoxMessage.Script("Debug\n"),
-                                                        new("SC0100", 0x2a43, -1, "-", 0xb2, 0), Prompt: false),
+                                                        new("SC0100", 0x2a43, -1, "-", 0xb2, 0), AgeBoxButtons.Ok),
                                         key => key == AgeBoxText.DebugHeading ? "" : AgeBoxText.JapaneseText(key)));
+    }
+
+    [Fact]
+    public void TheYesNoBoxComposesAgesBodyAndItsAnswersContinueOrExit()
+    {
+        // age_show_message_box mode 5 (format 0x5706f0), as native showed it for SetKeyTotal 40 on 2026-11-16.
+        var parts = new AgeBoxParts(AgeBoxMessage.Keyed(AgeBoxText.BadArgument, "SetKeyTotal"),
+                                    new("$2$DETOUR.BIN", 0x38, -1, "-", 0xfe, 2), AgeBoxButtons.YesNo);
+
+        Assert.Equal(
+            "SetKeyTotalの引数が不正です．\n\nデバック情報：\nFILE=$2$DETOUR.BIN ADDRESS=38 LINE=-1 COMMAND=-(254) DEPTH=2\n"
+            + "\n\nプログラムを続行しますか？\n\nはい：このままプログラムを続行します．\n"
+            + "      (ただし正常に動作しない場合があります)\nいいえ：プログラムを終了します．\n",
+            AgeBoxText.Compose(parts, AgeBoxText.JapaneseText));
+        Assert.Equal(["はい(&Y)", "いいえ(&N)"], ShellBoxes.ErrorButtons(AgeBoxButtons.YesNo, ShellStrings.Japanese));
+        Assert.Equal(["&Yes", "&No"], ShellBoxes.ErrorButtons(AgeBoxButtons.YesNo, ShellStrings.Load("en")));
+        Assert.Equal([ScriptErrorChoice.Ignore, ScriptErrorChoice.Abort],
+                     AgeBoxText.ButtonChoices(AgeBoxButtons.YesNo));
+        Assert.Equal([ScriptErrorChoice.Abort, ScriptErrorChoice.Retry, ScriptErrorChoice.Ignore],
+                     AgeBoxText.ButtonChoices(AgeBoxButtons.AbortRetryIgnore));
+        Assert.Empty(AgeBoxText.ButtonKeys(AgeBoxButtons.Ok));
     }
 
     [Fact]
@@ -49,8 +70,9 @@ public sealed class EngineTextTests
         Assert.Equal("An error occurred", caption);
         Assert.StartsWith("Invalid depth INNER != OUTER\n\nDebug information:\nFILE=INNER ADDRESS=3 LINE=-1 COMMAND=-(2) "
                           + "DEPTH=1\n\n\nContinue the program?\n\nAbort: end the program.\n", text);
-        Assert.Equal(["&Abort", "&Retry", "&Ignore"], ShellBoxes.ErrorButtons(en));
-        Assert.Equal(["中止(&A)", "再試行(&R)", "無視(&I)"], ShellBoxes.ErrorButtons(ShellStrings.Japanese));
+        Assert.Equal(["&Abort", "&Retry", "&Ignore"], ShellBoxes.ErrorButtons(AgeBoxButtons.AbortRetryIgnore, en));
+        Assert.Equal(["中止(&A)", "再試行(&R)", "無視(&I)"],
+                     ShellBoxes.ErrorButtons(AgeBoxButtons.AbortRetryIgnore, ShellStrings.Japanese));
         Assert.Equal((message.Caption, message.Text), ShellBoxes.Present(message, ShellStrings.Japanese));
         Assert.Equal(("t", "x"), ShellBoxes.Present(new DiagnosticMessage("t", "x"), en));      // no parts: as given
     }

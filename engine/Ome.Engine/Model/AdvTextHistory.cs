@@ -211,6 +211,10 @@ public sealed class AdvTextHistory
         public long TextObjectRangeCount;
     }
 
+    /// <summary>Native's ADV text layouts, slots 0 to 9 (text_manager+0x414, adv_text_layouts_allocate@0x44f6d0; 4.33G
+    /// @0x44ed60). Slot 0 selects the current layout for most ops.</summary>
+    public const int LayoutCount = 10;
+
     private readonly List<AdvTextHistoryRecord> _records = new();
     private readonly List<AdvTextHistoryEntry> _entries = new();
     private readonly Dictionary<int, LayoutState> _layouts = new();

@@ -79,6 +79,13 @@ class DerivedFactsTests(unittest.TestCase):
         self.assertEqual(self.facts("present-gfx-object-range")[0], "never")
         self.assertEqual(self.facts("sleep")[0], "may")
 
+    def test_the_script_error_box_is_an_errors_path(self):
+        # The はい/いいえ box of op 0x60's zero bound neither waits nor leaves for the op: はい goes on to the next
+        # instruction, いいえ ends the run as a halt does. The 中止/再試行/無視 box's 再試行 runs the instruction again.
+        self.assertEqual(self.facts("random-modulo"), ("never", ["falls"]))
+        self.assertEqual(self.facts("draw-texture"), ("never", ["falls"]))
+        self.assertEqual(self.facts("sfx-load"), ("never", ["falls", "jumps"]))
+
     def test_the_save_native(self):
         self.assertIn("saves", self.facts("save-numbered-slot")[1])
         self.assertIn("loads", self.facts("load-numbered-slot-and-resume")[1])

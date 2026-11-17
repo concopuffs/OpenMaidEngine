@@ -501,7 +501,7 @@ The handler reads the same 0x20-byte string vector counted by opcode 0x2dc and s
 - **semantic status:** investigated
 - **summary:** (packed_raw_resource_id)(channel) — synchronously open the universal SYS4INI/AAI catalog entry and replace the channel's decoded sound buffer without starting playback. A zero high byte is a raw SYS4INI index; a nonzero high byte selects an append catalog and uses the low 24-bit index. Native manager supports channels 0..12; SC0000 uses 0..9.
 - **operand access:** `1` read · `2` read
-- **control (port handler):** waits never; leaves falls
+- **control (port handler):** waits never; leaves falls, jumps
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xb4`; scope=Himegari SYS4422. Ghidra /v2: op_0xb4_sfx_load@0x4201d0 -> sfx_channel_load@0x482500 -> asset_open_indexed_entry@0x44f390 + sound_decode_channel@0x483360. The opener indexes the base catalog directly for a zero high byte and selects mounted_aai[high_byte] otherwise. SC0000 0xc29 uses raw 0x28 = E0808.WAV. TITLE independently proves the addressing rule: raw 0x2aea = SE020.WAV is preloaded on channel 2 and started on every hover-selection change; raw 0x3321 = SE015.WAV is loaded/started on activation. The pre-fix port trace reported file=null under scene-manifest resolution; after switching Godot to ResolveSoundEffect/ResolvePacked, a synchronized TITLE->GAMESTART->TITLE trace resolves and starts SE020/SE015/SE013, confirmed audible by the user.
 
@@ -675,7 +675,7 @@ Port status (2026-07-29): implemented with native SYS4REG.INI route persistence 
 - **observed by:** kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
 - **semantic status:** investigated
-- **summary:** (out boolean)(channel) — report whether native sound channel 0..12 is currently playing. The observed channel organization is SFX 0..9, BGM 11, and voice 12; unavailable or out-of-range channels return false.
+- **summary:** (out boolean)(channel) — report whether native sound channel 0..12 is currently playing. The observed channel organization is SFX 0..9, BGM 11, and voice 12; an unavailable channel reads false, channels of 13 and up are traced (dsIsPlaying) and read false, and a negative channel passes native's signed test (the port halts).
 - **operand access:** `1` write · `2` read
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
@@ -848,13 +848,13 @@ Implemented with domain-preserving addressed-array access, native signed 32-bit 
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
 - **semantic status:** investigated
-- **summary:** (queue_id) - destroy any existing queue in the selected engine slot and replace it with an empty integer FIFO. Valid queue ids are 0..10.
+- **summary:** (queue_id) - destroy any existing queue in the selected engine slot and replace it with an empty integer FIFO. Native owns ten queues, ids 0..9; its test admits id 10, which lands on stack 0.
 - **operand access:** `1` read
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x132`; scope=Himegari SYS4422. Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. scene_context_init_reset@0x40b560 constructs exactly ten queue pointers at EngineCtx+0x55130 before the ten stack pointers at +0x55158, so admitted queue id 10 aliases stack slot 0. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, both using id 0 before their flood fills.
 
-Implemented as 11 safe logical queue slots so the handler-admitted 0..10 script ABI cannot corrupt adjacent host state. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity; invalid ids halt with a diagnostic. Native physically owns only ten independent slots and its id-10 address aliases stack slot 0.
+Implemented as native's ten queues. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity. Id 10, which the handler's test lets through onto stack slot 0, halts the run; ids above 10 are traced as ResetQの引数が不正です． and skipped, as native traces them (2026-11-17; docs/engine-re.md, 'Indices outside their tables').
 
 ### 0x133 `enqueue-int` (enqueue-int, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -866,7 +866,7 @@ Implemented as 11 safe logical queue slots so the handler-admitted 0..10 script 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x133`; scope=Himegari SYS4422. Ghidra /v2: op_0x133_enqueue_int@0x4218d0 validates queue_id 0..10, fetches value, and calls int_queue_enqueue@0x408930 on ctx's selected queue. The helper appends at end_index, compacts unread entries when read_index is nonzero, or grows capacity by the 0x100-dword quantum. All four corpus sites are in ATSEEK/MVSEEK and enqueue coordinates packed as (x << 16) + y.
 
-Implemented with signed 32-bit value normalization into the selected FIFO. The port diagnoses invalid or never-reset slots; every shipped use resets queue 0 before enqueueing.
+Implemented with signed 32-bit value normalization into the selected FIFO. Id 10 halts and ids above 10 are traced (AddQ) and skipped, as for op 0x132; a queue never reset halts. Every shipped use resets queue 0 before enqueueing.
 
 ### 0x134 `try-dequeue-int` (try-dequeue-int, argc 3)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -888,7 +888,7 @@ Implemented as FIFO TryDequeue: nonempty writes success=1 plus the signed dword;
 - **operand access:** `1` read+write · `2` read
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x135`; scope=Himegari SYS4422. Ghidra /v2: op_0x135_handler@0x4296c0 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value | (1 << index). HIDEWIN.BIN sets index 1 at 0x13d and later tests mask 0x2 at 0x146.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x135`; scope=Himegari SYS4422. Ghidra /v2: op_0x135_handler@0x4296c0 fetches operand 2 as an unsigned bit index, traces SetBitの引数が不正です． for values >=32 and writes nothing (corrected 2026-11-17: no script error is thrown); otherwise it fetches operand 1 and writes value | (1 << index). HIDEWIN.BIN sets index 1 at 0x13d and later tests mask 0x2 at 0x146.
 
 ### 0x136 `bit-reset` (bit-reset, argc 2)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -898,7 +898,7 @@ Implemented as FIFO TryDequeue: nonempty writes success=1 plus the signed dword;
 - **operand access:** `1` read+write · `2` read
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x136`; scope=Himegari SYS4422. Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value & ~(1 << index). HIDEWIN.BIN clears index 1 at 0x154 after testing mask 0x2.
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x136`; scope=Himegari SYS4422. Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsigned bit index, traces RemBitの引数が不正です． for values >=32 and writes nothing (corrected 2026-11-17: no script error is thrown); otherwise it fetches operand 1 and writes value & ~(1 << index). HIDEWIN.BIN clears index 1 at 0x154 after testing mask 0x2.
 
 ### 0x137 `reset-int-stack` (reset-int-stack, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -911,7 +911,7 @@ Implemented as FIFO TryDequeue: nonempty writes success=1 plus the signed dword;
 - **depended on by:** 0x138, 0x139
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x137`; scope=Himegari SYS4422. Ghidra /v2: op_0x137_reset_int_stack@0x421940 destroys the pointer at EngineCtx+0x55158+id*4, allocates 0x14 bytes, and calls int_stack_construct@0x407410. The constructor allocates 0x100 dwords, records a 0x100-dword growth quantum, and initializes top=-1. scene_context_init_reset@0x40b560 constructs exactly ten entries [0,10), while the handler checks only id<=10; id 10 therefore lands at +0x55180, the numeric-glyph-style table. Corpus: CALLBACK_LOAD@0xf2 is the sole site and resets stack 0 before rebuilding the eight retained ADV layers.
 
-AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs all ten on every scene-context reset. The handler's unsigned range check accidentally admits id 10 as well as 0..9; that address aliases the first dword of the numeric-glyph-style table rather than an eleventh stack. Himegari uses only id 0. Port status (2026-07-29): implemented with eleven safely isolated handler-addressable stacks, each initially available with native-equivalent 0x100-dword starting capacity and reconstructed empty on root scene reload. Reset replaces only the selected logical stack; invalid ids halt diagnostically.
+AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs all ten on every scene-context reset. The handler's unsigned range check accidentally admits id 10 as well as 0..9; that address aliases the first dword of the numeric-glyph-style table rather than an eleventh stack. Himegari uses only id 0. Port status (2026-11-17): implemented as native's ten stacks, each initially available with native-equivalent 0x100-dword starting capacity and reconstructed empty on root scene reload. Reset replaces only the selected stack. Id 10 halts the run and ids above 10 are traced (ResetStack) and skipped (docs/engine-re.md, 'Indices outside their tables').
 
 ### 0x138 `push-int-stack` (push-int-stack, argc 2)
 - **observed by:** none in recorded corpora
@@ -924,7 +924,7 @@ AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs al
 - **depended on by:** 0x139
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x138`; scope=Himegari SYS4422. Ghidra /v2: op_0x138_push_int_stack@0x421a40 admits stack ids <=10 and calls int_stack_push@0x408860. The helper grows capacity by the stored 0x100-dword quantum when top+2 reaches capacity, increments top, and stores the value. The ten-slot/id-10 alias caveat is documented on op 0x137. No Himegari script calls this opcode.
 
-Port status (2026-07-29): implemented over the scene-context stack registry. All signed dword values round-trip through the VM's integer-cell representation, and handler-addressable slot 10 remains independent host state.
+Port status (2026-07-29): implemented over the scene-context stack registry. All signed dword values round-trip through the VM's integer-cell representation. Id 10 halts and ids above 10 are traced (Push) and skipped, as for op 0x137 (2026-11-17).
 
 ### 0x139 `try-pop-int-stack` (try-pop-int-stack, argc 3)
 - **observed by:** none in recorded corpora
@@ -1709,7 +1709,7 @@ Port status (2026-11-03): the text native (TextManager) seeds the value from SYS
 - **depended on by:** 0x23b
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x13a`; scope=Himegari SYS4422. Ghidra /v2: op_0x13a_register_numeric_glyph_style@0x421ab0 writes operands 2..6 to EngineCtx+0x55180+style_index*0x14 after enforcing style_index<11. scene_context_init_reset@0x40b560 clears 200 bytes at +0x55180, exactly ten records; record 10 therefore overlaps ret_stack_a at +0x55248. Corpus: 74 sites in 24 scripts; all literal style registrations are 0..9.
 
-SYS4422 stores the five-dword definition at EngineCtx+0x55180+style_index*0x14. SYS4433 stores the same five fields in a seven-dword record at EngineCtx+0x5940c+style_index*0x1c and clears the two cell-spacing fields to zero; opcode 0x2da is its extended writer for all seven fields. Opcode 0x23b consumes the selected revision's record to turn an integer into retained draw objects, one atlas cell per decimal digit. SYS4422 scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port safely models all eleven handler-addressable logical records without reproducing the overflow. The same reset first zeroes the return-stack table (+0x55248, 0xa0 bytes), so after a reset all eleven records are zero; SYS4433 likewise zeroes 0x118 bytes at +0x5940c and 0xa0 bytes at +0x59524 (scene_context_init_reset_sys4433@0x40c2b0). The port clears all eleven at op 0x9 (2026-11-13).
+SYS4422 stores the five-dword definition at EngineCtx+0x55180+style_index*0x14. SYS4433 stores the same five fields in a seven-dword record at EngineCtx+0x5940c+style_index*0x1c and clears the two cell-spacing fields to zero; opcode 0x2da is its extended writer for all seven fields. Opcode 0x23b consumes the selected revision's record to turn an integer into retained draw objects, one atlas cell per decimal digit. SYS4422 scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port keeps the ten records: style 10 halts the run, and a larger style is traced as CGNumberの引数が不正です． and skipped (2026-11-17). The same reset first zeroes the return-stack table (+0x55248, 0xa0 bytes), so after a reset all eleven records are zero; SYS4433 likewise zeroes 0x118 bytes at +0x5940c and 0xa0 bytes at +0x59524 (scene_context_init_reset_sys4433@0x40c2b0). The port clears its ten at op 0x9 (2026-11-13).
 
 ### 0x141 `set-message-window-alpha` (set-message-window-alpha, argc 1)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -1938,7 +1938,7 @@ Native handler gfx_op_0x20c_present_frame -> gfx_render_frame @0x4820b0. This is
 - **depended on by:** 0x21, 0x22, 0x23, 0x24, 0x25
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x20d`; scope=Himegari SYS4422. Ghidra /v2: op_0x20d_select_render_target@0x422e10 passes operand 1 and retained-gfx owner ctx+0x46614 to retained_gfx_select_render_target@0x479660. Its D3D calls resolve texture level 0 or backbuffer 0, then invoke device vtable +0x94 SetRenderTarget and store selected slot at owner+0xb530. DATA1: 113 calls in 24 scripts.
 
-For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it.
+For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it. The port also selects the backbuffer for slot -1, which both games' retail scripts pass; what native's test makes of -1 is not read (docs/backlog.md, 'Native index tests for 28 ops').
 
 ### 0x20e `clear-render-target` (clear-render-target, argc 0)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -1995,7 +1995,7 @@ Both-found swaps every object field, including surface binding, geometry, color,
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x216`; scope=Himegari SYS4422. SYS4422 handler 0x42a0f0 reads EngineCtx+0x46d14 + slot*0x14; SYS4433 handler 0x42af80 reads EngineCtx+0x4af9c + slot*0x14. These are surface-record resource words, not an independent object-field table. Native gfx_surface_load_asset@0x477c40 maintains the SYS4422 record; initial/blank records use -1. Installed Kamidori loose BTL.BIN@0x30e0 queries old slot 0xc2+side, then @0x319d reloads the returned id into transition slot 0x2b+side after replacing the primary texture. Kamidori native at ALLMAP after a workshop scene: G[0xfd437]=-1 from op 0x215, G[0x320a]=0 from this op (Frida, 2026-11-07); a Frida read of the SYS4433 snapshot at ctx+0x4af9c+0x4e20 matches the SAVE05 snapshot.
 
-Both handlers index gfx manager+0x700+slot*0x14 with no bounds check. Scripts reach slot -1 when op 0x215 reports no object: Kamidori ALLMAP@0x4fa and SAVE@0xbce query object 0xcb2a and test the result only for zero before querying its slot. Slot -1 reads manager+0x6ec, which neither image addresses (no displacement 0x6ec or ctx+0x46d00/0x4af88 operand); a Frida read of Kamidori native reads 0 there, and native saves keep G[0x320a]=0 while the port wrote -1 (2026-11-07). The page snapshot table follows the live one at manager+0x5520, so slots 1000..1999 read snapshot record slot-1000. Slots outside -1..1999 read unrelated manager memory and are not modeled (the port returns -1).
+Both handlers index gfx manager+0x700+slot*0x14 with no bounds check. Scripts reach slot -1 when op 0x215 reports no object: Kamidori ALLMAP@0x4fa and SAVE@0xbce query object 0xcb2a and test the result only for zero before querying its slot. Slot -1 reads manager+0x6ec, which neither image addresses (no displacement 0x6ec or ctx+0x46d00/0x4af88 operand); a Frida read of Kamidori native reads 0 there, and native saves keep G[0x320a]=0 while the port wrote -1 (2026-11-07). The page snapshot table follows the live one at manager+0x5520, so slots 1000..1999 read snapshot record slot-1000. Slots outside -1..1999 read unrelated manager memory and are not modeled (the port halts).
 
 ### 0x217 `set-gfx-geom3` (set-gfx-geom3, argc 4)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2330,7 +2330,7 @@ The handler requires an existing destination texture, allocates/reuses a 0x478-b
 - **depended on by:** 0x2da
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x23b`; scope=Himegari SYS4422. Ghidra /v2: op_0x23b_draw_decimal_glyphs@0x424190 reads the five-dword style record at EngineCtx+0x55180, erases the destination handle range, and calls gfx_object_bind_draw once per displayed digit. Corpus: 147 sites in 24 scripts; DRAWCHP contains 22 calls for the field HUD, including turn/control/mana/level/HP/SP/FS values visible as blank in the DEBUGMAP discrepancy.
 
-First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using the registered atlas. SYS4422's five-field style and SYS4433 opcode 0x13a use tightly packed cells. SYS4433 opcode 0x2da adds independent source and destination spacing: source atlas stride is digit_width+source_cell_spacing and destination stride is digit_width+destination_cell_spacing. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though SYS4422 native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles raise the engine's script error.
+First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using the registered atlas. SYS4422's five-field style and SYS4433 opcode 0x13a use tightly packed cells. SYS4433 opcode 0x2da adds independent source and destination spacing: source atlas stride is digit_width+source_cell_spacing and destination stride is digit_width+destination_cell_spacing. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though SYS4422 native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles are traced as CGNumberの引数が不正です． and the op is skipped; the port halts at index 10 (2026-11-17).
 
 ### 0x23c `sample-frame-time` (sample-frame-time, argc 0)
 - **observed by:** himegari (SYS4422), kamidori (SYS4433)
@@ -2564,7 +2564,7 @@ Port status (2026-11-13): the VM passes 0 and 1 to the shell-services native (Sh
 - **depends on:** 0x23b
 - **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433 (4.33F), addresses given for /kamidori/4.33G`; site=`vm-map/opcodes.toml opcode 0x2da`; scope=SYS4433 extended numeric-glyph style writer and consumer. op_0x2da_register_extended_numeric_glyph_style@0x423510 writes all seven fields after enforcing index<11; op_0x23b_draw_decimal_glyphs@0x422030 adds fields 6/7 to digit width for source/destination stride. DRAWCHP.BIN@0x626 is the first reached dungeon site; SYS4422 has no handler in slot 0x2da.
 
-Operand 1 selects one of eleven style records. Operands 2..6 match opcode 0x13a: source surface slot, atlas x/y, and digit width/height. Operand 7 is added to digit width when stepping between source atlas cells; operand 8 is added to digit width when placing destination glyph objects. Opcode 0x23b consumes all seven fields. Invalid style indices take the native script-error path. The complete Kamidori catalog has 66 calls; the first reached dungeon site is DRAWCHP.BIN@0x626 with (0, 0x40, 0x39f, 0x2fe, 0x15, 0x1d, 1, 1). SYS4422 does not install dispatch slot 0x2da.
+Operand 1 selects one of the ten style records (the handler admits 0..10; see op 0x13a). Operands 2..6 match opcode 0x13a: source surface slot, atlas x/y, and digit width/height. Operand 7 is added to digit width when stepping between source atlas cells; operand 8 is added to digit width when placing destination glyph objects. Opcode 0x23b consumes all seven fields. Invalid style indices are traced as CGNumber's argument error. The complete Kamidori catalog has 66 calls; the first reached dungeon site is DRAWCHP.BIN@0x626 with (0, 0x40, 0x39f, 0x2fe, 0x15, 0x1d, 1, 1). SYS4422 does not install dispatch slot 0x2da.
 
 ## input
 
@@ -2716,7 +2716,7 @@ The registration is engine-wide (target +0x5f684, owner mouse_callback_owner_scr
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`
 - **semantic status:** investigated
 - **summary:** Dispatch the registered mouse callback when its polling interval elapses (at once under fast-forward). A callback registered by another script raises the Depth error.
-- **control (port handler):** waits may; leaves falls, jumps
+- **control (port handler):** waits never; leaves falls, jumps
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xcd`; scope=Himegari SYS4422. Ghidra /v2: op_0xcd_dispatch_mouse_callback@0x417e10 sets frame_instruction_word_count 1, compares timeGetTime minus ctx+0x5f334 against the interval at ctx+0x5f338 (or run-state 0x8000000), stores the new time, pushes the following PC, pops it again for target -1, compares frame_script_resource_id with ctx+0x5f6ac and throws the 0x570424 Depth message on a mismatch, and otherwise jumps to the registered callback target. It writes no operand, so the upstream get-input-type label was incorrect.
 

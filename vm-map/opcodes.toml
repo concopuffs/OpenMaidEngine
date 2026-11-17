@@ -2173,7 +2173,7 @@ category = "audio"
 summary = "(packed_raw_resource_id)(channel) — synchronously open the universal SYS4INI/AAI catalog entry and replace the channel's decoded sound buffer without starting playback. A zero high byte is a raw SYS4INI index; a nonzero high byte selects an append catalog and uses the low 24-bit index. Native manager supports channels 0..12; SC0000 uses 0..9."
 noop_headless = false
 waits = "never"
-leaves = ["falls"]
+leaves = ["falls", "jumps"]
 source = "investigation"
 confidence = "high"
 depends_on = []
@@ -2598,7 +2598,7 @@ category = "input"
 summary = "Dispatch the registered mouse callback when its polling interval elapses (at once under fast-forward). A callback registered by another script raises the Depth error."
 details = "Once due, the handler restarts the timer and pushes the following pc; a -1 target pops it again. When the running script is not the registrant it throws flags 0x10007 \"Depth が不正です <running> != <owner>\" with that return pc still pushed. Its recorded length is 1, so 無視 resumes at the successor, whose ret then pops the stale return pc; 再試行 re-runs it, which is not due again until the interval passes."
 noop_headless = false
-waits = "may"
+waits = "never"
 leaves = ["falls", "jumps"]
 source = "investigation"
 confidence = "high"
@@ -3261,7 +3261,7 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "reset-int-queue"
 category = "compute"
-summary = "(queue_id) - destroy any existing queue in the selected engine slot and replace it with an empty integer FIFO. Valid queue ids are 0..10."
+summary = "(queue_id) - destroy any existing queue in the selected engine slot and replace it with an empty integer FIFO. Native owns ten queues, ids 0..9; its test admits id 10, which lands on stack 0."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -3269,7 +3269,7 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. scene_context_init_reset@0x40b560 constructs exactly ten queue pointers at EngineCtx+0x55130 before the ten stack pointers at +0x55158, so admitted queue id 10 aliases stack slot 0. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, both using id 0 before their flood fills."
-details = "Implemented as 11 safe logical queue slots so the handler-admitted 0..10 script ABI cannot corrupt adjacent host state. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity; invalid ids halt with a diagnostic. Native physically owns only ten independent slots and its id-10 address aliases stack slot 0."
+details = "Implemented as native's ten queues. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity. Id 10, which the handler's test lets through onto stack slot 0, halts the run; ids above 10 are traced as ResetQの引数が不正です． and skipped, as native traces them (2026-11-17; docs/engine-re.md, 'Indices outside their tables')."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3294,7 +3294,7 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x133_enqueue_int@0x4218d0 validates queue_id 0..10, fetches value, and calls int_queue_enqueue@0x408930 on ctx's selected queue. The helper appends at end_index, compacts unread entries when read_index is nonzero, or grows capacity by the 0x100-dword quantum. All four corpus sites are in ATSEEK/MVSEEK and enqueue coordinates packed as (x << 16) + y."
-details = "Implemented with signed 32-bit value normalization into the selected FIFO. The port diagnoses invalid or never-reset slots; every shipped use resets queue 0 before enqueueing."
+details = "Implemented with signed 32-bit value normalization into the selected FIFO. Id 10 halts and ids above 10 are traced (AddQ) and skipped, as for op 0x132; a queue never reset halts. Every shipped use resets queue 0 before enqueueing."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3361,7 +3361,7 @@ leaves = ["falls"]
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x135_handler@0x4296c0 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value | (1 << index). HIDEWIN.BIN sets index 1 at 0x13d and later tests mask 0x2 at 0x146."
+evidence = "Ghidra /v2: op_0x135_handler@0x4296c0 fetches operand 2 as an unsigned bit index, traces SetBitの引数が不正です． for values >=32 and writes nothing (corrected 2026-11-17: no script error is thrown); otherwise it fetches operand 1 and writes value | (1 << index). HIDEWIN.BIN sets index 1 at 0x13d and later tests mask 0x2 at 0x146."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3391,7 +3391,7 @@ leaves = ["falls"]
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsigned bit index, rejects values >=32 through the native script-error path, fetches operand 1, and writes value & ~(1 << index). HIDEWIN.BIN clears index 1 at 0x154 after testing mask 0x2."
+evidence = "Ghidra /v2: op_0x136_handler@0x429730 fetches operand 2 as an unsigned bit index, traces RemBitの引数が不正です． for values >=32 and writes nothing (corrected 2026-11-17: no script error is thrown); otherwise it fetches operand 1 and writes value & ~(1 << index). HIDEWIN.BIN clears index 1 at 0x154 after testing mask 0x2."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3415,7 +3415,7 @@ abi_source = "kelebek+decode-validated"
 name = "reset-int-stack"
 category = "compute"
 summary = "(stack_id) - destroy the selected native integer LIFO and replace it with an empty stack."
-details = "AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs all ten on every scene-context reset. The handler's unsigned range check accidentally admits id 10 as well as 0..9; that address aliases the first dword of the numeric-glyph-style table rather than an eleventh stack. Himegari uses only id 0. Port status (2026-07-29): implemented with eleven safely isolated handler-addressable stacks, each initially available with native-equivalent 0x100-dword starting capacity and reconstructed empty on root scene reload. Reset replaces only the selected logical stack; invalid ids halt diagnostically."
+details = "AGE owns ten independent stack pointers at EngineCtx+0x55158 and reconstructs all ten on every scene-context reset. The handler's unsigned range check accidentally admits id 10 as well as 0..9; that address aliases the first dword of the numeric-glyph-style table rather than an eleventh stack. Himegari uses only id 0. Port status (2026-11-17): implemented as native's ten stacks, each initially available with native-equivalent 0x100-dword starting capacity and reconstructed empty on root scene reload. Reset replaces only the selected stack. Id 10 halts the run and ids above 10 are traced (ResetStack) and skipped (docs/engine-re.md, 'Indices outside their tables')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -3440,7 +3440,7 @@ abi_source = "kelebek+decode-validated"
 name = "register-numeric-glyph-style"
 category = "draw"
 summary = "Register a decimal-glyph atlas style as (surface slot, source x/y, digit width/height); the handler admits style indices 0..10."
-details = "SYS4422 stores the five-dword definition at EngineCtx+0x55180+style_index*0x14. SYS4433 stores the same five fields in a seven-dword record at EngineCtx+0x5940c+style_index*0x1c and clears the two cell-spacing fields to zero; opcode 0x2da is its extended writer for all seven fields. Opcode 0x23b consumes the selected revision's record to turn an integer into retained draw objects, one atlas cell per decimal digit. SYS4422 scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port safely models all eleven handler-addressable logical records without reproducing the overflow. The same reset first zeroes the return-stack table (+0x55248, 0xa0 bytes), so after a reset all eleven records are zero; SYS4433 likewise zeroes 0x118 bytes at +0x5940c and 0xa0 bytes at +0x59524 (scene_context_init_reset_sys4433@0x40c2b0). The port clears all eleven at op 0x9 (2026-11-13)."
+details = "SYS4422 stores the five-dword definition at EngineCtx+0x55180+style_index*0x14. SYS4433 stores the same five fields in a seven-dword record at EngineCtx+0x5940c+style_index*0x1c and clears the two cell-spacing fields to zero; opcode 0x2da is its extended writer for all seven fields. Opcode 0x23b consumes the selected revision's record to turn an integer into retained draw objects, one atlas cell per decimal digit. SYS4422 scene reset clears only ten physical records (200 bytes, indices 0..9); the admitted index 10 begins at EngineCtx+0x55248 and aliases the return-stack table. Himegari's literal registrations use only 0..9. The port keeps the ten records: style 10 halts the run, and a larger style is traced as CGNumberの引数が不正です． and skipped (2026-11-17). The same reset first zeroes the return-stack table (+0x55248, 0xa0 bytes), so after a reset all eleven records are zero; SYS4433 likewise zeroes 0x118 bytes at +0x5940c and 0xa0 bytes at +0x59524 (scene_context_init_reset_sys4433@0x40c2b0). The port clears its ten at op 0x9 (2026-11-13)."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -6227,7 +6227,7 @@ abi_source = "kelebek+decode-validated"
 name = "select-render-target"
 category = "draw"
 summary = "Select an offscreen surface slot as Direct3D render target 0, or restore the device backbuffer when the operand is at least 1000."
-details = "For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it."
+details = "For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it. The port also selects the backbuffer for slot -1, which both games' retail scripts pass; what native's test makes of -1 is not read (docs/backlog.md, 'Native index tests for 28 ops')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -6404,7 +6404,7 @@ abi_source = "kelebek+decode-validated"
 name = "query-gfx-field?"
 category = "draw"
 summary = "(out)(surface_slot) - return the packed resource id in the live surface record: -1 for an empty or created surface, after op 0x249's raw load, and after op 0x9 reset the records, even when the texture survives. The slot is not bounds-checked: slot -1 returns 0 and slots 1000..1999 read the page snapshot table. Legacy mnemonic query-gfx-field? is retained for compatibility."
-details = "Both handlers index gfx manager+0x700+slot*0x14 with no bounds check. Scripts reach slot -1 when op 0x215 reports no object: Kamidori ALLMAP@0x4fa and SAVE@0xbce query object 0xcb2a and test the result only for zero before querying its slot. Slot -1 reads manager+0x6ec, which neither image addresses (no displacement 0x6ec or ctx+0x46d00/0x4af88 operand); a Frida read of Kamidori native reads 0 there, and native saves keep G[0x320a]=0 while the port wrote -1 (2026-11-07). The page snapshot table follows the live one at manager+0x5520, so slots 1000..1999 read snapshot record slot-1000. Slots outside -1..1999 read unrelated manager memory and are not modeled (the port returns -1)."
+details = "Both handlers index gfx manager+0x700+slot*0x14 with no bounds check. Scripts reach slot -1 when op 0x215 reports no object: Kamidori ALLMAP@0x4fa and SAVE@0xbce query object 0xcb2a and test the result only for zero before querying its slot. Slot -1 reads manager+0x6ec, which neither image addresses (no displacement 0x6ec or ctx+0x46d00/0x4af88 operand); a Frida read of Kamidori native reads 0 there, and native saves keep G[0x320a]=0 while the port wrote -1 (2026-11-07). The page snapshot table follows the live one at manager+0x5520, so slots 1000..1999 read snapshot record slot-1000. Slots outside -1..1999 read unrelated manager memory and are not modeled (the port halts)."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -7581,7 +7581,7 @@ abi_source = "kelebek+decode-validated"
 name = "draw-decimal-glyphs"
 category = "draw"
 summary = "Draw an integer as decimal glyph objects from a style registered by opcode 0x13a or SYS4433 opcode 0x2da."
-details = "First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using the registered atlas. SYS4422's five-field style and SYS4433 opcode 0x13a use tightly packed cells. SYS4433 opcode 0x2da adds independent source and destination spacing: source atlas stride is digit_width+source_cell_spacing and destination stride is digit_width+destination_cell_spacing. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though SYS4422 native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles raise the engine's script error."
+details = "First erase digit_capacity objects beginning at base_handle. Then split value by signed division/modulo 10 and bind at most digit_capacity retained objects using the registered atlas. SYS4422's five-field style and SYS4433 opcode 0x13a use tightly packed cells. SYS4433 opcode 0x2da adds independent source and destination spacing: source atlas stride is digit_width+source_cell_spacing and destination stride is digit_width+destination_cell_spacing. Flags bit 0 zero-pads, bit 1 centers the used digits, and bit 2 left-aligns them; with no alignment bit the value is right-aligned in the capacity. The handler admits style index 10 even though SYS4422 native physically clears only records 0..9; see op 0x13a's adjacent-memory alias note. Indices above 10 and unregistered styles are traced as CGNumberの引数が不正です． and the op is skipped; the port halts at index 10 (2026-11-17)."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -10093,7 +10093,7 @@ abi_source = "kelebek"
 name = "push-int-stack"
 category = "compute"
 summary = "(stack_id, value) - push one signed integer onto the selected native LIFO, growing its dword buffer by 0x100 entries when full."
-details = "Port status (2026-07-29): implemented over the scene-context stack registry. All signed dword values round-trip through the VM's integer-cell representation, and handler-addressable slot 10 remains independent host state."
+details = "Port status (2026-07-29): implemented over the scene-context stack registry. All signed dword values round-trip through the VM's integer-cell representation. Id 10 halts and ids above 10 are traced (Push) and skipped, as for op 0x137 (2026-11-17)."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -10438,7 +10438,7 @@ abi_source = "kelebek"
 [opcode.semantics]
 name = "get-sound-channel-playing"
 category = "audio"
-summary = "(out boolean)(channel) — report whether native sound channel 0..12 is currently playing. The observed channel organization is SFX 0..9, BGM 11, and voice 12; unavailable or out-of-range channels return false."
+summary = "(out boolean)(channel) — report whether native sound channel 0..12 is currently playing. The observed channel organization is SFX 0..9, BGM 11, and voice 12; an unavailable channel reads false, channels of 13 and up are traced (dsIsPlaying) and read false, and a negative channel passes native's signed test (the port halts)."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -12131,7 +12131,7 @@ abi_source = "kelebek"
 name = "register-extended-numeric-glyph-style"
 category = "draw"
 summary = "Register a SYS4433 decimal-glyph atlas style with independent source-cell and destination-cell spacing."
-details = "Operand 1 selects one of eleven style records. Operands 2..6 match opcode 0x13a: source surface slot, atlas x/y, and digit width/height. Operand 7 is added to digit width when stepping between source atlas cells; operand 8 is added to digit width when placing destination glyph objects. Opcode 0x23b consumes all seven fields. Invalid style indices take the native script-error path. The complete Kamidori catalog has 66 calls; the first reached dungeon site is DRAWCHP.BIN@0x626 with (0, 0x40, 0x39f, 0x2fe, 0x15, 0x1d, 1, 1). SYS4422 does not install dispatch slot 0x2da."
+details = "Operand 1 selects one of the ten style records (the handler admits 0..10; see op 0x13a). Operands 2..6 match opcode 0x13a: source surface slot, atlas x/y, and digit width/height. Operand 7 is added to digit width when stepping between source atlas cells; operand 8 is added to digit width when placing destination glyph objects. Opcode 0x23b consumes all seven fields. Invalid style indices are traced as CGNumber's argument error. The complete Kamidori catalog has 66 calls; the first reached dungeon site is DRAWCHP.BIN@0x626 with (0, 0x40, 0x39f, 0x2fe, 0x15, 0x1d, 1, 1). SYS4422 does not install dispatch slot 0x2da."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]

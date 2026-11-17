@@ -31,7 +31,8 @@ public static class EngineBuilds
             Text: new TextRules(
                 GlyphCoverage: GlyphCoverageAlpha.Sixteenths,
                 Ruby: RubyRule.FixedOffsets,
-                FuriganaArmsGlyphTimer: false),
+                FuriganaArmsGlyphTimer: false,
+                HistoryLookupTestsSign: false),
             Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
             Settings: SettingsRules.LoaderKeys,
             Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize)));
@@ -52,6 +53,9 @@ public static class EngineBuilds
                 Ruby = RubyRule.ShiftModes,
                 // Its op 0x196 handler re-arms the glyph timer as op 0x6e does.
                 FuriganaArmsGlyphTimer = true,
+                // text_history_find_typed_value@0x4501b0 and text_history_find_pair@0x450270 return for a negative
+                // record index.
+                HistoryLookupTestsSign = true,
             },
             // Worker 0x486120 tests the record's bound bit before it returns the slot.
             Gfx = Age424J.Rules.Gfx with { UnboundObjectReadsAbsent = true },

@@ -389,8 +389,8 @@ public sealed partial class GfxState
         o.PostBindStaticColorBlend = false;
     }
 
-    /// <summary>Ops 0x13a/0x2da: replace one of eleven safely isolated handler-addressable styles.
-    /// Native physically clears ten records; its admitted index 10 aliases return-stack storage.</summary>
+    /// <summary>Ops 0x13a/0x2da: replace one of the ten styles. Returns false for an index outside them (the
+    /// interpreter checks it first).</summary>
     public bool RegisterNumericGlyphStyle(int styleIndex, int surfaceSlot, int atlasX, int atlasY,
                                           int digitWidth, int digitHeight,
                                           int sourceCellSpacing = 0,
@@ -404,8 +404,8 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x23b: erase a destination handle range, split a signed 32-bit value into decimal
-    /// digits, and bind one retained object per displayed atlas cell. Returns false for an invalid or
-    /// unregistered style, matching the native handler's script-error path.</summary>
+    /// digits, and bind one retained object per displayed atlas cell. Returns false, erasing nothing, for an
+    /// unregistered style or one outside the ten, as the native handler skips it after its trace.</summary>
     public bool DrawDecimalGlyphs(long baseHandle, int styleIndex, int value, int x, int y,
                                   int digitCapacity, int flags)
     {

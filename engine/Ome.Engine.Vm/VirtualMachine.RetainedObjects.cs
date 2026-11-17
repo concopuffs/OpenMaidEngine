@@ -26,7 +26,14 @@ public sealed partial class VirtualMachine
     private StepResult OpQueryGfxField(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], Gfx.QueryField(Read(a[1]))); return StepResult.Next;
+        // Native reads the live records, then the page snapshot after them, unchecked. Slot -1, which scripts pass
+        // for op 0x215's "no such object", reads a word nothing writes (GfxState.QueryField); others outside the two
+        // tables read unrelated memory.
+        long record = Read(a[1]);
+        if (record != -1 && IndexRefused(ins, "surface record", record, 2 * GfxState.SurfaceRecordCount,
+                                         IndexTest.Unchecked) is { } refused)
+            return refused;
+        Write(a[0], Gfx.QueryField(record)); return StepResult.Next;
     }
 
     // 0x218 (handle)(outA)(outB)(outC) <- V18
@@ -63,6 +70,7 @@ public sealed partial class VirtualMachine
     private StepResult OpSetDefaultGfxObjectSlot(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (UnclassifiedLayoutSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
         Gfx.SetDefaultObjectSlot((int)Read(a[0])); return StepResult.Next;
     }
 

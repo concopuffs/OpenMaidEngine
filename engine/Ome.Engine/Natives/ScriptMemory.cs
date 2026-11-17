@@ -10,7 +10,7 @@ public enum ScriptCollectionStatus
     /// <summary>The op ran.</summary>
     Done,
 
-    /// <summary>The id names none of the eleven slots; the op halts the run.</summary>
+    /// <summary>The id names none of the ten slots (the interpreter checks the id first).</summary>
     OutOfRange,
 
     /// <summary>The queue was never reset (op 0x132); the op halts the run.</summary>
@@ -37,9 +37,10 @@ public enum ScriptCollectionStatus
 /// </remarks>
 public sealed partial class ScriptMemory
 {
-    /// <summary>Native owns ten queues at EngineCtx +0x55130 and ten stacks at +0x55158; its admitted id 10 aliases
-    /// the next table, which the port keeps as an eleventh slot of each.</summary>
-    private const int CollectionSlots = 11;
+    /// <summary>Native owns ten queues at EngineCtx +0x55130 and ten stacks at +0x55158. Its test admits id 10, which
+    /// lands in the next table; the interpreter halts there (docs/engine-re.md, "Indices outside their tables").
+    /// </summary>
+    public const int CollectionSlots = 10;
 
     // Scene-lifetime state: op 0x9's reset rebuilds it (engine layering spec §5.1, rule 5).
     private sealed class Scene

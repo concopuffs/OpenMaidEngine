@@ -19,9 +19,10 @@ The two facts are whether an instruction waits and how it leaves:
 The derivation reads the handler table (``VirtualMachine.Handlers.cs``: each opcode's canonical name to its ``Op``
 method), every method of the interpreter's partial classes, and the wait native's methods. It follows a handler
 through the interpreter's own methods (a call to a method of the same name; overloads are one), and stops at
-``RunFrame`` and ``RunInstructions``, which run other code (``calls``). Step results count in methods that return a
-``StepResult``. A call through a field to another native is not followed, except ``_waits.X``, which waits when the
-wait native's ``X`` reaches its blocking helpers. It over-approximates: a fact a handler can reach on some path is
+``RunFrame`` and ``RunInstructions``, which run other code (``calls``), and at ``ShowScriptError``, the script-error
+box: an error's path, which ends the run or skips the instruction as a halt does, and which a script call refuses before
+it waits. Step results count in methods that return a ``StepResult``. A call through a field to another native is not
+followed, except ``_waits.X``, which waits when the wait native's ``X`` reaches its blocking helpers. It over-approximates: a fact a handler can reach on some path is
 given, so ``never`` and a missing ``leaves`` entry are proven absent as far as the source shows. The engine checks the
 facts against what each instruction does in the tests' runs (``OpcodeFlowCheck``).
 
@@ -61,6 +62,10 @@ NOT_WAITS_LIST = re.compile(r"\bNotWaits\s*=\s*\[(?P<body>[^\]]*)\]")
 NAMEOF = re.compile(r"nameof\(\s*(?:\w+\.)?(?P<name>\w+)\s*\)")
 # Interpreter methods that run other code: a frame, or a wait's callback inside the waiting frame.
 RUNS_CODE = {"RunFrame", "RunInstructions"}
+# The script-error box (VirtualMachine.cs). Its wait and its outcome are an error's, not the instruction's: いいえ and
+# 中止 end the run, as a halt does, and はい and 無視 skip the instruction. A script call refuses it before it waits
+# (RefuseScriptErrorInModCall).
+ERROR_BOX = {"ShowScriptError"}
 # Tokens in a body, and the fact each gives.
 STEP_TOKENS = {
     "StepResult.Next": "falls",
@@ -300,7 +305,7 @@ def derive() -> tuple[dict[str, dict], dict[str, list[Method]]]:
                     callee = call.group("name")
                     if callee in RUNS_CODE:
                         give("calls", callee)
-                    elif callee in vm and callee != m.name:
+                    elif callee in vm and callee != m.name and callee not in ERROR_BOX:
                         # A callee's step results are the handler's only when it returns one and this method does.
                         pending.append((callee, steps and m.returns == "StepResult"))
                 # A method passed as an argument (a wait's callback, _waits.WaitForInput(ServiceHotspotCallback, …))

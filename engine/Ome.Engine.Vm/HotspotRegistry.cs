@@ -106,7 +106,9 @@ internal sealed class HotspotRegistry
         for (int i = 0; i < _entries.Count; i++)
         {
             int? action = _entries[i].LogicalAction;
-            if (action is >= 0 and < 32 && (actionMask & (1 << action.Value)) != 0)
+            // input_hotspot_poll_bound_action_callback: a negative action never fires; the bit is the action's low
+            // five.
+            if (action >= 0 && (actionMask & (1 << (action.Value & 31))) != 0)
                 return ConsumeActivation(_entries[i].ActivateTarget);
         }
         return false;

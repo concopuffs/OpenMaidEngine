@@ -3124,9 +3124,10 @@ at `+0x55180`. Himegari's queue and stack sites use only id 0. Its sole `0x137` 
 `CALLBACK_LOAD@0xf2`, immediately before the helper that rebuilds the eight retained ADV layers; no
 Himegari script calls `0x138` or `0x139`.
 
-The portable VM implements the complete family as eleven isolated logical stacks. All slots exist at
-scene entry, root reload reconstructs them empty, and `0x137` replaces only the selected slot. This keeps
-the handler-admitted id-10 ABI without allowing it to overwrite numeric-glyph state. Empty `0x139`
+The portable VM implements the complete family as native's ten stacks. All slots exist at scene entry, root
+reload reconstructs them empty, and `0x137` replaces only the selected slot. Id 10, which the handlers' test lets
+through into the glyph styles, halts the run; ids above 10 are traced as native traces them and skipped
+("Indices outside their tables", 2026-11-17, which retired the former eleventh, isolated stack). Empty `0x139`
 preserves `out_value` while writing success zero, because reproducing the native leaked `EngineCtx *`
 would expose meaningless host-dependent data rather than a script-observable engine value.
 
@@ -7130,7 +7131,8 @@ the port:
 - `op_0x13a_register_numeric_glyph_style@0x421ab0` takes
   `(style_index, surface_slot, atlas_x, atlas_y, digit_width, digit_height)`. It accepts style indices
   `0..10` and stores the remaining five operands in the 20-byte record at
-  `EngineCtx+0x55180+style_index*0x14`; an invalid index raises the standard script error. Scene reset
+  `EngineCtx+0x55180+style_index*0x14`; a larger index is traced as `CGNumberの引数が不正です．` and the op is
+  skipped (corrected 2026-11-17: no script error is thrown). Scene reset
   clears only 200 bytes here, exactly ten records. Handler-admitted record 10 starts at `+0x55248` and
   aliases the return-stack table. All literal Himegari registrations use indices 0..9. The corpus has
   74 registrations in 24 scripts, including eight in `DRAWCHP.BIN`.
@@ -7140,13 +7142,13 @@ the port:
   displayed digit using horizontally adjacent cells from the selected style record. Flag bit `0x1`
   includes leading zeroes, bit `0x2` centers the used digits, and bit `0x4` left-aligns them; without an
   alignment flag the value is right-aligned in the requested capacity. An invalid or unregistered style
-  raises the script error. The corpus has 147 draws in the same 24 scripts; `DRAWCHP.BIN` has 22 and uses
-  them for the field HUD's turn/control/mana/level/HP/SP/FS values.
+  is traced the same way, before anything is erased. The corpus has 147 draws in the same 24 scripts;
+  `DRAWCHP.BIN` has 22 and uses them for the field HUD's turn/control/mana/level/HP/SP/FS values.
 
 This path creates ordinary retained graphics objects, so the existing atlas decode and compositor are
-the correct backend; it is not an immediate raster operation. The port models
-all eleven handler-addressable indices as safe independent `GfxState` records rather than reproducing
-native index 10's adjacent-memory overwrite. Each `0x23b` call erases its full destination-handle capacity
+the correct backend; it is not an immediate raster operation. The port keeps native's ten records: style 10,
+which the handlers' test lets through into the return-stack table, halts the run ("Indices outside their tables",
+2026-11-17). Each `0x23b` call erases its full destination-handle capacity
 and then uses the ordinary
 `BindDraw` path for every displayed digit, preserving surface replacement, z-order, and compositor effects.
 
@@ -7437,11 +7439,12 @@ origin valid but left `0x134`'s zero-initialized success local unchanged, so the
 first loop test. This exactly explained why clicking the occupied tile still reached Wait while neither
 reachable overlays nor movement targets existed; `ATSEEK` was blocked identically.
 
-The port retains all eleven handler-addressable queue ids as safe independent VM-lifetime slots rather than
-reproducing id 10's adjacent stack overwrite, and implements reset/enqueue/try-dequeue with native
-signed-dword behavior. It diagnoses ids above 10 or never-reset slots; shipped scripts always reset queue 0
-first. On empty dequeue it writes `success=0` and retains the value destination rather than reproducing the
-native handler's unusable implementation-pointer value. Focused tests cover independent slots, FIFO order,
+The port keeps native's ten queues and implements reset/enqueue/try-dequeue with native signed-dword behavior.
+Id 10, which the handlers' test lets through into stack 0, halts the run; ids above 10 are traced as
+`ResetQの引数が不正です．` (and its siblings) and skipped, as native does ("Indices outside their tables",
+2026-11-17). A queue never reset halts the run; shipped scripts always reset queue 0 first. On empty dequeue it
+writes `success=0` and retains the value destination rather than reproducing the native handler's unusable
+implementation-pointer value. Focused tests cover independent slots, FIFO order,
 signed values, empty reads, and reset replacement. Real-script tests seed a bounded passable grid and prove
 that shipped `MVSEEK.BIN` populates all four neighboring movement costs while `ATSEEK.BIN` populates attack
 distance 1 around the origin. Both scripts are now 100% handled. The handlers and queue helpers are
@@ -7903,6 +7906,107 @@ mechanism:
 
 Generating such a catalog is the native route for mod-added scripts. It has not yet been exercised with a synthetic
 catalog.
+
+### Indices outside their tables (2026-11-17)
+
+Every handler that indexes one of native's tables with a script operand checks the index first, with native's own
+test for that handler (`engine/Ome.Engine.Vm/VirtualMachine.Indices.cs`). `IndexBoundsTests` drives each one past
+its table. For an index outside the table, a native handler does one of four things, and the port does the same:
+
+| Native | Port |
+|---|---|
+| No test, or a test that lets the index through: a signed `i < n` passes a negative index, and a test that admits one past the table's end passes that index | The handler would read or write outside native's table, which the port cannot reproduce. The run halts: `index-out-of-range: SCRIPT@0xOFF handler (op 0xNN): what N is outside 0..M, …` |
+| A test that skips the op without a word | The op is skipped |
+| A test that skips the op and writes a host trace (`…の引数が不正です．`, `関数：dsPlay エラー：…`) | The op is skipped, with a warning that carries native's trace |
+| A test that throws a script error | The same box (`age_show_message_box@0x409370`): flags `0x10007` the 中止/再試行/無視 box (mode 7), flags `0x10005` the はい/いいえ box (mode 5; はい goes on to the next instruction, as the policy at `0x412689` does with its answer 4, and いいえ ends the run), flags `0x10001` a fatal box (mode 1) |
+
+The script-error box is an error's path, not the op's: `tools/opcode_flow.py` gives an op neither `waits` nor a
+`leaves` fact for it, and a Lua script call refuses the box before it waits.
+
+The tables, by what native does:
+
+- **ADV text layouts, 0 to 9** (`text_manager+0x414`, `adv_text_layouts_allocate@0x44f6d0`). No op tests a layout
+  slot; slot 0 selects the current layout. Ops `0x6e`, `0x6f`, `0x70`, `0x71`, `0x73`, `0x79`, `0x7a`, `0x196`,
+  `0x198`, `0x1c1`, `0x20a`, `0x212`, `0x213` and the layout operands of `0x82` and `0x1d1` halt past 9. Ops `0x82`
+  and `0x1d1` test their record index, which skips the op.
+- **Surfaces, 0 to 999** (the retained graphics records and the surface pointers beside them). No surface op tests
+  its slot: `0x1f8`, `0x1f9`, `0x1fa`, `0x207`, `0x20b`, `0x223`, `0x249`, `0x24d`, `0x24f`, `0x258` and `0x32`
+  halt. Ops `0x20b` and `0x32` mark the destination's record dirty before they look for its surface. Op `0x216` reads
+  the live records and then the page snapshot after them, so it takes 0 to 1999, and -1, op `0x215`'s "no such
+  object", which reads a word nothing writes ("Surface resource query 0x216"); any other slot halts.
+- **Numeric glyph styles, 0 to 9** (`EngineCtx+0x55180`; SYS4433 `+0x5940c`). Ops `0x13a`, `0x2da` and `0x23b` test
+  the style below 11, unsigned, and trace `CGNumberの引数が不正です．` for the rest. Style 10 passes and lands in the
+  return-stack table after the styles: it halts. Op `0x23b` traces an unregistered style the same way.
+- **Integer queues and stacks, 0 to 9** (`EngineCtx+0x55130` and `+0x55158`). Ops `0x132`-`0x134` and
+  `0x137`-`0x139` (`op_0x132_reset_int_queue@0x4217d0` and its siblings) test the id below 11, unsigned, and trace
+  `ResetQ`, `AddQ`, `GetQ`, `ResetStack`, `Push` or `Pop`'s argument error for the rest. Id 10 passes and lands in the
+  next table, a queue's on stack 0 and a stack's on glyph style 0: it halts.
+- **Bits, 0 to 31.** Ops `0x135`, `0x136` and `0x13f` (`op_0x135_handler@0x4296c0` and its siblings) test the bit
+  below 32, unsigned, and trace `SetBit`, `RemBit` or `GetBit`'s argument error, writing nothing.
+- **Op `0x64`** (`op_0x64_copy_inline_int_array@0x426b00`) tests neither its body offset nor its count: an offset
+  outside the script's body, or a count past its end, halts. A count of 0 or less copies nothing.
+- **Op `0x60`**: a bound of zero writes 0 and throws 「RANDOMの最大値が0になっています．」 with flags `0x10005`.
+- **Sound channels.** The sound manager has 13 channels (sound effects 0 to 9, BGM 11, voice 12); the sound
+  effects' resource table has ten.
+  - Op `0xb4` (`sfx_channel_load@0x482500`): the decoder refuses 13 and up (`sound_decode_channel`'s `dsReadSound`
+    trace), and the op then throws 「WAVファイル %s の読み込みに失敗しました」 with flags `0x10007`. A channel the decoder
+    takes is recorded in the ten-entry resource table unchecked, so 10 to 12 write into the voice facade after it,
+    and a negative channel passes the decoder's signed test: both halt.
+  - Ops `0xb5` and `0xba` (`sound_manager_start_channel@0x482f00`) start any of the 13 channels and trace
+    「関数：dsPlay エラー：不正なSound番号[n]です」 for the rest, unsigned. A sound effect channel with no sound is
+    traced too, while the sound effect route is on: 4.24J's `sfx_channel_start@0x4825d0` returns before the manager
+    when it is off.
+  - Op `0xb6` (`sfx_channel_release@0x482600`) clears the channel's resource-table entry whatever the channel, after
+    `sound_buffer_destroy`'s signed test below 13: every channel outside 0 to 9 halts.
+  - Op `0x2bf` (`sfx_set_delay@0x482720`) traces 「関数：SetDelay エラー：不正なSound番号です」 for 10 and up. Its
+    test is signed, so a negative channel halts.
+  - Op `0x1be` (`sound_channel_is_playing@0x483000`) traces 「関数：dsIsPlaying エラー：不正なSound番号です」 for 13
+    and up and writes 0. Its test is signed, so a negative channel halts.
+  - The mixer's categories: ops `0xc5` and `0xc6` (0 to 4) trace `GetVolume` and `SetVolume`'s argument error, ops
+    `0xc7` and `0x1ba` (1 to 4) `GetSoundMode` and `SetSoundMode`'s.
+- **Input actions, 0 to 31.**
+  - Ops `0xfb`, `0xfe` and `0x10c` throw `SetKeyJump`, `SetKeyTotal` and `SetKeyMulti`'s argument error with flags
+    `0x10005` for 32 and up, unsigned.
+  - Ops `0x107` and `0x10b` skip a slot or action of 32 and up, unsigned, without a word. Op `0x10b` then stores the
+    action at any physical button unchecked (its table holds 32, of which polling reads buttons 0 and 1), and op
+    `0x10c` translates the scan code through its 256-entry table unchecked: both halt past the table.
+  - Op `0x97`: `input_hotspot_poll_bound_action_callback` tests the action's low five bits, so action 39 answers
+    action 7, and a negative action never fires.
+- **Script frames, 0 to 39** (`EngineCtx`'s frame table, `0x1e` dwords each). Op `0x6`
+  (`op_0x6_preload_script_slot@0x41bdb0`) makes the slot the current frame before its signed test: a slot above 39
+  throws a fatal box (flags `0x10001`) whose context is read from the frame outside the table, and a negative slot
+  passes and loads below it. Both halt. Op `0x8` (`op_0x8_call_preloaded_script_slot@0x41bf00`) reads the slot's
+  frame unchecked, so it halts outside 0 to 39, and throws 「この階層にはファイルが読み込まれていません．Depth=n」
+  with flags `0x10005` for a slot nothing was loaded into.
+- **Text history records** (ops `0x1d3`, `0x1d4`). A record past the last finds nothing. 4.33G's
+  `text_history_find_typed_value@0x4501b0` and `text_history_find_pair@0x450270` refuse a negative record the same
+  way. 4.24J's `@0x450840` and `@0x4509f0` test only the upper end, and the negative index fails a checked subscript,
+  which ends the process: the port halts there (`TextRules.HistoryLookupTestsSign`).
+
+**Handlers whose test has not been read (28 ops).** Native's test was not read for 28 ops (`docs/backlog.md`,
+"Native index tests for 28 ops"). Each raises the はい/いいえ box for an index outside its table, with AGE's caption
+and debug block and an engine-owned message that names the op, the argument and its value: `error.index-range`
+(「get-texture-sizeの第1引数 1000 が範囲 0..999 の外です．」) or, for a save slot, which names a file and has no upper
+bound, `error.index-negative` (「…が負の値です．」). はい skips the instruction and いいえ ends the run; the warning
+names the operand. The operands are:
+
+- the layout slot of `0x72`, `0x80` and `0x2bc`;
+- the surface slot of `0x21`, `0x22`, `0x24`, `0x25` (both), `0x27`, `0x28`, `0x73`, `0x2bc`, `0x1fb`, `0x204`,
+  `0x205`, `0x208`, `0x20f`, `0x236`, `0x241`, `0x23a`, `0x23f`, `0x246`, `0x1ae` and `0x1af`;
+- the save slot of `0x19e`, `0x19f`, `0x1a0`, `0x1a1`, `0x1ab`, `0x1ac` (both), `0x1ae` and `0x1af`.
+
+Two values that retail scripts pass get through, with the port's earlier behaviour:
+
+- Op `0x20d` checks nothing. Both games' retail scripts pass -1 (a Himegari save load and a Kamidori new game reach
+  one), and the port selects the backbuffer for any slot outside 0 to 999, as native does for 1000 and up.
+- Op `0x208` reads 0 x 0 for slot -1. `HIDEWIN.BIN` passes op `0x215`'s answer for object `0xcb2a` to it untested
+  (both games), Kamidori runs `HIDEWIN.BIN` on every hide, and 4.33G's op `0x215` answers -1 once a scene has erased
+  that object (Kamidori `SC1250`).
+
+**Retail scan (2026-11-17).** No script of either game passes an immediate outside its table to any of the 28 ops'
+operands. Of the values from cells, the engine's real-script tests found the two above. A scan of op `0x215`'s
+answers found that every other use reaches an unclassified op only after the script tests it against 0 (`lt`,
+`gre`), as Himegari's `SP13xx` scenes and Kamidori's `SC0050` do before op `0x208`.
 
 ---
 

@@ -39,26 +39,20 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
-    // 0x64: count dword followed by plain file values
+    // 0x64: count dword followed by plain file values. Native checks neither the offset nor the count
+    // (op_0x64_copy_inline_int_array@0x426b00), and a count of 0 or less copies nothing.
     private StepResult OpCopyInlineIntArray(Instruction ins, int pc)
     {
         var a = ins.Args;
-        int offset = checked((int)Read(a[1]));
-        if ((uint)offset >= (uint)_cur.Script.BodyDwords.Count)
-        {
-            HaltReason ??= $"inline-array-offset@0x{offset:x}";
-            return StepResult.Halt;
-        }
-        uint rawCount = _cur.Script.BodyDwords[offset];
-        int available = _cur.Script.BodyDwords.Count - offset - 1;
-        if (rawCount > (uint)available)
-        {
-            HaltReason ??= $"inline-array-length@0x{offset:x}:{rawCount}";
-            return StepResult.Halt;
-        }
-        int count = (int)rawCount;
+        long offset = Read(a[1]);
+        IReadOnlyList<uint> body = _cur.Script.BodyDwords;
+        if (IndexRefused(ins, "body offset", offset, body.Count, IndexTest.Unchecked) is { } refused) return refused;
+        int count = unchecked((int)body[(int)offset]);
+        int available = body.Count - (int)offset - 1;
+        if (count > 0 && IndexRefused(ins, "element count", count, available + 1, IndexTest.Unchecked) is { } tooMany)
+            return tooMany;
         for (int i = 0; i < count; i++)
-            WriteConsecutive(a[0], i, unchecked((int)_cur.Script.BodyDwords[offset + 1 + i]));
+            WriteConsecutive(a[0], i, unchecked((int)body[(int)offset + 1 + i]));
         return StepResult.Next;
     }
 
@@ -200,10 +194,11 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
-    // 0x132: 11 safe logical slots; native's admitted id 10 aliases stack 0
+    // 0x132: ten queues; native's test admits id 10, whose queue is stack 0's
     private StepResult OpResetIntQueue(Instruction ins, int pc)
     {
         int queueId = unchecked((int)Read(ins.Args[0]));
+        if (CollectionIdRefused(ins, "queue", queueId, "ResetQ") is { } refused) return refused;
         return CollectionStep(_memory.ResetQueue(queueId), "queue", queueId);
     }
 
@@ -212,6 +207,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int queueId = unchecked((int)Read(a[0]));
+        if (CollectionIdRefused(ins, "queue", queueId, "AddQ") is { } refused) return refused;
         return CollectionStep(_memory.Enqueue(queueId, unchecked((int)Read(a[1]))), "queue", queueId);
     }
 
@@ -220,6 +216,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int queueId = unchecked((int)Read(a[0]));
+        if (CollectionIdRefused(ins, "queue", queueId, "GetQ") is { } refused) return refused;
         ScriptCollectionStatus status = _memory.TryDequeue(queueId, out bool taken, out int value);
         if (status != ScriptCollectionStatus.Done) return CollectionStep(status, "queue", queueId);
         if (taken)
@@ -240,6 +237,7 @@ public sealed partial class VirtualMachine
     private StepResult OpResetIntStack(Instruction ins, int pc)
     {
         int stackId = unchecked((int)Read(ins.Args[0]));
+        if (CollectionIdRefused(ins, "stack", stackId, "ResetStack") is { } refused) return refused;
         return CollectionStep(_memory.ResetStack(stackId), "stack", stackId);
     }
 
@@ -248,6 +246,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int stackId = unchecked((int)Read(a[0]));
+        if (CollectionIdRefused(ins, "stack", stackId, "Push") is { } refused) return refused;
         return CollectionStep(_memory.Push(stackId, unchecked((int)Read(a[1]))), "stack", stackId);
     }
 
@@ -256,6 +255,7 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         int stackId = unchecked((int)Read(a[0]));
+        if (CollectionIdRefused(ins, "stack", stackId, "Pop") is { } refused) return refused;
         ScriptCollectionStatus status = _memory.TryPop(stackId, out bool taken, out int value);
         if (status != ScriptCollectionStatus.Done) return CollectionStep(status, "stack", stackId);
         if (taken)
@@ -272,7 +272,14 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
-    /// <summary>An integer queue or stack op's step: an id out of range, or a queue never reset, halts the run.
+    /// <summary>Native's test of a queue or stack id (op_0x132_reset_int_queue@0x4217d0 and its siblings): ids 0..10
+    /// pass, and the rest are traced as <c>ResetQの引数が不正です．</c> and skipped. The ten tables are followed by the
+    /// next one, so id 10 reads or writes there: a queue's lands on stack 0, a stack's on glyph style 0.</summary>
+    private StepResult? CollectionIdRefused(Instruction ins, string kind, int id, string command)
+        => IndexRefused(ins, kind + " id", id, ScriptMemory.CollectionSlots,
+                        IndexTest.Traced(BadArgumentTrace(command), 11));
+
+    /// <summary>An integer queue or stack op's step: a queue never reset halts the run.
     /// </summary>
     private StepResult CollectionStep(ScriptCollectionStatus status, string kind, int id)
     {
@@ -289,11 +296,14 @@ public sealed partial class VirtualMachine
         }
     }
 
+    // Ops 0x135, 0x136 and 0x13f test the bit below 32, unsigned (op_0x135_handler@0x4296c0 and its siblings), and
+    // trace the rest as SetBit, RemBit or GetBit's argument error, writing nothing.
     private StepResult OpBitSet(Instruction ins, int pc)
     {
         var a = ins.Args;
         long bit = Read(a[1]);
-        if ((ulong)bit >= 32) { HaltReason ??= $"bit-index-out-of-range:{bit}"; return StepResult.Halt; }
+        if (IndexRefused(ins, "bit", bit, 32, IndexTest.Traced(BadArgumentTrace("SetBit"), 32)) is { } refused)
+            return refused;
         Write(a[0], I32(Read(a[0]) | (1L << (int)bit))); return StepResult.Next;
     }
 
@@ -301,14 +311,18 @@ public sealed partial class VirtualMachine
     {
         var a = ins.Args;
         long bit = Read(a[1]);
-        if ((ulong)bit >= 32) { HaltReason ??= $"bit-index-out-of-range:{bit}"; return StepResult.Halt; }
+        if (IndexRefused(ins, "bit", bit, 32, IndexTest.Traced(BadArgumentTrace("RemBit"), 32)) is { } refused)
+            return refused;
         Write(a[0], I32(Read(a[0]) & ~(1L << (int)bit))); return StepResult.Next;
     }
 
     private StepResult OpCheckBit(Instruction ins, int pc)
     {
         var a = ins.Args;
-        Write(a[0], (Read(a[1]) >> (int)(Read(a[2]) & 31)) & 1); return StepResult.Next;
+        long bit = Read(a[2]);
+        if (IndexRefused(ins, "bit", bit, 32, IndexTest.Traced(BadArgumentTrace("GetBit"), 32)) is { } refused)
+            return refused;
+        Write(a[0], (Read(a[1]) >> (int)bit) & 1); return StepResult.Next;
     }
 
     private StepResult OpZeroIntRange(Instruction ins, int pc)
@@ -329,9 +343,9 @@ public sealed partial class VirtualMachine
         long bound = Read(a[1]);
         if (bound == 0)
         {
+            // Native writes 0, then throws 「RANDOMの最大値が0になっています．」 with flags 0x10005.
             Write(a[0], 0);
-            HaltReason ??= "random-modulo-zero";
-            return StepResult.Halt;
+            return YesNoScriptError(AgeBoxMessage.Keyed(AgeBoxText.RandomBoundZero), pc);
         }
         Write(a[0], drawn % bound);
         return StepResult.Next;

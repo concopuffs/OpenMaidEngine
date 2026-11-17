@@ -5,8 +5,9 @@ namespace Ome.Engine.Model;
 /// another language (<see cref="AgeBoxText.Compose"/>).</summary>
 public readonly record struct DiagnosticMessage(string Caption, string Text, AgeBoxParts? Parts = null);
 
-/// <summary>The answer to an interpreter error box (age_show_message_box mode 7, MessageBoxA style 0x112). AGE's
-/// packer thunk maps IDRETRY to 2 and IDIGNORE to 4 for the main loop's policy; every other button exits.</summary>
+/// <summary>What the main loop does after an interpreter error box: age_show_message_box returns 1, 2 or 4 and the
+/// policy at 0x412689 acts on it. Mode 7 (style 0x112) maps IDRETRY to 2 and IDIGNORE to 4, mode 5 (style 0x14) IDYES
+/// to 4; every other button exits (<see cref="AgeBoxText.ButtonChoices"/>).</summary>
 public enum ScriptErrorChoice
 {
     /// <summary>中止: the game closes (a forced WM_CLOSE, which saves the shared profile).</summary>

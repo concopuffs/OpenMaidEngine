@@ -48,6 +48,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpWaitForInput(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (UnclassifiedLayoutSlot(ins, 1) is { } error) return YesNoScriptError(error, pc);
         EnterTextWait();
         // Faithful headless: no player => halt here rather than plow past every prompt (see VmOptions).
         if (_o.HaltAtWaitForInput) { HaltReason ??= "wait-for-input"; return StepResult.Halt; }
@@ -152,8 +153,12 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpRegisterJoyCallback(Instruction ins, int pc)
     {
         var a = ins.Args;
-        int index = (int)Read(a[0]);
-        if ((uint)index < 32) _cur.InputCallbackTargets[index] = (int)Read(a[1]);
+        long index = Read(a[0]);
+        // op_0xfb_register_joy_callback@0x421270 stores slots 0..31 and throws SetKeyJump's argument error with flags
+        // 0x10005 for the rest.
+        if (index is < 0 or >= InputBindings.MaximumActions)
+            return YesNoScriptError(BadArgument("SetKeyJump"), pc);
+        _cur.InputCallbackTargets[(int)index] = (int)Read(a[1]);
         return StepResult.Next;
     }
 
@@ -162,11 +167,10 @@ public sealed partial class VirtualMachine : IInterpreterInput
     {
         var a = ins.Args;
         int count = unchecked((int)Read(a[0]));
+        // op_0xfe_set_input_action_count@0x421390 throws SetKeyTotal's argument error with flags 0x10005 for a count
+        // of 32 or more, unsigned.
         if (!InputBindings.SetActionCount(count))
-        {
-            HaltReason ??= $"input-action-count-out-of-range:{count}";
-            return StepResult.Halt;
-        }
+            return YesNoScriptError(BadArgument("SetKeyTotal"), pc);
         return StepResult.Next;
     }
 
@@ -210,6 +214,10 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpMapJoystickButton(Instruction ins, int pc)
     {
         var a = ins.Args;
+        // op_0x107_map_joystick_button@0x421550 skips a slot of 32 or more, unsigned, without a word.
+        if (IndexRefused(ins, "button slot", Read(a[0]), InputBindings.MaximumActions,
+                         IndexTest.Silent(InputBindings.MaximumActions)) is { } skipped)
+            return skipped;
         InputBindings.MapJoystickButton(unchecked((int)Read(a[0])), unchecked((int)Read(a[1])));
         return StepResult.Next;
     }
@@ -261,6 +269,14 @@ public sealed partial class VirtualMachine : IInterpreterInput
     private StepResult OpMapMouseButton(Instruction ins, int pc)
     {
         var a = ins.Args;
+        // op_0x10b_map_mouse_button@0x4216f0 skips an action of 32 or more, unsigned, without a word, then stores the
+        // action at any physical button: its table holds 32, of which polling reads buttons 0 and 1.
+        if (IndexRefused(ins, "action", Read(a[0]), InputBindings.MaximumActions,
+                         IndexTest.Silent(InputBindings.MaximumActions)) is { } skipped)
+            return skipped;
+        if (IndexRefused(ins, "physical button", Read(a[1]), InputBindings.MaximumActions, IndexTest.Unchecked)
+            is { } refused)
+            return refused;
         InputBindings.MapMouseButton(unchecked((int)Read(a[0])), unchecked((int)Read(a[1])));
         return StepResult.Next;
     }
@@ -271,11 +287,12 @@ public sealed partial class VirtualMachine : IInterpreterInput
         var a = ins.Args;
         int action = unchecked((int)Read(a[0]));
         int dik = unchecked((int)Read(a[1]));
-        if (!InputBindings.MapKeyboardScanCode(action, dik))
-        {
-            HaltReason ??= $"keyboard-action-out-of-range:{action}";
-            return StepResult.Halt;
-        }
+        // op_0x10c_map_keyboard_scancode@0x421730 throws SetKeyMulti's argument error with flags 0x10005 for an action
+        // of 32 or more, unsigned; it then translates the scan code through its 256-entry table unchecked.
+        if ((uint)action >= InputBindings.MaximumActions)
+            return YesNoScriptError(BadArgument("SetKeyMulti"), pc);
+        if (IndexRefused(ins, "scan code", dik, 256, IndexTest.Unchecked) is { } refused) return refused;
+        InputBindings.MapKeyboardScanCode(action, dik);
         return StepResult.Next;
     }
 }
