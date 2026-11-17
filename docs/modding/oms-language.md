@@ -117,7 +117,8 @@ are numbers for now; naming them (`unit[<unit name>]`) is in `../backlog.md`.
 - `^` compiles to `(a | b) - (a & b)`, which computes both operands twice, so the code doubles with each nested
   `^`. Nesting deeper than 8 is an error; assign part of the expression to a `local` first.
 - Integers in decimal, `0x` hex or `0b` binary; floats like `1.5`; strings in `"…"` with `\"`, `\\`, `\n`, `\t`,
-  `\uXXXX`. An integer must fit in 32 bits: up to `0xffffffff`, and down to `-2147483648`.
+  `\uXXXX`. An integer must fit in 32 bits: up to `0xffffffff`, and down to `-2147483648`. A cell holds the
+  signed 32 bits, so `0xffffffff` is `-1` and `0x80000000` is `-2147483648`, in a compare as in a cell.
 - Blocks, parentheses, unary operators and the operators of one chain nest at most 200 deep. An `else if` chain does
   not count.
 - **`&&` and `||` always evaluate both sides.** The VM has no short-circuit. To guard the second operand (against

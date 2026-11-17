@@ -179,7 +179,7 @@ public class SharedProfileTests
         var profile = new SharedProfile();
         var vm = new VirtualMachine(
             script, table, new RecordingWaits(), saves: new SavesAndSettings(profile: profile));
-        vm.Globals[0x701] = 999;
+        vm.SeedGlobal(0x701, 999);
         vm.GlobalStrings[0x801] = "not empty";
 
         vm.Run();

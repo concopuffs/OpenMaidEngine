@@ -164,16 +164,6 @@ it; git history keeps the record.
 
 Gaps the 2026-11-10 codebase review found and the fixes that followed it left open. None affects retail scripts.
 
-- **Integer cells are not normalised to 32 bits when written.** Native cells are 32-bit. The port's are `long`:
-  immediates load zero-extended (`Sys4Loader`), C# writes and loaded saves sign-extended, and `Write` stores whatever
-  it is given (`VirtualMachine.cs`, `Read`/`Write`, into script memory's banks, `Natives/ScriptMemory.cs`). Since
-  2026-11-10 arithmetic wraps and compares take the signed low 32 bits (`VirtualMachine.Values.cs`, `I32`), so
-  `bit-set g,31` then `lt g,0` gives native's 1. Values that only move between cells (packed ids, colours) still keep
-  whichever extension they arrived with, and consumers that compare or index with the wide value could still differ.
-  Neither disassembled corpus has a high-bit immediate in an arithmetic or compare op, so this is latent for retail
-  scripts and live for mod bytecode. Done when every integer cell holds one canonical form, written in one place
-  (script memory owns the banks since engine layering milestone 9), and a test round-trips a high-bit value through an
-  immediate, a write, a save and a load.
 - **Each handler checks its own script-controlled indices.** A handler that indexes a table with an operand checks the
   range itself, if at all, and no helper decides what happens past the end. Some halt with a reason that names the
   index, five reasons in all (`bit-index-out-of-range`, `numeric-glyph-style-index-out-of-range`,

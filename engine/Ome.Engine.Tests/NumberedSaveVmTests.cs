@@ -40,7 +40,7 @@ public class NumberedSaveVmTests
             history.AppendText(1, 0x40, "保存", AdvTextStyle.Default);
             var vm = new VirtualMachine(
                 script, Table, new RecordingWaits(), textHistory: history, saves: new SavesAndSettings(store: store));
-            vm.Globals[0x123] = 456;
+            vm.SeedGlobal(0x123, 456);
             vm.GlobalFloats[0] = BitConverter.SingleToInt32Bits(2.5f);
             vm.GlobalStrings[4] = "姫狩り";
             vm.Gfx.SetSurface(3, 0x1234, 0xff00ff);
@@ -213,10 +213,10 @@ public class NumberedSaveVmTests
                     }),
                 sink: trace, textHistory: liveHistory, saves: new SavesAndSettings(store: store),
                 skipAndAuto: audio.Skip, audio: audio.Audio, tick: audio.Tick);
-            vm.Globals[0x10] = 999;
-            vm.Globals[0x123] = 999;
-            vm.Globals[0x124] = 777;           // past the saved integer prefix
-            vm.Globals[0x510] = 5;             // past it too; RESUMED.BIN's prologue re-authors it
+            vm.SeedGlobal(0x10, 999);
+            vm.SeedGlobal(0x123, 999);
+            vm.SeedGlobal(0x124, 777);           // past the saved integer prefix
+            vm.SeedGlobal(0x510, 5);             // past it too; RESUMED.BIN's prologue re-authors it
             vm.GlobalStrings[0] = "stale";
             vm.GlobalStrings[1] = "static-unit-name";   // past the saved string prefix
             vm.Graphics.LoadSurface(15, 0x3383, 0);
@@ -532,8 +532,8 @@ public class NumberedSaveVmTests
             var host = new RecordingWaits();
             var audio = new AudioRig();
             var vm = audio.Vm(FullLoadScript(), Table, host, textHistory: history, nativeDatStore: store);
-            vm.Globals[0x10] = 999;
-            vm.Globals[0x123] = 999;
+            vm.SeedGlobal(0x10, 999);
+            vm.SeedGlobal(0x123, 999);
             vm.GlobalStrings[0] = "live";
             vm.Gfx.SetSurface(15, 0x3383, 0);
 
@@ -734,6 +734,56 @@ public class NumberedSaveVmTests
         ], []), packedId);
 
     private static (int, Operand[]) SleepMs(int milliseconds) => (0xc8, [new Operand(Immediate, milliseconds)]);
+
+    // An integer cell holds one form, the signed low 32 bits (ScriptMemory.IntegerCell). The loader keeps an
+    // immediate's bits zero-extended and a load reads them sign-extended; both are int32's -2147483648 and -1, and
+    // compare equal to the immediate before and after the round trip, as native's int32 cells do.
+    [Fact]
+    public void AHighBitValueIsOneValueThroughAnImmediateAWriteASaveAndALoad()
+    {
+        const int Mov = 0x55, Eq = 0x5a;
+        static Operand G(int address) => new(GlobalInt, address);
+        static Operand I(long value) => new(Immediate, value);
+        string root = NewTemporaryDirectory();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            var saver = new VirtualMachine(SaveSlotScript("SAVER.BIN", 0x77, 2,
+                (Mov, [G(0x100), I(0x80000000L)]),
+                (Mov, [new Operand(LocalInt, 1), I(0xffffffffL)]),
+                (Mov, [G(0x101), new Operand(LocalInt, 1)]),
+                (Eq, [G(0x102), G(0x100), I(0x80000000L)])), Table, new RecordingWaits(),
+                saves: new SavesAndSettings(store: store));
+
+            saver.Run();
+
+            Assert.Equal("exit", saver.HaltReason);
+            Assert.Equal(int.MinValue, saver.Globals[0x100]);
+            Assert.Equal(-1, saver.Globals[0x101]);
+            Assert.Equal(1, saver.Globals[0x102]);
+
+            Script loader = ScriptAssembler.Assemble(Table, "LOADER.BIN",
+            [
+                (0x19f, [new Operand(LocalInt, 0), I(2)]),
+                (Eq, [G(0x103), G(0x100), I(0x80000000L)]),
+                (Eq, [G(0x104), G(0x101), I(0xffffffffL)]),
+                (0x2, Array.Empty<Operand>()),
+            ], []);
+            var vm = new VirtualMachine(loader, Table, new RecordingWaits(), saves: new SavesAndSettings(store: store));
+
+            vm.Run();
+
+            Assert.Equal("exit", vm.HaltReason);
+            Assert.Equal(int.MinValue, vm.Globals[0x100]);
+            Assert.Equal(-1, vm.Globals[0x101]);
+            Assert.Equal(1, vm.Globals[0x103]);
+            Assert.Equal(1, vm.Globals[0x104]);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
 
     [Theory]
     [InlineData(5_000_123, 31_000, 31)]

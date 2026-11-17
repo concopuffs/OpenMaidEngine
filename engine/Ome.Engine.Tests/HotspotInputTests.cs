@@ -499,7 +499,7 @@ public class HotspotInputTests
         var trace = new RecordingTraceSink { TracingSteps = true };
         var vm = new VirtualMachine(script, table, new RecordingWaits(),
             new VmOptions(HaltAtWaitForInput: true), sink: trace);
-        vm.Globals[0x6c1] = 1; // inherited SYSTEM4 adv_chrome_enabled state seeded by Godot Main
+        vm.SeedGlobal(0x6c1, 1); // inherited SYSTEM4 adv_chrome_enabled state seeded by Godot Main
 
         vm.Run();
 
@@ -519,7 +519,7 @@ public class HotspotInputTests
         var host = new Sc0000HoverHost();
         var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 1_000_000));
         host.Vm = vm;
-        vm.Globals[0x6c1] = 1;
+        vm.SeedGlobal(0x6c1, 1);
 
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 
@@ -820,7 +820,7 @@ public class HotspotInputTests
         var host = new Sc0000MessageSkipHost();
         var vm = new VirtualMachine(script, table, host, new VmOptions(MaxSteps: 1_000_000));
         host.Vm = vm;
-        vm.Globals[0x6c1] = 1;
+        vm.SeedGlobal(0x6c1, 1);
 
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 
@@ -866,7 +866,7 @@ public class HotspotInputTests
         host.Vm = vm;
         InputBindingBootstrap.Apply(
             Sys4Loader.Load(Paths.Scripts()["SYSTEM4.BIN"], table), vm.InputBindings);
-        vm.Globals[0x6c1] = 1;
+        vm.SeedGlobal(0x6c1, 1);
 
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 
@@ -965,8 +965,8 @@ public class HotspotInputTests
         host.Vm = vm;
         InputBindingBootstrap.Apply(
             Sys4Loader.Load(Paths.Scripts()["SYSTEM4.BIN"], table), vm.InputBindings);
-        vm.Globals[0x6c1] = 1;
-        vm.Globals[0x62425] = 1; // the HIDEWIN.BIN branch; retail leaves it 0 (Sc0000HideWindowButton_RetailWaits...)
+        vm.SeedGlobal(0x6c1, 1);
+        vm.SeedGlobal(0x62425, 1); // the HIDEWIN.BIN branch; retail leaves it 0 (Sc0000HideWindowButton_RetailWaits...)
 
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 
@@ -991,8 +991,8 @@ public class HotspotInputTests
         host.Vm = vm;
         sink.Vm = vm;
         InputBindingBootstrap.Apply(scripts.RequireByName("SYSTEM4.BIN"), vm.InputBindings);
-        vm.Globals[0x6c1] = 1;
-        vm.Globals[0x62425] = 1;
+        vm.SeedGlobal(0x6c1, 1);
+        vm.SeedGlobal(0x62425, 1);
 
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 
@@ -1190,8 +1190,8 @@ public class HotspotInputTests
             new VmOptions(MaxSteps: 5_000_000), scripts);
         host.Vm = vm;
         InputBindingBootstrap.Apply(scripts.RequireByName("SYSTEM4.BIN"), vm.InputBindings);
-        vm.Globals[0x6c1] = 1;
-        vm.Globals[0x62425] = 1;
+        vm.SeedGlobal(0x6c1, 1);
+        vm.SeedGlobal(0x62425, 1);
 
         Assert.Throws<StopAtFirstWaitException>(() => vm.Run());
 

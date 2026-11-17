@@ -7668,6 +7668,15 @@ it had no cell for. `ReadFloat` and `WriteFloat` are SYS4433's float pair (`vm_o
 `vm_operand_write_float@0x426c00`): float forms as they are, integers converted, strings through `atof`, and a float
 stored into an integer cell truncated.
 
+An integer cell holds one form, the signed low 32 bits of what was written (`ScriptMemory.IntegerCell`), as
+native's int32 cells do. Script memory writes the integer globals (`SetInteger`, and `SeedInteger` for a tool's or the
+debugger's writes; the bank is read-only outside it), and a frame writes its integer locals (`Frame.SetInteger`). An
+immediate reads as int32 too, though the loader keeps its bits zero-extended for the toolchain. Before 2026-11-16 a
+cell kept whichever extension its value arrived with: an immediate `0x80000000` stayed 2147483648 until a save and a
+load made it -2147483648. Arithmetic and compares already took the low 32 bits (`VirtualMachine.Values.cs`), but a
+handler reading the wide value saw the difference; copy-dwords (`0x1b0`) now reads that count as negative and halts
+(`copy-dwords-negative-count`).
+
 Which operands a handler reads or writes as floats is the registry's contract for the build's ABI, not a handler
 variant: `OpcodeTableJson` turns each operand whose `access` (or `access_by_abi` entry) is `read-float` or
 `write-float` into `OpcodeDefinition.FloatOperands`, and the transform handlers (the 21 SYS4433 opcodes `0x1fd`–`0x235`

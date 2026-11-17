@@ -188,7 +188,7 @@ public class HistoryInteractionOpsTests
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
         SeedSystem4Services(scripts, vm);
-        vm.Globals[0x6c1] = 1;
+        vm.SeedGlobal(0x6c1, 1);
 
         Assert.Throws<StopAfterHistoryWheelException>(() => vm.Run());
 
@@ -206,7 +206,7 @@ public class HistoryInteractionOpsTests
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
         SeedSystem4Services(scripts, vm);
-        vm.Globals[0x6c1] = 1;
+        vm.SeedGlobal(0x6c1, 1);
 
         Assert.Throws<StopAfterHistoryReturnsException>(() => vm.Run());
 
@@ -293,7 +293,7 @@ public class HistoryInteractionOpsTests
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
         SeedSystem4Services(scripts, vm);
-        vm.Globals[0x6c1] = 1;
+        vm.SeedGlobal(0x6c1, 1);
 
         Assert.Throws<StopAfterHistoryReturnsException>(() => vm.Run());
 
@@ -336,7 +336,7 @@ public class HistoryInteractionOpsTests
             new VmOptions(MaxSteps: 2_000_000), scripts);
         host.Vm = vm;
         SeedSystem4Services(scripts, vm);
-        vm.Globals[0x6c1] = 1;
+        vm.SeedGlobal(0x6c1, 1);
 
         Assert.Throws<StopAfterHistoryVoiceException>(() => vm.Run());
 

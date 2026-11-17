@@ -758,7 +758,7 @@ public partial class Main : Godot.Control
                 hostPolicy.CoordinatorScript, hostedScene.PackedId, coordinatorWrites));
         }
         else
-            foreach (var (addr, val) in seeds) _vm.Globals[addr] = val;   // --seed: initial global state
+            foreach (var (addr, val) in seeds) _vm.SeedGlobal(addr, val);   // --seed: initial global state
         if (holdMessageSkip)
             _waits.HoldKeyFromLaunch(0x11); // Ctrl; bindings resolve it to logical action 6.
         if (!ApplyGameLanguage(_portOptions.Effective.Language, startup: true))

@@ -36,7 +36,7 @@ public class IndexedSortOpsTests
             ScriptAssembler.Assemble(table, "INDEX_SORT", ops, Array.Empty<string>()),
             table, new RecordingWaits());
         long[] primaryKeys = { 4, -2, 4, 1, int.MaxValue };
-        for (int i = 0; i < primaryKeys.Length; i++) vm.Globals[0x100 + i] = primaryKeys[i];
+        for (int i = 0; i < primaryKeys.Length; i++) vm.SeedGlobal(0x100 + i, primaryKeys[i]);
 
         vm.Run();
 

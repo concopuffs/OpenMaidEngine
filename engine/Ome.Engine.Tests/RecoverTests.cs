@@ -23,12 +23,12 @@ public class RecoverTests
         var vm = new VirtualMachine(script, table, new HeadlessWaits(), null, new AnyProvider(noop));
 
         int unit = 0;
-        vm.Globals[0x152616] = unit;
+        vm.SeedGlobal(0x152616, unit);
         int A = 0x4e11b, B = 0x4e085, C = 0x52383, E = 0x52f3b, F = 0x5295f, FL = 0xaacb4;
-        for (int k = 0; k < 3; k++) vm.Globals[A + unit * 14 + (11 + k)] = 100 + k;
-        vm.Globals[C + unit * 30 + 5] = 7; vm.Globals[FL + 5] = 1; vm.Globals[E + unit * 30 + 5] = 42;
-        vm.Globals[C + unit * 30 + 6] = 0; vm.Globals[FL + 6] = 1; vm.Globals[E + unit * 30 + 6] = 99;
-        vm.Globals[C + unit * 30 + 7] = 3; vm.Globals[FL + 7] = 0; vm.Globals[E + unit * 30 + 7] = 88;
+        for (int k = 0; k < 3; k++) vm.SeedGlobal(A + unit * 14 + (11 + k), 100 + k);
+        vm.SeedGlobal(C + unit * 30 + 5, 7); vm.SeedGlobal(FL + 5, 1); vm.SeedGlobal(E + unit * 30 + 5, 42);
+        vm.SeedGlobal(C + unit * 30 + 6, 0); vm.SeedGlobal(FL + 6, 1); vm.SeedGlobal(E + unit * 30 + 6, 99);
+        vm.SeedGlobal(C + unit * 30 + 7, 3); vm.SeedGlobal(FL + 7, 0); vm.SeedGlobal(E + unit * 30 + 7, 88);
         vm.Run();
 
         Assert.Equal(100, G(vm, B + unit * 3 + 0));

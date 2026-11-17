@@ -94,7 +94,7 @@ public class HistoryDataOpsTests
                 (0x2, Array.Empty<Operand>()),                         // 37
             }, Array.Empty<string>());
         var vm = new VirtualMachine(script, Table, new RecordingWaits());
-        vm.Globals[0x100] = selector;
+        vm.SeedGlobal(0x100, selector);
 
         vm.Run();
 
@@ -117,7 +117,7 @@ public class HistoryDataOpsTests
                 (0x2, Array.Empty<Operand>()),                         // 24
             }, new[] { "３" });
         var vm = new VirtualMachine(script, Table, new RecordingWaits());
-        vm.Globals[0x100] = 3;
+        vm.SeedGlobal(0x100, 3);
 
         vm.Run();
 

@@ -56,7 +56,7 @@ public class StringComparisonOpsTests
         var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.GlobalStrings[0x301] = "姫狩り違い";
         vm.GlobalStrings[0x302] = "姫狩り";
-        vm.Globals[0x400] = 0x302;
+        vm.SeedGlobal(0x400, 0x302);
 
         vm.Run();
 
@@ -88,7 +88,7 @@ public class StringComparisonOpsTests
         }, new[] { "?" });
         var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.GlobalStrings[0x52d] = "?";
-        vm.Globals[0x600] = 1;
+        vm.SeedGlobal(0x600, 1);
 
         vm.Run();
 
@@ -140,7 +140,7 @@ public class StringComparisonOpsTests
         var vm = new VirtualMachine(script, table, new RecordingWaits());
         vm.GlobalStrings[0x301] = "姫狩り違い";
         vm.GlobalStrings[0x302] = "姫狩り";
-        vm.Globals[0x400] = 0x302;
+        vm.SeedGlobal(0x400, 0x302);
 
         vm.Run();
 

@@ -97,8 +97,8 @@ public class PointerAndBlockCopyOpsTests
             (0x2, Array.Empty<Operand>()),
         }, Array.Empty<string>());
         var vm = new VirtualMachine(script, table, new RecordingWaits());
-        vm.Globals[0x712] = 44;
-        vm.Globals[0x713] = 55;
+        vm.SeedGlobal(0x712, 44);
+        vm.SeedGlobal(0x713, 55);
 
         vm.Run();
 
@@ -163,8 +163,8 @@ public class PointerAndBlockCopyOpsTests
         var vm = new VirtualMachine(
             script, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
-        vm.Globals[0x810] = 44;
-        vm.Globals[0x811] = 55;
+        vm.SeedGlobal(0x810, 44);
+        vm.SeedGlobal(0x811, 55);
 
         vm.Run();
 

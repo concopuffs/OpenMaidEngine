@@ -590,12 +590,12 @@ public class MovieOpcodeTests
         var movies = new MovieRig(_ => new FakeMovieDecoder { StopTimeMs = 12016 });   // CHAPTER.AGF's stop time
         var trace = new RecordingTraceSink { TracingSteps = true };
         var vm = movies.Vm(script, table, host, new VmOptions(MaxSteps: 20_000_000), provider, trace);
-        foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
+        foreach (var kv in session.Globals) vm.SeedGlobal(kv.Key, kv.Value);
         foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
         // SYSTEM4@0x5bf fills adv_layer_surface_slots before any scene runs; this bootstrap skips SYSTEM4 and its
         // state makes SC0000 skip its own copy at 0x50f, so seed each layer's first slot as SYSTEM4 does.
         foreach (var (layer, slot) in new[] { (0, 4), (1, 5), (2, 6), (3, 7) })
-            vm.Globals[0x3239 + layer * 3] = slot;
+            vm.SeedGlobal(0x3239 + layer * 3, slot);
 
         vm.Run();
 

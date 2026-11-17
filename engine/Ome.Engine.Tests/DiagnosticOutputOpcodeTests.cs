@@ -30,7 +30,7 @@ public class DiagnosticOutputOpcodeTests
         var pendingAtPresentation = new List<string>();
         host.OnDiagnosticMessage = _ => pendingAtPresentation.Add(vm!.Shell.PendingDiagnosticText);
         vm = new VirtualMachine(scene, Table, host);
-        vm.Globals[0x100] = -3;
+        vm.SeedGlobal(0x100, -3);
 
         vm.Run();
 
@@ -72,9 +72,9 @@ public class DiagnosticOutputOpcodeTests
         var host = new HeadlessWaits();
         var vm = new VirtualMachine(scene, Table, host);
         vm.GlobalFloats[0x10] = BitConverter.SingleToInt32Bits(1.25f);
-        vm.Globals[0x20] = 0x30;
-        vm.Globals[0x30] = -9;
-        vm.Globals[0x21] = 0x31;
+        vm.SeedGlobal(0x20, 0x30);
+        vm.SeedGlobal(0x30, -9);
+        vm.SeedGlobal(0x21, 0x31);
         vm.GlobalStrings[0x31] = "pointer text";
 
         vm.Run();

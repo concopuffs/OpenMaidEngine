@@ -16,7 +16,7 @@ public class CoroutineHostModelTests
     /// <summary>TITLE's ＡＤＶパート developer entry writes 1 to the gate (TITLE@0x5fa); retail keeps it 0.</summary>
     private static VirtualMachine DeveloperEntry(VirtualMachine vm)
     {
-        vm.Globals[SceneEntryGate] = 1;
+        vm.SeedGlobal(SceneEntryGate, 1);
         return vm;
     }
 
@@ -62,7 +62,7 @@ public class CoroutineHostModelTests
         var sink = new RecordingTraceSink { TracingSteps = true };
         var vm = DeveloperEntry(new VirtualMachine(
             SceneLoop(0x10, setupCount, slot, observed), Table, new HeadlessWaits(), sink: sink));
-        vm.Globals[output] = 0x10; // stale value from a previous scene: already equal to this scene's terminal
+        vm.SeedGlobal(output, 0x10); // stale value from a previous scene: already equal to this scene's terminal
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
@@ -149,7 +149,7 @@ public class CoroutineHostModelTests
         };
         var sink = new RecordingTraceSink { TracingSteps = true };
         var vm = new VirtualMachine(script, Table, new HeadlessWaits(), sink: sink);
-        vm.Globals[0x699] = 123;
+        vm.SeedGlobal(0x699, 123);
         vm.Run();
 
         Assert.Equal(123, vm.Globals[0x699]);

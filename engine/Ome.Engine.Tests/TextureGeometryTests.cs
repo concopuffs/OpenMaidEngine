@@ -25,7 +25,7 @@ public class TextureGeometryTests
             Strings = new Dictionary<int, string>(),
         };
         var vm = new VirtualMachine(script, table, new RecordingWaits());
-        vm.Globals[50] = 9;
+        vm.SeedGlobal(50, 9);
         vm.Graphics.CreateSurface(9, 0x140, 0xC8);
         vm.Run();
         Assert.Equal(0x140, vm.Globals[60]);

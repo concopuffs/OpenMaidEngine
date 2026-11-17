@@ -42,7 +42,7 @@ public class AnimChannelTests
             (0x227, new[]{G(10), G(1), G(11), G(12), G(13), G(14)}), Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, t, new RecordingWaits());
-        vm.Globals[1] = 0x4f8;
+        vm.SeedGlobal(1, 0x4f8);
         vm.Gfx.BindDraw(0x4f8, 1, 0, 0, 1, 1, 0, 0);
         vm.Gfx.TryGet(0x4f8)!.RotationCurrent = (1.9, -2.9, 0.9, -45.75);
         vm.Run();

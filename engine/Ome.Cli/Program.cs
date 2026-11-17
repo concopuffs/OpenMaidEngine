@@ -716,7 +716,7 @@ if (command == "audio")
         var kv = s.Split('=');
         int k = kv[0].StartsWith("0x") ? Convert.ToInt32(kv[0], 16) : int.Parse(kv[0]);
         long v = kv[1].StartsWith("0x") ? Convert.ToInt64(kv[1], 16) : long.Parse(kv[1]);
-        vm.Globals[k] = v;
+        vm.SeedGlobal(k, v);
     }
     vm.Run();
     Console.WriteLine($"{sceneName}: {trace.Events.Count} audio ops (halt: {vm.HaltReason})");
@@ -763,7 +763,7 @@ if (command == "gfx")
     var vm = boot ? new VirtualMachine(target, table, waits, new VmOptions(MaxSteps: 20_000_000), provider,
                                        build: engineBuild, graphics: graphics)
                   : new VirtualMachine(target, table, waits, build: engineBuild, graphics: graphics);
-    foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
+    foreach (var kv in session.Globals) vm.SeedGlobal(kv.Key, kv.Value);
     foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
     vm.Run();
     Console.WriteLine($"{sceneName}: {traced.Count} texture ops (halt: {vm.HaltReason})");
@@ -999,7 +999,7 @@ if (command == "trace")
         var sink = new JsonOffsetTraceSink(target.Name);
         var vm = new VirtualMachine(target, table, new HeadlessWaits(),
                                     new VmOptions(HaltAtWaitForInput: true, MaxSteps: 20_000_000), provider, sink, build: engineBuild);
-        foreach (var kv in session.Globals) vm.Globals[kv.Key] = kv.Value;
+        foreach (var kv in session.Globals) vm.SeedGlobal(kv.Key, kv.Value);
         foreach (var kv in session.GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
         vm.Run();
         var dir = Path.GetDirectoryName(outPath);

@@ -1,3 +1,5 @@
+using Ome.Engine.Natives;
+
 namespace Ome.Engine.Vm;
 
 public enum VmAddressSpace
@@ -19,9 +21,14 @@ public readonly record struct VmAddress(VmAddressSpace Space, int Address)
 
 public sealed class Frame
 {
-    public Dictionary<int, long> I = new();   // local-int
+    private readonly Dictionary<int, long> _integers = new();
+    /// <summary>local-int, each cell in its one form (<see cref="ScriptMemory.IntegerCell"/>); written only through
+    /// <see cref="SetInteger"/>.</summary>
+    public IReadOnlyDictionary<int, long> I => _integers;
     public Dictionary<int, long> F = new();   // local-float (raw)
     public Dictionary<int, string> S = new(); // local-string
     public Dictionary<int, VmAddress> P = new();  // local-ptr (retains local/global address domain)
     public Dictionary<int, VmAddress> SP = new(); // local-string-ptr (same, for the string banks)
+
+    public void SetInteger(int index, long value) => _integers[index] = ScriptMemory.IntegerCell(value);
 }

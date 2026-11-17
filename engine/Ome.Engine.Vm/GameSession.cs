@@ -66,7 +66,7 @@ public sealed class GameSession
             script, table, waits, options, provider, sink, TextHistory,
             saves: new SavesAndSettings(SharedProfile, NativeDatStore), shell: shell, build: build, skipAndAuto: skip,
             audio: audio?.Invoke(skip) ?? Audio.Silent(skip, AudioMixerSettings), scripting: scripting);
-        foreach (var kv in Globals) vm.Globals[kv.Key] = kv.Value;
+        foreach (var kv in Globals) vm.SeedGlobal(kv.Key, kv.Value);
         foreach (var kv in GlobalFloats) vm.GlobalFloats[kv.Key] = kv.Value;
         foreach (var kv in GlobalStrings) vm.GlobalStrings[kv.Key] = kv.Value;
         foreach (var kv in GlobalPointers) vm.GlobalPointers[kv.Key] = kv.Value;
@@ -85,7 +85,7 @@ public sealed class GameSession
         return new SceneResult(vm.Emitted.ToList(), vm.HaltReason, vm.Steps);
     }
 
-    private static void Replace<T>(Dictionary<int, T> session, Dictionary<int, T> final)
+    private static void Replace<T>(Dictionary<int, T> session, IReadOnlyDictionary<int, T> final)
     {
         session.Clear();
         foreach (var kv in final) session[kv.Key] = kv.Value;

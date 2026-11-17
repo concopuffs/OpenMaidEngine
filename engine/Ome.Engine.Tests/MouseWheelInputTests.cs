@@ -176,7 +176,7 @@ public class MouseWheelInputTests
                 Sys4AssetCatalog.Load(Paths.Sys4Ini).StartupSettings), scripts,
             new StopAtHistorySink());
         host.Vm = vm;
-        vm.Globals[0x6c1] = 1;
+        vm.SeedGlobal(0x6c1, 1);
 
         Assert.Throws<StopAtHistoryException>(() => vm.Run());
 

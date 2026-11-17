@@ -55,9 +55,10 @@ public class CoreScalarAndScreenTransitionOpsTests
         Assert.False(vm.Globals.ContainsKey(0x101));
     }
 
-    // A count past int.MaxValue in an op that converts it checked (copy-dwords) halts the same way.
+    // An immediate is an int32, so the count 0x80000000 reads -2147483648, which copy-dwords refuses. No operand can
+    // read past int.MaxValue.
     [Fact]
-    public void ACheckedCountPastInt32MaxHaltsWithTheInstructionLocation()
+    public void AHighBitCountReadsNegativeAndCopyDwordsHaltsOnIt()
     {
         var table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var ops = new List<(int, Operand[])>
@@ -71,7 +72,7 @@ public class CoreScalarAndScreenTransitionOpsTests
 
         vm.Run();
 
-        Assert.Equal($"operand-overflow:OVERFLOW.BIN@0x{script.Instructions[0].Offset:x}:op 0x1b0", vm.HaltReason);
+        Assert.Equal("copy-dwords-negative-count:-2147483648", vm.HaltReason);
         Assert.False(vm.Globals.ContainsKey(0x101));
     }
 

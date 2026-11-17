@@ -103,8 +103,8 @@ public class BattleFrontierOpsTests
             (0x2, Array.Empty<Operand>()),
         }, new[] { "素材", "個" });
         var vm = new VirtualMachine(script, table, new RecordingWaits());
-        vm.Globals[0x100] = 12;
-        vm.Globals[0x101] = 3;
+        vm.SeedGlobal(0x100, 12);
+        vm.SeedGlobal(0x101, 3);
 
         vm.Run();
 

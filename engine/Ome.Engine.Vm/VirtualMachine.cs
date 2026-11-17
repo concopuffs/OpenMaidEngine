@@ -60,7 +60,9 @@ public sealed partial class VirtualMachine
     /// </summary>
     public ScriptMemory Memory => _memory;
     // The banks, as tools and tests read them (spec §3.4): script memory's.
-    public Dictionary<int, long> Globals => _memory.Integers;
+    public IReadOnlyDictionary<int, long> Globals => _memory.Integers;
+    /// <summary>Writes an integer global as a tool or a test seeds it: in the cell's one form, unseen by watches.</summary>
+    public void SeedGlobal(int address, long value) => _memory.SeedInteger(address, value);
     public Dictionary<int, long> GlobalFloats => _memory.Floats;
     public Dictionary<int, string> GlobalStrings => _memory.Strings;
     public Dictionary<int, int> GlobalPointers => _memory.Pointers;
@@ -473,7 +475,7 @@ public sealed partial class VirtualMachine
     private void OnPhysicalSkipInputChanged()
         => _skip.PhysicalInputChanged(InputBindings, _advTextWaitPolling, _text.IsRevealing);
 
-    private static long Gi(Dictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
+    private static long Gi(IReadOnlyDictionary<int, long> d, int k) => d.TryGetValue(k, out var v) ? v : 0;
     private int GlobalPointer(int index) => _memory.IntegerPointer(index);
     private int GlobalStringPointer(int index) => _memory.StringPointer(index);
     private long ReadGlobal(int k) => _memory.Integer(k);
@@ -549,7 +551,7 @@ public sealed partial class VirtualMachine
     /// semantics").</summary>
     private long Read(Operand op) => op.Type switch
     {
-        T_IMM => op.Value,
+        T_IMM => ScriptMemory.IntegerCell(op.Value),   // an int32, as the loader keeps its bits zero-extended
         T_FLOAT => NativeTruncate(BitConverter.Int32BitsToSingle(unchecked((int)op.Value))),
         T_STR or T_GSTR or T_LSTR => NativeAtol(ReadStr(op)),
         T_GINT => ReadGlobal((int)op.Value),
@@ -570,7 +572,7 @@ public sealed partial class VirtualMachine
             case T_GINT: _memory.SetInteger((int)op.Value, val); break;
             case T_GFLOAT: _memory.SetFloat((int)op.Value, NativeFloatBits(unchecked((int)val))); break;
             case T_GPTR: _memory.SetInteger(GlobalPointer((int)op.Value), val); break;
-            case T_LINT: _cur.Locals.I[(int)op.Value] = val; break;
+            case T_LINT: _cur.Locals.SetInteger((int)op.Value, val); break;
             case T_LFLOAT: _cur.Locals.F[(int)op.Value] = NativeFloatBits(unchecked((int)val)); break;
             case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)op.Value), val); break;
             default: throw RejectedOperand(op, "write");
@@ -803,7 +805,7 @@ public sealed partial class VirtualMachine
     {
         switch (address.Space)
         {
-            case VmAddressSpace.LocalInteger: _cur.Locals.I[address.Address] = value; break;
+            case VmAddressSpace.LocalInteger: _cur.Locals.SetInteger(address.Address, value); break;
             case VmAddressSpace.LocalFloat: _cur.Locals.F[address.Address] = value; break;
             default: _memory.SetInteger(address.Address, value); break;
         }
@@ -877,7 +879,7 @@ public sealed partial class VirtualMachine
         {
             case T_GINT: _memory.SetInteger(address, value); break;
             case T_GFLOAT: _memory.SetFloat(address, value); break;
-            case T_LINT: _cur.Locals.I[address] = value; break;
+            case T_LINT: _cur.Locals.SetInteger(address, value); break;
             case T_LFLOAT: _cur.Locals.F[address] = value; break;
             case T_GPTR:
                 _memory.SetInteger(checked(GlobalPointer((int)destination.Value) + index), value);
@@ -1314,7 +1316,7 @@ public sealed partial class VirtualMachine
         _scene.HostedSceneEntry = null;
         // A tool's seeding, which no watch sees (Lua scripting spec §7.3).
         foreach (var (address, value) in entry.CoordinatorWrites)
-            _memory.Integers[address] = value;
+            _memory.SeedInteger(address, value);
         _scene.HostedScenePackedId = entry.ScenePackedId;
         return true;
     }
@@ -1326,7 +1328,7 @@ public sealed partial class VirtualMachine
         if (!ReferenceEquals(_scene.DebugFrameReturnRequest?.Frame, frame)) return false;
         // The debugger's writes, which no watch sees (Lua scripting spec §7.3).
         foreach (var (address, value) in _scene.DebugFrameReturnRequest.GlobalWrites)
-            _memory.Integers[address] = value;
+            _memory.SeedInteger(address, value);
         _scene.DebugFrameReturnRequest = null;
         return true;
     }

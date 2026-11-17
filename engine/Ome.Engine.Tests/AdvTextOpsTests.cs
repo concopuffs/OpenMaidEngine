@@ -333,7 +333,7 @@ public class AdvTextOpsTests
             }, Array.Empty<string>());
         var host = new RecordingWaits();
         var vm = new VirtualMachine(caller, table, host, provider: scripts);
-        vm.Globals[0x1560e7] = 7;
+        vm.SeedGlobal(0x1560e7, 7);
 
         vm.Run();
 

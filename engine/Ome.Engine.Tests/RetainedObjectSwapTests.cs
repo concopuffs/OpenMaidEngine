@@ -48,8 +48,8 @@ public class RetainedObjectSwapTests
             (0x214, new[]{G(1), G(2)}), Exit(),
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, table, new RecordingWaits());
-        vm.Globals[1] = 100;
-        vm.Globals[2] = 200;
+        vm.SeedGlobal(1, 100);
+        vm.SeedGlobal(2, 200);
         vm.Gfx.BindDraw(100, 3, 1, 2, 30, 40, 10, 20);
 
         vm.Run();

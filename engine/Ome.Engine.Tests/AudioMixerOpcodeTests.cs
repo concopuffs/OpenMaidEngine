@@ -211,8 +211,8 @@ public class AudioMixerOpcodeTests
             Exit(),
         ], []);
         var vm = rig.Vm(scene, Table, host);
-        vm.Globals[30] = 123;
-        vm.Globals[31] = 456;
+        vm.SeedGlobal(30, 123);
+        vm.SeedGlobal(31, 456);
 
         vm.Run();
 

@@ -81,10 +81,10 @@ public class ForegroundTransitionTests
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
-        vm.Globals[10] = 8;
-        vm.Globals[11] = 16;
-        vm.Globals[12] = 100;
-        vm.Globals[13] = 500;
+        vm.SeedGlobal(10, 8);
+        vm.SeedGlobal(11, 16);
+        vm.SeedGlobal(12, 100);
+        vm.SeedGlobal(13, 500);
 
         vm.Run();
 
@@ -195,10 +195,10 @@ public class ForegroundTransitionTests
         }, System.Array.Empty<string>());
         var vm = new VirtualMachine(scene, table, new RecordingWaits(),
             build: EngineBuilds.Age433G);
-        vm.Globals[10] = 100;
-        vm.Globals[11] = -90;
-        vm.Globals[12] = 0;
-        vm.Globals[13] = 90;
+        vm.SeedGlobal(10, 100);
+        vm.SeedGlobal(11, -90);
+        vm.SeedGlobal(12, 0);
+        vm.SeedGlobal(13, 90);
 
         vm.Run();
 

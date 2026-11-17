@@ -27,6 +27,9 @@ public enum ScriptCollectionStatus
 /// <para>The banks are sparse: a cell never written reads 0 or "". The interpreter decodes operands (locals are a
 /// frame's, not script memory's) and reads and writes the global cells here; tools and tests reach the banks
 /// through <see cref="Integers"/> and its siblings, which the VM's public face forwards.</para>
+/// <para>An integer cell holds one form, <see cref="IntegerCell"/>: the integer bank is written only through
+/// <see cref="SetInteger"/>, <see cref="SeedInteger"/> and a load, and a frame's integer locals through
+/// <c>Frame.SetInteger</c>.</para>
 /// <para>The banks are five sections of a numbered save (<see cref="WriteSaveRecords"/>, <see cref="ReadSaveRecords"/>);
 /// the save native decides when they are written and read (spec §5.1, rule 6).</para>
 /// <para>Engine thread only (spec §5.1, rule 4); the driver's <see cref="SeedDeterministicRandom"/> comes as a
@@ -66,8 +69,13 @@ public sealed partial class ScriptMemory
         _encoding = Encoding.GetEncoding(codePage);
     }
 
-    /// <summary>The integer bank (operand type 3).</summary>
-    public Dictionary<int, long> Integers => _scene.Integers;
+    /// <summary>The integer bank (operand type 3), each cell in its one form (<see cref="IntegerCell"/>).</summary>
+    public IReadOnlyDictionary<int, long> Integers => _scene.Integers;
+
+    /// <summary>An integer cell's one form: the signed low 32 bits of the value written. Native's cells are int32, a
+    /// numbered save stores and loads them so, and Lua's writes give them (<c>CellRules.Integer</c>); so 0x80000000
+    /// written from an immediate and the same bits loaded from a save are one value, -2147483648.</summary>
+    public static long IntegerCell(long value) => unchecked((int)value);
 
     /// <summary>The float bank (operand type 4), each cell a float's bits.</summary>
     public Dictionary<int, long> Floats => _scene.Floats;
@@ -95,10 +103,15 @@ public sealed partial class ScriptMemory
     /// write the banks directly, which is no write.</summary>
     public void SetInteger(int address, long value)
     {
+        value = IntegerCell(value);
         if (_watched != null && _watched.Integer(address))
             _watched.Record(new CellWrite(CellKind.Integer, address, Integer(address), value, null, null));
         _scene.Integers[address] = value;
     }
+
+    /// <summary>A write no watch sees (Lua scripting spec §7.3): a tool's or a test's seeding, or the debugger's.
+    /// </summary>
+    public void SeedInteger(int address, long value) => _scene.Integers[address] = IntegerCell(value);
 
     public void SetFloat(int address, long value) => _scene.Floats[address] = value;
 

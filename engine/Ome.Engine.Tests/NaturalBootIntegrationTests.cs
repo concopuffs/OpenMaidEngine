@@ -340,7 +340,7 @@ public class NaturalBootIntegrationTests
         var menuVm = new VirtualMachine(boot.Scripts.RequireByName("CHMENU.BIN"), boot.Table,
             new RecordingWaits(), new VmOptions(MaxSteps: 5_000_000), boot.Scripts, sink);
         sink.Vm = menuVm;
-        foreach (var (address, value) in boot.Vm.Globals) menuVm.Globals[address] = value;
+        foreach (var (address, value) in boot.Vm.Globals) menuVm.SeedGlobal(address, value);
         foreach (var (address, value) in boot.Vm.GlobalStrings) menuVm.GlobalStrings[address] = value;
 
         var exception = Record.Exception(() => menuVm.Run());

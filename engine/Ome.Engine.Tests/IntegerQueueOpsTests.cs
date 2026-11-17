@@ -133,7 +133,7 @@ public class IntegerQueueOpsTests
     {
         var vm = RealSearchVm("ATSEEK.BIN");
         SeedSearchGrid(vm, movementPoints: 0);
-        vm.Globals[0xcc9f3] = 2;
+        vm.SeedGlobal(0xcc9f3, 2);
 
         vm.Run();
 
@@ -155,23 +155,23 @@ public class IntegerQueueOpsTests
     {
         const int entity = 0;
         const int x = 5, y = 5;
-        vm.Globals[0x66713] = entity;
-        vm.Globals[0x5231f + entity] = x;
-        vm.Globals[0x52351 + entity] = y;
-        vm.Globals[0x4e11b + entity * 14 + 10] = movementPoints;
+        vm.SeedGlobal(0x66713, entity);
+        vm.SeedGlobal(0x5231f + entity, x);
+        vm.SeedGlobal(0x52351 + entity, y);
+        vm.SeedGlobal(0x4e11b + entity * 14 + 10, movementPoints);
 
-        vm.Globals[0xccbcf + 1] = 1;
-        vm.Globals[0xccbcf + 2] = -1;
-        vm.Globals[0xccbcf + 3] = 0;
-        vm.Globals[0xccbcf + 4] = 0;
-        vm.Globals[0xccbd4 + 1] = 0;
-        vm.Globals[0xccbd4 + 2] = 0;
-        vm.Globals[0xccbd4 + 3] = 1;
-        vm.Globals[0xccbd4 + 4] = -1;
+        vm.SeedGlobal(0xccbcf + 1, 1);
+        vm.SeedGlobal(0xccbcf + 2, -1);
+        vm.SeedGlobal(0xccbcf + 3, 0);
+        vm.SeedGlobal(0xccbcf + 4, 0);
+        vm.SeedGlobal(0xccbd4 + 1, 0);
+        vm.SeedGlobal(0xccbd4 + 2, 0);
+        vm.SeedGlobal(0xccbd4 + 3, 1);
+        vm.SeedGlobal(0xccbd4 + 4, -1);
 
         // Terrain id 1 is passable. MVSEEK checks destination centers; ATSEEK checks the
         // fine-grid edge between the origin and each logical neighbor.
-        vm.Globals[0xe6ae0 + 1] = 1;
+        vm.SeedGlobal(0xe6ae0 + 1, 1);
         SetTerrain(vm, x * 2, y * 2);
         SetTerrain(vm, (x + 1) * 2, y * 2);
         SetTerrain(vm, (x - 1) * 2, y * 2);
@@ -184,7 +184,7 @@ public class IntegerQueueOpsTests
     }
 
     private static void SetTerrain(VirtualMachine vm, int x, int y)
-        => vm.Globals[0x341ab + y * 53 + x] = 1;
+        => vm.SeedGlobal(0x341ab + y * 53 + x, 1);
 
     private static int MovementCell(int x, int y) => 0xaba96 + y * 27 + x;
     private static int AttackCell(int x, int y) => 0xb8d86 + y * 27 + x;

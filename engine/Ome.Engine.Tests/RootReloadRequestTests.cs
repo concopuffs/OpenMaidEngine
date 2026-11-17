@@ -59,7 +59,7 @@ public class RootReloadRequestTests
         var vm = new VirtualMachine(root, table, host,
             provider: new MapProvider(new Dictionary<long, Script> { [0] = root }));
         host.Vm = vm;
-        vm.Globals[SceneFlag] = 5;
+        vm.SeedGlobal(SceneFlag, 5);
 
         var run = new VmRunThread(vm);
         VmRunThread.AwaitSignal(host.FirstSleepEntered, "entered the first sleep");

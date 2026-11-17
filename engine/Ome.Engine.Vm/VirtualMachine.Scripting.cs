@@ -37,7 +37,7 @@ public sealed partial class VirtualMachine : IInterpreterAccess
     bool IInterpreterAccess.HasFrame => _activeExecutionFrames.Count > 0;
 
     long IInterpreterAccess.LocalInteger(int index) => Gi(_cur.Locals.I, index);
-    void IInterpreterAccess.SetLocalInteger(int index, long value) => _cur.Locals.I[index] = value;
+    void IInterpreterAccess.SetLocalInteger(int index, long value) => _cur.Locals.SetInteger(index, value);
     long IInterpreterAccess.LocalFloat(int index) => Gi(_cur.Locals.F, index);
     void IInterpreterAccess.SetLocalFloat(int index, long bits) => _cur.Locals.F[index] = bits;
     string IInterpreterAccess.LocalString(int index) => Gs(_cur.Locals.S, index);

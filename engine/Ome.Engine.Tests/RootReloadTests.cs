@@ -50,7 +50,7 @@ public class RootReloadTests
         var host = new RecordingWaits();
         var trace = new RecordingTraceSink();
         var vm = new VirtualMachine(initial, table, host, provider: provider, sink: trace);
-        vm.Globals[0x2ff] = 0x1234;
+        vm.SeedGlobal(0x2ff, 0x1234);
         vm.Gfx.SetSurface(5, 0x33, 0);
         vm.Gfx.BindDraw(0x100, 5, 0, 0, 1, 1, 0, 0);
         vm.TextHistory.DefineLayout(1, 10, 10, 0, 0);
@@ -137,7 +137,7 @@ public class RootReloadTests
         }, Array.Empty<string>());
         var vm = new VirtualMachine(initial, table, new RecordingWaits(),
             provider: new MapProvider(new Dictionary<long, Script> { [0] = system4 }));
-        vm.Globals[0x2ff] = 0x1234;
+        vm.SeedGlobal(0x2ff, 0x1234);
         vm.GlobalFloats[1] = BitConverter.SingleToInt32Bits(2.5f);
         vm.GlobalStrings[2] = "残留";
         vm.GlobalPointers[3] = 0x2ff;

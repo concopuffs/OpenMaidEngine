@@ -1420,9 +1420,9 @@ public sealed class ModLuaLinkTests : IDisposable
         });
         var vm = new VirtualMachine(Sys4Loader.Parse(RunAddExp, HimegariTable, AddExp), HimegariTable, new HeadlessWaits(),
                                     null, provider, scripting: scripting);
-        vm.Globals[0x8c877] = 7;          // current_item_id as the hooked script left it
-        vm.Globals[0x8c878] = -2;         // current_item_count_change
-        vm.Globals[0x3306 + 5] = 10;      // item_inventory_counts[5]
+        vm.SeedGlobal(0x8c877, 7);          // current_item_id as the hooked script left it
+        vm.SeedGlobal(0x8c878, -2);         // current_item_count_change
+        vm.SeedGlobal(0x3306 + 5, 10);      // item_inventory_counts[5]
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);

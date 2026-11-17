@@ -46,7 +46,7 @@ public class HostedSceneEntryTests
     {
         var (root, provider) = HostingRoot();
         var vm = new VirtualMachine(root, Table, new RecordingWaits(), provider: provider);
-        vm.Globals[0x55] = 3;   // boot state the handoff overrides
+        vm.SeedGlobal(0x55, 3);   // boot state the handoff overrides
         vm.HostScene(new HostedSceneEntry("TITLE.BIN", SceneId,
             new Dictionary<int, long> { [0x699] = SceneId, [0x55] = 7 }));
 
@@ -64,7 +64,7 @@ public class HostedSceneEntryTests
     {
         var (root, provider) = HostingRoot();
         var vm = new VirtualMachine(root, Table, new RecordingWaits(), provider: provider);
-        vm.Globals[0x699] = SceneId;
+        vm.SeedGlobal(0x699, SceneId);
 
         vm.Run();
 

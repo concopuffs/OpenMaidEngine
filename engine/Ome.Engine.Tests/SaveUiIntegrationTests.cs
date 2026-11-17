@@ -256,8 +256,8 @@ public class SaveUiIntegrationTests
                 new VmOptions(MaxSteps: 1_000_000), provider, trace,
                 saves: new SavesAndSettings(store: store));
             host.Vm = vm;
-            vm.Globals[0x6241b] = 1; // LOAD mode
-            vm.Globals[0x696] = 0;   // caller allows direct load without the optional confirmation
+            vm.SeedGlobal(0x6241b, 1); // LOAD mode
+            vm.SeedGlobal(0x696, 0);   // caller allows direct load without the optional confirmation
 
             vm.Run();
 
@@ -297,9 +297,9 @@ public class SaveUiIntegrationTests
             new StopAtInstalledResumeSink(),
             saves: new SavesAndSettings(profile: sharedProfile, store: store));
         host.Vm = vm;
-        vm.Globals[0x4] = unchecked((uint)sharedProfile.LoadInteger(0x5c3));
-        vm.Globals[0x6241b] = 1;
-        vm.Globals[0x696] = 0;
+        vm.SeedGlobal(0x4, unchecked((uint)sharedProfile.LoadInteger(0x5c3)));
+        vm.SeedGlobal(0x6241b, 1);
+        vm.SeedGlobal(0x696, 0);
 
         Assert.Throws<InstalledResumeReachedException>(() => vm.Run());
     }
@@ -326,9 +326,9 @@ public class SaveUiIntegrationTests
             new InstalledContinuationSink(state),
             saves: new SavesAndSettings(profile: sharedProfile, store: store));
         host.Vm = vm;
-        vm.Globals[0x4] = unchecked((uint)sharedProfile.LoadInteger(0x5c3));
-        vm.Globals[0x6241b] = 1;
-        vm.Globals[0x696] = 0;
+        vm.SeedGlobal(0x4, unchecked((uint)sharedProfile.LoadInteger(0x5c3)));
+        vm.SeedGlobal(0x6241b, 1);
+        vm.SeedGlobal(0x696, 0);
 
         Exception? outcome = Record.Exception(() => vm.Run());
         Assert.True(outcome is InstalledGameplayPollReachedException,
