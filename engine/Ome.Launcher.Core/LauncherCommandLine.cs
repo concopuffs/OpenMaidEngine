@@ -5,14 +5,14 @@ namespace Ome.Launcher.Core;
 
 public enum LauncherCommand { Window, Launch, Check, PrintCommand }
 
-/// <summary>Why the window would open (spec ﾂｧ8.6): on request, at a failed check, at a failed start, or at the review of
+/// <summary>Why the window would open (spec §8.6): on request, at a failed check, at a failed start, or at the review of
 /// a root the launcher did not create.</summary>
 public enum WindowReason { None, Requested, CheckFailed, StartFailed, Review }
 
 /// <summary>A command line the launcher refuses; it exits with <see cref="LauncherCommandLine.UsageError"/>.</summary>
 public sealed class LauncherUsageException(string message) : Exception(message);
 
-/// <summary>The launcher's command line (spec ﾂｧ8.6), parsed.</summary>
+/// <summary>The launcher's command line (spec §8.6), parsed.</summary>
 /// <param name="Target">The <c>ID|DIR</c> of <c>--launch</c>, <c>--check</c> or <c>--print-command</c>.</param>
 /// <param name="RunArguments">What follows <c>--</c>: engine flags for that run.</param>
 public sealed record LauncherArguments(LauncherCommand Command, string? Target, IReadOnlyList<string> RunArguments,
@@ -92,7 +92,7 @@ public sealed record WindowStart(OmeHome Home, EngineProgram Engine, ProfileEntr
 public sealed record LauncherOutcome(int ExitCode, WindowReason Window, WindowStart? Start = null);
 
 /// <summary>
-/// The launcher's command line (spec ﾂｧ8.6), before any window: <c>--launch ID|DIR [-- ARGS]</c>, <c>--check</c>,
+/// The launcher's command line (spec §8.6), before any window: <c>--launch ID|DIR [-- ARGS]</c>, <c>--check</c>,
 /// <c>--print-command</c> (JSON), <c>--home</c>, <c>--output</c>, <c>--engine</c> and <c>--engine-arg</c>. The program's
 /// <c>Main</c> calls <see cref="Run"/> and does what its outcome's <see cref="LauncherOutcome.Window"/> says.
 /// </summary>
@@ -204,7 +204,7 @@ public static class LauncherCommandLine
     }
 
     /// <summary>A profile by its id, else by its folder; a folder no profile lists is a root the launcher did not
-    /// create, which needs its review (spec ﾂｧ12).</summary>
+    /// create, which needs its review (spec §12).</summary>
     private static ProfileEntry Locate(string target, OmeHome home, LauncherSettings settings, Func<MachineState> machine,
                                        string workingDirectory, OmePlatform platform)
     {
