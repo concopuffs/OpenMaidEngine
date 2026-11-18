@@ -6,8 +6,8 @@ namespace Ome.Engine.Persistence;
 /// The thumbnail of a numbered save (`SAVEnn.STH`): op 0x1ae writes a surface as one, op 0x1af loads one into a
 /// surface. The image stays here, so a handler passes only numbers
 /// (docs/superpowers/specs/2026-11-12-engine-layering-design.md §3.3). Both return the script's result: 0 done,
-/// 1 when there is no save store, no thumbnail to load or the file fails, 2 when the slot, the surface or the image
-/// is unusable.
+/// 1 when there is no save store, no thumbnail to load or the file fails, 2 when the surface or the image is unusable.
+/// Any save slot names a file (<see cref="DirectoryNativeDatStore.NumberedFileName"/>).
 /// </summary>
 public static class NumberedSaveThumbnails
 {

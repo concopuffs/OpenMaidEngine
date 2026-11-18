@@ -89,6 +89,10 @@ public interface INativeDatStore
     int DeleteNumberedPair(int slot);
     int CopyNumberedPair(int sourceSlot, int destinationSlot);
     byte[]? LoadNumberedThumbnail(int slot);
+
+    /// <summary>Whether save <paramref name="slot"/> has a thumbnail to load: op 0x1af opens it before anything else
+    /// (docs/engine-re.md, "The 28 ops' native tests").</summary>
+    bool HasNumberedThumbnail(int slot) => LoadNumberedThumbnail(slot) != null;
     void SaveNumberedThumbnail(int slot, ReadOnlySpan<byte> data);
 
     /// <summary>
@@ -308,17 +312,21 @@ public sealed class DirectoryNativeDatStore : INativeDatStore
         WriteReplacing(Path.Combine(_root, NumberedThumbnailFileName(slot)), data);
     }
 
-    public static string NumberedFileName(int slot)
-    {
-        if (slot < 0) throw new ArgumentOutOfRangeException(nameof(slot));
-        return "SAVE" + slot.ToString("00", CultureInfo.InvariantCulture) + ".DAT";
-    }
+    /// <summary>
+    /// Save <paramref name="slot"/>'s file, as native names it (<c>%s\SAVE%2.2d.DAT</c>): any slot names a file, so
+    /// slot -1 is <c>SAVE-01.DAT</c> and slot 100 <c>SAVE100.DAT</c>, and native tests none (docs/engine-re.md, "The 28
+    /// ops' native tests").
+    /// </summary>
+    public static string NumberedFileName(int slot) => NumberedName(slot) + ".DAT";
 
-    public static string NumberedThumbnailFileName(int slot)
-    {
-        if (slot < 0) throw new ArgumentOutOfRangeException(nameof(slot));
-        return "SAVE" + slot.ToString("00", CultureInfo.InvariantCulture) + ".STH";
-    }
+    /// <summary>Save <paramref name="slot"/>'s thumbnail (<c>%s\SAVE%2.2d.STH</c>), named as
+    /// <see cref="NumberedFileName"/> names the save.</summary>
+    public static string NumberedThumbnailFileName(int slot) => NumberedName(slot) + ".STH";
+
+    /// <summary><c>SAVE%2.2d</c>: at least two digits, after the sign of a negative slot.</summary>
+    private static string NumberedName(int slot) => "SAVE" + slot.ToString("00", CultureInfo.InvariantCulture);
+
+    public bool HasNumberedThumbnail(int slot) => File.Exists(Path.Combine(_root, NumberedThumbnailFileName(slot)));
 
     private NativeSaveDocument LoadAndValidate(string path)
     {

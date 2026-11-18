@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Xunit;
@@ -9,8 +11,7 @@ using Xunit;
 /// <summary>
 /// Each handler that indexes one of native's tables with an operand, driven past the table's end (docs/engine-re.md,
 /// "Indices outside their tables"). It halts where native does not test the index, skips where native's test refuses
-/// it (with native's trace as a warning where native writes one), and raises the box where native throws. A handler
-/// whose native test has not been read raises the はい/いいえ box (docs/backlog.md).
+/// it (with native's trace as a warning where native writes one), and raises the box where native throws.
 /// </summary>
 public sealed class IndexBoundsTests
 {
@@ -36,8 +37,7 @@ public sealed class IndexBoundsTests
     private static Operand I(long value) => new(0, value);
     private static Operand G(int address) => new(3, address);
 
-    private const string SurfaceRange = "が範囲 0..999 の外です．";
-    private const string LayoutRange = "が範囲 0..9 の外です．";
+    private const string TextureSizeTrace = "関数：GetTextureSize エラー：不正なtexture ";
 
     /// <summary>(opcode, argument number, value, what happens, a text the halt reason, warning or box carries).
     /// </summary>
@@ -107,16 +107,26 @@ public sealed class IndexBoundsTests
         cases.Add(0x1d3, 4, -1, Past.Halts, "history record -1 is negative");
         cases.Add(0x1d4, 4, -1, Past.Halts, "history record -1 is negative");
         // The 28 read tests (engine-re.md, "The 28 ops' native tests", 2026-11-17).
-        // Transition and size surface ops: gfx_surface_get_size tests below 1000 unsigned and traces.
+        // Transition surfaces: gfx_surface_get_size traces past 999, but the op goes on and draws the slot unchecked.
+        // Ops 0x27 and 0x28 run here with no divisions, so they finish on the surface at once (the facts below drive
+        // fast-forward, the pattern begin and the negative slot a finish takes).
         foreach ((int op, int argument) in new[] { (0x21, 1), (0x22, 1), (0x24, 1), (0x25, 1), (0x25, 2), (0x27, 1),
-                                                   (0x28, 1), (0x208, 1) })
-            cases.Add(op, argument, 1000, Past.Traces, "関数：GetTextureSize エラー：不正なtexture ");
-        // Slot -1 at op 0x208 (HIDEWIN's op 0x215 answer) reads 0 x 0 with the same trace.
-        cases.Add(0x208, 1, -1, Past.Traces, "関数：GetTextureSize エラー：不正なtexture ");
+                                                   (0x28, 1) })
+            cases.Add(op, argument, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
+        // The pattern reveals' type, 0 to 4, signed: traced before the surface is read.
+        cases.Add(0x27, 4, 5, Past.Traces, "関数：ComEfBl エラー：Typeは0から1の間にしてください");
+        cases.Add(0x28, 4, -1, Past.Traces, "関数：ComEfBl2 エラー：Typeは0から1の間にしてください");
+        // Op 0x208 reads 0 x 0 with the trace for any slot outside 0..999, -1 (HIDEWIN's op 0x215 answer) too
+        // (TheTextureSizeOfASlotPastTheTableIsZero reads the outputs).
+        cases.Add(0x208, 1, 1000, Past.Traces, TextureSizeTrace + "1000");
+        cases.Add(0x208, 1, -1, Past.Traces, TextureSizeTrace + "-1");
         // Draw-string, bound-draw, indicator and thumbnail surfaces: no test at use; the port halts.
         foreach ((int op, int argument) in new[] { (0x73, 4), (0x2bc, 4), (0x1fb, 2), (0x204, 1), (0x205, 1),
-                                                   (0x1ae, 3), (0x1af, 3) })
+                                                   (0x1ae, 3) })
             cases.Add(op, argument, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
+        // Op 0x1af opens the thumbnail first: with none (no save store here) it writes 1 and never reads the surface
+        // (NumberedSavePairTests drives one that has a thumbnail).
+        cases.Add(0x1af, 3, 1000, Past.Continues, "");
         // Movie surface ops: no test; the port halts.
         foreach ((int op, int argument) in new[] { (0x20f, 2), (0x236, 2), (0x241, 2), (0x23a, 2), (0x23f, 2),
                                                    (0x246, 1) })
@@ -124,7 +134,8 @@ public sealed class IndexBoundsTests
         // Layout slots: no test (0x80 stores any value; the indicator workers read or write through the pointer).
         foreach (int op in new[] { 0x72, 0x80, 0x2bc })
             cases.Add(op, 1, 10, Past.Halts, "layout slot 10 is outside 0..9");
-        // Save slots: no test — any value only names a file, and the run goes on through the save native.
+        // Save slots: no test — any value only names a file (-1 is SAVE-01.DAT), and the run goes on through the save
+        // native (NumberedSavePairTests saves and loads one).
         foreach ((int op, int argument) in new[] { (0x19e, 2), (0x19f, 2), (0x1a0, 2), (0x1a1, 2), (0x1ab, 2),
                                                    (0x1ac, 2), (0x1ac, 3), (0x1ae, 2), (0x1af, 2) })
             cases.Add(op, argument, -1, Past.Continues, "");
@@ -258,6 +269,130 @@ public sealed class IndexBoundsTests
         Assert.Empty(host.Diagnostics);
         Assert.Equal(1, vm.Globals.GetValueOrDefault(Marker));
         if (op == 0x20d) Assert.Equal(-1, vm.Gfx.CurrentRenderTargetSlot);
+    }
+
+    /// <summary>Op 0x208 writes 0 x 0 for a slot gfx_surface_get_size refuses, over whatever the outputs held.
+    /// </summary>
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(1000)]
+    public void TheTextureSizeOfASlotPastTheTableIsZero(long slot)
+    {
+        OpcodeTable table = Himegari.Value;
+        var script = ScriptAssembler.Assemble(table, "SIZE", new List<(int, Operand[])>
+        {
+            (0x208, new[] { I(slot), G(0x301), G(0x302) }),
+            (0x2, Array.Empty<Operand>()),
+        }, Array.Empty<string>());
+        var host = new RecordingWaits();
+        var vm = new VirtualMachine(script, table, host);
+        vm.SeedGlobal(0x301, 7);
+        vm.SeedGlobal(0x302, 9);
+
+        vm.Run();
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x301));
+        Assert.Equal(0, vm.Globals.GetValueOrDefault(0x302));
+        Assert.Contains(TextureSizeTrace + slot, Assert.Single(host.Warnings));
+    }
+
+    /// <summary>The legacy transitions on 4.33G's table, which has every one, then the marker and the exit.</summary>
+    private static (VirtualMachine, RecordingWaits) RunTransitions(IEnumerable<(int, Operand[])> ops,
+                                                                    bool fastForward = false,
+                                                                    Sys4LogicalCanvas? screen = null)
+    {
+        OpcodeTable table = Kamidori.Value;
+        var instructions = ops.ToList();
+        instructions.Add((0x55, new[] { G(Marker), I(1) }));
+        instructions.Add((0x2, Array.Empty<Operand>()));
+        var script = ScriptAssembler.Assemble(table, "PAST", instructions, Array.Empty<string>());
+        var host = new RecordingWaits();
+        var vm = new VirtualMachine(script, table, host, build: EngineBuilds.Age433G,
+                                    skipAndAuto: fastForward ? TestSkipAndAuto.HoldingFastForward() : null,
+                                    graphics: screen is { } canvas ? new Graphics(null, new FrameClock(), canvas) : null);
+        vm.Run();
+        return (vm, host);
+    }
+
+    /// <summary>
+    /// A transition that finishes at once reads only the surface it finishes on (screen_transition_finalize), where a
+    /// negative slot is the endpoint colour: under fast-forward ops 0x22 and 0x24 finish on black or white and read no
+    /// slot, op 0x25 reads only its target, and ops 0x21, 0x27 and 0x28 their surface; a pattern reveal with no
+    /// divisions finishes at once without fast-forward too.
+    /// </summary>
+    [Fact]
+    public void ATransitionThatFinishesAtOnceReadsOnlyTheSurfaceItFinishesOn()
+    {
+        (VirtualMachine vm, RecordingWaits host) = RunTransitions(new List<(int, Operand[])>
+        {
+            (0x21, new[] { I(-1), I(30) }),
+            (0x22, new[] { I(1000), I(30) }),
+            (0x24, new[] { I(1000), I(80) }),
+            (0x25, new[] { I(1000), I(-1), I(10) }),
+            (0x27, new[] { I(-1), I(40), I(64), I(3) }),
+            (0x28, new[] { I(-1), I(15), I(64), I(0) }),
+        }, fastForward: true);
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Empty(host.Warnings);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(Marker));
+        Assert.Equal(new[] { true, true }, host.SurfaceBlackFadeForceEndpoints);
+        Assert.Equal(new[] { true }, host.SurfaceCrossfadeForceEndpoints);
+        Assert.Equal(new[] { true, true }, host.SurfacePatternForceEndpoints);
+
+        (vm, _) = RunTransitions(new List<(int, Operand[])> { (0x28, new[] { I(-1), I(15), I(0), I(0) }) });
+        Assert.Equal("exit", vm.HaltReason);
+
+        // The surface it finishes on is drawn unchecked.
+        foreach ((int op, Operand[] operands) in new (int, Operand[])[]
+                 {
+                     (0x21, new[] { I(1000), I(30) }),
+                     (0x25, new[] { I(1), I(1000), I(10) }),
+                     (0x28, new[] { I(1000), I(15), I(64), I(0) }),
+                 })
+        {
+            (vm, _) = RunTransitions(new List<(int, Operand[])> { (op, operands) }, fastForward: true);
+            Assert.StartsWith("index-out-of-range: PAST@0x0 ", vm.HaltReason);
+            Assert.Contains("surface slot 1000 is outside 0..999", vm.HaltReason);
+        }
+
+        // Without fast-forward every transition draws its slot: a negative one too.
+        (vm, _) = RunTransitions(new List<(int, Operand[])> { (0x22, new[] { I(-1), I(30) }) });
+        Assert.Contains("surface slot -1 is outside 0..999", vm.HaltReason);
+    }
+
+    /// <summary>
+    /// pattern_surface_transition_begin sizes the surface (tracing a slot past 999) and then refuses a division count
+    /// the screen does not divide by, or a mode outside 0..11, with a trace: nothing starts and the surface is never
+    /// drawn. When it begins, its tick draws the slot unchecked.
+    /// </summary>
+    [Fact]
+    public void APatternRevealTheScreenRefusesStartsNothingAndNeverDrawsItsSurface()
+    {
+        var screen = new Sys4LogicalCanvas(1000, 600);   // 64 divides neither
+        (VirtualMachine vm, RecordingWaits host) = RunTransitions(new List<(int, Operand[])>
+        {
+            (0x28, new[] { I(1000), I(15), I(64), I(0) }),   // mode 8: the width
+            (0x27, new[] { I(2), I(40), I(64), I(3) }),      // mode 7: the height
+            (0x28, new[] { I(2), I(15), I(64), I(4) }),      // mode 12
+        }, screen: screen);
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal(1, vm.Globals.GetValueOrDefault(Marker));
+        Assert.Empty(host.SurfacePatternTransitions);
+        Assert.Collection(host.Warnings,
+            warning => Assert.Contains(TextureSizeTrace + "1000", warning),
+            warning => Assert.Contains("64 divisions do not divide the screen's width 1000; skipped, as AGE skips it "
+                                       + "with the trace 「関数：SetLineFade エラー：分割サイズが不正です． "
+                                       + "画面の幅で割り切れるようにしてください．」", warning),
+            warning => Assert.Contains("画面の高さで割り切れるようにしてください．", warning),
+            warning => Assert.Contains("「関数：SetLineFade エラー：タイプが不正です．」", warning));
+
+        (vm, host) = RunTransitions(new List<(int, Operand[])> { (0x28, new[] { I(1000), I(15), I(64), I(0) }) },
+                                    screen: new Sys4LogicalCanvas(1024, 576));
+        Assert.Contains("surface slot 1000 is outside 0..999", vm.HaltReason);
+        Assert.Empty(host.SurfacePatternTransitions);
     }
 
     /// <summary>input_hotspot_poll_bound_action_callback tests the action's low five bits, so action 39 answers

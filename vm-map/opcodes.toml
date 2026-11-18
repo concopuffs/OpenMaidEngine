@@ -6233,7 +6233,7 @@ abi_source = "kelebek+decode-validated"
 name = "select-render-target"
 category = "draw"
 summary = "Select an offscreen surface slot as Direct3D render target 0, or restore the device backbuffer when the operand is at least 1000."
-details = "For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it. The port also selects the backbuffer for slot -1, which both games' retail scripts pass; what native's test makes of -1 is not read (docs/backlog.md, 'Native index tests for 28 ops')."
+details = "For slots below 1000 the native worker obtains that surface's level-0 D3D texture surface and calls IDirect3DDevice9::SetRenderTarget(0,...). The >=1000 path obtains backbuffer 0 and records current target -1. Himegari commonly follows a freshly created blank surface selection with 0x20e before drawing into it. The test is unsigned (/v2 retained_gfx_select_render_target@0x479660: CMP 0x3e7; JA), so slot -1, which both games' retail scripts pass, selects the backbuffer too, as in the port (2026-11-17; docs/engine-re.md, 'The 28 ops' native tests')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -8629,7 +8629,7 @@ abi_source = "kelebek"
 name = "reveal-surface-striped"
 category = "draw"
 summary = "(surface)(interval ms)(divisions)(selector) — blocking equal-strip reveal of a captured surface; selectors 0..3 choose vertical/horizontal direction and selector 4 selects the first staggered mode."
-details = "SYS4433 maps selector 0..4 to native pattern modes 4..8. Modes 4/5 divide the active width into equal strips and reveal each strip left-to-right/right-to-left in parallel; modes 6/7 do the equivalent across equal-height strips from top/bottom. Mode 8 is the first staggered vertical variant shared with opcode 0x28. A positive division count must evenly divide the relevant active dimension. Operand 2 arms the per-step timer; ADV fast-forward or a nonpositive division count publishes the target endpoint immediately. Kamidori's only call is SC1050@0x8cf5 `(2,40,64,3)`, mode 7. This is proven for SYS4433 only."
+details = "SYS4433 maps selector 0..4 to native pattern modes 4..8. Modes 4/5 divide the active width into equal strips and reveal each strip left-to-right/right-to-left in parallel; modes 6/7 do the equivalent across equal-height strips from top/bottom. Mode 8 is the first staggered vertical variant shared with opcode 0x28. A positive division count must evenly divide the relevant active dimension. Operand 2 arms the per-step timer; ADV fast-forward or a nonpositive division count publishes the target endpoint immediately. Kamidori's only call is SC1050@0x8cf5 `(2,40,64,3)`, mode 7. A selector outside 0..4 (signed) is traced (ComEfBl: Typeは0から1の間にしてください) and nothing starts; a division count the screen does not divide is traced by the begin worker (SetLineFade) and nothing starts; the port skips both with the trace and halts on a surface the transition would draw past 999 (2026-11-17; docs/engine-re.md, 'The 28 ops' native tests'). This is proven for SYS4433 only."
 noop_headless = false
 waits = "may"
 leaves = ["falls"]
@@ -8674,7 +8674,7 @@ abi_source = "kelebek"
 name = "reveal-surface-staggered-strips"
 category = "draw"
 summary = "(surface)(interval ms)(divisions)(selector) — blocking staggered-strip reveal of a captured surface in one of four vertical/horizontal directions."
-details = "SYS4433 maps selector 0..4 to native pattern modes 8..12. The worker implements modes 8/9 as staggered equal-width strips revealed from the left/right and modes 10/11 as staggered equal-height strips revealed from the top/bottom. Each strip starts one timer step after its predecessor; completion takes `(divisions - 1 + strip thickness)` timer steps. Selector 4 reaches the worker's invalid-mode error for mode 12. ADV fast-forward or a nonpositive division count publishes the target endpoint immediately. Kamidori has 192 calls across 47 scripts; every call targets surface 2 with 64 divisions, uses a 10 or 15 ms interval, and selects one of modes 8..11. This is proven for SYS4433 only."
+details = "SYS4433 maps selector 0..4 to native pattern modes 8..12. The worker implements modes 8/9 as staggered equal-width strips revealed from the left/right and modes 10/11 as staggered equal-height strips revealed from the top/bottom. Each strip starts one timer step after its predecessor; completion takes `(divisions - 1 + strip thickness)` timer steps. Selector 4 reaches the worker's invalid-mode error for mode 12 (SetLineFade: タイプが不正です), and a selector outside 0..4 is traced (ComEfBl2) by the handler; either way nothing starts, and the port skips with the trace, as it does for a division count the screen does not divide (2026-11-17; docs/engine-re.md, 'The 28 ops' native tests'). ADV fast-forward or a nonpositive division count publishes the target endpoint immediately. Kamidori has 192 calls across 47 scripts; every call targets surface 2 with 64 divisions, uses a 10 or 15 ms interval, and selects one of modes 8..11. This is proven for SYS4433 only."
 noop_headless = false
 waits = "may"
 leaves = ["falls"]

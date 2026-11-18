@@ -184,6 +184,108 @@ public class NumberedSavePairTests
         }
     }
 
+    /// <summary>Native names any slot's files (<c>%s\SAVE%2.2d.DAT</c>, <c>.STH</c>) and tests none, so slot -1 is a
+    /// save like any other, in SAVE-01.DAT (docs/engine-re.md, "The 28 ops' native tests").</summary>
+    [Fact]
+    public void ANegativeSlotIsTheSaveNativeNamesSaveMinusOne()
+    {
+        Assert.Equal("SAVE-01.DAT", DirectoryNativeDatStore.NumberedFileName(-1));
+        Assert.Equal("SAVE-01.STH", DirectoryNativeDatStore.NumberedThumbnailFileName(-1));
+        Assert.Equal("SAVE100.DAT", DirectoryNativeDatStore.NumberedFileName(100));
+        string root = NewTempRoot();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            Script saving = ScriptAssembler.Assemble(Table, "NEGATIVE_SLOT",
+            [
+                (0x1ad, []),
+                (0x19e, [G(100), I(-1)]),
+                (0x1a0, [G(101), I(-1), G(120), G(121), G(122), G(123), G(124), G(125), G(126)]),
+                (0x1ae, [G(102), I(-1), I(7)]),
+                (0x1af, [G(103), I(-1), I(8)]),
+                (0x1ac, [G(104), I(-1), I(-2)]),
+                (0x2, []),
+            ], []);
+            var vm = new VirtualMachine(saving, Table, new RecordingWaits(), saves: new SavesAndSettings(store: store));
+            vm.Graphics.PublishSurfacePixels(7, new RgbaImage(1, 1, [10, 20, 30, 255]));
+            int[] statuses = [100, 101, 102, 103, 104];
+            foreach (int status in statuses) vm.SeedGlobal(status, 99);
+            vm.SeedGlobal(130, 1234);   // carried by the save
+
+            vm.Run();
+
+            Assert.Equal("exit", vm.HaltReason);
+            Assert.Equal(new long[statuses.Length], statuses.Select(status => vm.Globals.GetValueOrDefault(status)));
+            Assert.Equal(new byte[] { 10, 20, 30, 255 }, vm.Graphics.SurfacePixels(8)!.Pixels);
+            Assert.True(File.Exists(Path.Combine(root, "SAVE-01.DAT")));
+            Assert.True(File.Exists(Path.Combine(root, "SAVE-01.STH")));
+            Assert.True(File.Exists(Path.Combine(root, "SAVE-02.DAT")));
+
+            Script loading = ScriptAssembler.Assemble(Table, "NEGATIVE_LOAD",
+            [
+                (0x19f, [G(105), I(-2)]),
+                (0x1ab, [G(106), I(-2)]),
+                (0x2, []),
+            ], []);
+            vm = new VirtualMachine(loading, Table, new RecordingWaits(), saves: new SavesAndSettings(store: store));
+            vm.SeedGlobal(105, 99);
+            vm.SeedGlobal(106, 99);
+
+            vm.Run();
+
+            Assert.Equal("exit", vm.HaltReason);
+            Assert.Equal(1234, vm.Globals.GetValueOrDefault(130));
+            Assert.Equal(0, vm.Globals.GetValueOrDefault(105));
+            Assert.Equal(0, vm.Globals.GetValueOrDefault(106));
+            Assert.False(File.Exists(Path.Combine(root, "SAVE-02.DAT")));
+            Assert.False(File.Exists(Path.Combine(root, "SAVE-02.STH")));
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>Op 0x1af opens the thumbnail before it reads the surface slot: without one it writes 1, and with one
+    /// a surface past 999, which native writes through unchecked, halts.</summary>
+    [Fact]
+    public void AThumbnailLoadReadsItsSurfaceOnlyOnceTheThumbnailOpens()
+    {
+        string root = NewTempRoot();
+        try
+        {
+            var store = new DirectoryNativeDatStore(root, Identity);
+            store.SaveNumberedThumbnail(4, NumberedThumbnailCodec.Encode(new RgbaImage(1, 1, [10, 20, 30, 255])));
+            foreach ((int slot, bool halts) in new[] { (5, false), (4, true) })
+            {
+                Script script = ScriptAssembler.Assemble(Table, "THUMBNAIL",
+                [
+                    (0x1af, [G(100), I(slot), I(1000)]),
+                    (0x2, []),
+                ], []);
+                var vm = new VirtualMachine(script, Table, new RecordingWaits(),
+                                            saves: new SavesAndSettings(store: store));
+
+                vm.Run();
+
+                if (halts)
+                {
+                    Assert.StartsWith("index-out-of-range: THUMBNAIL@0x0 ", vm.HaltReason);
+                    Assert.Contains("surface slot 1000 is outside 0..999", vm.HaltReason);
+                }
+                else
+                {
+                    Assert.Equal("exit", vm.HaltReason);
+                    Assert.Equal(1, vm.Globals.GetValueOrDefault(100));
+                }
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
     [Fact]
     public void SaveResumeMarkerSurvivesNestedReturnUntilItsOwningFrameUnwinds()
     {

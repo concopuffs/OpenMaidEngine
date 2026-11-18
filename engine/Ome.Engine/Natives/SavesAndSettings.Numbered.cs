@@ -134,7 +134,7 @@ public sealed partial class SavesAndSettings
     }
 
     /// <summary>Op 0x1a0: 0 with the slot's metadata, 1 when there is no store or no save or the file fails, 2 when
-    /// the save is damaged or the slot is out of range.</summary>
+    /// the save is damaged. Any slot names a file (<see cref="DirectoryNativeDatStore.NumberedFileName"/>).</summary>
     public int QueryNumbered(int slot, out NativeSaveMetadata? metadata)
     {
         metadata = null;
@@ -155,18 +155,10 @@ public sealed partial class SavesAndSettings
         }
     }
 
-    /// <summary>Op 0x1ab: the store's result, 2 without a store or for a slot out of range.</summary>
-    public int DeleteNumbered(int slot)
-    {
-        try
-        {
-            return _store?.DeleteNumberedPair(slot) ?? 2;
-        }
-        catch (ArgumentOutOfRangeException) { return 2; }
-    }
+    /// <summary>Op 0x1ab: the store's result, 2 without a store.</summary>
+    public int DeleteNumbered(int slot) => _store?.DeleteNumberedPair(slot) ?? 2;
 
-    /// <summary>Op 0x1ac: the store's result, 2 without a store, for a slot out of range or when the copy fails.
-    /// </summary>
+    /// <summary>Op 0x1ac: the store's result, 2 without a store or when the copy fails.</summary>
     public int CopyNumbered(int sourceSlot, int destinationSlot)
     {
         try
@@ -187,6 +179,18 @@ public sealed partial class SavesAndSettings
     /// <summary>Op 0x1af (<see cref="NumberedSaveThumbnails.Load"/>).</summary>
     public int LoadThumbnail(Graphics graphics, int slot, int surface)
         => NumberedSaveThumbnails.Load(graphics, _store, slot, surface);
+
+    /// <summary>Whether save <paramref name="slot"/> has a thumbnail to load, which op 0x1af asks before it reads its
+    /// surface slot, as native opens the file first: false without a save store or when the file cannot be
+    /// seen.</summary>
+    public bool HasThumbnail(int slot)
+    {
+        try
+        {
+            return _store?.HasNumberedThumbnail(slot) ?? false;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException) { return false; }
+    }
 
     /// <summary>A numbered save's records, in native's order of the payload: the save native's carried records and
     /// the saved frames, then each native's own.</summary>

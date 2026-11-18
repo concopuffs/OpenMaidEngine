@@ -193,8 +193,9 @@ public sealed partial class Graphics
         });
     }
 
-    /// <summary>Op 0x24: crossfade one surface's captured objects into another's (the live objects when the target
-    /// has none).</summary>
+    /// <summary>Op 0x25: crossfade one surface's captured objects into another's (the live objects when the target
+    /// has none). A negative target, which the op passes only when it finishes at once, is black: native's
+    /// <c>screen_transition_finalize</c> fills scratch surface 0x20 with black for it.</summary>
     public ScreenTransitionStart StartSurfaceCrossfade(
         int sourceSurface, int targetSurface, long intervalArgument, bool forceEndpoint)
     {
@@ -203,8 +204,9 @@ public sealed partial class Graphics
         IReadOnlyList<RenderObject> target;
         source = _renderTargetSnapshots.TryGetValue(sourceSurface, out var capturedSource)
             ? capturedSource : System.Array.Empty<RenderObject>();
-        target = _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
-            ? capturedTarget : State.SnapshotVisibleObjects(start);
+        target = targetSurface < 0 ? System.Array.Empty<RenderObject>()
+            : _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
+                ? capturedTarget : State.SnapshotVisibleObjects(start);
         return StartScreenTransition(source, target, start, intervalArgument, forceEndpoint, new()
         {
             ["kind"] = "surface-crossfade",
@@ -228,12 +230,14 @@ public sealed partial class Graphics
             }, overlayRgb: 0xffffff);
     }
 
-    /// <summary>Op 0x25: reveal a surface's captured objects over the live ones by a pattern (drawn as a
-    /// crossfade).</summary>
+    /// <summary>Ops 0x27 and 0x28: reveal a surface's captured objects over the live ones by a pattern (drawn as a
+    /// crossfade). A negative surface, which the ops pass only when they finish at once, is black: native's
+    /// <c>screen_transition_finalize</c> fills scratch surface 0x20 with black for it.</summary>
     public ScreenTransitionStart StartSurfacePatternReveal(SurfacePatternTransitionRequest request, bool forceEndpoint)
     {
         long start = _clock.NowMs;
-        IReadOnlyList<RenderObject> target = RenderTargetSnapshot(request.Surface) ?? State.SnapshotVisibleObjects(start);
+        IReadOnlyList<RenderObject> target = request.Surface < 0 ? System.Array.Empty<RenderObject>()
+            : RenderTargetSnapshot(request.Surface) ?? State.SnapshotVisibleObjects(start);
         IReadOnlyList<RenderObject> source = State.SnapshotVisibleObjects(start);
         long duration = LegacyScreenTransitionTiming.PatternDurationMilliseconds(
             _screenWidth, _screenHeight, request.IntervalMilliseconds, request.Divisions, request.Mode);

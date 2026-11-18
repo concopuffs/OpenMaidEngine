@@ -107,14 +107,29 @@ public sealed partial class VirtualMachine
         => IndexRefused(ins, "surface slot", slot, GfxState.SurfaceRecordCount, IndexTest.Unchecked);
 
     /// <summary>
-    /// Native's transition surfaces, 0 to 999, as `0x21`, `0x22`, `0x24`, `0x25` (both), `0x27` and `0x28` reach them
-    /// through `screen_transition_begin` → `gfx_surface_get_size` in the shipped draw mode: tested below 1000
-    /// unsigned and traced 「関数：GetTextureSize エラー：不正なtexture %d」, the transition continuing with size
-    /// 0×0 (`engine-re.md`, "The 28 ops' native tests").
+    /// Native's surfaces, 0 to 999, as the legacy screen transitions (`0x21`, `0x22`, `0x24`, `0x25`, `0x27`, `0x28`)
+    /// draw them. Their begin sizes the surface through `gfx_surface_get_size`, which traces
+    /// 「関数：GetTextureSize エラー：不正なtexture %d」 for a slot past 999 unsigned, but the op goes on: begin stores the
+    /// slot and `gfx_object_blit_d3d9` reads `[gfx+0xa590+slot*4]` unchecked, at begin, on every tick and when the
+    /// transition finishes. So the port halts (`engine-re.md`, "The 28 ops' native tests").
     /// </summary>
     private StepResult? TransitionSurfaceSlotRefused(Instruction ins, long slot)
-        => IndexRefused(ins, "surface slot", slot, GfxState.SurfaceRecordCount,
-                       IndexTest.Traced("関数：GetTextureSize エラー：不正なtexture ", 1000));
+        => IndexRefused(ins, "surface slot", slot, GfxState.SurfaceRecordCount, IndexTest.Unchecked);
+
+    /// <summary>
+    /// The surface a legacy transition finishes on at once (fast-forward, or a pattern reveal with no divisions):
+    /// `screen_transition_finalize` fills scratch surface 0x20 with the endpoint colour for a negative slot and draws
+    /// any other slot unchecked, so only a slot past 999 halts.
+    /// </summary>
+    private StepResult? FinishedTransitionSurfaceRefused(Instruction ins, long slot)
+        => slot < 0 ? null : TransitionSurfaceSlotRefused(ins, slot);
+
+    /// <summary>Native's trace when `gfx_surface_get_size` refuses a slot, which it does past 999 unsigned (so -1
+    /// too).</summary>
+    private static string TextureSizeTrace(long slot) => $"関数：GetTextureSize エラー：不正なtexture {slot}";
+
+    /// <summary>A slot outside 0 to 999, which `gfx_surface_get_size` refuses with its trace.</summary>
+    private static bool TextureSizeRefuses(long slot) => slot is < 0 or >= GfxState.SurfaceRecordCount;
 
     /// <summary>
     /// Native's draw-string surfaces (`0x204`, `0x205`), the bound draw surface (`0x1fb` operand 2) and the indicator

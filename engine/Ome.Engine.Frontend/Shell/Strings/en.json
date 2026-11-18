@@ -89,8 +89,6 @@
   "error.random-zero": "The RANDOM bound is 0.",
   "error.script-slot-empty": "No file is loaded at this depth. Depth={0}",
   "error.wave-load": "Could not read the WAV file {0}",
-  "error.index-range": "Argument {1} of {0} is {2}, outside {3}.",
-  "error.index-negative": "Argument {1} of {0} is negative: {2}.",
   "error.depth-limit": "Files are nested too deep. The most is {0}.",
   "error.file-number": "File number {0} is not valid.",
   "error.file-open": "Cannot open {0}.\nERROR CODE = {1}",

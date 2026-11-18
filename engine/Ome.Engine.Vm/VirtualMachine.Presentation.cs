@@ -1,5 +1,6 @@
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
+using Ome.Engine.Sys4;
 
 namespace Ome.Engine.Vm;
 
@@ -69,7 +70,9 @@ public sealed partial class VirtualMachine
     private StepResult OpFadeSurfaceInFromBlack(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
+        // Under fast-forward the handler finishes on the surface, where a negative slot is the black endpoint.
+        if ((AdvFastForwardActive ? FinishedTransitionSurfaceRefused(ins, Read(a[0]))
+                                  : TransitionSurfaceSlotRefused(ins, Read(a[0]))) is { } refused) return refused;
         // Begin (mode 0) fills 0x20 with black; under fast-forward the handler finalizes on the surface instead.
         if (AdvFastForwardActive) MarkScratchIfFinalizeFills(Read(a[0]));
         else MarkLegacyTransitionScratchWritten();
@@ -84,7 +87,8 @@ public sealed partial class VirtualMachine
     private StepResult OpFadeSurfaceOutToBlack(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
+        // Under fast-forward the handler finishes on black (finalize(-1)) and never reads the slot.
+        if (!AdvFastForwardActive && TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         MarkLegacyTransitionScratchWritten();   // begin (mode 1) or, under fast-forward, finalize(-1) fills 0x20
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
         _waits.FadeSurfaceWithBlack(
@@ -97,7 +101,8 @@ public sealed partial class VirtualMachine
     private StepResult OpFadeSurfaceOutToWhite(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
+        // Under fast-forward the handler finishes on white (finalize(-1)) and never reads the slot.
+        if (!AdvFastForwardActive && TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
         MarkLegacyTransitionScratchWritten();   // begin (mode 3) or, under fast-forward, finalize(-1) fills 0x20
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
         _waits.FadeSurfaceToWhite(
@@ -110,8 +115,15 @@ public sealed partial class VirtualMachine
     private StepResult OpCrossfadeSurfaces(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
-        if (TransitionSurfaceSlotRefused(ins, Read(a[1])) is { } targetRefused) return targetRefused;
+        // Under fast-forward the handler finishes on the target alone, where a negative slot is the black endpoint;
+        // otherwise mode 4 draws both.
+        if (AdvFastForwardActive)
+        {
+            if (FinishedTransitionSurfaceRefused(ins, Read(a[1])) is { } finishRefused) return finishRefused;
+        }
+        else if ((TransitionSurfaceSlotRefused(ins, Read(a[0])) ?? TransitionSurfaceSlotRefused(ins, Read(a[1])))
+                 is { } refused)
+            return refused;
         // Mode 4 never touches 0x20; under fast-forward the handler finalizes on the target.
         if (AdvFastForwardActive) MarkScratchIfFinalizeFills(Read(a[1]));
         DiscardHeldTriggersUnlessFastForward();   // input_flush_action_triggers as the fade starts
@@ -121,13 +133,46 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
+    /// <summary>
+    /// Ops 0x27 and 0x28 (modes <paramref name="firstMode"/> + their type): native's tests in its order, before the
+    /// surface is drawn. A type outside 0 to 4 is traced and skipped. With no divisions or under fast-forward the
+    /// handler finishes on the surface at once. Otherwise <c>pattern_surface_transition_begin</c> sizes the surface
+    /// (tracing a slot past 999) and then refuses a mode or a division count the screen does not take, with a trace
+    /// and nothing started, so the surface is never drawn; when it begins, its tick draws the slot unchecked
+    /// (docs/engine-re.md, "The 28 ops' native tests").
+    /// </summary>
+    private StepResult? PatternRevealRefused(Instruction ins, string command, int firstMode)
+    {
+        var a = ins.Args;
+        long type = Read(a[3]), slot = Read(a[0]), divisions = Read(a[2]);
+        if (type is < 0 or > 4)
+        {
+            ReportSkipped(ins, "transition type", type, "0..4", $"関数：{command} エラー：Typeは0から1の間にしてください");
+            return StepResult.Next;
+        }
+        if (AdvFastForwardActive || divisions <= 0) return FinishedTransitionSurfaceRefused(ins, slot);
+        Sys4LogicalCanvas screen = _graphics.Canvas;
+        if (LegacyScreenTransitionTiming.PatternBeginRefusal(
+                screen.Width, screen.Height, (int)divisions, (SurfacePatternTransitionMode)(firstMode + (int)type))
+            is { } refusal)
+        {
+            if (TextureSizeRefuses(slot))
+                _waits.ReportWarning($"{At(ins)}: surface slot {slot} is outside 0..999; AGE traces 「"
+                                     + $"{TextureSizeTrace(slot)}」 as it sizes the transition");
+            _waits.ReportWarning($"{At(ins)}: {refusal.Reason}; skipped, as AGE skips it with the trace "
+                                 + $"「{refusal.Trace}」");
+            return StepResult.Next;
+        }
+        return TransitionSurfaceSlotRefused(ins, slot);
+    }
+
     private StepResult OpRevealSurfaceStriped(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
-        // pattern_surface_transition_begin/_tick draw the surface itself; with a valid selector but no divisions
-        // or under fast-forward, the handler finalizes on the surface.
-        if (Read(a[3]) is >= 0 and <= 4 && (AdvFastForwardActive || Read(a[2]) <= 0))
+        if (PatternRevealRefused(ins, "ComEfBl", 4) is { } refused) return refused;
+        // pattern_surface_transition_begin/_tick draw the surface itself; with no divisions or under fast-forward,
+        // the handler finalizes on the surface.
+        if (AdvFastForwardActive || Read(a[2]) <= 0)
             MarkScratchIfFinalizeFills(Read(a[0]));
         _waits.RevealSurfaceWithPattern(
             Gfx,
@@ -141,8 +186,8 @@ public sealed partial class VirtualMachine
     private StepResult OpRevealSurfaceStaggeredStrips(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
-        if (Read(a[3]) is >= 0 and <= 4 && (AdvFastForwardActive || Read(a[2]) <= 0))
+        if (PatternRevealRefused(ins, "ComEfBl2", 8) is { } refused) return refused;
+        if (AdvFastForwardActive || Read(a[2]) <= 0)
             MarkScratchIfFinalizeFills(Read(a[0]));
         _waits.RevealSurfaceWithPattern(
             Gfx,

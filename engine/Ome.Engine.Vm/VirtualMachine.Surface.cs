@@ -86,12 +86,19 @@ public sealed partial class VirtualMachine
     private StepResult OpGetTextureSize(Instruction ins, int pc)
     {
         var a = ins.Args;
-        // Slot -1, op 0x215's "no such object", reads 0 x 0: HIDEWIN.BIN passes op 0x215's answer for object 0xcb2a
-        // without testing it (both games), Kamidori runs it on every hide, and 4.33G answers -1 once a scene has
-        // erased that object. Native's own unsigned test refuses -1 the same way as 1000 and up, writing 0 x 0 with
-        // the GetTextureSize trace (engine-re.md, "The 28 ops' native tests").
-        if (TransitionSurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
-        var (gw, gh) = _graphics.SurfaceSize((int)Read(a[0]));
+        long slot = Read(a[0]);
+        // gfx_surface_get_size refuses a slot past 999 unsigned, so -1 too, with its trace, and gives 0 x 0, which
+        // the handler writes as for any slot. Slot -1 is op 0x215's "no such object": HIDEWIN.BIN passes op 0x215's
+        // answer for object 0xcb2a without testing it (both games), Kamidori runs it on every hide, and 4.33G answers
+        // -1 once a scene has erased that object (engine-re.md, "The 28 ops' native tests").
+        if (TextureSizeRefuses(slot))
+        {
+            _waits.ReportWarning($"{At(ins)}: surface slot {slot} is outside 0..999; reads 0 x 0, as AGE does with "
+                                 + $"the trace 「{TextureSizeTrace(slot)}」");
+            Write(a[1], 0); Write(a[2], 0);
+            return StepResult.Next;
+        }
+        var (gw, gh) = _graphics.SurfaceSize((int)slot);
         Write(a[1], gw); Write(a[2], gh);
         return StepResult.Next;
     }
@@ -136,10 +143,9 @@ public sealed partial class VirtualMachine
     private StepResult OpSelectRenderTarget(Instruction ins, int pc)
     {
         var a = ins.Args;
-        // The port selects the backbuffer for any slot outside 0..999: 1000 and up, as native does
-        // (vm-map/opcodes.toml), and -1, which both games' retail scripts pass (a Himegari save load and a Kamidori new
-        // game reach one). What native's test makes of -1 is not read (docs/backlog.md, "Native index tests for 28
-        // ops").
+        // Native's test is unsigned, so any slot outside 0..999 selects the backbuffer: 1000 and up, and -1, which
+        // both games' retail scripts pass (a Himegari save load and a Kamidori new game reach one; docs/engine-re.md,
+        // "The 28 ops' native tests").
         Gfx.SelectRenderTarget(Read(a[0])); return StepResult.Next;
     }
 

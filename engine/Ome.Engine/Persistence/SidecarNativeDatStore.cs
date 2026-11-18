@@ -42,6 +42,7 @@ public sealed class SidecarNativeDatStore : INativeDatStore
     public void SaveReadText(ReadTextDatabaseSnapshot snapshot) => _inner.SaveReadText(snapshot);
     public NativeSaveMetadata? QueryNumberedMetadata(int slot) => _inner.QueryNumberedMetadata(slot);
     public byte[]? LoadNumberedThumbnail(int slot) => _inner.LoadNumberedThumbnail(slot);
+    public bool HasNumberedThumbnail(int slot) => _inner.HasNumberedThumbnail(slot);
     public void SaveNumberedThumbnail(int slot, ReadOnlySpan<byte> data) => _inner.SaveNumberedThumbnail(slot, data);
     public IReadOnlyList<string> SetAsideUnreadable(NativeProfileFile file) => _inner.SetAsideUnreadable(file);
 

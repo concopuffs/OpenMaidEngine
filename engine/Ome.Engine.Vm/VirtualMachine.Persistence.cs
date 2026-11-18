@@ -149,6 +149,7 @@ public sealed partial class VirtualMachine
     private StepResult OpWriteNumberedSaveThumbnail(Instruction ins, int pc)
     {
         var a = ins.Args;
+        // Native creates the .STH before it reads the surface slot; the port halts before it writes the file.
         if (DrawSurfaceSlotRefused(ins, Read(a[2])) is { } refused) return refused;
         Write(a[0], _saves.WriteThumbnail(_graphics, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
@@ -158,8 +159,15 @@ public sealed partial class VirtualMachine
     private StepResult OpLoadNumberedSaveThumbnail(Instruction ins, int pc)
     {
         var a = ins.Args;
+        int slot = unchecked((int)Read(a[1]));
+        // Native opens the .STH first: without one it writes 1 and never reads the surface slot.
+        if (!_saves.HasThumbnail(slot))
+        {
+            Write(a[0], 1);
+            return StepResult.Next;
+        }
         if (DrawSurfaceSlotRefused(ins, Read(a[2])) is { } refused) return refused;
-        Write(a[0], _saves.LoadThumbnail(_graphics, slot: unchecked((int)Read(a[1])), surface: unchecked((int)Read(a[2]))));
+        Write(a[0], _saves.LoadThumbnail(_graphics, slot, surface: unchecked((int)Read(a[2]))));
         return StepResult.Next;
     }
 
