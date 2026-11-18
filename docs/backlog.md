@@ -338,7 +338,9 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12; its
   launcher is built: `superpowers/specs/2026-11-15-launcher-design.md`, `launcher/`):
   - mod-owned sites (patching another mod's inserted code);
-  - declarative data patches;
+  - declarative data patches: designed, and accepted on 2026-11-18
+    (`superpowers/specs/2026-11-17-data-patches-design.md`, which replaces that spec's sentence). Not built yet;
+    the work is on `feature/data-patches`. Done when the gates of its §12 pass;
   - mod merging;
   - precompiled new scripts.
 - **Accepted future work** in the Lua scripting design (`superpowers/specs/2026-11-10-lua-scripting-design.md` §16).
