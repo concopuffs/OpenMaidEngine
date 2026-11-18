@@ -1,13 +1,13 @@
 # Data patches design (draft)
 
 **Date:** 2026-11-17
-**Status:** draft for review. Nothing in it is built. It sits in the repository root for the review. Once accepted
-its home is `docs/superpowers/specs/2026-11-17-data-patches-design.md`, with a row in the documents map of
-`AGENTS.md`. On 2026-11-18 the user decided the first three questions (§14.1), and the boot readings of §6.5 were
-made. Five smaller questions are open (§14.2).
-**Checked against:** `9041dde9` on `develop`, and the boot readings against `3f793be0`; no file this draft cites
-changed between the two. Code references name files and members, not lines. Paths are relative to `age-reimpl/`; a
-short path is under `engine/`.
+**Status:** draft, waiting for the user's own review of the whole. Nothing in it is built. It sits in the
+repository root for the review. Once accepted its home is
+`docs/superpowers/specs/2026-11-17-data-patches-design.md`, with a row in the documents map of `AGENTS.md`. On
+2026-11-18 the user decided every question of §14, so none is open, and the boot readings of §6.5 were made.
+**Checked against:** `9041dde9` on `develop`, with the boot readings made at `3f793be0`. Read again at `b3760c74`
+for what the NativeAOT engine changed (§2, last row). Code references name files and members, not lines. Paths are
+relative to `age-reimpl/`; a short path is under `engine/`.
 **Direction:** `docs/remake-architecture-and-roadmap.md` §3.2 ("post-initialization patches") and §3.8 (base mods);
 the mod loader design's future work (`docs/superpowers/specs/2026-11-03-mod-loader-design.md` §12, "Declarative data
 patches"); and the rule the user set on 2026-11-16: the engine knows nothing about a game, also where two games
@@ -134,7 +134,7 @@ trace names `example.tougher-slimes` for the writes.
 - **Every save path.** A data file is applied again whenever the game builds the table again and the base mod's
   event is raised. This design adds no mechanism of its own for saves. Where a game's load skips the step that
   raises the event, the edit is missing until the game next builds the table. Such a case is a known gap, kept in
-  the backlog, and the design is not bent around it (§14.1). §6.5 has the one found so far.
+  the backlog, and the design is not bent around it (§14). §6.5 has the one found so far.
 - **How a string that a data file sets meets a language package.**
 - **A Lua function that applies the same format** for Lua mods (§6.6 says why).
 
@@ -160,8 +160,9 @@ trace names `example.tougher-slimes` for the writes.
 | A file outside the package layout is a note. `lua/` holds only `*.lua`, and `layout/` only its three generated files | `Ome.Mods/Packages/ModLayout.cs` (`Classify`) | `data/` is a new folder, and generated Lua sits under `lua/` |
 | The manifest is at format version 3, and the reader rejects unknown keys | `ModManifest.CurrentOmpVersion`; `ManifestReader` | the new tables take version 4 |
 | The Compatibility mode refuses a package that targets `extended`, and one that requires a base mod | `Ome.Mods/Launch/ModeCheck.cs` | a data mod is port only by the rules that exist |
-| The loader reads TOML with Tomlyn | `Ome.Mods/Ome.Mods.csproj` | no new dependency |
+| The loader reads TOML with Tomlyn, through `TomlDocument.Parse` | `Ome.Mods/TomlDocument.cs`; `Ome.Mods/Ome.Mods.csproj` | no new dependency |
 | The engine ships every package under `mods/` inside its build. It mounts one when an enabled mod requires it, and then the shipped packages that one requires in turn | `Ome.Mods/Packages/ShippedPackages.cs` (`Required`); `Ome.Mods/Ome.Mods.csproj` | a first-party library ships the same way, and a base mod can require it |
+| The engine ships compiled with NativeAOT, and the trim and AOT analyzers' warnings are errors. TOML is parsed through a source-generated context, and JSON is read and written through source-generated contexts | `Ome.Mods/TomlDocument.cs`; `Ome.Mods/ModsJson.cs`; `docs/platform-portability.md`, "Fewer files in a package" | the document reader walks Tomlyn's `TomlTable` by hand; the documents in the link cache need a type in `ModsJsonContext`; a shape is read without reflection |
 
 ## 3. Decisions
 
@@ -420,8 +421,8 @@ max_level = 12
 part of the format to an event of its own.
 
 - **Boot tables.** `<game>.data.ready` exists, but it comes after the boot's own work with the tables (§2). An edit
-  made there is not seen by that work. The proposal is a second event, `<game>.data.layered`, at the instruction
-  after op `0x143`: every layer has written its data, and the boot has not used it yet.
+  made there is not seen by that work. So each base mod gets a second event, `<game>.data.layered`, at the
+  instruction after op `0x143`: every layer has written its data, and the boot has not used it yet.
   - An edit made there lands where an append's edit lands. The game's own work then runs over it, as it runs over
     its appends' edits.
   - `data.ready` stays, for a mod that wants to run after the boot's own work.
@@ -466,10 +467,10 @@ The applier needs the record tables in Lua: `unit.stats` is `unit_base_stats`. L
 
 Both games keep record tables in parallel arrays, so both appliers do the same walk: check the document against the
 record map, then write each value through an accessor. That code goes into a first-party Lua library with no game,
-here called `ome-records` (Lua §6.4). The engine ships it beside the base mods.
+`ome-records` (Lua §6.4). The engine ships it beside the base mods.
 
 ```lua
--- mods/kamidori-base/lua/tables.lua: a sketch, and the names are suggestions
+-- mods/kamidori-base/lua/tables.lua: a sketch; the library's own function names are the plan's to settle
 local records = require("ome-records")
 
 local applier = records.applier {
@@ -541,7 +542,7 @@ place.
   as a data file's.
   - Whether the game offers such a route is not known. Neither is whether the game reads the enemy table again
     after it has placed the enemies.
-  - **It is an accepted gap** (§14.1), and the backlog has the item ("Mod loader and modding"). It does not hold up
+  - **It is an accepted gap** (§14), and the backlog has the item ("Mod loader and modding"). It does not hold up
     a milestone.
   - If it is closed later, `kamidori.stage.loaded` takes a second point after INIT2's loader loop (`INIT2@0x2b3`).
     That is a change to the base mod's event file and the patch points, not to the engine.
@@ -576,8 +577,8 @@ check to the link.
 
 - **A shape is a description of a kind's documents, shipped by the owner as data:** a file under `shapes/`, which
   `[[accepts]] shape` names. The link checks each document against it and runs no code.
-- **The proposal is a small subset of JSON Schema:** `type`, `properties`, `additionalProperties`, `items`, `enum`,
-  `minimum`, `maximum`, `oneOf`, `description`, and `$ref` inside the file.
+- **A shape is written in a small subset of JSON Schema:** `type`, `properties`, `additionalProperties`, `items`,
+  `enum`, `minimum`, `maximum`, `oneOf`, `description`, and `$ref` inside the file.
   - Editors that check TOML against JSON Schema (Taplo does) then complete and check a data file as it is typed,
     from the same file the link uses.
   - One keyword of our own says that a table's keys are integers in a range. The link then reads `761` and `0x2f9`
@@ -682,11 +683,10 @@ Every gate except the driven ones runs in `Ome.Engine.Tests`, without Godot.
 When it is built: the backlog's "declarative data patches" line goes, and the mod loader spec stays as it is, with
 this spec named as what replaced its sentence.
 
-## 14. Questions
+## 14. Decisions by the user
 
-### 14.1 Decided
-
-The user decided these on 2026-11-18.
+The draft put eight questions, each with a recommendation. The user decided all of them on 2026-11-18, and none is
+open.
 
 1. **Port only is acceptable** ("Port only is fine"). A data mod needs the base mod's Lua, so the Compatibility
    mode and `omp export` refuse it, and the boot script stays the native route. The alternative was the linker
@@ -696,24 +696,21 @@ The user decided these on 2026-11-18.
    only" in §10. Milestone 1 is what makes a data mod free of code and visible to the link.
 3. **The two facts of §6.3 live in the registry's `[[table]]` entries,** as recommended. They are facts about the
    game's data, and the registry already says them in prose. The alternative was a hand-kept file in the base mod.
+4. **The boot moment is the new event after op `0x143`,** as recommended (§6.2). The readings of §6.5 support it on
+   both games: neither boot writes a record table after that point, and each reads the tables there in a way that
+   an edit should reach. The alternative was `data.ready`, with the base mod deriving again after the edits.
+5. **The shared code is a library,** as recommended (§6.4). It keeps the two games' likeness out of the engine and
+   in one place, and it gives Lua §6.4 its first real user. The alternative was a copy in each base mod.
+6. **A shape is a JSON Schema subset, and it waits for milestone 3,** as recommended (§7). The alternative was a
+   small format of our own, in the style of the event declarations.
+7. **The first format has no relative edits,** as recommended (§11).
+8. **The names stand:** `[[data]]`, `[[accepts]]`, "kind", `<game>.tables`, `<game>.data.layered` and
+   `ome-records`.
 
-Also decided that day, outside the numbered list:
+Questions 4 to 8 were answered together: "I'm fine with your recommendations for all of the questions."
+
+Also decided that day, outside the list:
 
 - **A robust system first, and gaps around saves are accepted.** The user: "For now I'd rather focus on a robust
   system and accept certain gaps, particularly around saving." A save path on which an edit is not made again goes
   to the backlog (§1.5). It does not change the design or hold up a milestone.
-
-### 14.2 Open
-
-Each has a recommendation. The numbers continue from §14.1.
-
-4. **The boot moment.** Recommended: the new event after op `0x143`. The readings of §6.5 support it on both
-   games: neither boot writes a record table after that point, and each reads the tables there in a way that an
-   edit should reach. The alternative is `data.ready`, with the base mod deriving again after the edits.
-5. **A library, or the walker copied into each base mod?** Recommended: the library. It keeps the two games'
-   likeness out of the engine and in one place, and it gives Lua §6.4 its first real user.
-6. **The shape's form.** Recommended: the JSON Schema subset, for the editors. The alternative is a small format of
-   our own, in the style of the event declarations. And should it wait for milestone 3? Recommended: yes.
-7. **Relative edits in the first format?** Recommended: no (§11).
-8. **Names.** `[[data]]`, `[[accepts]]`, "kind", `<game>.tables`, `<game>.data.layered` and `ome-records` are all
-   suggestions.
