@@ -26,6 +26,15 @@ it; git history keeps the record.
   than one row above; Latin glyphs lack ClearType's exact rasterization; the strip's minimize and restore buttons use
   Windows 10's default hover colours. Out of scope since 2026-11-06: the 設定 radio groups, the right-click ﾒｯｾｰｼﾞ
   popup and 設定 page 101, which neither shipped game can reach (`engine-re.md`, "Native menu bar", "Out of scope").
+- **The window's close button does nothing while 設定 is open (the user's report, 2026-11-18).** With the options
+  panel open, the game window's close button neither opens the 終了 dialog nor quits, and the player sees nothing
+  happen. The fullscreen strip's close button goes the same way. `RequestUnforcedClose` (`godot/Main.Exit.cs`) returns
+  at once while the panel, the 終了 dialog or the script error box is open. That follows native, where a modal dialog
+  disables AGE's window, so its close button cannot ask. But native's 設定 is a window of its own, and Windows answers
+  a click on its disabled owner window by beeping and flashing the dialog. That is Windows' rule; it has not been
+  driven on native AGE. The port's panel is drawn inside the game window, so there the click just looks lost. Done
+  when native's answer to the close button during 設定 is driven, and the port shows the player an answer: the
+  flash and the beep, or another the user chooses, such as cancelling the panel and asking.
 - **Input-latch cases the port does not model.** The port's latch (`VirtualMachine.InputLatch`) covers effects,
   sleeps, the ops between waits, the coroutine yield, and every consumer and flush point that SC0000 reaches
   (`engine-re.md`, "Effect skipping and the input latch"). Still open:
