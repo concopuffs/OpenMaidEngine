@@ -175,6 +175,11 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIsNotNone(image)
         self.assertIn(f"image: {image.group(1)}\n", FFMPEG_WORKFLOW.read_text(encoding="utf-8"))
         self.assertIn("manylinux_2_28_x86_64", image.group(1))
+        # The container's root user does not own the runner's checkout: without its trust, git cannot name the commit
+        # the publish is stamped with.
+        trust = self.linux_engine.index('git config --global --add safe.directory "$GITHUB_WORKSPACE"')
+        self.assertLess(self.linux_engine.index("uses: actions/checkout@"), trust)
+        self.assertLess(trust, self.linux_engine.index("tools/publish_engine.py --runtime linux-x64"))
         self.assertIn('OME_PUBLISH_ASSEMBLY="OME.so"', self.linux_build)
         self.assertIn('OME_PUBLISH_ASSEMBLY="OME.dll"', self.windows_build)
         # Checked out as stored, so the Windows library embeds the bytes the Linux one does.

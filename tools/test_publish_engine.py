@@ -25,13 +25,17 @@ class FakeRun:
     """Stands in for subprocess.run: answers git with `commit`, and for `dotnet publish` records the command and writes
     the publish's files and the kept dependency list."""
 
-    def __init__(self, *extra: str, commit: str = COMMIT, returncode: int = 0, keep_list: bool = True):
+    def __init__(self, *extra: str, commit: str = COMMIT, returncode: int = 0, keep_list: bool = True,
+                 git_error: str = ""):
         self.extra, self.commit, self.returncode, self.keep_list = extra, commit, returncode, keep_list
+        self.git_error = git_error
         self.publishes: list[list[str]] = []
         self.environments: list[dict[str, str]] = []
 
     def __call__(self, command, cwd, check, env=None, capture_output=False, text=False):
         if command[0] == "git":
+            if self.git_error:
+                return subprocess.CompletedProcess(command, 128, stdout="", stderr=self.git_error + "\n")
             answer = self.commit if command[1] == "rev-parse" else ""
             return subprocess.CompletedProcess(command, 0, stdout=answer + "\n", stderr="")
         self.publishes.append(command)
@@ -46,6 +50,12 @@ class FakeRun:
 
 
 class PublishEngineTests(unittest.TestCase):
+    def test_a_git_failure_carries_gits_message(self) -> None:
+        # A container's root user does not own a checkout the runner made, and git refuses it (release-build.yml).
+        refusal = "fatal: detected dubious ownership in repository at '/__w/OpenMaidEngine/OpenMaidEngine'"
+        with self.assertRaisesRegex(RuntimeError, "git rev-parse HEAD failed with exit code 128: fatal: detected dubious"):
+            publish_engine.source_state(FakeRun(git_error=refusal))
+
     def test_the_publish_is_the_projects_nativeaot_form_with_one_node(self) -> None:
         root = Path("/opt/build/engine-publish")
         for runtime, platform, library in (("win-x64", "windows", "OME.dll"), ("linux-x64", "linuxbsd", "OME.so")):

@@ -120,7 +120,11 @@ def verify_publish(directory: Path, runtime: str) -> None:
 def source_state(run=subprocess.run) -> dict[str, object]:
     """The checkout the library is built from: its commit and whether it has uncommitted changes."""
     def git(*arguments: str) -> str:
-        return run(("git", *arguments), cwd=REPO, check=True, capture_output=True, text=True).stdout.strip()
+        result = run(("git", *arguments), cwd=REPO, check=False, capture_output=True, text=True)
+        if result.returncode != 0:
+            raise RuntimeError(f"git {' '.join(arguments)} failed with exit code {result.returncode}: "
+                               f"{(result.stderr or '').strip()}")
+        return result.stdout.strip()
 
     return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain", "--untracked-files=no"))}
 
