@@ -31,7 +31,7 @@ omp check: does not link: 2 mods; 0 errors, 1 conflicts, 0 interactions, 0 overr
 | `conflict` | Two mods cannot load together: overlapping edits, two replacements of one script, a declared `[[conflicts]]`, a missing dependency. | yes |
 | `interaction` | Several mods insert at the same site, several Lua handlers are due at one hook, or two Lua mods list one global in `[lua] writes`. They all apply, in the order shown. | no |
 | `override` | Several mods supply the same asset or script. The winner is named. | no |
-| `note` | Information. Examples: a fragment compiled at load time, a stray file in a package, a table entry that now points at replacement code, or a record 0 that would hang native AGE at boot (`warning: record 0 runs at boot …`). | no |
+| `note` | Information. Examples: a compiler warning (`file:line:col: warning: …`, listed in [oms-language.md](oms-language.md), "Errors"), a fragment compiled at load time, a stray file in a package, a table entry that now points at replacement code, or a record 0 that would hang native AGE at boot (`warning: record 0 runs at boot …`). | no |
 
 In the port, a report with errors or conflicts stops startup with exit code 2. `--skip-failed-mods` drops the mods
 involved and starts with the rest, naming what it dropped.

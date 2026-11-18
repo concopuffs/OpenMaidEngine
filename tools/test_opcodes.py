@@ -253,6 +253,31 @@ def test_operand_access_lint():
         7, 'access = ["read"]\n[[opcode.semantics.args]]\ni = 8\naccess = ["read"]\n'))))
     check(any("operand 8: index outside argc 7" in m for m in e), "operand indices stay within argc")
 
+def test_unchecked_index_lint():
+    import opcodes_build as B
+    def lint(fact: str) -> list[str]:
+        return M.lint(M.load(write_tmp(_with_access(2, f'access = ["read"]\nunchecked_index = {fact}\n'))))[0]
+    check(lint('{ table = "layout", count = 10 }') == [], "an untested table index is clean")
+    check(lint('{ table = "queue", count = 10, admits = 11 }') == [], "a test that admits past the table is clean")
+    check(lint('{ table = "channel", count = 10, admits = 10, signed = true }') == [], "a signed test is clean")
+    check(lint('{ table = "record", count = 2000, first = -1 }') == [], "a table may start below 0")
+    check(any("needs count" in m for m in lint('{ table = "layout" }')), "count is required")
+    check(any("unknown key 'size'" in m for m in lint('{ table = "layout", count = 10, size = 4 }')),
+          "unknown keys are linted")
+    check(any("count must be a int" in m for m in lint('{ table = "layout", count = true }')),
+          "a boolean is not a count")
+    check(any("admits must be count or more" in m for m in lint('{ table = "queue", count = 10, admits = 9 }')),
+          "admits is at least count")
+    check(any("give admits" in m for m in lint('{ table = "queue", count = 10, signed = true }')),
+          "signed needs admits")
+    check(any("first must be 0 or less" in m for m in lint('{ table = "layout", count = 10, first = 1 }')),
+          "first is 0 or less")
+    e = M.lint(M.load(write_tmp(_with_access(5, 'access = ["read"]\nunchecked_index = { table = "t", count = 1 }\n'))))[0]
+    check(any("not a table index" in m for m in e), "a code target is not a table index")
+    view = B._operand_access_md(M.load(write_tmp(_with_access(
+        2, 'access = ["read"]\nunchecked_index = { table = "queue", count = 10, admits = 11 }\n'))).opcodes[0x90])
+    check("`2` read (queue 0..9; native lets through 10)" in view, f"the reference names the table: {view}")
+
 def test_bootstrap():
     import opcodes_build as B
     from pathlib import Path
@@ -358,6 +383,7 @@ def main():
     test_load()
     test_lint()
     test_operand_access_lint()
+    test_unchecked_index_lint()
     test_bootstrap()
     test_emit_semantics()
     test_emit_runtime()

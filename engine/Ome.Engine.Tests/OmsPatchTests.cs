@@ -105,6 +105,29 @@ public class OmsPatchTests
 
     private static string Header(byte[] bytes) => $"patch \"{Name}\" fingerprint \"{OmsPatchPlan.FingerprintOf(bytes)}\"\n";
 
+    /// <summary>Replacing a base operand with a constant past the table it indexes, where native lets it through
+    /// (registry <c>unchecked_index</c>), warns as the same constant in new code does.</summary>
+    [Fact]
+    public void ReplacingAnOperandWithAnIndexNativeLetsPastItsTableWarns()
+    {
+        var contracts = OpcodeContracts.FromParts(new Dictionary<int, int[]> { [0x8c] = [1], [0x8f] = [1], [0xa0] = [2, 3] },
+            new Dictionary<(int, int), string[]>(), new Dictionary<int, string> { [0x71] = "reset-adv-text-layout" },
+            new Dictionary<int, string> { [0x8c] = "transfer", [0x8f] = "call", [0xa0] = "transfer" },
+            uncheckedIndices: new Dictionary<(int, int), NativeIndex> { [(0x71, 1)] = new("layout", 10) });
+        Base base_ = Compile(DialogueBase);
+        var warnings = new List<OmsWarning>();
+        OmsPatchCompiler.Compile(Parser.ParseScript(Header(base_.Bytes) + $"""
+            replace site {base_.Label(0)} operand 1 with 10
+            replace site {base_.Label(2)} operand 1 with 9
+            """, "p.oms"), base_.Bytes, Table, contracts, new IntrinsicCatalog(Table, contracts), Modules,
+            warnings: warnings);
+        OmsWarning warning = Assert.Single(warnings);
+        Assert.Equal(2, warning.Span.Line);
+        Assert.Equal("operand 1 of reset_adv_text_layout: 10 is outside the layout table (0..9); native AGE lets it "
+                     + "through and reads or writes memory outside the table, while the port halts the run",
+                     warning.Message);
+    }
+
     private static OmsPatchPlan Plan(Base base_, string body, bool idiomatic = false)
         => OmsPatchCompiler.Compile(Parser.ParseScript(Header(base_.Bytes) + body, "p.oms"), base_.Bytes, Table, Contracts,
             Intrinsics, Modules, idiomatic ? Idioms : null);

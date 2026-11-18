@@ -150,15 +150,6 @@ it; git history keeps the record.
   Done when the sweep has compared each bound handler with its native handler and listed each one that does less.
   Each listed gap is then fixed or gets its own item here, and the registry's `noop_headless` flags and stub summaries
   say what the port does.
-- **Warn at compile time on an out-of-range table slot.** The 28 ops' native tests (`engine-re.md`, "The 28 ops'
-  native tests") show native does **not** bounds-check several table indices, so a compiled script that passes a
-  layout slot past 9, or a movie/surface slot past 999, makes the **native** engine read or write memory through an
-  unchecked table index — controlled-offset, and for the layout write ops (`0x73`, `0x2bc`: ten dwords of operand data
-  through `*(text_manager+0x414+slot*4)+0x3c`) controlled-data, as an OMS-compiled record proved on native AGE
-  (`engine-re.md`, "The layout primitive, proven on native AGE"). It is a local hazard (a player must run an untrusted mod on the original engine) and the OME port is
-  immune (it halts), but a published OMS toolkit lowers the bar to emit such a script. Done when the OMS compiler
-  refuses or warns on an immediate layout/surface/movie slot outside its table, with the native memory-safety reason
-  in the message, and `docs/modding/` notes the native hazard and that the port guards against it.
 - **A voice replayed from History may loop natively.** Op `0x1bd` replays a History voice with playback variant 1,
   which `voice_play_indexed_asset@0x488330` writes into channel 12's sound-buffer state. That is the field
   `sound_buffer_start@0x484270` writes an op `0xb5`/`0xba` start mode to, and `sound_stream_fill_quarter@0x483b70`

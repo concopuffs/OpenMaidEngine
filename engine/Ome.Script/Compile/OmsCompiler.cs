@@ -185,6 +185,32 @@ public static class OmsCompiler
                 return;
             Warn(span, $"opcode 0x{opcode:x} is installed in {intrinsics.AbiId} but no game corpus executes it");
         }
+
+        /// <summary>Warns on a constant operand that indexes one of native AGE's tables past its end where native does
+        /// not refuse it (registry <c>unchecked_index</c>): native reads or writes memory outside the table, and the
+        /// port halts the run there (docs/engine-re.md, "Indices outside their tables").</summary>
+        private void CheckIndex(int opcode, int operand, long? value, SourceSpan span)
+        {
+            if (value is not long index || intrinsics?.Contracts.UncheckedIndex(opcode, operand) is not { } table
+                || !table.LetsPast(index))
+                return;
+            string name = intrinsics.TryGet(opcode, out Intrinsic intrinsic) ? intrinsic.Name : IntrinsicCatalog.RawName(opcode);
+            Warn(span, $"operand {operand} of {name}: {index} is outside the {table.Table} table "
+                       + $"({table.First}..{table.Count - 1}); native AGE lets it through and reads or writes memory "
+                       + "outside the table, while the port halts the run");
+        }
+
+        /// <summary>The integer an operand expression is at compile time: a literal, a constant or a negation of one,
+        /// as the engine's 32-bit operand holds it.</summary>
+        private long? IntegerOf(Expr expression) => expression switch
+        {
+            OperandExpr { Operand: RawInteger integer } => unchecked((int)integer.Value),
+            OperandExpr { Operand: RawLabelRef name } when _parameters?.ContainsKey(name.Name) != true
+                                                          && _constants.TryGetValue(name.Name, out uint value)
+                => unchecked((int)value),
+            UnaryExpr { Op: "-" } negation when IntegerOf(negation.Operand) is long value => unchecked((int)(-value)),
+            _ => null,
+        };
         private readonly Dictionary<string, Declared> _names = new(StringComparer.Ordinal);
         private readonly Dictionary<string, uint> _constants = new(StringComparer.Ordinal);
         private readonly List<GameModule> _used = new();
@@ -689,7 +715,11 @@ public static class OmsCompiler
                 case RawOpStatement raw:
                     CheckArgc(raw.Opcode, raw.Operands.Count, raw.Span);
                     CheckObserved(raw.Opcode, raw.Span);
-                    Add(raw.Opcode, raw.Operands.Select(o => Operand(o)).ToArray());
+                    IrOperand[] rawOperands = raw.Operands.Select(o => Operand(o)).ToArray();
+                    for (int k = 0; k < rawOperands.Length; k++)
+                        if (rawOperands[k] is { Kind: IrOperandKind.Literal, Type: 0 } immediate)
+                            CheckIndex(raw.Opcode, k + 1, unchecked((int)immediate.Value), raw.Operands[k].Span);
+                    Add(raw.Opcode, rawOperands);
                     break;
                 case AssignStatement assign:
                     EmitAssign(assign);
@@ -1336,6 +1366,7 @@ public static class OmsCompiler
                         ? $"operand {k + 1} of {call.Name} is not written; remove 'out'"
                         : $"operand {k + 1} of {call.Name} is written; mark it 'out'");
                 CheckCodeReference(intrinsic, k + 1, argument.Value, call.Name);
+                if (!argument.Out) CheckIndex(intrinsic.Opcode, k + 1, IntegerOf(argument.Value), argument.Value.Span);
                 operands[k] = argument.Out ? LValue(argument.Value) : ToL(argument.Value);
             }
             CheckObserved(intrinsic.Opcode, call.Span);
@@ -1500,11 +1531,15 @@ public static class OmsCompiler
                         break;
                     }
                     case OperandPatchStatement patch:
-                        ResolveSite(patch.Site);
+                    {
+                        int patched = ResolveSite(patch.Site);
+                        if (patched < patchBase!.Opcodes.Count)
+                            CheckIndex(patchBase.Opcodes[patched], patch.Operand, IntegerOf(patch.Value), patch.Value.Span);
                         Boundary();
                         _operandPatches.Add((patch, _code.Count));
                         _code.Add(new IrInstruction(OperandValueOpcode, [Atom(patch.Value, "a replaced operand")]));
                         break;
+                    }
                     case SubStatement sub:
                         subs.Add(sub);
                         break;

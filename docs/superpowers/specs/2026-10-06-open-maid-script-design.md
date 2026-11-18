@@ -557,10 +557,14 @@ Each argument is checked against the access kind of its operand position under t
 - division by a constant zero;
 - recursion with bound parameters;
 - an opcode never observed in the game's corpus;
+- a constant table index that native AGE lets past its table (the operand's registry `unchecked_index`, added
+  2026-11-18): native reads or writes memory outside the table, which for a layout slot is a script-chosen 40-byte
+  write (`docs/engine-re.md`, "The layout primitive, proven on native AGE"), and the port halts the run instead. It
+  covers a literal, a constant or a negation of one, in a call, an `@op` or an operand patch;
 - an `atomic` body containing a wait.
 
-The compiler reports the middle three so far (`OmsWarning`, printed by `Age.Cli oms-compile`). The type-dependent
-string↔number warning and the `atomic`-wait warning wait for the checker.
+The compiler reports the middle four so far (`OmsWarning`, printed by `Age.Cli oms-compile` and carried into a mod
+link report as notes). The type-dependent string↔number warning and the `atomic`-wait warning wait for the checker.
 ## 9. Linking and identity
 
 ### 9.1 Scripts

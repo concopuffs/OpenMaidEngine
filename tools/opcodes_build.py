@@ -365,8 +365,22 @@ def _operand_access_md(oc: M.Opcode) -> str:
             continue
         target = f" ({oc.code_target_kind} target)" if arg.get("i") in oc.code_target_args else ""
         value = f" ({arg['value']})" if arg.get("value") else ""
-        parts.append(f"`{arg.get('i')}` {kinds}{target}{value}")
+        index = _unchecked_index_md(arg["unchecked_index"]) if "unchecked_index" in arg else ""
+        parts.append(f"`{arg.get('i')}` {kinds}{target}{value}{index}")
     return " · ".join(parts)
+
+def _unchecked_index_md(fact: dict) -> str:
+    """` (layout 0..9, untested)` · ` (queue 0..9; native lets through 10)`."""
+    inside = f"{fact.get('first', 0)}..{fact['count'] - 1}"
+    if "admits" not in fact:
+        return f" ({fact['table']} {inside}, untested)"
+    through = []
+    if fact["admits"] > fact["count"]:
+        last = fact["admits"] - 1
+        through.append(str(last) if last == fact["count"] else f"{fact['count']}..{last}")
+    if fact.get("signed"):
+        through.append("negatives")
+    return f" ({fact['table']} {inside}; native lets through {' and '.join(through)})"
 
 def emit_reference_md(model: M.Model) -> str:
     rev = M.dependents(model)

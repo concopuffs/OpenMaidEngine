@@ -6,6 +6,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
+using Ome.Script.Abi;
 using Xunit;
 
 /// <summary>
@@ -184,6 +185,32 @@ public sealed class IndexBoundsTests
                 Assert.Equal(1, skipped.Globals.GetValueOrDefault(Marker));
                 break;
         }
+    }
+
+    /// <summary>The registry's <c>unchecked_index</c> facts, which the OMS compiler warns from, agree with the handlers:
+    /// each value a handler halts on is one its fact says native lets past the table, each value it traces is one
+    /// native refuses, and each fact's operand has a case here.</summary>
+    [Fact]
+    public void TheRegistryNamesEachIndexNativeLetsPastItsTable()
+    {
+        OpcodeContracts contracts = OpcodeContracts.Load(Paths.OpcodesJson);
+        // Op 0x64's body offset has no fixed table, and whether a negative history record halts depends on the build.
+        var unrecorded = new HashSet<(int, int)> { (0x64, 2), (0x1d3, 4), (0x1d4, 4) };
+        var cased = new HashSet<(int, int)>();
+        foreach (object[] row in Cases())
+        {
+            var (op, argument, value, past) = ((int)row[0], (int)row[1], (long)row[2], (Past)row[3]);
+            cased.Add((op, argument));
+            NativeIndex? table = contracts.UncheckedIndex(op, argument);
+            if (past == Past.Halts && !unrecorded.Contains((op, argument)))
+                Assert.True(table?.LetsPast(value) == true,
+                            $"op 0x{op:x} operand {argument} halts on {value}, which its unchecked_index does not let past");
+            if (past == Past.Traces && table != null)
+                Assert.False(table.LetsPast(value),
+                             $"op 0x{op:x} operand {argument} traces {value}, which its unchecked_index lets past");
+        }
+        foreach ((int op, int argument) in contracts.UncheckedIndices.Keys)
+            Assert.True(cased.Contains((op, argument)), $"op 0x{op:x} operand {argument} has an unchecked_index but no case");
     }
 
     /// <summary>One instruction with <paramref name="value"/> at <paramref name="argument"/> and a cell elsewhere,

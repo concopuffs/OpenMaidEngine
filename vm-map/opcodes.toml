@@ -4,6 +4,8 @@
 # Skeletons are appended by --bootstrap; enrich each [opcode.semantics] as we investigate.
 # Each implemented opcode's `waits` and `leaves` (Lua scripting spec §7.1) are written by
 # tools/opcode_flow.py --apply from the port's handlers, as operand access is by tools/operand_access.py --apply.
+# An operand that indexes a native table native does not keep it inside carries `unchecked_index` (its keys are in
+# tools/opcodes_model.py, UNCHECKED_INDEX_KEYS); IndexBoundsTests holds each one to the port's handlers.
 # Native addresses: Himegari's are the /v2 image's (SYS4422). Kamidori's (SYS4433) are the clean install's
 # 4.33G (Ghidra /kamidori/4.33G) since 2026-11-09; evidence read on the translation's 4.33F image was
 # converted (docs/engine-re.md, "Kamidori engine builds").
@@ -320,6 +322,7 @@ i = 2
 role = "frame_slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "script frame", count = 40 }
 
 [[opcode]]
 op = 0x8
@@ -345,6 +348,7 @@ i = 1
 role = "frame_slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "script frame", count = 40 }
 
 [[opcode]]
 op = 0x9
@@ -389,6 +393,7 @@ i = 1
 role = "captured full-frame surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -420,6 +425,7 @@ i = 1
 role = "captured full-frame surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -451,12 +457,14 @@ i = 1
 role = "captured source surface"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
 role = "captured target surface"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -1216,6 +1224,7 @@ i = 1
 role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -1246,6 +1255,7 @@ i = 1
 role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode]]
 op = 0x70
@@ -1270,6 +1280,7 @@ i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -1319,6 +1330,7 @@ i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode]]
 op = 0x72
@@ -1344,6 +1356,7 @@ i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode]]
 op = 0x73
@@ -1368,6 +1381,7 @@ i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -1386,6 +1400,7 @@ i = 4
 role = "source surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 5
@@ -1543,6 +1558,7 @@ i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -1579,6 +1595,7 @@ i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -1690,6 +1707,7 @@ i = 1
 role = "default retained graphics-object slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode]]
 op = 0x85
@@ -2196,6 +2214,7 @@ i = 2
 role = "channel"
 observed_types = ["imm", "g-int", "l-int"]
 access = ["read"]
+unchecked_index = { table = "sound effect channel", count = 10, admits = 13, signed = true }
 
 [[opcode]]
 op = 0xb5
@@ -2244,6 +2263,7 @@ i = 1
 role = "channel"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "sound effect channel", count = 10 }
 
 [[opcode]]
 op = 0xb7
@@ -2996,6 +3016,7 @@ i = 2
 role = "physical mouse button index"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "physical button", count = 32 }
 
 [[opcode]]
 op = 0x10c
@@ -3026,6 +3047,7 @@ i = 2
 role = "DirectInput DIK scan code"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "scan code", count = 256 }
 
 [[opcode]]
 op = 0x10d
@@ -3282,6 +3304,7 @@ i = 1
 role = "queue_id"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "queue", count = 10, admits = 11 }
 
 [[opcode]]
 op = 0x133
@@ -3307,6 +3330,7 @@ i = 1
 role = "queue_id"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "queue", count = 10, admits = 11 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -3338,6 +3362,7 @@ i = 1
 role = "queue_id"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "queue", count = 10, admits = 11 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -3435,6 +3460,7 @@ i = 1
 role = "stack_id"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "stack", count = 10, admits = 11 }
 
 [[opcode]]
 op = 0x13a
@@ -3463,6 +3489,7 @@ i = 1
 role = "style_index"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "glyph style", count = 10, admits = 11 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -3916,6 +3943,7 @@ i = 1
 role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -3976,6 +4004,7 @@ i = 1
 role = "layout slot"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -4615,6 +4644,7 @@ i = 3
 role = "source surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode]]
 op = 0x1af
@@ -4652,6 +4682,7 @@ i = 3
 role = "destination surface slot"
 observed_types = ["l-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode]]
 op = 0x1b0
@@ -5024,6 +5055,7 @@ i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -5277,6 +5309,7 @@ i = 1
 role = "layout slot"
 observed_types = ["l-int"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -5551,6 +5584,7 @@ i = 1
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -5599,6 +5633,7 @@ i = 2
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -5630,6 +5665,7 @@ i = 1
 role = "surface slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode]]
 op = 0x1fb
@@ -5660,6 +5696,7 @@ i = 2
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -5942,6 +5979,7 @@ i = 1
 role = "destination surface slot"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -5985,6 +6023,7 @@ i = 1
 role = "destination surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -6040,12 +6079,14 @@ i = 1
 role = "source_surface"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
 role = "destination_surface"
 observed_types = ["imm", "g-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -6143,6 +6184,7 @@ i = 1
 role = "layout_slot (0 = current)"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode]]
 op = 0x20b
@@ -6167,6 +6209,7 @@ i = 1
 role = ""
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -6297,6 +6340,7 @@ i = 2
 role = "surface_slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -6327,6 +6371,7 @@ i = 1
 role = "ADV layout slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -6357,6 +6402,7 @@ i = 1
 role = "ADV layout slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -6430,6 +6476,7 @@ i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int"]
 access = ["read"]
+unchecked_index = { table = "surface record", count = 2000, first = -1 }
 
 [[opcode]]
 op = 0x217
@@ -6900,6 +6947,7 @@ i = 2
 role = "target surface slot"
 observed_types = ["imm", "l-ptr"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -7456,6 +7504,7 @@ i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -7576,6 +7625,7 @@ i = 2
 role = "surface_slot"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode]]
 op = 0x23b
@@ -7610,6 +7660,7 @@ i = 2
 role = "style_index"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "glyph style", count = 10, admits = 11 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -7708,6 +7759,7 @@ i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode]]
 op = 0x241
@@ -7739,6 +7791,7 @@ i = 2
 role = "surface slot"
 observed_types = ["l-ptr"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -7861,6 +7914,7 @@ i = 2
 role = "surface slot"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -7898,6 +7952,7 @@ i = 2
 role = "scratch movie surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -8008,6 +8063,7 @@ i = 1
 role = "surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -8080,6 +8136,7 @@ i = 1
 role = "sound channel (0..9)"
 observed_types = ["imm", "g-int", "l-int"]
 access = ["read"]
+unchecked_index = { table = "sound effect channel", count = 10, admits = 10, signed = true }
 
 [[opcode.semantics.args]]
 i = 2
@@ -8596,6 +8653,7 @@ i = 1
 role = "captured full-frame surface slot"
 observed_types = []
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -8645,6 +8703,7 @@ i = 1
 role = "target captured surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -8690,6 +8749,7 @@ i = 1
 role = "target captured surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -8863,12 +8923,14 @@ i = 1
 role = "source surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
 role = "destination surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -9249,6 +9311,7 @@ i = 1
 role = "target ADV layout/surface slot"
 observed_types = ["g-int"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -10112,6 +10175,7 @@ evidence = "Ghidra /v2: op_0x138_push_int_stack@0x421a40 admits stack ids <=10 a
 i = 1
 role = "stack_id"
 observed_types = []
+unchecked_index = { table = "stack", count = 10, admits = 11 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -10141,6 +10205,7 @@ evidence = "Ghidra /v2: op_0x139_try_pop_int_stack@0x4297a0 reads top at stack+0
 i = 1
 role = "stack_id"
 observed_types = []
+unchecked_index = { table = "stack", count = 10, admits = 11 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -10466,6 +10531,7 @@ i = 2
 role = "native sound channel (0..12)"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "sound channel", count = 13, admits = 13, signed = true }
 
 [[opcode]]
 op = 0x1c0
@@ -11139,6 +11205,7 @@ i = 1
 role = "movie surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -11213,6 +11280,7 @@ i = 2
 role = "target surface slot"
 observed_types = ["l-ptr"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
@@ -11728,6 +11796,7 @@ i = 1
 role = "ADV layout slot (zero selects current)"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "layout", count = 10 }
 
 [[opcode.semantics.args]]
 i = 2
@@ -11746,6 +11815,7 @@ i = 4
 role = "source surface slot"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 5
@@ -12153,6 +12223,7 @@ i = 1
 role = "style_index"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "glyph style", count = 10, admits = 11 }
 
 [[opcode.semantics.args]]
 i = 2

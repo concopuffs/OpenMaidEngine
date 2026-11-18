@@ -3,6 +3,24 @@ using System.Text.Json;
 namespace Ome.Script.Abi;
 
 /// <summary>
+/// A table of native AGE's that an operand indexes, where native does not keep the operand inside the table (registry
+/// <c>unchecked_index</c>; docs/engine-re.md, "Indices outside their tables"). <see cref="First"/> to
+/// <see cref="Count"/> − 1 are inside. Without <see cref="Admits"/> native does not test the value; with it, native's
+/// test lets through each value below it, compared unsigned unless <see cref="Signed"/> (so only a signed test lets a
+/// negative value through).
+/// </summary>
+public sealed record NativeIndex(string Table, int Count, int First = 0, int? Admits = null, bool Signed = false)
+{
+    /// <summary>Whether native lets <paramref name="value"/> reach memory outside the table, where the port halts.</summary>
+    public bool LetsPast(long value)
+    {
+        if (value >= First && value < Count) return false;
+        if (Admits is not int admits) return true;
+        return value < 0 ? Signed : value < admits;
+    }
+}
+
+/// <summary>
 /// Operand contracts from the generated opcode registry view (<c>build/opcodes.json</c>, generated from
 /// <c>vm-map/opcodes.toml</c>): which operand positions are code targets and each operand's native access
 /// kinds per engine ABI. Instruction framing (argument counts) stays with the engine's ABI-resolved
@@ -16,6 +34,7 @@ public sealed class OpcodeContracts
     private readonly Dictionary<int, string> _codeTargetKinds;
     private readonly Dictionary<int, HashSet<string>> _observedRevisions = new();
     private readonly HashSet<(int Opcode, int Operand)> _codeValues = new();
+    private readonly Dictionary<(int Opcode, int Operand), NativeIndex> _uncheckedIndices = new();
 
     private OpcodeContracts(
         Dictionary<int, HashSet<int>> codeTargets,
@@ -60,6 +79,7 @@ public sealed class OpcodeContracts
         var kinds = new Dictionary<int, string>();
         var observed = new Dictionary<int, HashSet<string>>();
         var codeValues = new HashSet<(int, int)>();
+        var uncheckedIndices = new Dictionary<(int, int), NativeIndex>();
         foreach (JsonElement entry in doc.RootElement.GetProperty("opcodes").EnumerateArray())
         {
             int op = Convert.ToInt32(entry.GetProperty("op").GetString(), 16);
@@ -93,11 +113,19 @@ public sealed class OpcodeContracts
                     access[(op, index.GetInt32())] = new OperandAccess(common, byAbi);
                 if (arg.TryGetProperty("value", out JsonElement value) && value.GetString() == "code-address")
                     codeValues.Add((op, index.GetInt32()));
+                if (arg.TryGetProperty("unchecked_index", out JsonElement table))
+                    uncheckedIndices[(op, index.GetInt32())] = new NativeIndex(
+                        table.GetProperty("table").GetString() ?? "",
+                        table.GetProperty("count").GetInt32(),
+                        table.TryGetProperty("first", out JsonElement first) ? first.GetInt32() : 0,
+                        table.TryGetProperty("admits", out JsonElement admits) ? admits.GetInt32() : null,
+                        table.TryGetProperty("signed", out JsonElement signed) && signed.GetBoolean());
             }
         }
         var contracts = new OpcodeContracts(codeTargets, access, names, kinds);
         foreach (var (op, revisions) in observed) contracts._observedRevisions[op] = revisions;
         contracts._codeValues.UnionWith(codeValues);
+        foreach (var (key, table) in uncheckedIndices) contracts._uncheckedIndices[key] = table;
         return contracts;
     }
 
@@ -107,18 +135,22 @@ public sealed class OpcodeContracts
         IReadOnlyDictionary<(int Opcode, int Operand), string[]> access,
         IReadOnlyDictionary<int, string> semanticNames,
         IReadOnlyDictionary<int, string>? codeTargetKinds = null,
-        IEnumerable<(int Opcode, int Operand)>? codeValues = null)
+        IEnumerable<(int Opcode, int Operand)>? codeValues = null,
+        IReadOnlyDictionary<(int Opcode, int Operand), NativeIndex>? uncheckedIndices = null)
     {
         var contracts = new OpcodeContracts(codeTargets.ToDictionary(pair => pair.Key, pair => pair.Value.ToHashSet()),
             access.ToDictionary(pair => (pair.Key.Opcode, pair.Key.Operand), pair => new OperandAccess(pair.Value, null)),
             semanticNames.ToDictionary(pair => pair.Key, pair => pair.Value),
             codeTargetKinds?.ToDictionary(pair => pair.Key, pair => pair.Value));
         contracts._codeValues.UnionWith(codeValues ?? []);
+        foreach (var (key, table) in uncheckedIndices ?? new Dictionary<(int, int), NativeIndex>())
+            contracts._uncheckedIndices[key] = table;
         return contracts;
     }
 
     /// <summary>A deterministic digest of every contract held (code targets and their kinds, operand access per ABI,
-    /// semantic names, observed revisions, code values), for caches whose output depends on them.</summary>
+    /// semantic names, observed revisions, code values, unchecked indices), for caches whose output depends on them.
+    /// </summary>
     public string Fingerprint()
     {
         var text = new System.Text.StringBuilder();
@@ -141,6 +173,10 @@ public sealed class OpcodeContracts
             text.Append("r ").Append(op).Append(':').AppendJoin(',', revisions.Order(StringComparer.Ordinal)).Append('\n');
         foreach (var (op, operand) in _codeValues.Order())
             text.Append("v ").Append(op).Append('.').Append(operand).Append('\n');
+        foreach (var (key, table) in _uncheckedIndices.OrderBy(pair => pair.Key.Opcode).ThenBy(pair => pair.Key.Operand))
+            text.Append("u ").Append(key.Opcode).Append('.').Append(key.Operand).Append(':').Append(table.Table)
+                .Append(',').Append(table.First).Append(',').Append(table.Count).Append(',').Append(table.Admits)
+                .Append(',').Append(table.Signed).Append('\n');
         return "sha256:" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(text.ToString()))).ToLowerInvariant();
     }
@@ -162,6 +198,13 @@ public sealed class OpcodeContracts
     /// <summary>Whether the one-based operand's value is a code position held as data (registry
     /// <c>value = "code-address"</c>), such as the PC op 0x140 writes.</summary>
     public bool IsCodeValue(int opcode, int operand) => _codeValues.Contains((opcode, operand));
+
+    /// <summary>The native table a one-based operand indexes without keeping it inside (registry
+    /// <c>unchecked_index</c>), if any.</summary>
+    public NativeIndex? UncheckedIndex(int opcode, int operand) => _uncheckedIndices.GetValueOrDefault((opcode, operand));
+
+    /// <summary>Every operand that has an <see cref="UncheckedIndex"/>.</summary>
+    public IReadOnlyDictionary<(int Opcode, int Operand), NativeIndex> UncheckedIndices => _uncheckedIndices;
 
     /// <summary>The native access kinds of a one-based operand under an engine ABI, if recorded.</summary>
     public IReadOnlyList<string>? Access(int opcode, int operand, string abiId)

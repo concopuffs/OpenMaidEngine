@@ -228,4 +228,16 @@ The compiler reports `file:line:col` and a message. The common ones:
 - `goto` into or out of an `atomic` block;
 - an opcode the target game's engine does not dispatch.
 
+Warnings do not stop the build. `oms-compile` prints them with `file:line:col`, and a mod link lists them as notes:
+
+- division by a constant zero;
+- a recursive call that overwrites its own bound parameters;
+- an opcode that no corpus of the target game executes;
+- a constant table index past the end of its table, where the original engine does not refuse it: a layout slot
+  past 9 or a surface slot past 999, for example. The operand reference marks each such operand with its table, as
+  in `` `1` read (layout 0..9, untested) ``. The original engine reads or writes memory outside the table with that
+  index. That can crash it, and for a layout slot it can let the script write 40 bytes of its own choosing through a
+  pointer the slot picks. The port halts the run there instead. A mod that passes such an index is unsafe for players on the
+  original engine, so fix it rather than ship it.
+
 [troubleshooting.md](troubleshooting.md) covers errors that appear only when mods link.

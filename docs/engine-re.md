@@ -8149,7 +8149,17 @@ OMS (`oms-append`, selector 2) drove both halves on the scratch install:
   script-chosen-offset, script-valued 40-byte write: the slot picks where the pointer is fetched from, and
   the operand dwords are the data. Composed with the bank pointer (or any other known dword the engine
   holds at a fixed offset), it is a write-what-where reachable purely from bytecode; the port halts
-  rather than reproduce it, and an OMS compiler warning on layout slots past 9 would keep mods clear of it.
+  rather than reproduce it, and the OMS compiler warns on a constant layout slot past 9 (below).
+
+**The registry's facts and the compiler's warning (2026-11-18).** Each operand above that native lets past its table
+carries `unchecked_index` in `vm-map/opcodes.toml`: the table, its range and, where native tests the value, what the
+test lets through (69 operands: the layout, surface, record, glyph style, queue, stack, sound channel, button, scan
+code and frame slots; not op `0x64`'s body offset, which has no fixed table, nor the history record, whose sign test
+depends on the build). The OMS compiler warns on a constant the fact says native lets through, in a call, an `@op` or
+an operand patch (OMS spec §8.2). `IndexBoundsTests.TheRegistryNamesEachIndexNativeLetsPastItsTable` holds the facts
+to the handlers: each value a handler halts on is one its fact lets through, and each value it traces is one the fact
+refuses. Neither game's retail scripts pass such a constant to any of the 69 (a scan of 481 Himegari and 732 Kamidori
+scripts, 2026-11-18), so recompiling a decompiled retail script raises none.
 
 ---
 

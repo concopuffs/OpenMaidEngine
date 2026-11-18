@@ -26,6 +26,8 @@ public sealed record OmsPatchBase(
     public string Fingerprint { get; init; } = "";
     /// <summary>The profile's named patch points (mod loader spec §5), when a registry is loaded.</summary>
     public OmsPatchPoints? Points { get; init; }
+    /// <summary>Each base instruction's opcode, by instruction index.</summary>
+    public IReadOnlyList<int> Opcodes { get; init; } = [];
 
     /// <summary>The environment of a decoded base with the labels and library subs of its decompilation.</summary>
     public static OmsPatchBase From(IrScript script, IReadOnlyDictionary<string, int>? labels = null,
@@ -45,7 +47,10 @@ public sealed record OmsPatchBase(
             }
         return new OmsPatchBase(script.Name, offsets, indexByOffset,
             labels ?? new Dictionary<string, int>(), library ?? new Dictionary<string, string>(),
-            highest.Select(slot => (int)Math.Max(-1, slot)).ToArray());
+            highest.Select(slot => (int)Math.Max(-1, slot)).ToArray())
+        {
+            Opcodes = script.Code.Select(instruction => instruction.Opcode).ToArray(),
+        };
     }
 }
 

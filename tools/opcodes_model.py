@@ -26,6 +26,13 @@ CODE_TARGET_KINDS = ("transfer", "call", "callback", "coroutine")
 # position relocates instead of surviving as a number.
 VALUE_KINDS = ("code-address",)
 
+# `unchecked_index` marks an operand that indexes one of native's tables without native keeping it inside (OMS spec
+# §8.2; docs/engine-re.md, "Indices outside their tables"): `table` names it and `first` (default 0) to `count` - 1 are
+# inside. Without `admits` native does not test the value; with it, native's test lets through each value below
+# `admits`, unsigned unless `signed = true`. The port halts on a value native lets past the table, and the OMS compiler
+# warns on a constant one. IndexBoundsTests holds each fact to the port's handlers.
+UNCHECKED_INDEX_KEYS = {"table": str, "count": int, "first": int, "admits": int, "signed": bool}
+
 # The two control facts of an implemented opcode (Lua scripting spec §7.1), derived from the port's handlers by
 # tools/opcode_flow.py: whether it waits, and the ways it can leave. An opcode the port does not implement has neither.
 WAITS = ("never", "may", "always")
@@ -438,7 +445,9 @@ def _operand_access_errors(model: Model, oc: Opcode, tag: str) -> list[str]:
                 errors.append(f"{arg_tag}: value must be one of {list(VALUE_KINDS)}")
             elif index in oc.code_target_args:
                 errors.append(f"{arg_tag}: a code-target operand is already a code position; drop its value")
-        lists = [("access", arg["access"])] if "access" in arg else []
+        if "unchecked_index" in arg:
+            errors.extend(_unchecked_index_errors(arg["unchecked_index"], arg_tag, index in oc.code_target_args))
+        lists =[("access", arg["access"])] if "access" in arg else []
         for abi, kinds in arg.get("access_by_abi", {}).items():
             if abi not in model.abi_layers:
                 errors.append(f"{arg_tag}: access_by_abi names unknown ABI {abi!r}")
@@ -459,6 +468,35 @@ def _operand_access_errors(model: Model, oc: Opcode, tag: str) -> list[str]:
                 errors.append(f"{tag}: operand {index} has no {abi} access contract")
             elif index in oc.code_target_args and "read" not in kinds:
                 errors.append(f"{tag}: code-target operand {index} is not read under {abi}")
+    return errors
+
+
+def _unchecked_index_errors(fact, arg_tag: str, code_target: bool) -> list[str]:
+    """An `unchecked_index` is a table with a name, a count, and optionally first, admits and signed."""
+    tag = f"{arg_tag}: unchecked_index"
+    if not isinstance(fact, dict):
+        return [f"{tag} must be a table"]
+    errors = [f"{tag} has unknown key {key!r}" for key in sorted(set(fact) - set(UNCHECKED_INDEX_KEYS))]
+    for key in ("table", "count"):
+        if key not in fact:
+            errors.append(f"{tag} needs {key}")
+    for key, kind in UNCHECKED_INDEX_KEYS.items():
+        # bool is an int in Python: an integer key refuses it.
+        if key in fact and (not isinstance(fact[key], kind) or kind is int and isinstance(fact[key], bool)):
+            errors.append(f"{tag}: {key} must be a {kind.__name__}")
+    if errors:
+        return errors
+    first, count = fact.get("first", 0), fact["count"]
+    if not fact["table"]:
+        errors.append(f"{tag}: table must name the table")
+    if first > 0 or count <= first:
+        errors.append(f"{tag}: first must be 0 or less and below count")
+    if "admits" in fact and fact["admits"] < count:
+        errors.append(f"{tag}: admits must be count or more")
+    if "signed" in fact and "admits" not in fact:
+        errors.append(f"{tag}: signed describes native's test; give admits")
+    if code_target:
+        errors.append(f"{tag}: a code-target operand is not a table index")
     return errors
 
 

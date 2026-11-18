@@ -872,6 +872,41 @@ public class OmsCoreTests
         Assert.Contains("the recursive call to 'walk' overwrites its own bound parameters", messages);
     }
 
+    /// <summary>A constant that indexes a native table past its end, where native lets it through (registry
+    /// <c>unchecked_index</c>), warns: literals, constants and negations, in calls and in raw instructions.</summary>
+    [Fact]
+    public void AConstantIndexNativeLetsPastItsTableWarns()
+    {
+        var contracts = OpcodeContracts.FromParts(new Dictionary<int, int[]>(), new Dictionary<(int, int), string[]>(),
+            new Dictionary<int, string>(), uncheckedIndices: new Dictionary<(int, int), NativeIndex>
+            {
+                [(0x249, 1)] = new("surface", 1000),
+                [(0x249, 2)] = new("queue", 10, Admits: 11),
+                [(0x249, 3)] = new("channel", 10, Admits: 10, Signed: true),
+            });
+        var warnings = new List<OmsWarning>();
+        OmsCompiler.Compile(Parser.ParseScript("""
+            script "T.BIN"
+            const LAST = 999
+            op_0x249(LAST, 9, 0)
+            op_0x249(1000, 10, -1)
+            op_0x249(-1, 11, 10)
+            op_0x249(G[1], -1, G[2])
+            @op(0x249, 0xFFFFFFFF, LAST, 0)
+            exit
+            """, "t.oms"), Abi, Table, null, new IntrinsicCatalog(Table, contracts), warnings: warnings);
+        const string Native = "; native AGE lets it through and reads or writes memory outside the table, while the "
+                              + "port halts the run";
+        Assert.Equal(new[]
+        {
+            (4, "operand 1 of op_0x249: 1000 is outside the surface table (0..999)" + Native),
+            (4, "operand 2 of op_0x249: 10 is outside the queue table (0..9)" + Native),
+            (4, "operand 3 of op_0x249: -1 is outside the channel table (0..9)" + Native),
+            (5, "operand 1 of op_0x249: -1 is outside the surface table (0..999)" + Native),
+            (7, "operand 1 of op_0x249: -1 is outside the surface table (0..999)" + Native),
+        }, warnings.Select(warning => (warning.Span.Line, warning.Message)));
+    }
+
     [Theory]
     [InlineData("use nowhere.globals\nexit\n", "unknown module 'nowhere.globals'")]
     [InlineData("L[1] = missing[2]\n", "'missing' is not a declared array")]
