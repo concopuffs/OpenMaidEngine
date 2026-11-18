@@ -585,6 +585,7 @@ public class DriveControlTests
                 .GetCustomAttributes(typeof(System.Diagnostics.DebuggableAttribute), false)
                 .Cast<System.Diagnostics.DebuggableAttribute>().Any(d => d.IsJITOptimizerDisabled);
             Assert.Equal(!optimizerOff, (bool)hello["result"]!["jit_optimized"]!);
+            Assert.False((bool)hello["result"]!["native_aot"]!);  // the tests run under the JIT
             Assert.True(server.ClientConnected);
 
             JsonObject state = Exchange(client, """{"id":2,"op":"state"}""");

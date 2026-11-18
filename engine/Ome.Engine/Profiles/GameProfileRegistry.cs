@@ -7,9 +7,20 @@ using Ome.Engine.Persistence;
 namespace Ome.Engine.Profiles;
 
 /// <summary>The supported content-free profiles embedded in the runtime assembly.</summary>
-public sealed class GameProfileRegistry
+public sealed partial class GameProfileRegistry
 {
     private const string ResourcePrefix = "Ome.Engine.Profiles.";
+
+    /// <summary>The manifests' reading options, bound to source-generated metadata: the engine ships compiled with
+    /// NativeAOT, where reflection-based serialization is off.</summary>
+    private static readonly ProfileJsonContext Json = new(new JsonSerializerOptions
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+    });
+
+    [JsonSerializable(typeof(ProfileDocument))]
+    private sealed partial class ProfileJsonContext : JsonSerializerContext;
     private static readonly Lazy<GameProfileRegistry> BuiltInLazy = new(LoadBuiltIn);
     private readonly ImmutableArray<GameProfileManifest> _profiles;
 
@@ -57,14 +68,9 @@ public sealed class GameProfileRegistry
     /// <summary>One manifest's JSON, as the built-in ones are read; the tests read their own through it.</summary>
     internal static GameProfileManifest Parse(Stream stream, string name)
     {
-        var options = new JsonSerializerOptions
-        {
-            PropertyNameCaseInsensitive = true,
-            ReadCommentHandling = JsonCommentHandling.Skip,
-        };
         try
         {
-            ProfileDocument document = JsonSerializer.Deserialize<ProfileDocument>(stream, options)
+            ProfileDocument document = JsonSerializer.Deserialize(stream, Json.ProfileDocument)
                 ?? throw new InvalidDataException($"{name}: empty profile manifest");
             return document.ToManifest();
         }

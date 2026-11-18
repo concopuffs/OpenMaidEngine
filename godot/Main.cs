@@ -942,6 +942,13 @@ public partial class Main : Godot.Control
         finally { perf?.EndFrame(); }
     }
 
+    /// <summary>How <see cref="CaptureStallDiagnostic"/> writes a snapshot: indented, with snake_case names.</summary>
+    private static readonly PortJsonContext StallDiagnosticJson = new(new JsonSerializerOptions
+    {
+        WriteIndented = true,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    });
+
     /// <summary>Write a diagnostic snapshot. Only the user's F6 copies its locator and path to the clipboard; a
     /// snapshot the port takes on its own (worker failure, halt, step limit) leaves the clipboard alone.</summary>
     private void CaptureStallDiagnostic(GodotTraceSnapshot? traceOverride = null,
@@ -954,39 +961,25 @@ public partial class Main : Godot.Control
             MoviePlaybackDiagnostics? movies = _movies?.PlaybackDiagnostics();
             // The waits' and graphics' state is the engine thread's: ask it, and say so when it does not answer.
             bool engineAnswered = _waits.TryInvoke(
-                () => ((object)_waits.CaptureDiagnosticSnapshot(), (object)_vm.Gfx.CaptureDiagnosticSnapshot(nowMs)),
+                () => (_waits.CaptureDiagnosticSnapshot(), _vm.Gfx.CaptureDiagnosticSnapshot(nowMs)),
                 DiagnosticAnswerTimeoutMs, out var engineState);
-            var snapshot = new
-            {
-                format_version = 1,
-                captured_utc = System.DateTimeOffset.UtcNow.ToString("O"),
-                render_frame = _timelineFrame,
-                clock_ms = nowMs,
-                vm = new
-                {
-                    steps = _vm.Steps,
-                    halt_reason = _vm.HaltReason,
-                    compatibility_failure = _vm.CompatibilityFailure,
-                    done = _done,
-                    trace,
-                },
-                engine_thread_answered = engineAnswered,
-                waits = engineAnswered ? engineState.Item1 : null,
-                gfx = engineAnswered ? engineState.Item2 : null,
-                active_movies = movies?.Playing,
-                pending_movies = movies?.Opened,
-            };
+            var snapshot = new StallDiagnostic(
+                FormatVersion: 1,
+                CapturedUtc: System.DateTimeOffset.UtcNow.ToString("O"),
+                RenderFrame: _timelineFrame,
+                ClockMs: nowMs,
+                Vm: new StallDiagnosticVm(_vm.Steps, _vm.HaltReason, _vm.CompatibilityFailure, _done, trace),
+                EngineThreadAnswered: engineAnswered,
+                Waits: engineAnswered ? engineState.Item1 : null,
+                Gfx: engineAnswered ? engineState.Item2 : null,
+                ActiveMovies: movies?.Playing,
+                PendingMovies: movies?.Opened);
 
             string directory = _profilePersistence.DiagnosticsDirectory;
             System.IO.Directory.CreateDirectory(directory);
             string path = System.IO.Path.Combine(directory,
                 $"{snapshotKind}-{System.DateTimeOffset.Now:yyyyMMdd-HHmmss-fff}.json");
-            var jsonOptions = new JsonSerializerOptions
-            {
-                WriteIndented = true,
-                PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
-            };
-            System.IO.File.WriteAllText(path, JsonSerializer.Serialize(snapshot, jsonOptions));
+            System.IO.File.WriteAllText(path, JsonSerializer.Serialize(snapshot, StallDiagnosticJson.StallDiagnostic));
             string coordinate = trace.CurrentOffset >= 0
                 ? $"{System.IO.Path.GetFileNameWithoutExtension(trace.CurrentScript).ToUpperInvariant()}@0x{trace.CurrentOffset:x}"
                 : trace.CurrentScript;

@@ -74,7 +74,7 @@ public sealed record DriveState(IReadOnlyList<DriveFrame> Frames, string? Waitin
     {
         var frames = new JsonArray();
         foreach (DriveFrame frame in Frames)
-            frames.Add(new JsonObject
+            frames.Add((JsonNode)new JsonObject
             {
                 ["script"] = frame.Script,
                 ["offset"] = frame.Offset,

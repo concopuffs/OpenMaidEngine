@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -75,6 +76,10 @@ public sealed class DriveServer : IDisposable
         typeof(Ome.Engine.Vm.VirtualMachine).Assembly.GetCustomAttribute<DebuggableAttribute>()
             is not { IsJITOptimizerDisabled: true };
 
+    /// <summary>Whether this is a release's engine, compiled ahead of time with NativeAOT
+    /// (<c>drive.py port start --package</c>), rather than code the JIT compiles.</summary>
+    public static bool NativeAot { get; } = !RuntimeFeature.IsDynamicCodeSupported;
+
     public JsonObject Hello() => new()
     {
         ["target"] = _backend.Target,
@@ -82,6 +87,7 @@ public sealed class DriveServer : IDisposable
         ["version"] = DriveProtocol.Version,
         ["capabilities"] = new JsonArray(_backend.Capabilities.Select(c => (JsonNode?)c).ToArray()),
         ["jit_optimized"] = JitOptimized,
+        ["native_aot"] = NativeAot,
     };
 
     private void Serve()

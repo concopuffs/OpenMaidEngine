@@ -214,10 +214,13 @@ internal static class FfmpegMovieNative
             OperatingSystem.IsWindows(),
             OperatingSystem.IsMacOS(),
             RuntimeInformation.ProcessArchitecture);
+        // A JIT runtime's base directory is Godot's data folder; a NativeAOT engine's is the executable's, and the
+        // data folder is the engine library's own (OwnLibrary).
         string[] candidates =
         {
             configured == null ? "" : Path.Combine(configured, fileName),
             Path.Combine(AppContext.BaseDirectory, fileName),
+            OwnLibrary.Directory is { } library ? Path.Combine(library, fileName) : "",
             Path.Combine(AppContext.BaseDirectory, "runtimes", rid, "native", fileName),
         };
         foreach (string candidate in candidates)

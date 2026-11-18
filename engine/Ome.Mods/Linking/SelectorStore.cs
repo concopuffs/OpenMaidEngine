@@ -35,7 +35,7 @@ public sealed class SelectorStore
         TomlTable table;
         try
         {
-            table = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
+            table = TomlDocument.Parse(text) ?? new TomlTable();
         }
         catch (TomlException error)
         {

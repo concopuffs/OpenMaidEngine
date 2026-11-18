@@ -39,7 +39,7 @@ public sealed record ModSaveStamp(IReadOnlyList<ModStackEntry> Mods, IReadOnlyDi
     {
         try
         {
-            TomlTable table = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
+            TomlTable table = TomlDocument.Parse(text) ?? new TomlTable();
             var mods = new List<ModStackEntry>();
             if (table.TryGetValue("mods", out object? list) && list is TomlTableArray entries)
                 foreach (TomlTable entry in entries)

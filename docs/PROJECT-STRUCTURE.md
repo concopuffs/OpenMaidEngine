@@ -82,7 +82,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── test_validate.py                   pure resolver + validation-plan regressions
     │   ├── build-linux-x64.sh                 one-command pinned Linux export/package/smoke pipeline
     │   ├── build-windows-x64.sh               Linux-hosted Windows cross-export/package pipeline
-    │   ├── dotnet_publish_proxy.py            guarded low-memory Godot export-time publish staging
+    │   ├── dotnet_publish_proxy.py            guarded Godot export-time publish staging (hands Godot the engine library)
+    │   ├── publish_engine.py                  the engine's NativeAOT release library for a target, built on its own
+    │   │                                      system, checked and stamped with its commit (build/engine-publish/)
     │   ├── publish_launcher.py                the launcher's release publish for a target, its files checked
     │   │                                      and placed beside the engine in an export (build/launcher-publish/)
     │   ├── publish_github_release.py          guarded/retry-safe draft-first GitHub release promotion
@@ -96,7 +98,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── mingw_runtime_notices.py           MinGW link-map check: linked runtime objects covered by the shipped notices
     │   ├── test_install_godot_templates.py, test_package_notices.py, test_package_linux_x64.py,
     │   │   test_package_windows_x64.py, test_mingw_runtime_notices.py,
-    │   │   test_dotnet_publish_proxy.py, test_publish_launcher.py,
+    │   │   test_dotnet_publish_proxy.py, test_publish_engine.py, test_publish_launcher.py,
     │   │   test_publish_github_release.py, test_write_ffmpeg_source_notice.py,
     │   │   test_release_workflow.py,
     │   │   test_verify_windows_native.py       source-only bootstrap/package/publish/native regressions
@@ -457,10 +459,11 @@ the project do not enter its import or export scan. Every `godot/*.cs` has a tra
 script id): add, move or delete it with its source, since `tools/test_release_workflow.py` checks that the two sets
 match. A headless editor scan (`<Godot console> --headless --editor --quit --path godot`) writes a missing one.
 `tools/build-linux-x64.sh` and
-`tools/build-windows-x64.sh` produce their complete disposable artifacts under `build/export/`; the older
-Windows-hosted `tools/export-linux-x64.ps1` remains a Linux-export development path. All three put the launcher
-beside the engine through `tools/publish_launcher.py`, whose publish and kept dependency list are disposable
-`build/launcher-publish/<rid>/` and `build/launcher-publish/<rid>.deps.json`.
+`tools/build-windows-x64.sh` produce their complete disposable artifacts under `build/export/`. Both take the
+engine's NativeAOT library from `tools/publish_engine.py`, run beforehand on the target's own system: its publish,
+kept dependency list and commit stamp are disposable `build/engine-publish/<rid>/`, `<rid>.deps.json` and
+`<rid>.json`. Both put the launcher beside the engine through `tools/publish_launcher.py`, whose publish and kept
+dependency list are disposable `build/launcher-publish/<rid>/` and `build/launcher-publish/<rid>.deps.json`.
 
 `godot/Main.cs` retains the front-end's startup and runtime coordination. Behavior-neutral partial-class
 companions keep cohesive surfaces independently navigable without changing the Godot node type or invocation

@@ -16,8 +16,119 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # The engine ships as one NativeAOT library (docs/platform-portability.md, "Fewer files in a package"). NativeAOT
+  # compiles for its own system only, so each library is built on its own system, and the package jobs below take it
+  # from here.
+  linux-engine:
+    name: Linux x64 engine library
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    # The library needs the glibc it is linked on, so it is linked on the package's floor, 2.28, in the image the
+    # FFmpeg SDK is built in (ffmpeg-sdk.yml). The Linux packager refuses a library that needs a newer one.
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64:2026.10.03-1@sha256:39df0042d5cc900b085aa25a0659368b42a0006c54c474299b785b44c1b4ff82
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+      NUGET_XMLDOC_MODE: skip
+      PYTHONUTF8: "1"
+      # The SDK's own tools need no culture data, so the image needs no ICU.
+      DOTNET_SYSTEM_GLOBALIZATION_INVARIANT: "1"
+    steps:
+      - name: Install build tools
+        # git before the checkout, so the checkout is a repository whose commit the publish stamps.
+        run: |
+          dnf install -y git
+          echo "/opt/python/cp311-cp311/bin" >> "$GITHUB_PATH"
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Report toolchain
+        run: |
+          python3 --version
+          dotnet --version
+          gcc --version | head -n 1
+          ldd --version | head -n 1
+
+      - name: Publish the engine library
+        run: |
+          python3 -X utf8 tools/opcodes_build.py --build
+          python3 -X utf8 tools/publish_engine.py --runtime linux-x64
+
+      - name: Upload the engine library
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-linux-x64-${{ github.sha }}
+          path: build/engine-publish/
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-engine:
+    name: Windows x64 engine library
+    runs-on: windows-2025
+    timeout-minutes: 30
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "true"
+      NUGET_XMLDOC_MODE: skip
+      PYTHONUTF8: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Keep the repository's line endings
+        # The library embeds text files, the base mods among them; checked out as stored, with LF, it embeds the bytes
+        # the Linux library does.
+        run: git config --global core.autocrlf false
+
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.11"
+          architecture: x64
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@0f4a354dd5547a28c70b7853dbd95d5b67886e73 # v6.1.0
+        with:
+          global-json-file: global.json
+
+      - name: Report toolchain
+        # NativeAOT links with the MSVC tools, which it finds through vswhere.
+        run: |
+          python --version
+          dotnet --version
+          "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products '*' \
+            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property displayName
+
+      - name: Publish the engine library
+        run: |
+          python -X utf8 tools/opcodes_build.py --build
+          python -X utf8 tools/publish_engine.py --runtime win-x64
+
+      - name: Upload the engine library
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: engine-win-x64-${{ github.sha }}
+          path: build/engine-publish/
+          if-no-files-found: error
+          retention-days: 7
+
   linux-release:
     name: Linux x64 artifact
+    needs: linux-engine
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -30,6 +141,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Download the engine library
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-linux-x64-${{ github.sha }}
+          path: build/engine-publish
 
       - name: Set up Python 3.11
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
@@ -98,6 +215,7 @@ jobs:
 
   windows-release:
     name: Windows x64 artifact
+    needs: windows-engine
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -111,6 +229,12 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Download the engine library
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: engine-win-x64-${{ github.sha }}
+          path: build/engine-publish
 
       - name: Set up Python 3.11
         uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0

@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Text;
-using System.Text.Json;
 using Ome.Engine.Model;
 using Ome.Engine.Sys4;
 
@@ -260,7 +259,7 @@ public sealed class PageLocatorState : System.IDisposable
                 };
                 if (_presented != null) row["presented"] = _presented.ToString();
                 if (_cut) row["cut"] = true;
-                _writer.WriteLine(JsonSerializer.Serialize(row));
+                _writer.WriteLine(DiagnosticJson.Row(row));
             }
 
             // The display remains parked on this page, but text/start observations for the next page must

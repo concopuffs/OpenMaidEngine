@@ -161,7 +161,7 @@ public partial class ScriptErrorDialog : Win32Dialog
     public System.Text.Json.Nodes.JsonObject Describe()
     {
         var buttons = new System.Text.Json.Nodes.JsonArray();
-        foreach (string text in _kind.Japanese) buttons.Add(text);
+        foreach (string text in _kind.Japanese) buttons.Add((System.Text.Json.Nodes.JsonNode?)text);
         return new System.Text.Json.Nodes.JsonObject
         {
             ["title"] = _message.Caption, ["text"] = _message.Text, ["buttons"] = buttons,

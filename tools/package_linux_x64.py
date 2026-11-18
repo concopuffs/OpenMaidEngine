@@ -24,43 +24,50 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import package_notices
+import publish_engine
 import publish_launcher
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
-MANAGED_DIRECTORY = "data_OME_linuxbsd_x86_64"
+DATA_DIRECTORY = "data_OME_linuxbsd_x86_64"
 PACKAGE_NAME = "OME-linux-x64"
+RUNTIME = "linux-x64"
 # The launcher beside the engine (launcher spec §10, plan §9.3): its program, natives and notices.
-LAUNCHER = publish_launcher.LAYOUTS["linux-x64"]
+LAUNCHER = publish_launcher.LAYOUTS[RUNTIME]
+# The FFmpeg shim and the libraries it loads (native/ome_movie_ffmpeg/build-linux-x64.sh), with their notices.
+FFMPEG_FILES = (
+    "libome_movie_ffmpeg.so",
+    "libavformat.so.62",
+    "libavcodec.so.62",
+    "libavutil.so.60",
+    "libswscale.so.9",
+    "libswresample.so.6",
+    "FFmpeg-LICENSE.txt",
+    "FFmpeg-SOURCE.txt",
+)
+# The data folder Godot loads the engine from, exactly: the engine's NativeAOT library with the notices of the .NET
+# runtime it holds (tools/publish_engine.py), and the FFmpeg bundle. A .NET runtime file there would send Godot down its
+# hostfxr route (docs/platform-portability.md, "Fewer files in a package").
+DATA_FILES = (*publish_engine.publish_files(RUNTIME), *FFMPEG_FILES)
 REQUIRED_FILES = (
     "OME",
     "OME.pck",
-    f"{MANAGED_DIRECTORY}/OME.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.Devices.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.Vm.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.Frontend.dll",
-    f"{MANAGED_DIRECTORY}/{package_notices.DEPS_FILE}",
-    f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-LICENSE.TXT",
-    f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.linux-x64-THIRD-PARTY-NOTICES.TXT",
-    f"{MANAGED_DIRECTORY}/libome_movie_ffmpeg.so",
-    f"{MANAGED_DIRECTORY}/libavformat.so.62",
-    f"{MANAGED_DIRECTORY}/libavcodec.so.62",
-    f"{MANAGED_DIRECTORY}/libavutil.so.60",
-    f"{MANAGED_DIRECTORY}/libswscale.so.9",
-    f"{MANAGED_DIRECTORY}/libswresample.so.6",
-    f"{MANAGED_DIRECTORY}/FFmpeg-LICENSE.txt",
-    f"{MANAGED_DIRECTORY}/FFmpeg-SOURCE.txt",
+    *(f"{DATA_DIRECTORY}/{name}" for name in DATA_FILES),
     *LAUNCHER.files(),
 )
 FORBIDDEN_FILES = (
-    f"{MANAGED_DIRECTORY}/Ome.Engine.Text.Windows.dll",
-    f"{MANAGED_DIRECTORY}/ome_movie_ffmpeg.dll",
-    f"{MANAGED_DIRECTORY}/avformat-62.dll",
     publish_launcher.LAYOUTS["win-x64"].program,
     *publish_launcher.LAYOUTS["win-x64"].natives,
 )
-LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
+# The engine's NativeAOT library: what Godot calls to start it, and the only libraries it may need, those of glibc
+# itself, which every system has.
+ENGINE_EXPORT = "godotsharp_game_main_init"
+GLIBC_LIBRARIES = frozenset({
+    "libc.so.6", "libm.so.6", "libdl.so.2", "librt.so.1", "libpthread.so.0", "ld-linux-x86-64.so.2",
+})
+ELF_MACHINE_X86_64 = 62
+# The FFmpeg bundle's pins, among them the package's glibc floor.
+FFMPEG_DEPENDENCY = REPO / "native/ome_movie_ffmpeg/dependency-linux-x64.json"
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
 SMOKE_MARKER = "PACKAGE SMOKE OK: opcodes=548 ffmpeg-abi=3"
 SMOKE_TIMEOUT_S = 120.0
@@ -75,24 +82,76 @@ def _resolved_directory(path: Path, label: str) -> Path:
     return resolved
 
 
-def verify_export(export_directory: Path, launcher_deps: Path | None = None) -> Path:
-    """Check the export's files, and that THIRD_PARTY_NOTICES.md names every package the engine and the launcher ship
-    (`launcher_deps`: the dependency list the launcher's publish kept, by default publish_launcher's)."""
+def minimum_glibc() -> str:
+    """The package's glibc floor: the FFmpeg bundle's, which its dependency manifest pins. The engine's library must
+    not raise it."""
+    with FFMPEG_DEPENDENCY.open(encoding="utf-8") as stream:
+        return json.load(stream)["minimum_glibc"]
+
+
+def _version(text: str) -> tuple[int, ...]:
+    return tuple(int(part) for part in text.split("."))
+
+
+def _readelf(readelf: str, path: Path, *arguments: str) -> str:
+    process = subprocess.run((readelf, *arguments, "--wide", str(path)), check=False, capture_output=True, text=True,
+                             encoding="utf-8", errors="replace")
+    if process.returncode != 0:
+        raise RuntimeError(f"readelf failed for {path.name}: {process.stderr.strip()}")
+    return process.stdout
+
+
+def verify_engine_library(path: Path, readelf: str = "readelf") -> dict[str, object]:
+    """Check the engine's NativeAOT library: an x86-64 ELF file that exports Godot's entry point, needs only glibc's
+    libraries, and no glibc newer than the package's floor."""
+    with path.open("rb") as stream:
+        header = stream.read(20)
+    if (len(header) < 20 or header[:4] != b"\x7fELF" or header[4] != 2
+            or struct.unpack_from("<H", header, 18)[0] != ELF_MACHINE_X86_64):
+        raise ValueError(f"Linux engine library is not an x86-64 ELF file: {path.name}")
+    symbols = _readelf(readelf, path, "--dyn-syms")
+    if not re.search(rf"\bGLOBAL\s+DEFAULT\s+\d+\s+{ENGINE_EXPORT}(?:@\S*)?\s*$", symbols, re.MULTILINE):
+        raise ValueError(f"Linux engine library does not export {ENGINE_EXPORT}: {path.name}; "
+                         "it is not a NativeAOT build")
+    dynamic = _readelf(readelf, path, "--dynamic")
+    needed = sorted(set(re.findall(r"\(NEEDED\)\s+Shared library: \[([^\]]+)\]", dynamic)))
+    foreign = [name for name in needed if name not in GLIBC_LIBRARIES]
+    if foreign:
+        raise ValueError("Linux engine library needs libraries outside glibc: " + ", ".join(foreign))
+    versions = sorted(set(re.findall(r"\bGLIBC_(\d+(?:\.\d+)*)", _readelf(readelf, path, "--version-info"))),
+                      key=_version)
+    if not versions:
+        raise ValueError(f"could not determine the glibc the engine library needs: {path.name}")
+    floor = minimum_glibc()
+    if _version(versions[-1]) > _version(floor):
+        raise ValueError(f"Linux engine library needs glibc {versions[-1]}, newer than the package's floor {floor}; "
+                         f"link it on glibc {floor}, as the release workflow's manylinux container does")
+    return {"export": ENGINE_EXPORT, "needed": needed, "glibc": versions[-1]}
+
+
+def verify_export(export_directory: Path, launcher_deps: Path | None = None, engine_deps: Path | None = None,
+                  readelf: str = "readelf") -> Path:
+    """Check the export's files and the engine's library, and that THIRD_PARTY_NOTICES.md names every package the engine
+    and the launcher ship (`engine_deps` and `launcher_deps`: the dependency lists their publishes kept, by default
+    publish_engine's and publish_launcher's)."""
     export_directory = _resolved_directory(export_directory, "Linux export")
     missing = [name for name in REQUIRED_FILES if not (export_directory / name).is_file()]
     if missing:
         raise ValueError("Linux export is incomplete; missing: " + ", ".join(missing))
+    data_directory = export_directory / DATA_DIRECTORY
+    extra = sorted(path.relative_to(data_directory).as_posix() for path in data_directory.rglob("*")
+                   if path.relative_to(data_directory).as_posix() not in DATA_FILES)
+    if extra:
+        raise ValueError("Linux export's data folder holds files the NativeAOT engine does not ship: "
+                         + ", ".join(extra))
     forbidden = [name for name in FORBIDDEN_FILES if (export_directory / name).exists()]
     if forbidden:
         raise ValueError("Linux export contains Windows-only files: " + ", ".join(forbidden))
     symbols = sorted(path.relative_to(export_directory).as_posix() for path in export_directory.rglob("*.pdb"))
     if symbols:
         raise ValueError("Linux export contains debug symbols: " + ", ".join(symbols))
-    legacy = [name for name in LEGACY_FILES if (export_directory / name).exists()]
-    if legacy:
-        raise ValueError("Linux export contains legacy-branded files: " + ", ".join(legacy))
     package_notices.verify_dependency_notices(
-        export_directory / MANAGED_DIRECTORY, REPO / "THIRD_PARTY_NOTICES.md"
+        engine_deps or publish_engine.dependency_list(RUNTIME), REPO / "THIRD_PARTY_NOTICES.md"
     )
     package_notices.verify_launcher_notices(
         launcher_deps or publish_launcher.dependency_list(LAUNCHER.runtime), REPO / "THIRD_PARTY_NOTICES.md"
@@ -100,6 +159,7 @@ def verify_export(export_directory: Path, launcher_deps: Path | None = None) -> 
     for executable in (export_directory / "OME", export_directory / LAUNCHER.program):
         if os.name != "nt" and not os.access(executable, os.X_OK):
             raise ValueError(f"Linux export executable bit is not set: {executable}")
+    verify_engine_library(data_directory / publish_engine.TARGETS[RUNTIME].library, readelf)
     return export_directory
 
 
@@ -125,9 +185,7 @@ def source_date_epoch() -> int:
 def build_metadata(epoch: int) -> dict[str, object]:
     with (HERE / "godot-linux-x64.json").open(encoding="utf-8") as stream:
         godot = json.load(stream)
-    with (REPO / "native/ome_movie_ffmpeg/dependency-linux-x64.json").open(
-        encoding="utf-8"
-    ) as stream:
+    with FFMPEG_DEPENDENCY.open(encoding="utf-8") as stream:
         ffmpeg = json.load(stream)
     dirty = bool(_git("status", "--porcelain", "--untracked-files=normal"))
     return {
@@ -188,8 +246,9 @@ def create_package(
     metadata: dict[str, object],
     epoch: int,
     launcher_deps: Path | None = None,
+    engine_deps: Path | None = None,
 ) -> tuple[Path, Path]:
-    export_directory = verify_export(export_directory, launcher_deps)
+    export_directory = verify_export(export_directory, launcher_deps, engine_deps)
     output_directory = output_directory.resolve()
     expected_parent = (REPO / "build/package").resolve()
     if output_directory != expected_parent:
@@ -525,9 +584,11 @@ def main() -> int:
     verify = subparsers.add_parser("verify")
     verify.add_argument("export_directory", type=Path)
     verify.add_argument("--launcher-deps", type=Path, help="the launcher's kept dependency list")
+    verify.add_argument("--engine-deps", type=Path, help="the engine's kept dependency list")
     package = subparsers.add_parser("package")
     package.add_argument("export_directory", type=Path)
     package.add_argument("--launcher-deps", type=Path, help="the launcher's kept dependency list")
+    package.add_argument("--engine-deps", type=Path, help="the engine's kept dependency list")
     package.add_argument("--output-directory", type=Path, default=REPO / "build/package")
     smoke = subparsers.add_parser("smoke")
     smoke.add_argument("package_root", type=Path)
@@ -535,7 +596,7 @@ def main() -> int:
     args = parser.parse_args()
 
     if args.command == "verify":
-        print(verify_export(args.export_directory, args.launcher_deps))
+        print(verify_export(args.export_directory, args.launcher_deps, args.engine_deps))
         return 0
     if args.command == "smoke":
         # Three steps, each adding to the log (launcher plan §9.4): the engine, the launcher's check, the hand-over.
@@ -552,7 +613,8 @@ def main() -> int:
         return 0
     epoch = source_date_epoch()
     package_root, archive_path = create_package(
-        args.export_directory, args.output_directory, build_metadata(epoch), epoch, args.launcher_deps
+        args.export_directory, args.output_directory, build_metadata(epoch), epoch, args.launcher_deps,
+        args.engine_deps,
     )
     print(package_root)
     print(archive_path)

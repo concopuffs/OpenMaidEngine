@@ -14,6 +14,8 @@ public sealed class PortableTextRenderingPolicy
     public string[] DefaultSubstitutes { get; set; } = [];
     public PortableFontFamilyPolicy[] Families { get; set; } = [];
 
+    private static readonly PortJsonContext Json = new(new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+
     public static PortableTextRenderingPolicy Load(string resourcePath)
     {
         if (string.IsNullOrWhiteSpace(resourcePath))
@@ -22,9 +24,8 @@ public sealed class PortableTextRenderingPolicy
         if (string.IsNullOrWhiteSpace(json))
             throw new InvalidOperationException(
                 $"Portable text policy '{resourcePath}' is missing or empty.");
-        var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
         PortableTextRenderingPolicy policy =
-            JsonSerializer.Deserialize<PortableTextRenderingPolicy>(json, options)
+            JsonSerializer.Deserialize(json, Json.PortableTextRenderingPolicy)
             ?? throw new InvalidOperationException(
                 $"Portable text policy '{resourcePath}' decoded to null.");
         policy.Validate();

@@ -7,7 +7,7 @@ remains subject to its own terms or is acknowledged as prior research rather tha
 
 Release packages also carry each shipped component's own license texts, named in its section below. Every NuGet
 package a release ships is named below in backticks; the packagers refuse a package that leaves one out
-(`docs/tools-reference.md`, "Third-party notices"). A package's managed directory is `data_OME_<platform>_x86_64`.
+(`docs/tools-reference.md`, "Third-party notices"). The engine's data folder is `data_OME_<platform>_x86_64`.
 The launcher (`OME-Launcher`, beside the engine) is one self-contained file. Its packages' own notice files are in
 `OME-Launcher-notices/` beside it.
 
@@ -27,11 +27,13 @@ Portions of this software are copyright © 1996-2025 The FreeType Project (www.f
 
 ## .NET
 
-Release packages are self-contained. They include the .NET 10 runtime (the `Microsoft.NETCore.App` runtime pack),
-Copyright (c) .NET Foundation and Contributors, under the MIT License. The runtime includes third-party components
-listed in its notices file. The publish copies each shipped NuGet package's own license and notice files into the
-managed directory as `<package id>-<file name>`: `Microsoft.NETCore.App.Runtime.<rid>-LICENSE.TXT` and
-`Microsoft.NETCore.App.Runtime.<rid>-THIRD-PARTY-NOTICES.TXT` for the runtime.
+Release packages are self-contained. The engine is compiled ahead of time with NativeAOT into one library in the data
+folder, `OME.dll` or `OME.so`, which holds the .NET 10 runtime (the `Microsoft.NETCore.App` runtime pack),
+Copyright (c) .NET Foundation and Contributors, under the MIT License, with the NuGet packages named below. The runtime
+includes third-party components listed in its notices file. The publish copies each shipped NuGet package's own license
+and notice files into the data folder as `<package id>-<file name>`: `Microsoft.NETCore.App.Runtime.<rid>-LICENSE.TXT`
+and `Microsoft.NETCore.App.Runtime.<rid>-THIRD-PARTY-NOTICES.TXT` for the runtime. The NativeAOT compiler's packages
+carry the same notices, under the same license.
 
 The launcher carries the .NET 10 runtime inside its single file, under the same terms. Its own copies of the
 runtime pack's two files are in `OME-Launcher-notices/`. The single file also holds the `Tomlyn`, `LuaCSharp` and

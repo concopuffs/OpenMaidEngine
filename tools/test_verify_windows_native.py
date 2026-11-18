@@ -60,6 +60,34 @@ class VerifyWindowsNativeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unexpected DLL"):
                 verify_windows_native.verify_bundle(bundle, "objdump")
 
+    def test_checks_the_engines_nativeaot_library(self) -> None:
+        def objdump(*imports: str, export: bool = True) -> str:
+            lines = [f"DLL Name: {name}" for name in ("KERNEL32.dll", "api-ms-win-crt-heap-l1-1-0.dll", *imports)]
+            if export:
+                lines.append(f"[   1] {verify_windows_native.ENGINE_EXPORT}")
+            return "\n".join(lines)
+
+        with tempfile.TemporaryDirectory() as temporary:
+            library = Path(temporary) / verify_windows_native.ENGINE_LIBRARY
+            write_pe(library)
+            with patch.object(verify_windows_native.subprocess, "run",
+                              return_value=Mock(returncode=0, stdout=objdump(), stderr="")):
+                self.assertEqual({"machine": "AMD64", "export": "godotsharp_game_main_init",
+                                  "imports": ["api-ms-win-crt-heap-l1-1-0.dll", "KERNEL32.dll"]},
+                                 verify_windows_native.verify_engine_library(library, "objdump"))
+            for text, message in (
+                (objdump(export=False), "does not export godotsharp_game_main_init"),
+                (objdump("VCRUNTIME140.dll", "MSVCP140.dll"), "lacks: MSVCP140.dll, VCRUNTIME140.dll"),
+                (objdump("coreclr.dll"), "lacks: coreclr.dll"),
+            ):
+                with self.subTest(message), patch.object(verify_windows_native.subprocess, "run",
+                                                         return_value=Mock(returncode=0, stdout=text, stderr="")):
+                    with self.assertRaisesRegex(ValueError, message):
+                        verify_windows_native.verify_engine_library(library, "objdump")
+            write_pe(library, machine=0xAA64)
+            with self.assertRaisesRegex(ValueError, "not AMD64 PE \\(0xaa64\\)"):
+                verify_windows_native.verify_engine_library(library, "objdump")
+
     def test_rejects_missing_export_and_compatibility_runtime(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             bundle = create_bundle(Path(temporary))

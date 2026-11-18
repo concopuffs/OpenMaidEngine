@@ -3,6 +3,10 @@
     <TargetFramework>net10.0</TargetFramework>
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <Nullable>enable</Nullable>
+    <!-- A release compiles the engine with NativeAOT, so the analyzers report a reflection-bound call as an error
+         (Directory.Build.targets). -->
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <EnableAotAnalyzer>true</EnableAotAnalyzer>
     <OmeNativeRid Condition="'$(RuntimeIdentifier)' != ''">$(RuntimeIdentifier)</OmeNativeRid>
     <OmeNativeRid Condition="'$(OmeNativeRid)' == '' and '$(GodotTargetPlatform)' == 'windows'">win-x64</OmeNativeRid>
     <OmeNativeRid Condition="'$(OmeNativeRid)' == '' and '$(GodotTargetPlatform)' == 'linuxbsd'">linux-x64</OmeNativeRid>
@@ -27,7 +31,28 @@
   <ItemGroup Condition="'$(GodotTargetPlatform)' == 'windows'">
     <ProjectReference Include="..\engine\Ome.Engine.Text.Windows\Ome.Engine.Text.Windows.csproj" />
   </ItemGroup>
-  <ItemGroup Condition="'$(OmeNativeRid)' == 'win-x64' and Exists('$(OmeNativeDirectory)\ome_movie_ffmpeg.dll')">
+  <!-- The release form (tools/publish_engine.py, which passes -p:PublishAot=true): one NativeAOT library, OME.dll or
+       OME.so, that Godot loads from its data folder when the folder holds no .NET runtime (docs/platform-portability.md,
+       "Fewer files in a package"). Godot's script lookup reads GodotSharp's and this assembly's metadata, so the
+       trimmer keeps both whole. -->
+  <PropertyGroup Condition="'$(PublishAot)' == 'true'">
+    <NativeLib>Shared</NativeLib>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(PublishAot)' == 'true'">
+    <TrimmerRootAssembly Include="GodotSharp" />
+    <TrimmerRootAssembly Include="$(TargetName)" />
+  </ItemGroup>
+  <!-- -p:OmeDependencyList=FILE keeps the build's dependency list, which a NativeAOT publish leaves out: the library
+       holds the packages, and the release's notices check reads the list (tools/publish_engine.py). -->
+  <Target Name="KeepDependencyList" AfterTargets="Publish" Condition="'$(OmeDependencyList)' != ''">
+    <Error Condition="!Exists('$(ProjectDepsFilePath)')"
+           Text="the build's dependency list was not found: $(ProjectDepsFilePath)" />
+    <Copy SourceFiles="$(ProjectDepsFilePath)" DestinationFiles="$(OmeDependencyList)" />
+  </Target>
+  <!-- The FFmpeg bundle beside a build, for runs from the build output. A release's NativeAOT publish leaves it out: the
+       release build scripts stage it in the data folder themselves (tools/build-*-x64.sh). -->
+  <ItemGroup Condition="'$(OmeNativeRid)' == 'win-x64' and '$(PublishAot)' != 'true'
+                        and Exists('$(OmeNativeDirectory)\ome_movie_ffmpeg.dll')">
     <None Include="$(OmeNativeDirectory)\*.dll"
           Link="%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"
@@ -41,7 +66,8 @@
           CopyToOutputDirectory="PreserveNewest"
           CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
-  <ItemGroup Condition="'$(OmeNativeRid)' == 'linux-x64' and Exists('$(OmeNativeDirectory)\libome_movie_ffmpeg.so')">
+  <ItemGroup Condition="'$(OmeNativeRid)' == 'linux-x64' and '$(PublishAot)' != 'true'
+                        and Exists('$(OmeNativeDirectory)\libome_movie_ffmpeg.so')">
     <None Include="$(OmeNativeDirectory)\*.so*"
           Link="%(Filename)%(Extension)"
           CopyToOutputDirectory="PreserveNewest"

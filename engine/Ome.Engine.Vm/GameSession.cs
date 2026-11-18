@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using Ome.Engine.Diagnostics;
 using Ome.Engine.Hosting;
 using Ome.Engine.Model;
@@ -18,7 +19,7 @@ namespace Ome.Engine.Vm;
 /// back after, so trace/selftest parity is untouched. Local frames are per-call and correctly do NOT
 /// persist (they live in the VM, not here).</para>
 /// </summary>
-public sealed class GameSession
+public sealed partial class GameSession
 {
     public Dictionary<int, long> Globals { get; } = new();
     public Dictionary<int, long> GlobalFloats { get; } = new();
@@ -99,15 +100,14 @@ public sealed class GameSession
     {
         var snap = new StateSnapshot(
             Keyed(Globals), Keyed(GlobalStrings), Keyed(GlobalFloats), Keyed(GlobalPointers), Keyed(GlobalStringPointers));
-        return JsonSerializer.Serialize(snap,
-            new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
+        return JsonSerializer.Serialize(snap, SnapshotJson.StateSnapshot);
     }
 
     /// <summary>Rebuild a session from a <see cref="ToJson"/> snapshot.</summary>
     public static GameSession FromJson(string json)
     {
         var s = new GameSession();
-        var snap = JsonSerializer.Deserialize<StateSnapshot>(json) ?? new StateSnapshot(new(), new());
+        var snap = JsonSerializer.Deserialize(json, SnapshotJson.StateSnapshot) ?? new StateSnapshot(new(), new());
         Unkeyed(snap.Globals, s.Globals);
         Unkeyed(snap.Strings, s.GlobalStrings);
         Unkeyed(snap.Floats, s.GlobalFloats);
@@ -125,6 +125,16 @@ public sealed class GameSession
         foreach (var kv in keyed)
             bank[int.Parse(kv.Key, System.Globalization.CultureInfo.InvariantCulture)] = kv.Value;
     }
+
+    /// <summary>How a snapshot is written: non-ASCII text as it is. The metadata is source-generated, since the engine ships
+    /// compiled with NativeAOT, where reflection-based serialization is off.</summary>
+    private static readonly SnapshotJsonContext SnapshotJson = new(new JsonSerializerOptions
+    {
+        Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+    });
+
+    [JsonSerializable(typeof(StateSnapshot))]
+    private sealed partial class SnapshotJsonContext : JsonSerializerContext;
 
     /// <summary>A snapshot from before the float and pointer banks were saved has only the first two.</summary>
     private sealed record StateSnapshot(Dictionary<string, long> Globals, Dictionary<string, string> Strings,

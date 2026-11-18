@@ -7,7 +7,6 @@ project_root="$repo_root/godot"
 export_directory="$repo_root/build/export/windows-x64"
 expected_export_directory="$repo_root/build/export/windows-x64"
 package_directory="$repo_root/build/package/windows-x64"
-managed_publish_directory="$repo_root/build/managed-publish/win-x64"
 managed_proxy_directory="$repo_root/build/managed-publish-proxy/win-x64"
 dotnet_proxy_directory="$repo_root/build/dotnet-export-proxy"
 toolchain_root="$repo_root/build/toolchains/godot-4.7-stable-mono-linux-x64"
@@ -27,29 +26,11 @@ godot_console="$("$script_dir/bootstrap-godot-linux-x64.sh" windows-x64)"
 ffmpeg_sdk="$("$repo_root/native/ome_movie_ffmpeg/bootstrap-win64.sh")"
 "$repo_root/native/ome_movie_ffmpeg/build-win64.sh" "$ffmpeg_sdk"
 
-# Keep the memory-heavy self-contained publish outside the resident Godot editor, as on Linux.
-expected_managed_publish_directory="$repo_root/build/managed-publish/win-x64"
-if [[ "$managed_publish_directory" != "$expected_managed_publish_directory" || "$managed_publish_directory" == "/" ]]; then
-    echo "refusing to replace unexpected managed publish directory: $managed_publish_directory" >&2
-    exit 1
-fi
-rm -rf -- "$managed_publish_directory"
-mkdir -p -- "$managed_publish_directory"
-DOTNET_CLI_USE_MSBUILD_SERVER=0 \
-MSBUILDDISABLENODEREUSE=1 \
-DOTNET_gcServer=0 \
-DOTNET_GCConserveMemory=9 \
-dotnet publish "$project_root/OME.csproj" \
-    --configuration ExportRelease \
-    --runtime win-x64 \
-    --self-contained true \
-    --output "$managed_publish_directory" \
-    -p:GodotTargetPlatform=windows \
-    -p:UseSharedCompilation=false \
-    -p:BuildInParallel=false \
-    -p:RestoreDisableParallel=true \
-    -p:DebugType=None \
-    -p:DebugSymbols=false
+# The engine is one NativeAOT library (docs/platform-portability.md, "Fewer files in a package"). NativeAOT compiles
+# for its own system only, so tools/publish_engine.py builds it beforehand: in the release workflow's own job for this
+# target, or by hand on a matching system. Take only a publish of this checkout's commit.
+engine_publish_directory="$repo_root/build/engine-publish/win-x64"
+python3 -X utf8 "$script_dir/publish_engine.py" --runtime win-x64 --check
 
 expected_managed_proxy_directory="$repo_root/build/managed-publish-proxy/win-x64"
 if [[ "$managed_proxy_directory" != "$expected_managed_proxy_directory" || "$managed_proxy_directory" == "/" ]]; then
@@ -58,7 +39,8 @@ if [[ "$managed_proxy_directory" != "$expected_managed_proxy_directory" || "$man
 fi
 rm -rf -- "$managed_proxy_directory"
 mkdir -p -- "$managed_proxy_directory"
-cp -- "$managed_publish_directory/OME.dll" "$managed_proxy_directory/OME.dll"
+# Godot's export publishes the project once more; the proxy hands it the library instead.
+cp -- "$engine_publish_directory/OME.dll" "$managed_proxy_directory/OME.dll"
 
 real_dotnet="$(command -v dotnet)"
 expected_dotnet_proxy_directory="$repo_root/build/dotnet-export-proxy"
@@ -113,7 +95,10 @@ if [[ "$managed_export_directory" != "$expected_managed_export_directory" || "$m
 fi
 rm -rf -- "$managed_export_directory"
 mkdir -p -- "$managed_export_directory"
-cp -a -- "$managed_publish_directory/." "$managed_export_directory/"
+cp -a -- "$engine_publish_directory/." "$managed_export_directory/"
+# The FFmpeg shim and its libraries, which this job built (native/ome_movie_ffmpeg/build-win64.sh).
+cp -- "$repo_root/build/native/win-x64/"*.dll "$repo_root/build/native/win-x64/FFmpeg-LICENSE.txt" \
+    "$repo_root/build/native/win-x64/FFmpeg-SOURCE.txt" "$managed_export_directory/"
 
 # The launcher beside the engine, cross-built here with the SDK alone (launcher plan §3.2, §9.2): its own publish,
 # a step of its own after Godot's export has exited, so their memory peaks never overlap on the runner (§3.7).

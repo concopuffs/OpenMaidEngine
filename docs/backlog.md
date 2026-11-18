@@ -435,33 +435,14 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
 - **Portability gates** listed in `remake-architecture-and-roadmap.md` ("The open portability gates remain separate
   follow-ups"): mixed-case roots, fresh-profile writes, native Linux desktop, the movie preroll recheck, and Linux
   font bundling (`platform-portability.md`, "Deferred Linux font-bundling follow-up").
-- **A package is an executable beside about 200 loose files.** Both export presets leave
-  `dotnet/embed_build_outputs` and `binary_format/embed_pck` off (`godot/export_presets.cfg`). v0.6.0's Windows
-  package therefore holds 220 files: `OME.exe`, `OME.pck`, the notices, and 208 files in `data_OME_windows_x86_64/`,
-  200 of them DLLs (the engine's assemblies, the .NET runtime, the movie shim and FFmpeg). The Linux package holds
-  217, with 180 DLLs and 19 shared objects in its folder. The user asked (2026-11-16) to investigate the opposite
-  layout: a "fat" executable, with only chosen data kept as files beside it. They named the game manifests as data
-  to separate out eventually. What an investigation starts from:
-  - Godot's executable hosts the .NET runtime from that folder: both packagers require `hostfxr.dll`, `coreclr.dll`
-    and `hostpolicy.dll` in it. Whether .NET's single-file publish, which the launcher uses (launcher plan §9.1;
-    `platform-portability.md`, "The launcher in the release archives"), can apply to the engine is not known.
-    Neither is what the two export switches do when the engine starts. If embedded assemblies are unpacked to a
-    folder outside the package before they load, that is a second copy of the program on the player's disk, outside
-    what a portable install covers (launcher spec §4.1).
-  - FFmpeg's libraries stay separate files. The license walk-through depends on dynamic linking
-    (`platform-portability.md`, "FFmpeg license checklist walk-through", item 2).
-  - The packagers and their checks name loose files: `REQUIRED_FILES` in `tools/package_windows_x64.py` and
-    `tools/package_linux_x64.py`, `tools/verify_windows_native.py`, and the notices check that reads the
-    `deps.json`.
-  - Data that is inside an assembly today: the game manifests (`engine/Ome.Engine/Profiles/*.json`, which
-    `GameProfileRegistry` reads from `Ome.Engine`'s resources), the opcode table, the base mods (`Ome.Mods`), the
-    shell's and the launcher's strings, the panel font and the icon. A manifest holds the art addresses and their
-    hashes (launcher spec §8.7), so where a separate manifest is read from decides whether it is trusted as the
-    program is. "Toolchain packaging for exported ports" above asks the same question for the OMS modules.
-
-  Done when the layouts are measured on both platforms (file count, archive size, start time, and what is written
-  outside the package), the user has chosen one and the data that stays beside it, and the release builds and their
-  package gates produce it. If the loose layout has to stay, done when `platform-portability.md` records why.
+- **Data beside the program.** Since 2026-11-18 the engine ships as one NativeAOT library (`platform-portability.md`,
+  "Fewer files in a package"), and all its data stays inside it: the game manifests
+  (`engine/Ome.Engine/Profiles/*.json`, which `GameProfileRegistry` reads from `Ome.Engine`'s resources), the opcode
+  table, the base mods (`Ome.Mods`), the shell's strings, the panel font and the icon. On 2026-11-16 the user named
+  the game manifests as data to separate out eventually. A manifest holds the art addresses and their hashes (launcher
+  spec §8.7), so where a separate manifest is read from decides whether it is trusted as the program is.
+  "Toolchain packaging for exported ports" above asks the same question for the OMS modules. Done when the user has
+  chosen the data that sits beside the library and the release builds ship it there.
 - **A package folder in a cloud folder may be refused.**
   - `FolderPackageContainer` (`engine/Ome.Mods/Packages/`) refuses every entry with the `ReparsePoint` attribute, to
     keep a package inside its folder (mod loader spec §3.1). A cloud folder's placeholder (OneDrive's

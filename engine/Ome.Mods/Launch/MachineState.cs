@@ -75,7 +75,7 @@ public sealed class MachineState
         TomlTable table;
         try
         {
-            table = TomlSerializer.Deserialize<TomlTable>(File.ReadAllText(path)) ?? new TomlTable();
+            table = TomlDocument.Parse(File.ReadAllText(path)) ?? new TomlTable();
         }
         catch (TomlException error)
         {

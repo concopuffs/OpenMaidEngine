@@ -9,6 +9,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- The engine ships compiled with NativeAOT (platform-portability.md, "Fewer files in a package"). -->
+    <IsAotCompatible>true</IsAotCompatible>
     <DisableTransitiveProjectReferences>true</DisableTransitiveProjectReferences>
   </PropertyGroup>
 

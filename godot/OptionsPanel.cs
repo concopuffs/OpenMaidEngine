@@ -489,11 +489,11 @@ public partial class OptionsPanel : Control
     public JsonObject Describe()
     {
         var buttons = new JsonArray();
-        foreach (string name in _switches.Keys) buttons.Add(Ja[ShellPanel.LabelKey(name)]);
-        if (_copy != null) buttons.Add(Ja["diag.copy"]);
-        foreach (ShellPanelSection section in ShellPanel.Sections) buttons.Add(Ja[section.TitleKey]);
-        buttons.Add(Ja["panel.ok"]);
-        buttons.Add(Ja["panel.cancel"]);
+        foreach (string name in _switches.Keys) buttons.Add((JsonNode?)Ja[ShellPanel.LabelKey(name)]);
+        if (_copy != null) buttons.Add((JsonNode?)Ja["diag.copy"]);
+        foreach (ShellPanelSection section in ShellPanel.Sections) buttons.Add((JsonNode?)Ja[section.TitleKey]);
+        buttons.Add((JsonNode?)Ja["panel.ok"]);
+        buttons.Add((JsonNode?)Ja["panel.cancel"]);
         return new JsonObject
         {
             ["title"] = Ja["panel.title"], ["text"] = Ja[ShellPanel.Section(_section).TitleKey], ["buttons"] = buttons,
@@ -567,7 +567,7 @@ public partial class OptionsPanel : Control
     {
         var options = new JsonArray();
         foreach (ShellOption option in _context.Draft.Visible)
-            options.Add(new JsonObject
+            options.Add((JsonNode)new JsonObject
             {
                 ["name"] = option.Name, ["section"] = option.Section.ToString().ToLowerInvariant(),
                 ["value"] = _context.Draft.Value(option), ["min"] = option.Min, ["max"] = option.Max,

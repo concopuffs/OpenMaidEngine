@@ -68,7 +68,7 @@ public sealed class ScreenshotFolderDialog
         foreach ((IntPtr _, string kind, string text) in Children(hwnd))
         {
             if (kind == "Static" && text.Length != 0) texts.Add(text);
-            else if (kind == "Button") buttons.Add(text);
+            else if (kind == "Button") buttons.Add((System.Text.Json.Nodes.JsonNode?)text);
         }
         return new System.Text.Json.Nodes.JsonObject
         {

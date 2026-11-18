@@ -7,6 +7,13 @@
     <DefineConstants>$(DefineConstants);OME_OPTIMIZED_DEBUG</DefineConstants>
   </PropertyGroup>
 
+  <!-- The engine ships compiled with NativeAOT (docs/platform-portability.md, "Fewer files in a package"). In the
+       projects it ships, which turn the trim and AOT analyzers on, their warnings are errors: a call that needs
+       reflection or code generated at run time works under the JIT and the tests, and fails only in a release. -->
+  <PropertyGroup Condition="'$(IsAotCompatible)' == 'true' or '$(EnableAotAnalyzer)' == 'true'">
+    <WarningsAsErrors>$(WarningsAsErrors);IL2026;IL2046;IL2050;IL2057;IL2058;IL2059;IL2060;IL2062;IL2063;IL2065;IL2067;IL2068;IL2069;IL2070;IL2072;IL2075;IL2077;IL2080;IL2087;IL2090;IL2091;IL2111;IL3000;IL3001;IL3002;IL3050;IL3051</WarningsAsErrors>
+  </PropertyGroup>
+
   <!-- The two programs a release ships, the engine (godot/OME.csproj) and the launcher
        (launcher/Ome.Launcher/Ome.Launcher.csproj), opt into what follows with OmeProgram=true (launcher plan §9.1). -->
 
@@ -53,6 +60,13 @@
     <GetPackageDirectory Items="@(_OmeShippedPackage)" PackageFolders="@(AssetsFilePackageFolder)">
       <Output TaskParameter="Output" ItemName="_OmeShippedPackageDirectory" />
     </GetPackageDirectory>
+    <!-- A NativeAOT publish compiles the .NET runtime pack into its library and leaves the pack's files out of the list
+         above. Its notices still apply, and the AOT compiler's packages carry the same third-party notices under the
+         same MIT license. -->
+    <ItemGroup Condition="'$(PublishAot)' == 'true'">
+      <_OmeShippedPackageDirectory Include="@(ResolvedRuntimePack)" NuGetPackageId="%(ResolvedRuntimePack.Identity)"
+                                   Condition="'%(ResolvedRuntimePack.FrameworkName)' == 'Microsoft.NETCore.App'" />
+    </ItemGroup>
     <ItemGroup>
       <_OmePackageNotice Include="%(_OmeShippedPackageDirectory.PackageDirectory)/LICENSE*;%(_OmeShippedPackageDirectory.PackageDirectory)/THIRD-PARTY-NOTICES*;%(_OmeShippedPackageDirectory.PackageDirectory)/NOTICE*"
                          Condition="'%(_OmeShippedPackageDirectory.PackageDirectory)' != ''">

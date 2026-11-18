@@ -139,7 +139,8 @@ def run(target: str, steps: list[core.Step], screenshot: bool) -> list[str | Ima
 @server.tool()
 def drive_start(target: Target, sandbox: str | None = None, seed: str | None = None, sound: bool = False,
                 foreground: bool = False, build: bool = True, mods: list[str] | None = None,
-                settings: list[str] | None = None, optimize: bool = False, data_root: str | None = None) -> str:
+                settings: list[str] | None = None, optimize: bool = False, data_root: str | None = None,
+                package: str | None = None) -> str:
     """Launch the game under the driver and return once it is up (`drive.py <target> start`).
 
     sandbox: named save sandbox kept between runs (default 'fresh', emptied on every start).
@@ -156,6 +157,8 @@ def drive_start(target: Target, sandbox: str | None = None, seed: str | None = N
     data_root: port only; run this player profile root (it holds profile.toml) as it is (`--data-root`): no sandbox,
     nothing written into it, and its own settings and volume. It cannot be combined with sandbox, seed, settings or
     sound, and its game must be the driver's.
+    package: port only; run this exported package's engine (its folder, holding OME.exe) instead of the Godot project
+    (`--package`): a release's NativeAOT engine, with no build. It cannot be combined with optimize.
     Fails if the target already has a session; drive_stop it first."""
     arguments = [target, "start"]
     if sandbox:
@@ -186,6 +189,12 @@ def drive_start(target: Target, sandbox: str | None = None, seed: str | None = N
         if target != "port":
             raise ToolError("data_root applies to the port only")
         arguments += ["--data-root", data_root]
+    if package:
+        if target != "port":
+            raise ToolError("package applies to the port only")
+        if optimize:
+            raise ToolError("optimize is a build option; a package is built already")
+        arguments += ["--package", package]
     return run_cli(*arguments, timeout=START_TIMEOUT_S)
 
 

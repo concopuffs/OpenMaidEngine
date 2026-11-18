@@ -306,14 +306,14 @@ public sealed class ImportReport
     public AssetCounts? Assets { get; set; }
     public VerifyCounts? Verify { get; set; }
 
-    public static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly ModsJsonContext Json = new(new JsonSerializerOptions
     {
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         DictionaryKeyPolicy = null,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    });
 
-    public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+    public string ToJson() => JsonSerializer.Serialize(this, Json.ImportReport);
 }

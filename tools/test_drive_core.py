@@ -750,6 +750,8 @@ def test_port_build():
     check(port.jit_note({"jit_optimized": True}) == "; JIT optimized"
           and "Debug" in port.jit_note({"jit_optimized": False}) and port.jit_note({}) == "",
           "the start line reports the port's JIT mode when its hello has it")
+    check("NativeAOT" in port.jit_note({"jit_optimized": True, "native_aot": True}),
+          "a package's engine reports NativeAOT instead")
     targets = (paths.REPO / "Directory.Build.targets").read_text(encoding="utf-8")
     check("'$(Optimize)' == 'true'" in targets and "DefineConstants" in targets,
           "Directory.Build.targets makes an Optimize change recompile")
@@ -796,6 +798,18 @@ def test_port_profile_root():
               "a profile root's start passes no --game-root")
         check(profile_run[-1] == "--locator-hud" and profile_run[profile_run.index("--desktop-dir") + 1] == str(desktop),
               "the Desktop and the extra port arguments stay")
+        package = Path(directory) / "OME-windows-x64"
+        package.mkdir()
+        check(raises(port.package_program, package, [], contains=f"no {port.PACKAGE_PROGRAM} in the package folder"),
+              "a folder without the engine program is refused")
+        (package / port.PACKAGE_PROGRAM).write_bytes(b"engine")
+        check(port.package_program(package, []) == (package / port.PACKAGE_PROGRAM).resolve(),
+              "--package runs the package's own engine program")
+        check(raises(port.package_program, package, ["--godot", "--optimize"],
+                     contains="--godot, --optimize cannot be combined with --package"),
+              "build options are refused with a package")
+        given = parser.parse_args(["--package", str(package)])
+        check(given.package == str(package) and given.godot is None, "--package is a start option")
         sandbox_run = port.engine_arguments(root, desktop, session, [], [], game_root=Path(directory))
         check(sandbox_run[:2] == ["--game-root", directory], "a sandbox start names the game root first")
 

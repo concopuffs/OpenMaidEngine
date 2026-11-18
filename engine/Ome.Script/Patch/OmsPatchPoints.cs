@@ -34,13 +34,13 @@ public sealed class OmsPatchPoints
                 throw new InvalidDataException($"patch point {point.Name} is defined twice");
     }
 
-    private sealed record Document(
+    internal sealed record Document(
         [property: JsonPropertyName("profile")] string Profile,
         [property: JsonPropertyName("points")] IReadOnlyList<OmsPatchPoint> Points);
 
     public static OmsPatchPoints FromJson(string json)
     {
-        Document document = JsonSerializer.Deserialize<Document>(json)
+        Document document = JsonSerializer.Deserialize(json, ScriptJsonContext.Default.Document)
                             ?? throw new InvalidDataException("empty patch-point registry");
         return new OmsPatchPoints(document.Points ?? []);
     }

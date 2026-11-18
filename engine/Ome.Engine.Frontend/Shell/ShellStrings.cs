@@ -1,5 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Ome.Engine.Localization;
 using Ome.Engine.Model;
@@ -134,6 +135,11 @@ public sealed partial class ShellStrings
         if (!Languages.Contains(language)) return null;
         using Stream? stream = Assembly.GetExecutingAssembly()
             .GetManifestResourceStream($"Ome.Engine.Frontend.Shell.Strings.{language}.json");
-        return stream == null ? null : JsonSerializer.Deserialize<Dictionary<string, string>>(stream);
+        return stream == null ? null : JsonSerializer.Deserialize(stream, TableJsonContext.Default.DictionaryStringString);
     }
+
+    /// <summary>The tables' metadata, source-generated: the engine ships compiled with NativeAOT, where reflection-based
+    /// serialization is off.</summary>
+    [JsonSerializable(typeof(Dictionary<string, string>))]
+    private sealed partial class TableJsonContext : JsonSerializerContext;
 }

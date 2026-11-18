@@ -12,9 +12,9 @@ import package_notices
 HERE = Path(__file__).resolve().parent
 
 
-def write_deps(directory: Path, rid: str = "linux-x64") -> Path:
-    """An OME.deps.json as a self-contained publish writes it: projects, the runtime pack, an analyzer-only package and
-    two packages with runtime assets."""
+def write_deps(path: Path, rid: str = "linux-x64") -> Path:
+    """The engine's dependency list as its publish keeps it (tools/publish_engine.py): projects, the runtime pack, an
+    analyzer-only package and two packages with runtime assets."""
     target = f".NETCoreApp,Version=v10.0/{rid}"
     runtime_pack = f"runtimepack.Microsoft.NETCore.App.Runtime.{rid}/10.0.15"
     deps = {
@@ -38,7 +38,6 @@ def write_deps(directory: Path, rid: str = "linux-x64") -> Path:
             "Ome.Engine/1.0.0": {"type": "project", "serviceable": False, "sha512": ""},
         },
     }
-    path = directory / package_notices.DEPS_FILE
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(deps), encoding="utf-8")
     return path
@@ -150,7 +149,7 @@ class PackageNoticesTests(unittest.TestCase):
 
     def test_shipped_packages_are_the_nuget_libraries_with_assets(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            deps = write_deps(Path(temporary), "win-x64")
+            deps = write_deps(Path(temporary) / "win-x64.deps.json", "win-x64")
             self.assertEqual(
                 ["GodotSharp", "Microsoft.NETCore.App", "Tomlyn"], package_notices.shipped_packages(deps)
             )
@@ -158,18 +157,19 @@ class PackageNoticesTests(unittest.TestCase):
     def test_notices_must_name_every_shipped_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            write_deps(root / "managed")
+            # The NativeAOT library holds the packages, so the list is the one the engine's publish kept beside it.
+            deps = write_deps(root / "engine-publish/linux-x64.deps.json")
             notices = root / "THIRD_PARTY_NOTICES.md"
             notices.write_text("`GodotSharp`, `Microsoft.NETCore.App`, `Tomlyn`\n", encoding="utf-8")
             self.assertEqual(
                 ["GodotSharp", "Microsoft.NETCore.App", "Tomlyn"],
-                package_notices.verify_dependency_notices(root / "managed", notices),
+                package_notices.verify_dependency_notices(deps, notices),
             )
             notices.write_text("`GodotSharp`, `Microsoft.NETCore.App`, Tomlyn\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "does not name shipped NuGet packages: Tomlyn"):
-                package_notices.verify_dependency_notices(root / "managed", notices)
-            with self.assertRaisesRegex(ValueError, "dependency file was not found"):
-                package_notices.verify_dependency_notices(root / "elsewhere", notices)
+                package_notices.verify_dependency_notices(deps, notices)
+            with self.assertRaisesRegex(ValueError, "engine's dependency list was not found.*publish_engine"):
+                package_notices.verify_dependency_notices(root / "elsewhere.deps.json", notices)
 
     def test_project_notices_name_the_packages_the_port_ships(self) -> None:
         # The NuGet packages a self-contained publish of godot/OME.csproj ships (2026-11-16, win-x64 on net10.0;

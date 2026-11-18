@@ -155,6 +155,17 @@ def test_refusals():
             drive_mcp.run_cli = saved
         check(passed == ["port", "start", "--no-build", "--data-root", "C:/profiles/one"],
               "data_root becomes drive.py's --data-root")
+        check(refused("drive_start", "port only", target="native", package="pkg"), "package is refused for native")
+        check(refused("drive_start", "built already", target="port", package="pkg", optimize=True),
+              "a package takes no optimize")
+        passed.clear()
+        saved, drive_mcp.run_cli = drive_mcp.run_cli, lambda *arguments, timeout: passed.extend(arguments) or "started"
+        try:
+            call("drive_start", target="port", package="C:/packages/OME-windows-x64")
+        finally:
+            drive_mcp.run_cli = saved
+        check(passed == ["port", "start", "--package", "C:/packages/OME-windows-x64"],
+              "package becomes drive.py's --package")
 
 
 def main():

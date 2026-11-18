@@ -11,6 +11,7 @@ import package_linux_x64
 
 REPO = Path(__file__).resolve().parent.parent
 WORKFLOW = REPO / ".github/workflows/release-build.yml"
+FFMPEG_WORKFLOW = REPO / ".github/workflows/ffmpeg-sdk.yml"
 WORKFLOW_DIRECTORY = REPO / ".github/workflows"
 EXPORT_PRESETS = REPO / "godot/export_presets.cfg"
 GODOT_PROJECT = REPO / "godot/project.godot"
@@ -20,7 +21,6 @@ ENGINE_PROJECT = REPO / "engine/Ome.Engine/Ome.Engine.csproj"
 MANAGED_SOLUTION = REPO / "godot/OME.sln"
 LINUX_BUILD = REPO / "tools/build-linux-x64.sh"
 WINDOWS_BUILD = REPO / "tools/build-windows-x64.sh"
-WINDOWS_HOSTED_EXPORT = REPO / "tools/export-linux-x64.ps1"
 LINUX_FFMPEG_MANIFEST = REPO / "native/ome_movie_ffmpeg/dependency-linux-x64.json"
 WINDOWS_FFMPEG_MANIFEST = REPO / "native/ome_movie_ffmpeg/dependency-win64.json"
 LINUX_FFMPEG_BOOTSTRAP = REPO / "native/ome_movie_ffmpeg/bootstrap-linux-x64.sh"
@@ -60,6 +60,8 @@ class ReleaseWorkflowTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.text = WORKFLOW.read_text(encoding="utf-8")
+        cls.linux_engine = job(cls.text, "linux-engine", "windows-engine")
+        cls.windows_engine = job(cls.text, "windows-engine", "linux-release")
         cls.linux = job(cls.text, "linux-release", "windows-release")
         cls.windows = job(cls.text, "windows-release", "publish-release")
         cls.publish = job(cls.text, "publish-release", None)
@@ -70,7 +72,6 @@ class ReleaseWorkflowTests(unittest.TestCase):
         cls.managed_solution = MANAGED_SOLUTION.read_text(encoding="utf-8")
         cls.linux_build = LINUX_BUILD.read_text(encoding="utf-8")
         cls.windows_build = WINDOWS_BUILD.read_text(encoding="utf-8")
-        cls.windows_hosted_export = WINDOWS_HOSTED_EXPORT.read_text(encoding="utf-8")
 
     def test_ffmpeg_inputs_are_the_pinned_minimal_lgpl_build(self) -> None:
         source = json.loads(FFMPEG_SOURCE_MANIFEST.read_text(encoding="utf-8"))
@@ -145,13 +146,40 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 self.assertEqual(1, script.count("publish_launcher.py"))
                 publish = script.index(f'publish_launcher.py" --runtime {runtime} --into "$export_directory"')
                 self.assertLess(script.index("export_status=$?"), publish)
-                self.assertLess(script.index('cp -a -- "$managed_publish_directory/." "$managed_export_directory/"'),
+                self.assertLess(script.index('cp -a -- "$engine_publish_directory/." "$managed_export_directory/"'),
                                 publish)
                 self.assertLess(publish, script.index(verify))
-        hosted = self.windows_hosted_export
-        publish = hosted.index("publish_launcher.py') --runtime linux-x64 --into $outputDirectory")
-        self.assertLess(hosted.index("--export-release"), publish)
-        self.assertLess(publish, hosted.index("package_linux_x64.py') verify"))
+
+    def test_the_engine_library_is_compiled_on_its_own_system(self) -> None:
+        # NativeAOT compiles for its own system only (docs/platform-portability.md, "Fewer files in a package"): each
+        # library has a job on its system, and the package job takes the library that job uploaded.
+        for engine, package, script, runtime in (
+            (self.linux_engine, self.linux, self.linux_build, "linux-x64"),
+            (self.windows_engine, self.windows, self.windows_build, "win-x64"),
+        ):
+            with self.subTest(runtime):
+                self.assertIn(f"tools/publish_engine.py --runtime {runtime}\n", engine)
+                self.assertIn(f"name: engine-{runtime}-${{{{ github.sha }}}}", engine)
+                self.assertIn("path: build/engine-publish/\n", engine)
+                self.assertNotIn("contents: write", engine)
+                self.assertRegex(package, rf"(?m)^    needs: {re.escape(engine.split(':', 1)[0].strip())}$")
+                download = package.index(f"name: engine-{runtime}-${{{{ github.sha }}}}")
+                self.assertIn("path: build/engine-publish\n", package[download:])
+                self.assertLess(download, package.index("run: ./tools/build-"))
+                # The build takes only a library built from its own commit, before Godot's export starts.
+                check = script.index(f'publish_engine.py" --runtime {runtime} --check')
+                self.assertLess(check, script.index("--export-release"))
+                self.assertNotIn("dotnet publish", script)
+        # Linked on the package's glibc floor, in the image the FFmpeg SDK is built in.
+        image = re.search(r"(?m)^      image: (\S+)$", self.linux_engine)
+        self.assertIsNotNone(image)
+        self.assertIn(f"image: {image.group(1)}\n", FFMPEG_WORKFLOW.read_text(encoding="utf-8"))
+        self.assertIn("manylinux_2_28_x86_64", image.group(1))
+        self.assertIn('OME_PUBLISH_ASSEMBLY="OME.so"', self.linux_build)
+        self.assertIn('OME_PUBLISH_ASSEMBLY="OME.dll"', self.windows_build)
+        # Checked out as stored, so the Windows library embeds the bytes the Linux one does.
+        self.assertLess(self.windows_engine.index("git config --global core.autocrlf false"),
+                        self.windows_engine.index("uses: actions/checkout@"))
 
     def test_public_build_outputs_use_ome_branding(self) -> None:
         self.assertIn('export_path="../build/export/linux-x64/OME"', self.export_presets)
@@ -164,7 +192,6 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn('LogicalName="Ome.Engine.Runtime.opcodes.json"', self.engine_project)
         self.assertNotIn("opcodes.json", self.managed_project)
         self.assertIn('= "OME", "OME.csproj"', self.managed_solution)
-        self.assertIn("'OME.sln'", self.windows_hosted_export)
         self.assertFalse((REPO / "godot/Himegari.csproj").exists())
         self.assertFalse((REPO / "godot/Himegari.sln").exists())
         active_surfaces = "\n".join(
@@ -174,7 +201,6 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 self.godot_project,
                 self.linux_build,
                 self.windows_build,
-                self.windows_hosted_export,
             )
         )
         for legacy_name in (
@@ -204,7 +230,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("run: ./tools/build-windows-x64.sh", self.windows)
         self.assertNotIn("contents: write", self.linux + self.windows)
         self.assertNotIn("secrets.", self.text)
-        self.assertNotIn("GITHUB_TOKEN", self.linux + self.windows)
+        self.assertNotIn("GITHUB_TOKEN", self.linux + self.windows + self.linux_engine + self.windows_engine)
+        # Only the Windows engine library needs a Windows runner: NativeAOT links it with the MSVC tools there.
+        self.assertIn("runs-on: windows-2025", self.windows_engine)
+        self.assertIn("runs-on: ubuntu-24.04", self.linux_engine)
 
     def test_windows_job_provisions_and_caches_only_its_cross_inputs(self) -> None:
         self.assertRegex(
@@ -279,7 +308,10 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 self.assertRegex(comment, r"^ # v\d+\.\d+\.\d+$", f"{workflow.name}: {action}")
             runners = re.findall(r"(?m)^\s*runs-on:\s*(\S+)\s*$", text)
             self.assertTrue(runners, workflow.name)
-            self.assertEqual({"ubuntu-24.04"}, set(runners), workflow.name)
+            # The Windows engine library's job is the one Windows runner (test_the_engine_library_is_compiled_on...).
+            expected = {"ubuntu-24.04", "windows-2025"} if workflow == WORKFLOW else {"ubuntu-24.04"}
+            self.assertEqual(expected, set(runners), workflow.name)
+            self.assertEqual(1 if workflow == WORKFLOW else 0, runners.count("windows-2025"), workflow.name)
             self.assertNotIn("pull_request_target", text)
 
     def test_dotnet_setup_installs_only_the_pinned_sdk(self) -> None:
@@ -295,7 +327,7 @@ class ReleaseWorkflowTests(unittest.TestCase):
                 inputs = match.group(1)
                 self.assertIn("global-json-file: global.json", inputs, workflow.name)
                 self.assertNotIn("dotnet-version:", inputs, workflow.name)
-        self.assertEqual(3, steps)
+        self.assertEqual(5, steps)
 
     def test_every_project_targets_net10(self) -> None:
         # .NET 8 left support on 2026-11-10; the exports bundle the runtime the projects target.

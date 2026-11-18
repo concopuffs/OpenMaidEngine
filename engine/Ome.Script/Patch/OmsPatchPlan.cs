@@ -115,7 +115,7 @@ public sealed class OmsPatchPlan
         init => Resources = value ?? new();
     }
 
-    private static readonly JsonSerializerOptions Options = new()
+    private static readonly ScriptJsonContext Json = new(new JsonSerializerOptions
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -124,9 +124,9 @@ public sealed class OmsPatchPlan
             new JsonStringEnumConverter<IrDataKind>(JsonNamingPolicy.SnakeCaseLower),
             new JsonStringEnumConverter<OmsPatchOperationKind>(JsonNamingPolicy.SnakeCaseLower),
         },
-    };
+    });
 
-    public string ToJson() => JsonSerializer.Serialize(this, Options);
+    public string ToJson() => JsonSerializer.Serialize(this, Json.OmsPatchPlan);
 
     /// <summary>Reads a stored plan. Every way a plan can be malformed throws <see cref="JsonException"/> or
     /// <see cref="InvalidDataException"/>, which the linker reports against the mod.</summary>
@@ -135,7 +135,7 @@ public sealed class OmsPatchPlan
         OmsPatchPlan? parsed;
         try
         {
-            parsed = JsonSerializer.Deserialize<OmsPatchPlan>(json, Options);
+            parsed = JsonSerializer.Deserialize(json, Json.OmsPatchPlan);
         }
         catch (Exception error) when (error is InvalidOperationException or FormatException or KeyNotFoundException)
         {

@@ -533,13 +533,28 @@ member from Godot's all-platform archive; it does not download the complete 1.2 
 
 The build regenerates embedded opcode metadata, bootstraps/builds the pinned Linux FFmpeg bundle, performs
 the Godot release export, and delegates the shared required/forbidden payload checks to
-`package_linux_x64.py`. To remain inside constrained CI memory cgroups, it first runs the exact self-contained
-`ExportRelease` publish with build/compiler servers and debug symbols disabled. Godot then performs its real
-PCK/executable export against a one-assembly staging payload supplied by `dotnet_publish_proxy.py`; the proxy
-refuses any project, configuration, runtime, self-contained flag, or output root other than the invocation
-reserved by the build driver. Because managed outputs are external to the PCK, the complete prepublished
-payload replaces that temporary staging directory only after Godot exits. The final payload verifier and
-packaged smoke test therefore validate the same complete runtime that is archived.
+`package_linux_x64.py`. It does not compile the engine: the engine is one NativeAOT library that
+`publish_engine.py --runtime linux-x64` builds beforehand on Linux (below), and the build takes that publish only if
+its stamp names the checkout's commit (`publish_engine.py --check`). Godot then performs its real PCK/executable
+export against the library alone, supplied by `dotnet_publish_proxy.py` (`OME_PUBLISH_ASSEMBLY="OME.so"`); the proxy
+refuses any project, configuration, runtime, self-contained flag, or output root other than the invocation reserved
+by the build driver. Because the data folder is external to the PCK, the build stages it after Godot exits: the
+engine publish and the FFmpeg bundle. The payload verifier and packaged smoke test therefore validate the same
+runtime that is archived.
+
+**The engine library (`tools/publish_engine.py`).** The engine ships as one NativeAOT library, `OME.dll` or
+`OME.so` in the data folder (`platform-portability.md`, "Fewer files in a package"). `publish_engine.py --runtime
+win-x64|linux-x64` publishes `godot/OME.csproj` with `-p:PublishAot=true` (`ExportRelease`, self-contained, one
+MSBuild node, no build servers, the conserving GC, no symbols) into `build/engine-publish/<rid>/`. The publish must
+hold exactly the library and the .NET runtime pack's two notice files; anything else fails it, a JIT runtime file
+or managed assembly above all. It keeps the build's dependency list as `build/engine-publish/<rid>.deps.json` for the
+notices check, since the library holds the packages, and writes `build/engine-publish/<rid>.json` with the runtime,
+the commit and whether the checkout had uncommitted changes. NativeAOT compiles for the host's own system only, so
+the tool refuses another: `win-x64` on Windows with the MSVC build tools (found through `vswhere`, whose folder the
+tool adds to `PATH`), `linux-x64` on Linux with gcc. A release links the Linux library in the `manylinux_2_28` image
+(the release workflow's `linux-engine` job), so it needs glibc 2.28 at most; one linked on a newer glibc fails the
+Linux packager. `--check` only checks that a complete publish for this checkout's commit is in place, as the build
+scripts do. `--dotnet` names another `dotnet`.
 
 Then `publish_launcher.py` puts the launcher beside the engine (launcher plan §9.2). It is a step of its own after
 Godot has exited, so its memory peak never joins the export's (plan §3.7). It runs `dotnet publish` of
@@ -551,7 +566,11 @@ them the ones `LAYOUTS` requires): a `.pdb`, a loose `.deps.json` or another tar
 copies them beside `OME`/`OME.exe`, refusing an export that has no engine. On Linux it prints the publish's peak
 memory: its largest process (`getrusage`), and the job's memory cgroup peak where the cgroup has `memory.peak`.
 The payload checks then require the launcher's files as the engine's (plan §9.3). They refuse the Windows launcher
-and its natives, and any `.pdb`, and require the executable bit on `OME-Launcher` as on `OME`.
+and its natives, and any `.pdb`, and require the executable bit on `OME-Launcher` as on `OME`. The data folder must
+hold exactly the engine's library, the runtime's two notice files and the FFmpeg bundle (`DATA_FILES`). The library is
+checked with `readelf` (`package_linux_x64.verify_engine_library`): an x86-64 ELF file that exports
+`godotsharp_game_main_init`, needs only glibc's own libraries, and needs no glibc newer than the FFmpeg manifest's
+`minimum_glibc` (2.28).
 
 The packager adds `LICENSE`, `README.md`, `THIRD_PARTY_NOTICES.md`, Godot's notices, a source/dependency
 `BUILD-INFO.json`, and per-file `SHA256SUMS` to a stable top-level directory. It normalizes archive ownership,
@@ -564,12 +583,13 @@ as `Godot-LICENSE.txt` and `Godot-COPYRIGHT.txt`. They refuse either file if it 
 `notices/godot/notices.json` (`tools/package_notices.py`). The self-contained publish of each program (the root
 `Directory.Build.targets`, target `PublishPackageNotices`, which `godot/OME.csproj` and the launcher opt into with
 `OmeProgram`) copies the root `LICENSE*`, `THIRD-PARTY-NOTICES*` and `NOTICE*` files of every NuGet package it ships
-as `<package id>-<file name>`: the engine's into the managed directory, the launcher's into `OME-Launcher-notices/`
-(`OmePackageNoticeFolder`). The verifiers require the .NET runtime pack's two, and the launcher's package notice
-files that `publish_launcher.LAYOUTS` lists. They also read two dependency lists: the managed directory's
-`OME.deps.json`, and the launcher's, which its publish kept as `build/launcher-publish/<rid>.deps.json` (`verify`'s
-and `package`'s `--launcher-deps` name another copy). They refuse an export that ships a NuGet package
-`THIRD_PARTY_NOTICES.md` does not name in backticks, and an export with no launcher list. A shipped package is a package or
+as `<package id>-<file name>`: the engine's into the data folder, the launcher's into `OME-Launcher-notices/`
+(`OmePackageNoticeFolder`). A NativeAOT publish leaves the runtime pack out of its file list, so the target adds it
+back for the engine. The verifiers require the .NET runtime pack's two, and the launcher's package notice files that
+`publish_launcher.LAYOUTS` lists. They also read two dependency lists, which the publishes kept: the engine's as
+`build/engine-publish/<rid>.deps.json` and the launcher's as `build/launcher-publish/<rid>.deps.json` (`verify`'s
+and `package`'s `--engine-deps` and `--launcher-deps` name other copies). They refuse an export that ships a NuGet
+package `THIRD_PARTY_NOTICES.md` does not name in backticks, and an export with either list missing. A shipped package is a package or
 runtime-pack library with runtime, native or resource assets; a runtime pack counts as its framework
 (`Microsoft.NETCore.App`). A Godot upgrade changes `release_tag` in `tools/godot-linux-x64.json`, and
 `test_package_notices.py` then fails until `notices/godot/` holds the new tag's files and pins.
@@ -596,8 +616,10 @@ font's SHA-256 is the one `THIRD_PARTY_NOTICES.md` records.
 
 Before reporting success, the command launches the staged executable as
 `OME --headless -- --package-smoke`. This asset-independent mode runs before game-root discovery
-and proves that the packaged managed assembly can read all 548 embedded opcode records and dynamically load
-the bundled native movie shim plus its local FFmpeg dependencies at ABI version 3. It does not exercise game
+and proves that the packaged engine can read all 548 embedded opcode records and dynamically load the bundled
+native movie shim plus its local FFmpeg dependencies at ABI version 3. It also reaches the code a NativeAOT release
+compiles differently from the JIT the tests run under: it reads the embedded game manifests, the shell's strings and
+every shipped package, round-trips a session snapshot, and compiles a Lua chunk. It does not exercise game
 archives, fonts, rendering, audio output, or a desktop window; retain the installed-game self-test below as a
 separate trusted/runtime gate.
 
@@ -635,6 +657,7 @@ The focused component commands are:
 
 ```bash
 ./tools/bootstrap-godot-linux-x64.sh
+python3 -X utf8 tools/publish_engine.py --runtime linux-x64
 python3 -X utf8 tools/publish_launcher.py --runtime linux-x64 --into build/export/linux-x64
 python3 -X utf8 tools/package_linux_x64.py verify build/export/linux-x64
 python3 -X utf8 tools/package_linux_x64.py package build/export/linux-x64
@@ -645,31 +668,36 @@ The bootstrap prints the pinned editor path. The verifier prints the accepted ex
 prints the staged root and archive path. Those Python components and the guarded publish proxy have source-only
 synthetic regressions in the core validation level.
 
-**Windows x64 cross-export** uses the same pinned Linux editor and low-memory publish boundary, with MinGW and
-the selectively installed Windows template:
+**Windows x64 cross-export** uses the same pinned Linux editor and publish proxy, with MinGW and the selectively
+installed Windows template. Its engine library comes from a Windows host: `publish_engine.py --runtime win-x64`
+there (the release workflow's `windows-engine` job), copied into `build/engine-publish/` with its list and stamp.
 
 ```bash
 ./tools/build-windows-x64.sh
 ```
 
 The command requires Python 3.11, the `global.json` .NET SDK, MinGW-w64 GCC/binutils, `curl`, and `sha256sum`.
-It regenerates runtime metadata, builds and statically verifies the pinned Windows FFmpeg bundle, publishes the
-exact self-contained `ExportRelease/win-x64` managed runtime, performs the real Godot `Windows x86_64`
+It regenerates runtime metadata, builds and statically verifies the pinned Windows FFmpeg bundle, takes the engine
+library for this commit (`publish_engine.py --check`), performs the real Godot `Windows x86_64`
 release export (the preset's `application/icon` names `res://assets/ome-icon.svg`, which Godot draws into
 `OME.exe` at 16 to 256 pixels; the project's `application/config/icon` names it too, which every export
 stores in its `.pck` and shows on the window from the start), and then cross-publishes the launcher beside it with the SDK alone (`publish_launcher.py --runtime
 win-x64`, as on Linux; plan §3.2). No produced Windows program is executed. `package_windows_x64.py` requires the Godot AMD64 EXE,
-PCK, self-contained runtime, project assemblies including `Ome.Engine.Text.Windows.dll`, and FFmpeg DLL/license
-set. It also requires the launcher: `OME-Launcher.exe`, an AMD64 PE with the Windows GUI subsystem, its three AMD64
-natives, and its notices. It rejects Linux shared objects, the Linux launcher, any `.pdb` and the legacy
-`Himegari.dll` name. It embeds `BUILD-INFO.json`, `WINDOWS-VERIFICATION.json` (whose `launcher` section records the
-launcher's check), the notices (Third-party notices, above), and a complete `SHA256SUMS`. The normalized output is
+PCK, and a data folder of exactly the engine library, the runtime's two notice files and the FFmpeg DLL/license set
+(`DATA_FILES`). It checks the library with objdump (`verify_windows_native.verify_engine_library`): an AMD64 PE that
+exports `godotsharp_game_main_init` and imports neither a Visual C++ redistributable nor a .NET runtime. It also
+requires the launcher: `OME-Launcher.exe`, an AMD64 PE with the Windows GUI subsystem, its three AMD64 natives, and
+its notices. It rejects Linux shared objects, the Linux launcher and any `.pdb`. It embeds `BUILD-INFO.json`,
+`WINDOWS-VERIFICATION.json` (whose `engine` and `launcher` sections record those checks), the notices (Third-party
+notices, above), and a complete `SHA256SUMS`. The normalized output is
 `build/package/windows-x64/OME-windows-x64.zip`.
 
 Focused commands are:
 
 ```bash
 ./tools/bootstrap-godot-linux-x64.sh windows-x64
+# on Windows, then copy build/engine-publish/ across:
+#   py -3.11 -X utf8 tools/publish_engine.py --runtime win-x64
 python3 -X utf8 tools/publish_launcher.py --runtime win-x64 --into build/export/windows-x64
 python3 -X utf8 tools/package_windows_x64.py verify build/export/windows-x64
 python3 -X utf8 tools/package_windows_x64.py package build/export/windows-x64
@@ -683,24 +711,14 @@ Windows host, an extracted package can optionally run the same asset-independent
 .\OME.exe --headless -- --package-smoke
 ```
 
-That command proves the embedded 548-opcode table and local FFmpeg ABI 3 load. It is a manual acceptance aid,
-not part of Linux-hosted Windows CI.
+That command proves the embedded 548-opcode table and local FFmpeg ABI 3 load, and reaches the NativeAOT-compiled
+readers the smoke covers. It is a manual acceptance aid, not part of Linux-hosted Windows CI. To play a package's
+engine under the driver, use `drive.py port start --package <folder>` (Game driver).
 
-The older Windows-hosted cross-export remains available for local development:
-
-```powershell
-.\tools\export-linux-x64.ps1 -GodotConsole <path-to-Godot-4.7-.NET-console.exe>
-```
-
-Install the Godot 4.7 .NET export templates first and build the pinned native bundle under
-`build/native/linux-x64` with the commands in “Native FFmpeg movie shim” above. The script safely replaces
-only `build/export/linux-x64`, invokes the release preset with a bounded headless shutdown, publishes the launcher
-beside it (`publish_launcher.py --runtime linux-x64`), then calls the same Python payload verifier used by the
-Linux pipeline. The verifier checks the executable/PCK/self-contained
-managed payload plus all six project-owned FFmpeg files and rejects the Windows GDI adapter and Windows FFmpeg
-DLLs as well as the legacy `Himegari.dll` name. Output is `build/export/linux-x64/OME` with `OME.pck` and the
-`data_OME_linuxbsd_x86_64/` runtime directory. Do not relocate only the executable; the three
-items are one artifact.
+A Windows host cannot build the Linux package: NativeAOT compiles the Linux library on Linux only. The Windows-hosted
+`tools/export-linux-x64.ps1` was retired for that reason on 2026-11-18; build in WSL or on Linux with
+`build-linux-x64.sh`. Output is `build/export/linux-x64/OME` with `OME.pck` and the `data_OME_linuxbsd_x86_64/` data
+folder. Do not relocate only the executable; the three items are one artifact.
 
 The portable font policy requires a Japanese-capable system font. A minimal Ubuntu install needs, for
 example, `sudo apt install fonts-noto-cjk`; absence is a startup failure rather than silent missing-glyph
@@ -1258,6 +1276,7 @@ driving needs the Godot .NET console binary and `dotnet`.
 | `--optimize` | port | build with the JIT optimizer on (`-p:Optimize=true`, still the Debug configuration), for timing against native ("Port timing" below); refused with `--no-build` |
 | `--mod PATH` | port | load this mod package (`.omp` or folder) in addition to the sandbox's `mods/` (repeatable; the port's `--mod`) |
 | `--port-arg ARG` | port | an extra port argument after `--`, e.g. `--port-arg=--locator-hud` (repeatable) |
+| `--package DIR` | port | run this exported package's engine (`DIR/OME.exe`, or `DIR/OME` on Linux) instead of the Godot project, with the same engine arguments: a release's NativeAOT engine (`platform-portability.md`, "Fewer files in a package"). Nothing is built; `--godot` and `--optimize` are refused. A package outside the repository links mods with its own toolchain, which does not yet carry the OMS modules (backlog, "Toolchain packaging for exported ports"). The MCP tool's `drive_start` takes it as `package` |
 | `--data-root DIR` | port | run this player profile root as it is (launcher spec §5.10). The port gets `--data-root DIR` and no `--game-root`, since the root's `profile.toml` names the install. No sandbox is made and the driver writes nothing into the root, so the profile's own settings apply, its display mode and volume included. The engine still writes its `SYS4REG.INI` and saves there as a run does. The Desktop is `drive/port/desktop/`. The root must hold a `profile.toml` whose `game` is the driver's (`--game`, which picks the drive folder and named points). `--sandbox`, `--seed`, `--set` and `--sound` are refused with it. The MCP tool's `drive_start` takes it as `data_root` |
 
 **Port timing.** The port runs Godot's Debug configuration (`godot/.godot/mono/temp/bin/Debug`; Godot's editor
@@ -1271,7 +1290,8 @@ costs"). To compare such work with native, start with `--optimize`, which builds
   `--optimize`, or an editor build, returns to unoptimized assemblies; that rebuild takes longer than an incremental
   one.
 - The start line ends with the mode the port reports in its `hello` (`jit_optimized`): `JIT optimized` or
-  `JIT optimizer off (Debug build)`. Check it after `--no-build`, which keeps whatever was built last.
+  `JIT optimizer off (Debug build)`, or `NativeAOT (a release's engine)` for a `--package` start (`native_aot`).
+  Check it after `--no-build`, which keeps whatever was built last.
 
 **Output.** Everything lives in `build/games/<game>/drive/<target>/`: `session.json` (port, token, pids; deleted
 when the session ends), `serve.log` (native daemon) or `godot.log` and `launch.json` (port), `events.jsonl` (native),
@@ -1586,7 +1606,7 @@ post `WM_KEYDOWN`/`WM_KEYUP`.
 
 | Tool | CLI equivalent | Returns |
 |---|---|---|
-| `drive_start(target, sandbox, seed, sound, foreground, build, mods, settings, optimize)` | `drive.py <target> start` (`build=false` is `--no-build`, `mods` is `--mod` per path, `optimize=true` is `--optimize`, all port only; `settings` is `--set` per `SECTION.KEY=VALUE`) | the CLI's output |
+| `drive_start(target, sandbox, seed, sound, foreground, build, mods, settings, optimize, data_root, package)` | `drive.py <target> start` (`build=false` is `--no-build`, `mods` is `--mod` per path, `optimize=true` is `--optimize`, `data_root` is `--data-root`, `package` is `--package`, all port only; `settings` is `--set` per `SECTION.KEY=VALUE`) | the CLI's output |
 | `drive_steps(target, steps \| file, screenshot=true)` | `do STEP…` or `run FILE` | a summary line (`ok: …` or `FAILED at step N …`), one line per step result, and a screenshot after the last step unless `screenshot=false` or a step closed the game |
 | `drive_screenshot(target, name)` | `do "shot NAME"` | the PNG as an image, with its path and the VM position |
 | `drive_state(target)` | `status` | the session, hello, VM stack and new events, as JSON |
@@ -1629,7 +1649,8 @@ these flags; you need them directly only to drive the port from another client.
   hello within 10 s and in at most 4096 characters, or it is closed; after the hello a request line may be up to
   1 MiB.
 - The port's `hello` also carries `jit_optimized`: whether its VM assembly was compiled with the JIT optimizer on
-  (`drive.py port start --optimize`).
+  (`drive.py port start --optimize`); and `native_aot`: whether the engine was compiled ahead of time, as a release's
+  is (`drive.py port start --package`).
 - `waiting` is `input` (an ADV page or hotspot wait), `menu` (a script-polled menu), `movie`, `transition`, `sleep`
   or null. `busy` means text is still revealing or a screen transition is running. `settle` waits for `input` or
   `menu` that stays not busy for `quiet_ms`.

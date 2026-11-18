@@ -1,5 +1,4 @@
-using System.Text.Encodings.Web;
-using System.Text.Json;
+using Ome.Engine.Diagnostics;
 
 namespace Ome.Engine.Localization;
 
@@ -12,7 +11,6 @@ namespace Ome.Engine.Localization;
 /// </summary>
 public sealed class TextMissLog
 {
-    private static readonly JsonSerializerOptions Json = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
     private readonly object _lock = new();
     private readonly Dictionary<(string Source, string Script, int Offset), int> _counts = [];
@@ -100,11 +98,22 @@ public sealed class TextMissLog
             string at = $"0x{offset:x}";
             writer.WriteLine(kind switch
             {
-                1 => JsonSerializer.Serialize(new { source, script, at, count, width_percent = value }, Json),
-                2 => JsonSerializer.Serialize(new { source, script, at, count, rows_cut = value }, Json),
-                _ => JsonSerializer.Serialize(new { source, script, at, count }, Json),
+                1 => Row(source, script, at, count, ("width_percent", value)),
+                2 => Row(source, script, at, count, ("rows_cut", value)),
+                _ => Row(source, script, at, count, null),
             });
         }
+    }
+
+    /// <summary>One row: its site and count, then the figure its kind adds, non-ASCII text written as it is.</summary>
+    private static string Row(string source, string script, string at, int count, (string Name, int Value)? figure)
+    {
+        var row = new List<KeyValuePair<string, object?>>
+        {
+            new("source", source), new("script", script), new("at", at), new("count", count),
+        };
+        if (figure is (string name, int value)) row.Add(new(name, value));
+        return DiagnosticJson.Row(row, relaxed: true);
     }
 
     /// <summary>Writes the log to <paramref name="path"/> if it changed since the last write; returns whether it

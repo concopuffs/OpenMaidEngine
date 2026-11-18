@@ -87,7 +87,7 @@ public sealed record ProfileFile(
         TomlTable table;
         try
         {
-            table = TomlSerializer.Deserialize<TomlTable>(text)
+            table = TomlDocument.Parse(text)
                     ?? throw new ProfileFileException(origin, ["the file is empty"]);
         }
         catch (TomlException error)

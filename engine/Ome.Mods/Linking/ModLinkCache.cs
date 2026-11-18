@@ -406,7 +406,7 @@ public sealed record MountedModLayer(string Directory, ModLinkManifest Manifest,
 public static class ModLinkCache
 {
     public const string FolderName = ".cache";
-    private static readonly JsonSerializerOptions Json = new() { WriteIndented = true };
+    private static readonly ModsJsonContext Json = new(new JsonSerializerOptions { WriteIndented = true });
 
     public static string ComputeKey(ModLinkBase linkBase, IReadOnlyList<ModPackage> order,
                                     IReadOnlyDictionary<string, int> selectors)
@@ -464,7 +464,7 @@ public static class ModLinkCache
         if (!File.Exists(manifestPath)) return null;
         try
         {
-            ModLinkManifest? manifest = JsonSerializer.Deserialize<ModLinkManifest>(File.ReadAllText(manifestPath), Json);
+            ModLinkManifest? manifest = JsonSerializer.Deserialize(File.ReadAllText(manifestPath), Json.ModLinkManifest);
             if (manifest == null || manifest.Key != key) return null;
             var layer = new MountedModLayer(directory, manifest,
                 File.Exists(Path.Combine(directory, MountedModLayer.ReportFile))
@@ -641,7 +641,7 @@ public static class ModLinkCache
                     ? LinkedLuaEntry.Of(result.Lua, linkBase.Lua?.Identity ?? "none") : null,
             };
             string report = result.Report.Render();
-            File.WriteAllText(Path.Combine(temporary, MountedModLayer.ManifestFile), JsonSerializer.Serialize(manifest, Json),
+            File.WriteAllText(Path.Combine(temporary, MountedModLayer.ManifestFile), JsonSerializer.Serialize(manifest, Json.ModLinkManifest),
                               new UTF8Encoding(false));
             File.WriteAllText(Path.Combine(temporary, MountedModLayer.ReportFile), report, new UTF8Encoding(false));
 

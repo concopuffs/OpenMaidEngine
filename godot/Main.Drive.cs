@@ -261,10 +261,10 @@ public partial class Main
         public System.Text.Json.Nodes.JsonArray Dialogs()
         {
             var dialogs = new System.Text.Json.Nodes.JsonArray();
-            if (main._exitConfirmation is { } exit) dialogs.Add(exit.Describe());
-            if (main._scriptErrorDialog is { } error) dialogs.Add(error.Describe());
-            if (main._screenshotFolderDialog?.Describe() is { } folder) dialogs.Add(folder);
-            if (main._optionsPanel is { } panel) dialogs.Add(panel.Describe());
+            if (main._exitConfirmation is { } exit) dialogs.Add((System.Text.Json.Nodes.JsonNode?)exit.Describe());
+            if (main._scriptErrorDialog is { } error) dialogs.Add((System.Text.Json.Nodes.JsonNode?)error.Describe());
+            if (main._screenshotFolderDialog?.Describe() is { } folder) dialogs.Add((System.Text.Json.Nodes.JsonNode?)folder);
+            if (main._optionsPanel is { } panel) dialogs.Add((System.Text.Json.Nodes.JsonNode?)panel.Describe());
             return dialogs;
         }
 

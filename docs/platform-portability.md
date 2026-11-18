@@ -60,6 +60,10 @@ native loading without weakening the separate installed-game/font/render/audio a
 20.04 WSL proof passed using isolated Python 3.11/.NET 8.0.408 toolchains; the hosted job provides those through
 its pinned setup actions.
 
+Since 2026-11-18 the Linux job publishes no .NET itself: it takes the engine's NativeAOT library from the
+workflow's `linux-engine` job ("Fewer files in a package"). The managed publish and its memory measurements below are
+history.
+
 The hosted artifact wrapper is `.github/workflows/release-build.yml` on GitHub Actions' pinned `ubuntu-24.04` image
 (until 2026-10-05 it ran as `.gitea/workflows/linux-release-build.yml` on the former Gitea host, where the
 acceptance runs recorded below took place). It invokes that exact local command on `develop`, manual dispatch, and
@@ -96,6 +100,12 @@ build and promotion job completed successfully, and that Gitea release carries t
 metadata, payload ledger, and smoke log. The Linux CI/CD path is therefore accepted end to end.
 
 ## Windows x64 CI/CD artifact
+
+Since 2026-11-18 the engine itself is not cross-built: NativeAOT compiles for its own system, so the workflow's
+`windows-engine` job builds `OME.dll` on a `windows-2025` runner, and this job takes it ("Fewer files in a package").
+The rest below still holds: the Godot export, the MinGW shim and the ZIP are built on the Linux runner, which never
+runs the EXE. Where it lists the data folder's assemblies and runtime, that is history: the folder now holds exactly
+the library, the runtime's notices and the FFmpeg bundle.
 
 The Windows artifact will be cross-built on the existing Linux runner; neither a Windows runner nor Wine is part
 of its build contract. The .NET SDK publishes `win-x64`, the Linux Godot editor exports through the pinned Windows
@@ -480,7 +490,7 @@ executable under Ubuntu 20.04 decoded all 213 installed payloads with 0 failures
 the Windows GDI assembly or DLLs.
 
 The Godot Linux-x64 artifact pipeline landed the same day. `godot/export_presets.cfg` and the .NET-export-required
-`godot/OME.sln` are committed; `tools/export-linux-x64.ps1` replaces only its exact disposable output,
+`godot/OME.sln` are committed; `tools/export-linux-x64.ps1` (retired 2026-11-18) replaced only its exact disposable output,
 performs a bounded Godot shutdown, verifies the complete artifact, and rejects Windows-only runtime files.
 `godot/build/.gdignore` prevents historical capture frames from being imported and packed. The exported ELF64
 x86-64 executable, PCK, self-contained .NET runtime, and local FFmpeg bundle passed `--selftest` under Ubuntu/WSL
@@ -595,10 +605,11 @@ Each archive carries the launcher beside the engine (launcher spec §10; plan §
   On a Windows host (plan §9.5), the zip's `OME.exe` handed over to its own launcher, whose window drew, and the
   launcher's `--check` passed. CI does not run either program.
 
-## Fewer files in a package (investigated 2026-11-18)
+## Fewer files in a package (NativeAOT since 2026-11-18)
 
-The backlog item "A package is an executable beside about 200 loose files" asks what a fatter layout costs. This
-section holds what was measured and read. The user has not yet chosen a layout.
+The backlog asked (2026-11-16) what a fatter layout than about 200 loose files costs. This section holds what was
+measured and read, and the layout the user chose on 2026-11-18: the engine compiled with NativeAOT into one library,
+which the release builds produce from `feature/native-aot` on.
 
 **What v0.7.2 ships.** The engine's data folder (`data_OME_<platform>_x86_64/`) holds 212 files on Windows and 211 on
 Linux:
@@ -614,9 +625,9 @@ the launcher's three graphics natives, and the notices.
 
 **How Godot 4.7 starts .NET in an exported game** (`modules/mono/mono_gd/gd_mono.cpp`, `GDMono::initialize`, tag
 `4.7-stable`). It tries three routes in order:
-1. `hostfxr` in the data folder (what the packages use);
+1. `hostfxr` in the data folder (what the packages used until 2026-11-18);
 2. `coreclr` alone;
-3. a NativeAOT library, `OME.dll` or `OME.so`, that exports `godotsharp_game_main_init`.
+3. a NativeAOT library, `OME.dll` or `OME.so`, that exports `godotsharp_game_main_init` (what they use since).
 
 Godot requires the data folder in every route.
 
@@ -650,29 +661,72 @@ holds the library, the FFmpeg shim and its 5 libraries, and four notices. The FF
 because the license walk-through relies on dynamic linking. Both layouts write the same Godot user data. NativeAOT adds
 nothing outside the package.
 
-**What the probe needed, and what a real AOT build still needs:**
-- **Root `GodotSharp` and `OME` in the trimmer** (`TrimmerRootAssembly`). Without them, Godot's script lookup finds no
-  `Main` (`csharp_script.cpp:2465`: `native_name == StringName()`), and the engine never quits. Rooted, the library
-  grows from 11.6 MB to 39 MB.
-- **Reflection-based serialization is off under AOT.** The compile gave 86 trim and AOT warnings from 41 call sites:
-  - `System.Text.Json` serialization: the game manifests, the shell's strings, session snapshots, the link cache's
-    manifest, patch plans, layouts, and the diagnostics logs, some of which serialize anonymous types;
-  - `JsonArray.Add<T>`;
-  - Tomlyn's `TomlSerializer.Deserialize`.
+**The layout a release ships.** The data folder holds exactly 11 files: the engine's library (`OME.dll` or `OME.so`,
+about 42 MB), the .NET runtime's license and notices, the FFmpeg shim and its 5 libraries, and FFmpeg's license and
+source notice. Godot finds no `hostfxr` there, so it takes its third route. The packagers refuse any other file in
+the folder (`DATA_FILES` in `tools/package_*_x64.py`), since a .NET runtime file there would send Godot down its
+`hostfxr` route. The top level is unchanged.
 
-  The probe turned reflection back on (`JsonSerializerIsReflectionEnabledByDefault=true`). The smoke then passed, but
-  the real boot failed in `GameProfileRegistry`: the trimmer had removed `ProfileDocument`'s constructor. Each site
-  needs a source-generated context or an explicit reader.
-- **Library lookup.** Under AOT, `AppContext.BaseDirectory` is the executable's folder, not the data folder, so
-  `FfmpegMovieNative`'s probe misses the shim. The probe passed with `OME_FFMPEG_NATIVE_DIR` set.
-- **GodotSharp's own warnings.** It reports trim and AOT warnings (IL2104, IL3053). Godot ships NativeAOT on iOS, where
-  this code path is tested more than on desktop.
-- **The Windows build host.** NativeAOT does not compile across operating systems, and the release's Windows job runs
-  on `ubuntu-24.04` with MinGW. The Windows library therefore needs a Windows build host.
-- **The notices check.** An AOT publish has no `deps.json`, which the check reads now. The .NET runtime's notices still
-  apply, since the runtime is compiled in.
-- **Tests.** The engine suite runs under the JIT. An AOT package needs its own gate: the smoke, and a game driven to its
-  title. `drive_port.py` starts only the editor build today.
+**How a release builds it.**
+- `tools/publish_engine.py --runtime <rid>` publishes `godot/OME.csproj` with `-p:PublishAot=true` into
+  `build/engine-publish/<rid>/`. It keeps the build's dependency list beside it (`<rid>.deps.json`) for the notices
+  check, and a stamp naming the commit (`<rid>.json`).
+- `godot/OME.csproj` sets `NativeLib=Shared` and roots `GodotSharp` and `OME` in the trimmer. Without the roots,
+  Godot's script lookup finds no `Main` (`csharp_script.cpp:2465`: `native_name == StringName()`) and the engine never
+  quits; with them the library grows from 11.6 MB to about 40 MB.
+- NativeAOT compiles for its own system only, so the release workflow builds each library on its system:
+  - `windows-engine` runs on `windows-2025`, where NativeAOT finds the MSVC tools through `vswhere`. It checks the
+    repository out with LF line endings, so the library embeds the bytes the Linux one does (the base mods among them).
+  - `linux-engine` runs in the `manylinux_2_28` image the FFmpeg SDK is built in, and links with gcc, so the library
+    needs glibc 2.28 at most. Linked on Ubuntu 20.04 it needed 2.29 (`exp`, `log`, `pow`), and on the runner's 24.04
+    it would need more.
+- The package jobs download their library into `build/engine-publish/`. `tools/build-*-x64.sh` take it only if its
+  stamp names their own commit (`publish_engine.py --check`). They hand it to Godot's export through the publish
+  proxy, which Godot accepts as `OME.dll` or `OME.<so-ext>` and copies without loading, then stage the data folder
+  after the export.
+- The packagers check the library itself:
+  - on Windows (`verify_windows_native.verify_engine_library`), an AMD64 PE that exports `godotsharp_game_main_init`
+    and imports neither a Visual C++ redistributable (it links the C runtime statically, except the Universal CRT
+    that Windows 10 includes) nor a .NET runtime;
+  - on Linux (`package_linux_x64.verify_engine_library`), an x86-64 ELF file that exports it, needs only glibc's own
+    libraries, and needs no glibc newer than the FFmpeg bundle's floor, 2.28.
+- The notices check reads the kept dependency list, since the library holds the packages: `GodotSharp`, `LuaCSharp`,
+  `LuaCSharp.Annotations`, `Microsoft.NETCore.App` and `Tomlyn`. The publish leaves the runtime pack out of its file
+  list, so `Directory.Build.targets` adds it back for its two notice files. Those two are all the JIT package's data
+  folder carried too: the other packages ship no notice file of their own.
+
+**The code it needed.** Every shipped project sets `IsAotCompatible`, and `godot/OME.csproj` turns on the trim and AOT
+analyzers. `Directory.Build.targets` makes their warnings errors, so a reflection-bound call fails the build.
+GodotSharp's own warnings at publish (IL2104, IL3053) remain, outside our code. The JIT probe's 86 warnings from 41
+call sites were resolved this way:
+- **JSON** goes through source-generated `System.Text.Json` contexts, with the runtime options passed to the context's
+  constructor. The diagnostics logs that serialized anonymous types write their rows with `Utf8JsonWriter`
+  (`DiagnosticJson.Row`), producing the same JSON. `JsonArray.Add` takes a `JsonNode`, since its generic overload uses
+  reflection.
+- **TOML** parses through Tomlyn's source-generated context (`engine/Ome.Mods/TomlDocument.cs`).
+- **The FFmpeg lookup.** Under AOT, `AppContext.BaseDirectory` names the executable's folder, so `FfmpegMovieNative`
+  also looks in the library's own folder. `OwnLibrary` finds it with `GetModuleHandleExW` on Windows and `dladdr` on
+  Linux, and gives null under the JIT.
+
+**How a release's code is tested.** The engine tests run under the JIT. A release's compiled code is checked three
+ways:
+- **The package smoke** (`--package-smoke`) reads the embedded manifests, the shell's strings and every shipped
+  package, round-trips a session snapshot, and compiles Lua, besides the opcode table and the FFmpeg ABI. A release
+  that breaks one of them fails in CI, where the Linux job runs it.
+- **The library checks** above, in both package jobs.
+- **Driven scenarios on a package.** `drive.py port start --package <folder>` runs a package's own engine under the
+  driver, and its hello reports NativeAOT. On 2026-11-18 the Windows AOT package passed `himegari-save-load.steps`,
+  `port/himegari-lua-random.steps`, and mod gate 4's save and load (`--mod oms/examples/mods/example.prologue`, with
+  the package inside the repository's `build/`; see the backlog's "Toolchain packaging for exported ports"). The Linux
+  library passed the package smoke in WSL.
+
+**Risks.** Godot ships NativeAOT on iOS, where its C# path is exercised more than on desktop. GodotSharp warns that
+parts of it are not trim-safe; nothing found in play so far depends on them. A Windows build host needs the MSVC build
+tools.
+
+**What it retired.** `tools/export-linux-x64.ps1`, the Windows-hosted Linux export: a Windows host cannot compile the
+Linux library. A Linux package is built with `tools/build-linux-x64.sh` on Linux or WSL, after
+`publish_engine.py --runtime linux-x64` there.
 
 ## Cross-platform validation gates
 

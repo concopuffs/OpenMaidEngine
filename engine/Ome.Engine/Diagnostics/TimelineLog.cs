@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.IO;
-using System.Text.Json;
 
 namespace Ome.Engine.Diagnostics;
 
@@ -69,7 +68,7 @@ public sealed class TimelineLog : System.IDisposable
             ["opcode"] = _opcode < 0 ? null : $"0x{_opcode:x}", ["vm_state"] = _state,
         };
         if (detail != null) foreach (var kv in detail) row[kv.Key] = kv.Value;
-        _writer.WriteLine(JsonSerializer.Serialize(row));
+        _writer.WriteLine(DiagnosticJson.Row(row));
     }
 
     public void Dispose() { lock (_lock) { if (_disposed) return; _disposed = true; _writer.Dispose(); } }

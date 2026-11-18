@@ -26,7 +26,6 @@ REPO = HERE.parent
 GODOT_NOTICES = REPO / "notices/godot/notices.json"
 MINGW_NOTICES = REPO / "notices/mingw-w64/notices.json"
 NOTO_NOTICES = REPO / "notices/noto-sans-jp/notices.json"
-DEPS_FILE = "OME.deps.json"
 _ASSET_KINDS = ("runtime", "native", "runtimeTargets", "resources")
 
 
@@ -85,12 +84,12 @@ def shipped_packages(deps_file: Path) -> list[str]:
     return sorted(names)
 
 
-def verify_dependency_notices(managed_directory: Path, notices_file: Path) -> list[str]:
-    """Fail unless the notices file names every NuGet package the engine's publish ships in backticks (`Tomlyn`);
-    return them."""
-    deps_file = managed_directory / DEPS_FILE
+def verify_dependency_notices(deps_file: Path, notices_file: Path) -> list[str]:
+    """Fail unless the notices file names every NuGet package the engine ships in backticks (`Tomlyn`); return them.
+    The NativeAOT library holds the packages, so `deps_file` is the build's dependency list, which the engine's publish
+    kept beside it (tools/publish_engine.py)."""
     if not deps_file.is_file():
-        raise ValueError(f"publish dependency file was not found: {deps_file}")
+        raise ValueError(f"the engine's dependency list was not found: {deps_file}; run tools/publish_engine.py")
     return _named(shipped_packages(deps_file), notices_file, "shipped NuGet packages")
 
 

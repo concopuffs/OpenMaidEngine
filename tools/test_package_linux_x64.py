@@ -4,17 +4,29 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import shlex
+import struct
 import sys
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import package_notices
 import package_linux_x64
 import parse_sys4ini
 from test_package_notices import LAUNCHER_FIXTURE_PACKAGES, write_deps, write_launcher_deps
+
+ENGINE_LIBRARY = f"{package_linux_x64.DATA_DIRECTORY}/OME.so"
+
+
+def write_elf(path: Path, machine: int = package_linux_x64.ELF_MACHINE_X86_64) -> None:
+    """An ELF header: 64-bit, little-endian, and the machine."""
+    data = bytearray(64)
+    data[:6] = b"\x7fELF\x02\x01"
+    struct.pack_into("<H", data, 18, machine)
+    path.write_bytes(data)
 
 
 def make_export(root: Path) -> Path:
@@ -23,9 +35,10 @@ def make_export(root: Path) -> Path:
         path = export / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(f"fixture:{relative}".encode())
+    write_elf(export / ENGINE_LIBRARY)
     (export / "OME").chmod(0o755)
     (export / package_linux_x64.LAUNCHER.program).chmod(0o755)
-    write_deps(export / package_linux_x64.MANAGED_DIRECTORY, "linux-x64")
+    write_deps(engine_deps(root), "linux-x64")
     write_launcher_deps(launcher_deps(root), "linux-x64")
     return export
 
@@ -33,6 +46,38 @@ def make_export(root: Path) -> Path:
 def launcher_deps(root: Path) -> Path:
     """The dependency list the launcher's publish kept, beside the fixture export."""
     return root / "launcher.deps.json"
+
+
+def engine_deps(root: Path) -> Path:
+    """The dependency list the engine's publish kept, beside the fixture export."""
+    return root / "engine.deps.json"
+
+
+# What readelf reports for the engine's NativeAOT library (linux-x64, linked on glibc 2.28), by option.
+READELF = {
+    "--dyn-syms": "   240: 0000000000800690   361 FUNC    GLOBAL DEFAULT   14 godotsharp_game_main_init@@V1.0\n",
+    "--dynamic": "".join(f" 0x0000000000000001 (NEEDED)             Shared library: [{name}]\n"
+                         for name in ("libdl.so.2", "librt.so.1", "libm.so.6", "libpthread.so.0", "libc.so.6",
+                                      "ld-linux-x86-64.so.2")),
+    "--version-info": ("  0x0010:   Name: GLIBC_2.2.5  Flags: none  Version: 3\n"
+                       "  0x0020:   Name: GLIBC_2.28  Flags: none  Version: 9\n"
+                       "  0x0030:   Name: GLIBC_2.27  Flags: none  Version: 8\n"),
+}
+
+
+def fake_readelf(outputs: dict[str, str] | None = None):
+    """subprocess.run as readelf answers it, with `outputs` in place of READELF's."""
+    answers = {**READELF, **(outputs or {})}
+
+    def run(arguments, **_):
+        option = next(argument for argument in arguments if argument in answers)
+        return Mock(returncode=0, stdout=answers[option], stderr="")
+    return run
+
+
+def verify(export: Path, root: Path, deps: Path | None = None, readelf: dict[str, str] | None = None) -> Path:
+    with patch.object(package_linux_x64.subprocess, "run", side_effect=fake_readelf(readelf)):
+        return package_linux_x64.verify_export(export, deps or launcher_deps(root), engine_deps(root))
 
 
 # THIRD_PARTY_NOTICES.md naming every package the fixtures ship.
@@ -328,34 +373,74 @@ class PackageLinuxX64Tests(unittest.TestCase):
         self.assertEqual("OME-linux-x64", package_linux_x64.PACKAGE_NAME)
         self.assertIn("OME", package_linux_x64.REQUIRED_FILES)
         self.assertIn("OME.pck", package_linux_x64.REQUIRED_FILES)
-        self.assertIn(
-            f"{package_linux_x64.MANAGED_DIRECTORY}/OME.dll",
-            package_linux_x64.REQUIRED_FILES,
-        )
-        self.assertIn(
-            f"{package_linux_x64.MANAGED_DIRECTORY}/Himegari.dll",
-            package_linux_x64.LEGACY_FILES,
-        )
+        self.assertIn(ENGINE_LIBRARY, package_linux_x64.REQUIRED_FILES)
+        # One NativeAOT library: no managed assembly, no .NET runtime, no dependency list in the data folder.
+        self.assertEqual([], [name for name in package_linux_x64.REQUIRED_FILES if name.endswith((".dll", ".json"))])
 
     def test_verify_rejects_missing_and_windows_files(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             export = make_export(root)
-            package_linux_x64.verify_export(export, launcher_deps(root))
+            verify(export, root)
             (export / package_linux_x64.REQUIRED_FILES[0]).unlink()
             with self.assertRaisesRegex(ValueError, "missing"):
-                package_linux_x64.verify_export(export, launcher_deps(root))
+                verify(export, root)
             (export / package_linux_x64.REQUIRED_FILES[0]).write_bytes(b"restored")
             (export / "OME").chmod(0o755)
             forbidden = export / package_linux_x64.FORBIDDEN_FILES[0]
             forbidden.write_bytes(b"windows")
             with self.assertRaisesRegex(ValueError, "Windows-only"):
-                package_linux_x64.verify_export(export, launcher_deps(root))
-            forbidden.unlink()
-            legacy = export / package_linux_x64.LEGACY_FILES[0]
-            legacy.write_bytes(b"legacy")
-            with self.assertRaisesRegex(ValueError, "legacy-branded"):
-                package_linux_x64.verify_export(export, launcher_deps(root))
+                verify(export, root)
+
+    def test_the_data_folder_holds_the_library_and_ffmpeg_only(self) -> None:
+        # Any .NET runtime file sends Godot down its hostfxr route; a managed assembly, a dependency list or a stale
+        # name has no place either.
+        for name in ("libhostfxr.so", "libcoreclr.so", "System.Private.CoreLib.dll", "Ome.Engine.dll",
+                     "OME.deps.json", "OME.dll", "Himegari.dll", "ome_movie_ffmpeg.dll", "OME.so.dbg"):
+            with self.subTest(name), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                export = make_export(root)
+                (export / package_linux_x64.DATA_DIRECTORY / name).write_bytes(b"stray")
+                with self.assertRaisesRegex(ValueError, f"data folder holds files the NativeAOT engine does not "
+                                                        f"ship: {re.escape(name)}$"):
+                    verify(export, root)
+
+    def test_the_engine_library_is_checked(self) -> None:
+        cases = (
+            ({}, None),
+            ({"--dyn-syms": "    12: 0000000000000000     0 FUNC    GLOBAL DEFAULT  UND godotsharp_game_main_init\n"},
+             "does not export godotsharp_game_main_init: OME.so; it is not a NativeAOT build"),
+            ({"--dynamic": READELF["--dynamic"] + " 0x1 (NEEDED)             Shared library: [libstdc++.so.6]\n"},
+             "needs libraries outside glibc: libstdc\\+\\+.so.6"),
+            # Linked on the runner's own glibc instead of in the manylinux_2_28 container.
+            ({"--version-info": READELF["--version-info"] + "  0x0040:   Name: GLIBC_2.29  Flags: none  Version: 10\n"},
+             "needs glibc 2.29, newer than the package's floor 2.28"),
+            ({"--version-info": "  0x0010:   Name: V1.0  Flags: none  Version: 2\n"},
+             "could not determine the glibc"),
+        )
+        for outputs, message in cases:
+            with self.subTest(message), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                export = make_export(root)
+                library = export / ENGINE_LIBRARY
+                with patch.object(package_linux_x64.subprocess, "run", side_effect=fake_readelf(outputs)):
+                    if message is None:
+                        self.assertEqual({"export": "godotsharp_game_main_init", "glibc": "2.28",
+                                          "needed": sorted(package_linux_x64.GLIBC_LIBRARIES)},
+                                         package_linux_x64.verify_engine_library(library))
+                        continue
+                    with self.assertRaisesRegex(ValueError, message):
+                        package_linux_x64.verify_engine_library(library)
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            export = make_export(root)
+            for content in (b"fixture", None):
+                if content is None:
+                    write_elf(export / ENGINE_LIBRARY, machine=183)  # AArch64
+                else:
+                    (export / ENGINE_LIBRARY).write_bytes(content)
+                with self.assertRaisesRegex(ValueError, "not an x86-64 ELF file: OME.so"):
+                    verify(export, root)
 
     def test_verify_requires_the_launcher_beside_the_engine(self) -> None:
         # Launcher spec §10, plan §9.3: the program, its natives and its notices; not the Windows launcher; no symbols.
@@ -374,7 +459,7 @@ class PackageLinuxX64Tests(unittest.TestCase):
                 export = make_export(root)
                 change(export)
                 with self.assertRaisesRegex(ValueError, message):
-                    package_linux_x64.verify_export(export, launcher_deps(root))
+                    verify(export, root)
 
     @unittest.skipIf(package_linux_x64.os.name == "nt", "executable-bit gate is POSIX-only")
     def test_verify_requires_executable_bit_on_posix(self) -> None:
@@ -384,7 +469,7 @@ class PackageLinuxX64Tests(unittest.TestCase):
                 export = make_export(root)
                 (export / program).chmod(0o644)
                 with self.assertRaisesRegex(ValueError, f"executable bit is not set: .*{program}"):
-                    package_linux_x64.verify_export(export, launcher_deps(root))
+                    verify(export, root)
 
     def test_verify_requires_notices_for_every_shipped_package(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -394,14 +479,17 @@ class PackageLinuxX64Tests(unittest.TestCase):
             notices.write_text("`GodotSharp`\n", encoding="utf-8")
             with patch.object(package_linux_x64, "REPO", temporary_root):
                 with self.assertRaisesRegex(ValueError, "Microsoft.NETCore.App, Tomlyn"):
-                    package_linux_x64.verify_export(export, launcher_deps(temporary_root))
+                    verify(export, temporary_root)
                 # The engine's packages named, the launcher's list is read too: from the copy its publish kept.
                 notices.write_text("`GodotSharp` `Tomlyn` `Microsoft.NETCore.App`\n", encoding="utf-8")
                 with self.assertRaisesRegex(ValueError, "launcher's shipped NuGet packages: Avalonia, "
                                                         "SkiaSharp.NativeAssets.Linux"):
-                    package_linux_x64.verify_export(export, launcher_deps(temporary_root))
+                    verify(export, temporary_root)
                 with self.assertRaisesRegex(ValueError, "launcher's dependency list was not found"):
-                    package_linux_x64.verify_export(export, temporary_root / "elsewhere.deps.json")
+                    verify(export, temporary_root, temporary_root / "elsewhere.deps.json")
+                engine_deps(temporary_root).unlink()
+                with self.assertRaisesRegex(ValueError, "engine's dependency list was not found"):
+                    verify(export, temporary_root)
 
     def test_package_has_notices_checksums_and_deterministic_envelope(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -420,15 +508,17 @@ class PackageLinuxX64Tests(unittest.TestCase):
             deps = launcher_deps(temporary_root)
             with patch.object(package_linux_x64, "REPO", temporary_root), patch.object(
                 package_linux_x64, "PROJECT_FILES", ("LICENSE", "THIRD_PARTY_NOTICES.md")
-            ), patch.object(package_linux_x64, "PINNED_NOTICES", pinned):
+            ), patch.object(package_linux_x64, "PINNED_NOTICES", pinned), patch.object(
+                package_linux_x64.subprocess, "run", side_effect=fake_readelf()
+            ):
                 (temporary_root / "LICENSE").write_text("MIT\n", encoding="utf-8")
                 (temporary_root / "THIRD_PARTY_NOTICES.md").write_text(NOTICES, encoding="utf-8")
-                package_linux_x64.create_package(export, output, metadata, 123456789, deps)
+                package_linux_x64.create_package(export, output, metadata, 123456789, deps, engine_deps(temporary_root))
                 first = hashlib.sha256(
                     (output / f"{package_linux_x64.PACKAGE_NAME}.tar.gz").read_bytes()
                 ).hexdigest()
                 package_root, archive = package_linux_x64.create_package(
-                    export, output, metadata, 123456789, deps
+                    export, output, metadata, 123456789, deps, engine_deps(temporary_root)
                 )
                 second = hashlib.sha256(archive.read_bytes()).hexdigest()
             self.assertEqual(first, second)
@@ -437,7 +527,7 @@ class PackageLinuxX64Tests(unittest.TestCase):
             self.assertTrue((package_root / "BUILD-INFO.json").is_file())
             checksums = (package_root / "SHA256SUMS").read_text(encoding="utf-8").splitlines()
             names = [line.split("  ", 1)[1] for line in checksums]
-            for name in ("OME", "THIRD_PARTY_NOTICES.md", *package_linux_x64.LAUNCHER.files()):
+            for name in ("OME", ENGINE_LIBRARY, "THIRD_PARTY_NOTICES.md", *package_linux_x64.LAUNCHER.files()):
                 self.assertIn(name, names)
 
 

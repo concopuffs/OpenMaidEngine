@@ -133,7 +133,7 @@ public partial class ExitConfirmationDialog : Win32Dialog
     {
         ShellExitDialog ja = ShellExitDialog.Japanese;
         var buttons = new System.Text.Json.Nodes.JsonArray();
-        foreach (string text in ja.Buttons) buttons.Add(text);
+        foreach (string text in ja.Buttons) buttons.Add((System.Text.Json.Nodes.JsonNode?)text);
         return new System.Text.Json.Nodes.JsonObject
         {
             ["title"] = ja.Title, ["text"] = ja.DriveText, ["buttons"] = buttons,

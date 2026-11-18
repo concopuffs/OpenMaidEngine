@@ -174,7 +174,7 @@ public partial class Main
         }
         panel.Press("ok");
         var languages = new System.Text.Json.Nodes.JsonArray();
-        foreach (string language in offered) languages.Add(language);
+        foreach (string language in offered) languages.Add((System.Text.Json.Nodes.JsonNode?)language);
         return new System.Text.Json.Nodes.JsonObject
         {
             ["language"] = _portOptions.Effective.Language, ["previous"] = previous, ["languages"] = languages,

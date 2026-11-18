@@ -14,42 +14,32 @@ from pathlib import Path
 from typing import Any
 
 import package_notices
+import publish_engine
 import publish_launcher
 import verify_windows_native
 
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parent
-MANAGED_DIRECTORY = "data_OME_windows_x86_64"
+DATA_DIRECTORY = "data_OME_windows_x86_64"
 PACKAGE_NAME = "OME-windows-x64"
+RUNTIME = "win-x64"
 # The launcher beside the engine (launcher spec §10, plan §9.3): its program, natives and notices.
-LAUNCHER = publish_launcher.LAYOUTS["win-x64"]
+LAUNCHER = publish_launcher.LAYOUTS[RUNTIME]
+# The data folder Godot loads the engine from, exactly: the engine's NativeAOT library with the notices of the .NET
+# runtime it holds (tools/publish_engine.py), and the FFmpeg bundle. A .NET runtime file there would send Godot down its
+# hostfxr route (docs/platform-portability.md, "Fewer files in a package").
+DATA_FILES = (*publish_engine.publish_files(RUNTIME), *verify_windows_native.REQUIRED_FILES)
 REQUIRED_FILES = (
     "OME.exe",
     "OME.pck",
-    f"{MANAGED_DIRECTORY}/OME.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.Devices.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.Vm.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.Frontend.dll",
-    f"{MANAGED_DIRECTORY}/Ome.Engine.Text.Windows.dll",
-    f"{MANAGED_DIRECTORY}/coreclr.dll",
-    f"{MANAGED_DIRECTORY}/hostfxr.dll",
-    f"{MANAGED_DIRECTORY}/hostpolicy.dll",
-    f"{MANAGED_DIRECTORY}/System.Private.CoreLib.dll",
-    f"{MANAGED_DIRECTORY}/{package_notices.DEPS_FILE}",
-    f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.win-x64-LICENSE.TXT",
-    f"{MANAGED_DIRECTORY}/Microsoft.NETCore.App.Runtime.win-x64-THIRD-PARTY-NOTICES.TXT",
-    *(f"{MANAGED_DIRECTORY}/{name}" for name in verify_windows_native.REQUIRED_FILES),
+    *(f"{DATA_DIRECTORY}/{name}" for name in DATA_FILES),
     *LAUNCHER.files(),
 )
 FORBIDDEN_FILES = (
     "OME",
     publish_launcher.LAYOUTS["linux-x64"].program,
-    f"{MANAGED_DIRECTORY}/libome_movie_ffmpeg.so",
-    f"{MANAGED_DIRECTORY}/libavformat.so.62",
 )
-LEGACY_FILES = (f"{MANAGED_DIRECTORY}/Himegari.dll",)
 PROJECT_FILES = ("LICENSE", "README.md", "THIRD_PARTY_NOTICES.md")
 # Godot's notices, the MinGW-w64 runtime's, which the shim and FFmpeg DLLs link statically
 # (tools/mingw_runtime_notices.py checks those links), and the license of the font OME.dll embeds.
@@ -68,14 +58,21 @@ def _resolved_directory(path: Path, label: str) -> Path:
 
 
 def verify_export(
-    export_directory: Path, objdump: str, launcher_deps: Path | None = None
+    export_directory: Path, objdump: str, launcher_deps: Path | None = None, engine_deps: Path | None = None
 ) -> tuple[Path, dict[str, Any]]:
     """Check the export's files and PE files, and that THIRD_PARTY_NOTICES.md names every package the engine and the
-    launcher ship (`launcher_deps`: the dependency list the launcher's publish kept, by default publish_launcher's)."""
+    launcher ship (`engine_deps` and `launcher_deps`: the dependency lists their publishes kept, by default
+    publish_engine's and publish_launcher's)."""
     export_directory = _resolved_directory(export_directory, "Windows export")
     missing = [name for name in REQUIRED_FILES if not (export_directory / name).is_file()]
     if missing:
         raise ValueError("Windows export is incomplete; missing: " + ", ".join(missing))
+    data_directory = export_directory / DATA_DIRECTORY
+    extra = sorted(path.relative_to(data_directory).as_posix() for path in data_directory.rglob("*")
+                   if path.relative_to(data_directory).as_posix() not in DATA_FILES)
+    if extra:
+        raise ValueError("Windows export's data folder holds files the NativeAOT engine does not ship: "
+                         + ", ".join(extra))
     forbidden = [name for name in FORBIDDEN_FILES if (export_directory / name).exists()]
     forbidden.extend(
         path.relative_to(export_directory).as_posix()
@@ -84,14 +81,11 @@ def verify_export(
     )
     if forbidden:
         raise ValueError("Windows export contains Linux-only files: " + ", ".join(sorted(set(forbidden))))
-    legacy = [name for name in LEGACY_FILES if (export_directory / name).exists()]
-    if legacy:
-        raise ValueError("Windows export contains legacy-branded files: " + ", ".join(legacy))
     symbols = sorted(path.relative_to(export_directory).as_posix() for path in export_directory.rglob("*.pdb"))
     if symbols:
         raise ValueError("Windows export contains debug symbols: " + ", ".join(symbols))
     package_notices.verify_dependency_notices(
-        export_directory / MANAGED_DIRECTORY, REPO / "THIRD_PARTY_NOTICES.md"
+        engine_deps or publish_engine.dependency_list(RUNTIME), REPO / "THIRD_PARTY_NOTICES.md"
     )
     package_notices.verify_launcher_notices(
         launcher_deps or publish_launcher.dependency_list(LAUNCHER.runtime), REPO / "THIRD_PARTY_NOTICES.md"
@@ -102,15 +96,17 @@ def verify_export(
             f"Windows executable is not AMD64 PE (0x{executable_machine:04x}): OME.exe"
         )
     native_report = verify_windows_native.verify_bundle(
-        export_directory / MANAGED_DIRECTORY,
+        data_directory,
         objdump,
         exact_dlls=False,
     )
-    native_report["bundle"] = MANAGED_DIRECTORY
+    native_report["bundle"] = DATA_DIRECTORY
     return export_directory, {
         "schema_version": 1,
         "target": "win-x64",
         "executable_machine": "AMD64",
+        "engine": verify_windows_native.verify_engine_library(
+            data_directory / verify_windows_native.ENGINE_LIBRARY, objdump),
         "native": native_report,
         "launcher": verify_windows_native.verify_launcher(export_directory, LAUNCHER.program, LAUNCHER.natives),
     }
@@ -257,16 +253,19 @@ def main() -> int:
     verify.add_argument("export_directory", type=Path)
     verify.add_argument("--objdump", default="x86_64-w64-mingw32-objdump")
     verify.add_argument("--launcher-deps", type=Path, help="the launcher's kept dependency list")
+    verify.add_argument("--engine-deps", type=Path, help="the engine's kept dependency list")
     package = subparsers.add_parser("package")
     package.add_argument("export_directory", type=Path)
     package.add_argument("--objdump", default="x86_64-w64-mingw32-objdump")
     package.add_argument("--launcher-deps", type=Path, help="the launcher's kept dependency list")
+    package.add_argument("--engine-deps", type=Path, help="the engine's kept dependency list")
     package.add_argument(
         "--output-directory", type=Path, default=REPO / "build/package/windows-x64"
     )
     args = parser.parse_args()
 
-    export_directory, verification = verify_export(args.export_directory, args.objdump, args.launcher_deps)
+    export_directory, verification = verify_export(args.export_directory, args.objdump, args.launcher_deps,
+                                                args.engine_deps)
     if args.command == "verify":
         print(export_directory)
         return 0

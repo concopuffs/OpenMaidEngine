@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Verify the project-owned Windows x64 FFmpeg bundle, and the launcher's PE files, without executing them."""
+"""Verify the project-owned Windows x64 FFmpeg bundle, the engine's NativeAOT library, and the launcher's PE files, without
+executing them."""
 from __future__ import annotations
 
 import argparse
@@ -31,6 +32,13 @@ REQUIRED_EXPORTS = frozenset({
     "ome_movie_close",
 })
 FORBIDDEN_RUNTIME_IMPORTS = frozenset({"cygwin1.dll", "msys-2.0.dll"})
+# The engine's NativeAOT library (tools/publish_engine.py): what Godot calls to start it, and what it must not need. It
+# links the C runtime statically except for the Universal CRT, part of Windows since 10, so a player needs no Visual
+# C++ redistributable; and it holds its .NET runtime, so it loads none.
+ENGINE_LIBRARY = "OME.dll"
+ENGINE_EXPORT = "godotsharp_game_main_init"
+FORBIDDEN_ENGINE_IMPORTS = re.compile(r"^(vcruntime|msvcp|concrt|vccorlib|ucrtbased|hostfxr|hostpolicy|coreclr)",
+                                      re.IGNORECASE)
 PE_MACHINE_AMD64 = 0x8664
 PE_SUBSYSTEM_WINDOWS_GUI = 2
 
@@ -83,16 +91,47 @@ def verify_launcher(directory: Path, program: str, natives: tuple[str, ...]) -> 
     return {"program": program, "machine": "AMD64", "subsystem": "windows-gui", "natives": machines}
 
 
-def parse_objdump(output: str) -> tuple[set[str], set[str]]:
+def parse_objdump(output: str, exports_of: frozenset[str] = REQUIRED_EXPORTS) -> tuple[set[str], set[str]]:
+    """The DLLs `objdump -p` lists as imports, and which of `exports_of` it names."""
     imports = {
         match.group(1).strip()
         for match in re.finditer(r"^\s*DLL Name:\s*(\S+)\s*$", output, re.MULTILINE)
     }
     exports = {
-        name for name in REQUIRED_EXPORTS
+        name for name in exports_of
         if re.search(rf"(?<![A-Za-z0-9_]){re.escape(name)}(?![A-Za-z0-9_])", output)
     }
     return imports, exports
+
+
+def _objdump(objdump: str, path: Path) -> str:
+    process = subprocess.run(
+        (objdump, "-p", str(path)),
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    if process.returncode != 0:
+        raise RuntimeError(f"objdump failed for {path.name}: {process.stderr.strip()}")
+    return process.stdout
+
+
+def verify_engine_library(path: Path, objdump: str) -> dict[str, Any]:
+    """Check the engine's NativeAOT library: an AMD64 PE that exports Godot's entry point and imports neither a Visual
+    C++ redistributable nor a .NET runtime."""
+    machine = pe_machine(path)
+    if machine != PE_MACHINE_AMD64:
+        raise ValueError(f"Windows engine library is not AMD64 PE (0x{machine:04x}): {path.name}")
+    imports, exports = parse_objdump(_objdump(objdump, path), frozenset({ENGINE_EXPORT}))
+    if ENGINE_EXPORT not in exports:
+        raise ValueError(f"Windows engine library does not export {ENGINE_EXPORT}: {path.name}; "
+                         "it is not a NativeAOT build")
+    forbidden = sorted(name for name in imports if FORBIDDEN_ENGINE_IMPORTS.match(name))
+    if forbidden:
+        raise ValueError(f"Windows engine library imports what a player's Windows lacks: {', '.join(forbidden)}")
+    return {"machine": "AMD64", "export": ENGINE_EXPORT, "imports": sorted(imports, key=str.lower)}
 
 
 def verify_bundle(
@@ -124,17 +163,7 @@ def verify_bundle(
             raise ValueError(f"Windows native file is not AMD64 PE (0x{machine:04x}): {name}")
         machines[name] = "AMD64"
 
-    process = subprocess.run(
-        (objdump, "-p", str(bundle / SHIM)),
-        check=False,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if process.returncode != 0:
-        raise RuntimeError(f"objdump failed for {SHIM}: {process.stderr.strip()}")
-    imports, exports = parse_objdump(process.stdout)
+    imports, exports = parse_objdump(_objdump(objdump, bundle / SHIM))
     import_names = {name.lower() for name in imports}
     missing_imports = sorted(name for name in RUNTIME_DLLS if name.lower() not in import_names)
     if missing_imports:

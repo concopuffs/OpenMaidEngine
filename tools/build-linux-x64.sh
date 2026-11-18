@@ -7,7 +7,6 @@ project_root="$repo_root/godot"
 export_directory="$repo_root/build/export/linux-x64"
 expected_export_directory="$repo_root/build/export/linux-x64"
 package_directory="$repo_root/build/package"
-managed_publish_directory="$repo_root/build/managed-publish/linux-x64"
 managed_proxy_directory="$repo_root/build/managed-publish-proxy/linux-x64"
 dotnet_proxy_directory="$repo_root/build/dotnet-export-proxy"
 toolchain_root="$repo_root/build/toolchains/godot-4.7-stable-mono-linux-x64"
@@ -25,35 +24,15 @@ godot_console="$("$script_dir/bootstrap-godot-linux-x64.sh")"
 ffmpeg_sdk="$("$repo_root/native/ome_movie_ffmpeg/bootstrap-linux-x64.sh")"
 "$repo_root/native/ome_movie_ffmpeg/build-linux-x64.sh" "$ffmpeg_sdk"
 
-# Godot keeps the editor resident while it launches dotnet publish. On constrained CI runners, that process
-# pair can exceed the job's memory cgroup. Produce the exact ExportRelease/linux-x64 payload first, without
-# compiler/build servers, so the memory-heavy compile and editor stages run sequentially.
-expected_managed_publish_directory="$repo_root/build/managed-publish/linux-x64"
-if [[ "$managed_publish_directory" != "$expected_managed_publish_directory" || "$managed_publish_directory" == "/" ]]; then
-    echo "refusing to replace unexpected managed publish directory: $managed_publish_directory" >&2
-    exit 1
-fi
-rm -rf -- "$managed_publish_directory"
-mkdir -p -- "$managed_publish_directory"
-DOTNET_CLI_USE_MSBUILD_SERVER=0 \
-MSBUILDDISABLENODEREUSE=1 \
-DOTNET_gcServer=0 \
-DOTNET_GCConserveMemory=9 \
-dotnet publish "$project_root/OME.csproj" \
-    --configuration ExportRelease \
-    --runtime linux-x64 \
-    --self-contained true \
-    --output "$managed_publish_directory" \
-    -p:GodotTargetPlatform=linuxbsd \
-    -p:UseSharedCompilation=false \
-    -p:BuildInParallel=false \
-    -p:RestoreDisableParallel=true \
-    -p:DebugType=None \
-    -p:DebugSymbols=false
+# The engine is one NativeAOT library (docs/platform-portability.md, "Fewer files in a package"). NativeAOT compiles
+# for its own system only, so tools/publish_engine.py builds it beforehand: in the release workflow's own job for this
+# target, or by hand on a matching system. Take only a publish of this checkout's commit.
+engine_publish_directory="$repo_root/build/engine-publish/linux-x64"
+python3 -X utf8 "$script_dir/publish_engine.py" --runtime linux-x64 --check
 
-# With dotnet/embed_build_outputs=false, Godot places publish files outside the PCK. Give the editor only the
-# required profile assembly while it creates the real PCK, then stage the complete prepublish after the editor
-# exits. This avoids making the memory-heavy editor traverse/hash the self-contained runtime and FFmpeg bundle.
+# With dotnet/embed_build_outputs=false, Godot places publish files outside the PCK. Godot's export publishes the
+# project once more: the proxy hands it only the library while it creates the real PCK, and the data folder is staged
+# after the editor exits.
 expected_managed_proxy_directory="$repo_root/build/managed-publish-proxy/linux-x64"
 if [[ "$managed_proxy_directory" != "$expected_managed_proxy_directory" || "$managed_proxy_directory" == "/" ]]; then
     echo "refusing to replace unexpected managed proxy directory: $managed_proxy_directory" >&2
@@ -61,7 +40,7 @@ if [[ "$managed_proxy_directory" != "$expected_managed_proxy_directory" || "$man
 fi
 rm -rf -- "$managed_proxy_directory"
 mkdir -p -- "$managed_proxy_directory"
-cp -- "$managed_publish_directory/OME.dll" "$managed_proxy_directory/OME.dll"
+cp -- "$engine_publish_directory/OME.so" "$managed_proxy_directory/OME.so"
 
 real_dotnet="$(command -v dotnet)"
 expected_dotnet_proxy_directory="$repo_root/build/dotnet-export-proxy"
@@ -93,7 +72,7 @@ OME_REAL_DOTNET="$real_dotnet" \
 OME_PUBLISH_PROJECT="$project_root/OME.csproj" \
 OME_PREPUBLISHED_OUTPUT="$managed_proxy_directory" \
 OME_PUBLISH_OUTPUT_ROOT="${TMPDIR:-/tmp}/godot-publish-dotnet" \
-OME_PUBLISH_ASSEMBLY="OME.dll" \
+OME_PUBLISH_ASSEMBLY="OME.so" \
 OME_PUBLISH_RUNTIME="linux-x64" \
 PATH="$dotnet_proxy_directory:$PATH" \
 XDG_DATA_HOME="$xdg_data_home" "$godot_console" \
@@ -116,7 +95,10 @@ if [[ "$managed_export_directory" != "$expected_managed_export_directory" || "$m
 fi
 rm -rf -- "$managed_export_directory"
 mkdir -p -- "$managed_export_directory"
-cp -a -- "$managed_publish_directory/." "$managed_export_directory/"
+cp -a -- "$engine_publish_directory/." "$managed_export_directory/"
+# The FFmpeg shim and its libraries, which this job built (native/ome_movie_ffmpeg/build-linux-x64.sh).
+cp -a -- "$repo_root/build/native/linux-x64/"*.so* "$repo_root/build/native/linux-x64/FFmpeg-LICENSE.txt" \
+    "$repo_root/build/native/linux-x64/FFmpeg-SOURCE.txt" "$managed_export_directory/"
 
 # The launcher beside the engine (launcher plan §9.2): its own publish, a step of its own after Godot's export has
 # exited, so their memory peaks never overlap on the runner (§3.7).

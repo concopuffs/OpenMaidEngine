@@ -73,17 +73,17 @@ public sealed class OmsLayout
                            && ItemDwords == null && Tables == null && TempBase == null && RefSwap == null
                            && Temps == null && Library == null;
 
-    private static readonly JsonSerializerOptions Options = new()
+    private static readonly ScriptJsonContext Json = new(new JsonSerializerOptions
     {
         WriteIndented = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-    };
+    });
 
-    public string ToJson() => JsonSerializer.Serialize(this, Options);
+    public string ToJson() => JsonSerializer.Serialize(this, Json.OmsLayout);
 
     public static OmsLayout FromJson(string json)
     {
-        OmsLayout layout = JsonSerializer.Deserialize<OmsLayout>(json, Options)
+        OmsLayout layout = JsonSerializer.Deserialize(json, Json.OmsLayout)
             ?? throw new InvalidDataException("empty layout sidecar");
         if (layout.Version != CurrentVersion)
             throw new InvalidDataException($"unsupported layout sidecar version {layout.Version}");

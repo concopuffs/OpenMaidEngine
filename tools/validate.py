@@ -36,6 +36,7 @@ CORE_TESTS = (
     "test_package_linux_x64.py",
     "test_package_windows_x64.py",
     "test_publish_launcher.py",
+    "test_publish_engine.py",
     "test_dotnet_publish_proxy.py",
     "test_publish_github_release.py",
     "test_release_workflow.py",

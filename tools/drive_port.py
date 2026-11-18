@@ -8,6 +8,9 @@ or PATH) with
 
     --path godot -- --game-root <install> --data-root <sandbox> --control --control-file <session.json>
 
+``start --package DIR`` runs an exported package's own engine instead (``DIR/OME.exe``, or ``DIR/OME`` on Linux),
+with the same arguments and no build: a release's engine, compiled with NativeAOT.
+
 ``--data-root`` is the sandbox itself, in the native profile layout (SYS4REG.INI, SAVE\\), so a port sandbox and a
 native one can seed each other. Its SYS4REG.INI gets the profile's ``[sandbox.settings]`` and, unless ``--sound``,
 ``[sandbox.quiet]``. ``start --data-root DIR`` runs an existing player profile root instead (launcher spec §5.10):
@@ -37,6 +40,8 @@ import drive_core as core  # noqa: E402
 from drive_core import DriveError  # noqa: E402
 
 GODOT_PROJECT = paths.REPO / "godot"
+# The engine program at the top of an exported package (tools/package_*_x64.py).
+PACKAGE_PROGRAM = "OME.exe" if os.name == "nt" else "OME"
 
 
 def resolve_godot(explicit: str | None) -> Path:
@@ -57,6 +62,9 @@ def add_launch_options(command: argparse.ArgumentParser) -> None:
     command.add_argument("--set", action="append", default=[], metavar="SECTION.KEY=VALUE",
                          help="write this setting into the sandbox SYS4REG.INI before launch, after the "
                               "profile's (repeatable), e.g. --set message.MessageSpeed=100")
+    command.add_argument("--package", metavar="DIR",
+                         help="run this exported package's engine (DIR/OME.exe, or DIR/OME on Linux) instead of the "
+                              "Godot project: no build; refuses --godot and --optimize")
     command.add_argument("--godot", help="Godot .NET console binary (default: OME_GODOT_CONSOLE, then PATH)")
     command.add_argument("--no-build", action="store_true", help="skip `dotnet build godot/OME.csproj`")
     command.add_argument("--optimize", action="store_true",
@@ -101,6 +109,17 @@ def check_profile_root(data_root: Path, game: str, refused: list[str]) -> Path:
     return root
 
 
+def package_program(folder: Path, given: list[str]) -> Path:
+    """The engine program of the exported package in `folder`. `given` names the build options passed with it, which a
+    package's engine has no use for."""
+    if given:
+        raise DriveError(f"{', '.join(given)} cannot be combined with --package: a package is built already")
+    program = folder.resolve() / PACKAGE_PROGRAM
+    if not program.is_file():
+        raise DriveError(f"no {PACKAGE_PROGRAM} in the package folder {folder.resolve()}")
+    return program
+
+
 def engine_arguments(data_root: Path, desktop: Path, session: Path, mods: list[str], port_args: list[str],
                      game_root: Path | None = None) -> list[str]:
     """The port's arguments after `--`. A profile root's start passes no game root: its profile.toml names the
@@ -143,9 +162,14 @@ def start(arguments: argparse.Namespace) -> int:
     settings = core.parse_settings(arguments.set)
     if arguments.optimize and arguments.no_build:
         raise DriveError("--optimize is a build option; it cannot be combined with --no-build")
-    godot = resolve_godot(arguments.godot)
-    if not arguments.no_build:
-        build(arguments.optimize)
+    package = (package_program(Path(arguments.package),
+                               [name for name, value in (("--godot", arguments.godot), ("--optimize", arguments.optimize))
+                                if value])
+               if arguments.package else None)
+    if package is None:
+        godot = resolve_godot(arguments.godot)
+        if not arguments.no_build:
+            build(arguments.optimize)
     sandbox: Path | None
     if data_root is not None:
         # Launcher spec §5.10: the root as it is. Only the Desktop (F1 screenshots, debug reports) is the driver's.
@@ -161,17 +185,18 @@ def start(arguments: argparse.Namespace) -> int:
                                   session.resolve(), arguments.mod, arguments.port_arg, game_root=paths.CONTEXT.game_root)
     token = secrets.token_hex(16)
     environment = {**os.environ, core.TOKEN_ENVIRONMENT: token}
-    command = [str(godot), "--path", str(GODOT_PROJECT), "--", *engine]
+    command = ([str(package), "--", *engine] if package is not None
+               else [str(godot), "--path", str(GODOT_PROJECT), "--", *engine])
     log_path = root / "godot.log"
     log = log_path.open("wb")
     flags = 0x00000008 | 0x00000200            # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
-    process = subprocess.Popen(command, cwd=paths.REPO, stdout=log, stderr=subprocess.STDOUT,
-                               stdin=subprocess.DEVNULL, env=environment, creationflags=flags)
+    process = subprocess.Popen(command, cwd=package.parent if package is not None else paths.REPO, stdout=log,
+                               stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL, env=environment, creationflags=flags)
     core.write_json_atomic(root / "launch.json", {
         "launcher_pid": process.pid, "launcher_created": core.pid_created(process.pid), "command": command,
         "sandbox": str(sandbox) if sandbox is not None else None, "profile_root": str(profile_root),
         "log": str(log_path), "started": core.now_text(), "foreground": bool(arguments.foreground),
-        "optimize": bool(arguments.optimize),
+        "optimize": bool(arguments.optimize), "package": str(package.parent) if package is not None else None,
     })
     deadline = time.monotonic() + arguments.timeout
     while time.monotonic() < deadline:
@@ -195,6 +220,8 @@ def start(arguments: argparse.Namespace) -> int:
 
 def jit_note(hello: dict) -> str:
     """How the port's assemblies were compiled, from its hello (absent from ports older than the field)."""
+    if hello.get("native_aot"):
+        return "; NativeAOT (a release's engine)"
     if "jit_optimized" not in hello:
         return ""
     return "; JIT optimized" if hello["jit_optimized"] else "; JIT optimizer off (Debug build)"

@@ -40,7 +40,7 @@ public static partial class TextCatalogFileReader
         TomlTable root;
         try
         {
-            root = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
+            root = TomlDocument.Parse(text) ?? new TomlTable();
         }
         catch (TomlException error)
         {
@@ -99,7 +99,7 @@ public static partial class TextCatalogFileReader
         TomlTable root;
         try
         {
-            root = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
+            root = TomlDocument.Parse(text) ?? new TomlTable();
         }
         catch (TomlException error)
         {

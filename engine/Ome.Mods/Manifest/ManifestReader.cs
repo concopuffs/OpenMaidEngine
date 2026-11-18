@@ -63,7 +63,7 @@ public static partial class ManifestReader
         TomlTable root;
         try
         {
-            root = TomlSerializer.Deserialize<TomlTable>(text)
+            root = TomlDocument.Parse(text)
                    ?? throw new ModManifestException(origin, ["the manifest is empty"]);
         }
         catch (TomlException error)
