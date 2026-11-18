@@ -595,6 +595,85 @@ Each archive carries the launcher beside the engine (launcher spec §10; plan §
   On a Windows host (plan §9.5), the zip's `OME.exe` handed over to its own launcher, whose window drew, and the
   launcher's `--check` passed. CI does not run either program.
 
+## Fewer files in a package (investigated 2026-11-18)
+
+The backlog item "A package is an executable beside about 200 loose files" asks what a fatter layout costs. This
+section holds what was measured and read. The user has not yet chosen a layout.
+
+**What v0.7.2 ships.** The engine's data folder (`data_OME_<platform>_x86_64/`) holds 212 files on Windows and 211 on
+Linux:
+- 172 .NET framework assemblies;
+- 14 native .NET runtime files on Windows (15 on Linux);
+- our 9 or 10 assemblies and `GodotSharp.dll`;
+- Lua and Tomlyn;
+- the FFmpeg shim and its 5 FFmpeg libraries;
+- the notices, `OME.deps.json` and `OME.runtimeconfig.json`.
+
+The top level holds `OME.exe` (109 MB), `OME.pck` (0.01 MB), the single-file launcher (94 MB, with its own runtime),
+the launcher's three graphics natives, and the notices.
+
+**How Godot 4.7 starts .NET in an exported game** (`modules/mono/mono_gd/gd_mono.cpp`, `GDMono::initialize`, tag
+`4.7-stable`). It tries three routes in order:
+1. `hostfxr` in the data folder (what the packages use);
+2. `coreclr` alone;
+3. a NativeAOT library, `OME.dll` or `OME.so`, that exports `godotsharp_game_main_init`.
+
+Godot requires the data folder in every route.
+
+**The export switches** (read from Godot's source, not run):
+- **`dotnet/embed_build_outputs`** (`GodotTools/Export/ExportPlugin.cs`, `modules/mono/godotsharp_dirs.cpp`). It packs
+  every file of the publish into the PCK under `res://.godot/mono/publish/<arch>/`, with a SHA-512 manifest.
+  - On desktop, the first start copies all of them to `OS::get_cache_path()/data_OME_<platform>_<arch>`. That is
+    `%LOCALAPPDATA%` on Windows (the temp folder without it), and `$XDG_CACHE_HOME` or `~/.cache` on Linux.
+  - It copies them again whenever the manifest differs. The folder's name carries no version, so two installed
+    versions recopy it in turn.
+  - The program thus gets a second copy outside the package, which a portable install does not cover.
+- **`binary_format/embed_pck`** puts `OME.pck` inside the executable: one file fewer.
+- **.NET's single-file publish does not apply.** Godot's executable is the host, and a single-file bundle needs .NET's
+  own apphost.
+
+**The NativeAOT probe** (a scratch worktree; nothing in the repository changed). The probe was
+`dotnet publish godot/OME.csproj -c ExportRelease -r <rid> -p:PublishAot=true -p:NativeLib=Shared`. Windows used the
+MSVC 2019 build tools, and Linux used WSL's gcc (`-p:CppCompilerAndLinker=gcc`). Each build took under a minute and
+made one 39 MB library. That library replaced v0.7.2's runtime and assemblies in the data folder, and the package smoke
+(`OME --headless -- --package-smoke`) passed on both platforms:
+
+| Layout | Files (data folder) | Archive | Smoke, warm |
+|---|---|---|---|
+| Windows, v0.7.2 | 237 (212) | 131.3 MB zip | 0.24 s |
+| Windows, NativeAOT | 36 (11) | 105.5 MB zip | 0.14 s |
+| Linux, v0.7.2 | 232 (211) | 119 MB tar.gz | about 1.05 s |
+| Linux, NativeAOT | 32 (11) | 94 MB tar.gz | 0.65 s |
+
+The Linux times ran in WSL with the package on `/mnt/c`, so they compare only with each other. The AOT data folder
+holds the library, the FFmpeg shim and its 5 libraries, and four notices. The FFmpeg libraries stay separate files,
+because the license walk-through relies on dynamic linking. Both layouts write the same Godot user data. NativeAOT adds
+nothing outside the package.
+
+**What the probe needed, and what a real AOT build still needs:**
+- **Root `GodotSharp` and `OME` in the trimmer** (`TrimmerRootAssembly`). Without them, Godot's script lookup finds no
+  `Main` (`csharp_script.cpp:2465`: `native_name == StringName()`), and the engine never quits. Rooted, the library
+  grows from 11.6 MB to 39 MB.
+- **Reflection-based serialization is off under AOT.** The compile gave 86 trim and AOT warnings from 41 call sites:
+  - `System.Text.Json` serialization: the game manifests, the shell's strings, session snapshots, the link cache's
+    manifest, patch plans, layouts, and the diagnostics logs, some of which serialize anonymous types;
+  - `JsonArray.Add<T>`;
+  - Tomlyn's `TomlSerializer.Deserialize`.
+
+  The probe turned reflection back on (`JsonSerializerIsReflectionEnabledByDefault=true`). The smoke then passed, but
+  the real boot failed in `GameProfileRegistry`: the trimmer had removed `ProfileDocument`'s constructor. Each site
+  needs a source-generated context or an explicit reader.
+- **Library lookup.** Under AOT, `AppContext.BaseDirectory` is the executable's folder, not the data folder, so
+  `FfmpegMovieNative`'s probe misses the shim. The probe passed with `OME_FFMPEG_NATIVE_DIR` set.
+- **GodotSharp's own warnings.** It reports trim and AOT warnings (IL2104, IL3053). Godot ships NativeAOT on iOS, where
+  this code path is tested more than on desktop.
+- **The Windows build host.** NativeAOT does not compile across operating systems, and the release's Windows job runs
+  on `ubuntu-24.04` with MinGW. The Windows library therefore needs a Windows build host.
+- **The notices check.** An AOT publish has no `deps.json`, which the check reads now. The .NET runtime's notices still
+  apply, since the runtime is compiled in.
+- **Tests.** The engine suite runs under the JIT. An AOT package needs its own gate: the smoke, and a game driven to its
+  title. `drive_port.py` starts only the editor build today.
+
 ## Cross-platform validation gates
 
 Before advertising a platform as supported:
