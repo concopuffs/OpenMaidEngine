@@ -451,6 +451,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       ffmpeg-source.json + build-ffmpeg-sdk.sh build the minimal LGPL FFmpeg SDK;
     │                                       write_ffmpeg_source_notice.py emits each bundle's FFmpeg-SOURCE.txt
     │                                       (outputs stay under disposable build/)
+    ├── tools/ghidra/                        Ghidra scripts of the name port between engine images
+    │                                       (ExportFunctionNames, ApplyFunctionNames; tools/ghidra_port_names.py)
     ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Ome.Engine
                                             plus the optional exact Windows text adapter). It reads the

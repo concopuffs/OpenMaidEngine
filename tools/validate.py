@@ -46,6 +46,7 @@ CORE_TESTS = (
     "test_engine_ctx.py",
     "test_ghidra_handler_map.py",
     "test_init_image.py",
+    "test_ghidra_port_names.py",
     "test_init_kamidori.py",
     "test_init_table_profile.py",
     "test_locate_page.py",
