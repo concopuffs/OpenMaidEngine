@@ -12,7 +12,7 @@ public abstract class DataValue
 {
     private protected DataValue() { }
 
-    /// <summary>The value as one line of inline TOML, keys in the file's order: <c>{unit = {"761" = {hp = 150}}}</c>.
+    /// <summary>The value as one line of inline TOML, keys in the file's order: <c>{a = {7 = {b = 1.5}}, "c d" = ["x"]}</c>.
     /// For tests and the console, not a format anything reads.</summary>
     public string ToText()
     {
@@ -26,19 +26,56 @@ public abstract class DataValue
     internal abstract void Write(StringBuilder text);
 
     /// <summary>A key as a path prints it (plan §4.2): bare when it is a bare TOML key, else a quoted one, with
-    /// <c>"</c>, <c>\</c> and every control character escaped, so a printed key never holds one.</summary>
+    /// <c>"</c>, <c>\</c> and every character that does not print (<see cref="IsHidden"/>) escaped, so a printed key never
+    /// holds one.</summary>
     public static string KeyText(string key)
     {
         if (key.Length > 0 && key.All(c => c is >= 'A' and <= 'Z' or >= 'a' and <= 'z' or >= '0' and <= '9' or '_' or '-'))
             return key;
-        var text = new StringBuilder(key.Length + 2).Append('"');
-        foreach (char c in key)
+        var text = new StringBuilder(key.Length + 2);
+        AppendQuoted(text, key);
+        return text.ToString();
+    }
+
+    /// <summary>Whether the character at <paramref name="index"/> of <paramref name="text"/> is one that does not print:
+    /// a control or format character (Unicode Cc or Cf, such as U+202E, which turns the text after it around), a line or
+    /// paragraph separator (U+2028, U+2029), or half of a surrogate pair whose other half is missing (plan §12.6). A key
+    /// may not hold one, and a printed key or string escapes it. At a pair's first half, the pair's character.</summary>
+    public static bool IsHidden(string text, int index)
+        => CharUnicodeInfo.GetUnicodeCategory(text, index) is UnicodeCategory.Control or UnicodeCategory.Format
+               or UnicodeCategory.LineSeparator or UnicodeCategory.ParagraphSeparator or UnicodeCategory.Surrogate;
+
+    /// <summary>The first character of <paramref name="text"/> that does not print (<see cref="IsHidden"/>), as its code
+    /// point, or -1.</summary>
+    public static int FirstHidden(string text)
+    {
+        for (int index = 0; index < text.Length; index++)
         {
-            if (c is '"' or '\\') text.Append('\\').Append(c);
-            else if (char.IsControl(c)) text.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
-            else text.Append(c);
+            if (IsHidden(text, index))
+                return char.IsSurrogatePair(text, index) ? char.ConvertToUtf32(text, index) : text[index];
+            if (char.IsSurrogatePair(text, index)) index++;
         }
-        return text.Append('"').ToString();
+        return -1;
+    }
+
+    /// <summary><paramref name="value"/> as a TOML basic string, with <c>"</c>, <c>\</c> and each character that does
+    /// not print escaped (<c>\u</c>, or <c>\U</c> past U+FFFF).</summary>
+    private protected static void AppendQuoted(StringBuilder text, string value)
+    {
+        text.Append('"');
+        for (int index = 0; index < value.Length; index++)
+        {
+            char c = value[index];
+            bool pair = char.IsSurrogatePair(value, index);
+            if (c is '"' or '\\') text.Append('\\').Append(c);
+            else if (IsHidden(value, index) && pair)
+                text.Append("\\U").Append(char.ConvertToUtf32(value, index).ToString("X8", CultureInfo.InvariantCulture));
+            else if (IsHidden(value, index)) text.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
+            else if (pair) text.Append(c).Append(value[index + 1]);
+            else text.Append(c);
+            if (pair) index++;
+        }
+        text.Append('"');
     }
 }
 
@@ -98,17 +135,7 @@ public sealed class DataString(string value) : DataValue
 {
     public string Value { get; } = value;
 
-    internal override void Write(StringBuilder text)
-    {
-        text.Append('"');
-        foreach (char c in Value)
-        {
-            if (c is '"' or '\\') text.Append('\\').Append(c);
-            else if (char.IsControl(c)) text.Append("\\u").Append(((int)c).ToString("X4", CultureInfo.InvariantCulture));
-            else text.Append(c);
-        }
-        text.Append('"');
-    }
+    internal override void Write(StringBuilder text) => AppendQuoted(text, Value);
 }
 
 public sealed class DataBoolean(bool value) : DataValue

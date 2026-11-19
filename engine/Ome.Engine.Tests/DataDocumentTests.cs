@@ -123,14 +123,44 @@ public sealed class DataDocumentTests
         Assert.Equal(value, Assert.IsType<DataInteger>(Read($"a = {written}").Root["a"]).Value);
     }
 
-    [Fact]
-    public void AKeyWithAControlCharacterIsRefusedAndPrintedEscaped()
+    private const string Hidden = "a control or format character, a line or paragraph separator, or half of a surrogate pair";
+
+    /// <summary>Plan §12.6: a control character, a format character (U+202E turns the text after it around in a message,
+    /// U+200B is not seen at all, U+E0001 is one past U+FFFF), a line or a paragraph separator: each is refused in a key,
+    /// with its code point, and the key is printed with it escaped.</summary>
+    [Theory]
+    [InlineData("[t]\n\"a\\u0001b\" = 1", @"t.""a\u0001b""", "0001")]
+    [InlineData("\"\\u0085\" = 1", @"""\u0085""", "0085")]
+    [InlineData("\"ab\\u202Ec\" = 1", @"""ab\u202Ec""", "202E")]
+    [InlineData("\"a\u200Bb\" = 1", @"""a\u200Bb""", "200B")]
+    [InlineData("\"a\\u2028\" = 1", @"""a\u2028""", "2028")]
+    [InlineData("[t]\n\"\\u2029\" = 1", @"t.""\u2029""", "2029")]
+    [InlineData("\"tag\\U000E0001\" = 1", @"""tag\U000E0001""", "E0001")]
+    public void AKeyWithACharacterThatDoesNotPrintIsRefusedAndPrintedEscaped(string text, string path, string code)
     {
-        Assert.Equal([@"data/a.toml: t.""a\u0001b"": a key holds a control character (U+0001)"],
-                     Refused("[t]\n\"a\\u0001b\" = 1"));
-        Assert.Equal([@"data/a.toml: ""\u0085"": a key holds a control character (U+0085)"], Refused("\"\\u0085\" = 1"));
-        // A string value may hold one: only keys are printed.
-        Assert.Equal("a\u0001b\n", Assert.IsType<DataString>(Read("a = \"a\\u0001b\\n\"").Root["a"]).Value);
+        Assert.Equal([$"data/a.toml: {path}: a key holds a character that does not print (U+{code}): {Hidden}"], Refused(text));
+    }
+
+    [Fact]
+    public void AStringValueMayHoldACharacterThatDoesNotPrintAndPrintsItEscaped()
+    {
+        // Only keys are refused: a string value keeps what the file gives it, and prints it escaped.
+        DataTable root = Read("a = \"a\\u0001b\\u202E\\n\"\nb = \"\U0001F600 \\U000E0001\"").Root;
+        Assert.Equal("a\u0001b\u202E\n", Assert.IsType<DataString>(root["a"]).Value);
+        Assert.Equal(@"{a = ""a\u0001b\u202E\u000A"", b = ""😀 \U000E0001""}", root.ToText());
+        // A key of letters outside ASCII is quoted, and kept.
+        Assert.Equal(@"{""名前"" = 1, ""é"" = 2}", Read("\"名前\" = 1\n\"é\" = 2").Root.ToText());
+    }
+
+    [Fact]
+    public void HalfOfASurrogatePairIsNotPrintedAsItIs()
+    {
+        // A TOML file cannot give one (its escapes name scalar values and its text is UTF-8), so it is checked here.
+        Assert.Equal(0xD800, DataValue.FirstHidden("a\uD800b"));
+        Assert.Equal(0xDC00, DataValue.FirstHidden("\uDC00"));
+        Assert.Equal(-1, DataValue.FirstHidden("\U0001F600 a"));
+        Assert.Equal(0xE0001, DataValue.FirstHidden("a\U000E0001"));
+        Assert.Equal(@"""a\uD800b""", DataValue.KeyText("a\uD800b"));
     }
 
     [Fact]

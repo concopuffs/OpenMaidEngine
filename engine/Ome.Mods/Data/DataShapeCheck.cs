@@ -32,7 +32,7 @@ public static class DataShapeCheck
     public const int NamesShown = 8;
 
     /// <summary>The marker of an array's element in a path's parts, as <see cref="DataLines"/> has it; a key never holds
-    /// a control character (<see cref="DataDocumentReader"/>).</summary>
+    /// a control character, nor another that does not print (<see cref="DataDocumentReader"/>).</summary>
     internal const char IndexMark = TomlStructure.IndexMark;
 
     public static DataShapeResult Check(DataShape shape, DataReadResult read)
@@ -121,7 +121,9 @@ public static class DataShapeCheck
                     Keep(schema.NotOffered ? description ?? "takes no value here" : KindProblem(schema.Types, value, description));
                 return;
             }
-            if (schema.Enum is { } values && Scalar(value) is { } scalar && !values.Any(item => Same(item, scalar)) && Keeps())
+            // An enum holds strings, numbers and booleans, so a table or an array fails it (plan §12.6).
+            if (schema.Enum is { } values && (Scalar(value) is not { } scalar || !values.Any(item => Same(item, scalar)))
+                && Keeps())
                 Keep($"takes one of {string.Join(", ", values.Take(NamesShown).Select(Literal))}"
                      + $"{(values.Count > NamesShown ? $" and {values.Count - NamesShown} more" : "")}, not {Describe(value)}");
             if (Number(value) is { } number

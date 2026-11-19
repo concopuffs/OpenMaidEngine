@@ -202,7 +202,14 @@ public sealed class DataShape
                         }
                         var properties = new Dictionary<string, DataShapeSchema>(StringComparer.Ordinal);
                         foreach (JsonProperty named in value.EnumerateObject())
-                            if (Schema(named.Value, $"{at}/{Escape(named.Name)}") is { } read) properties[named.Name] = read;
+                        {
+                            // Plan §12.6: a name no data file's key can be, so that the shape's names stay in the bound.
+                            if (named.Name.Length > DataBounds.MaxKeyLength)
+                                problems.Add($"{at}/{Escape(named.Name[..32])}…: a property's name is at most "
+                                             + $"{DataBounds.MaxKeyLength} characters, as a data file's key is, not "
+                                             + $"{named.Name.Length}");
+                            else if (Schema(named.Value, $"{at}/{Escape(named.Name)}") is { } read) properties[named.Name] = read;
+                        }
                         schema.Properties = properties;
                         others.Add(property.Name);
                         break;

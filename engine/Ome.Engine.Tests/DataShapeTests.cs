@@ -384,6 +384,37 @@ public sealed class DataShapeTests
         Assert.Contains(Broken(json), line => line.StartsWith(problem, StringComparison.Ordinal));
     }
 
+    /// <summary>Plan §12.6: a property's name no data file's key can be is refused when the shape is read, and the
+    /// longest a key can be is read.</summary>
+    [Fact]
+    public void AShapesPropertyNamePastTheKeyBoundIsRefused()
+    {
+        string longest = new('k', DataBounds.MaxKeyLength), past = new('k', DataBounds.MaxKeyLength + 1);
+        Assert.True(Check($$"""{ "properties": { "{{longest}}": { "type": "integer" } } }""", $"{longest} = 1\n").Ok);
+        Assert.Equal([$"#/properties/{new string('k', 32)}…: a property's name is at most 128 characters, as a data file's "
+                      + "key is, not 129"],
+                     Broken($$"""{ "properties": { "{{past}}": { "type": "integer" } } }"""));
+    }
+
+    /// <summary>Plan §12.6: an enum holds strings, numbers and booleans, so a table or an array where it stands fails it,
+    /// with or without a type beside it; inside a oneOf too.</summary>
+    [Fact]
+    public void ATableOrAnArrayWhereAnEnumStandsFailsIt()
+    {
+        const string shape = """
+            { "type": "object", "properties": {
+                "mode": { "enum": ["easy", "hard"] },
+                "pick": { "oneOf": [ { "enum": [1, 2] }, { "type": "string" } ] } } }
+            """;
+        Assert.True(Check(shape, "mode = \"easy\"\npick = 2\n").Ok);
+        Assert.Equal([
+            "data/a.toml:1: mode: takes one of \"easy\", \"hard\", not a table",
+            "data/a.toml:2: pick: matches none of the 2 forms its shape gives here",
+        ], Problems(shape, "mode = {}\npick = [1]\n"));
+        Assert.Equal(["data/a.toml:1: mode: takes one of \"easy\", \"hard\", not an array"],
+                     Problems(shape, "mode = [\"easy\"]\n"));
+    }
+
     [Fact]
     public void AShapePastItsSizeIsRefused()
     {

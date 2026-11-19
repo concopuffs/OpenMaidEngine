@@ -182,21 +182,14 @@ public static class DataDocumentReader
                     continue;
                 }
                 _path.Add(DataValue.KeyText(key));
-                if (FirstControl(key) is >= 0 and var control)
-                    problems.Add(null, $"{Here()}: a key holds a control character (U+{control:X4})");
+                if (DataValue.FirstHidden(key) is >= 0 and var hidden)
+                    problems.Add(null, $"{Here()}: a key holds a character that does not print (U+{hidden:X4}): a control or "
+                                       + "format character, a line or paragraph separator, or half of a surrogate pair");
                 else if (Value(value, depth) is { } converted)
                     entries.Add(new KeyValuePair<string, DataValue>(key, converted));
                 _path.RemoveAt(_path.Count - 1);
             }
             return new DataTable(entries);
-        }
-
-        /// <summary>The first control character of <paramref name="key"/>, or -1.</summary>
-        private static int FirstControl(string key)
-        {
-            foreach (char c in key)
-                if (char.IsControl(c)) return c;
-            return -1;
         }
 
         private DataArray? Array(IEnumerable<object?> items, int depth)

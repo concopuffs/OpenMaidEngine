@@ -73,12 +73,13 @@ priority = 0                   # optional; where the file comes among the event'
   `data/slimes.toml:3: the integer 18446744073709551615 is past 2^53 in size, …`, or
   `data/slimes.toml: unit.12.when: a date or a time has no value here`. The link reports the first 20 problems of a
   file and counts the rest.
-- **Keys are strings.** `[unit.761]` has the key `"761"`. What a key means is the kind's.
+- **Keys are strings.** `[rows.12]` has the key `"12"`. What a key means is the kind's.
 - **Bounds.** A document holds at most 400,000 values, where each string, boolean and number counts one (each
-  element of an array too) and so does each table and array, an empty one included: `[unit.12]` with one key under it
-  is three, the tables `unit` and `12` and the value. It nests tables and arrays at most 16 deep, and has keys of at
-  most 128 characters with no control character. This count is the document's size in the report, the budget and
-  the shape's check below.
+  element of an array too) and so does each table and array, an empty one included: `[rows.12]` with one key under it
+  is three, the tables `rows` and `12` and the value. This count is the document's size in the report, the budget
+  and the shape's check below. A document nests tables and arrays at most 16 deep, and its keys are at most 128
+  characters, with none that does not print: no control or format character (Unicode Cc and Cf, such as U+200B or
+  U+202E), no U+2028 or U+2029, and no half of a surrogate pair. A string value may hold them.
 
 ## The record tables: `<game>.tables`
 
@@ -242,7 +243,7 @@ checks TOML against JSON Schema can read the same file:
 ```
 
 - **The keywords:** `type`, `properties`, `additionalProperties`, `items` (one schema for every element), `enum`
-  (strings, numbers and booleans), `minimum` and `maximum` (inclusive), `oneOf`, `description`, and `$ref`, which
+  (strings, numbers and booleans, so a table or an array fails it), `minimum` and `maximum` (inclusive), `oneOf`, `description`, and `$ref`, which
   names `#/definitions/NAME` of the same file and takes only a `description` beside it. `$schema` and `definitions`
   are at the top. `integer` takes `5.0` too, as JSON Schema has it.
 - **`x-ome-decimal-keys`** is the engine's own: an object's keys that `properties` does not name are whole numbers in
@@ -254,7 +255,8 @@ checks TOML against JSON Schema can read the same file:
   set it`. Such a key is never suggested as a nearest name.
 - **Anything else is an error of the owner,** at the link: a keyword outside this list (`required`, `pattern`,
   `x-taplo`, …), a `$ref` to another file or to no definition, a chain of `$ref` that comes back to itself, a range
-  whose minimum is above its maximum, or a file that is not JSON. The report line names the owner, the shape and the
+  whose minimum is above its maximum, a property's name longer than a key may be (128 characters), or a file that is
+  not JSON. The report line names the owner, the shape and the
   place in it as a JSON pointer: `accepts[0] example.lists: shapes/lists.schema.json: #/properties/level/pattern: the
   keyword pattern is outside the shape subset (…)`. The kind's files are then not delivered.
 - **The files.** `shapes/` holds `*.json` files, at paths with forward slashes and no empty, `.` or `..` part, each at
