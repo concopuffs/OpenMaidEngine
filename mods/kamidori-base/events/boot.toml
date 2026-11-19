@@ -9,7 +9,8 @@ At boot, once every layer has written its data tables (the base layer's, then ea
 them. An edit made here lands where an append's edit lands, and the boot's own work then runs over it as it runs over \
 the appends'. A handler that edits a table (a unit's stats, an item, a skill) changes it until the tables are built \
 again. The tables are not saved: a load builds them again and raises this again while it restores \
-(maid.session.restoring is true), so the handler makes its edit again."""
+(maid.session.restoring is true), so the handler makes its edit again. The data files of kamidori.tables are applied \
+here, among this event's handlers in the mods' load order, so a handler here takes its place among them."""
 
 [[event]]
 name = "kamidori.data.ready"
@@ -17,6 +18,8 @@ point = "kamidori.boot.data_ready"
 description = """
 At boot, once every data table is built and the boot's own work on them is done: INIT2 has filled the unset text \
 colours, rebuilt the field for a save made on a floor and set up the studio's ornaments. An edit made here comes \
-after that work, which does not see it: kamidori.data.layered comes before it. The tables are not saved: a load \
+after that work, which does not see it: kamidori.data.layered comes before it. A handler here runs after every data \
+file of kamidori.tables, whatever the load order, because this event comes later in the boot; one that should take \
+its place among them by load order subscribes to kamidori.data.layered instead. The tables are not saved: a load \
 builds them again and raises this again while it restores (maid.session.restoring is true), so the handler makes its \
 edit again."""

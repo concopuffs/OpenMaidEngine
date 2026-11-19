@@ -9,7 +9,8 @@ At boot, once every layer has written its data tables (the base layer's, then ea
 them. An edit made here lands where an append's edit lands, and the boot's own work then runs over it as it runs over \
 the appends'. A handler that edits a table (a unit's stats, an item, a skill) changes it until the tables are built \
 again. The tables are not saved: a load builds them again and raises this again while it restores \
-(maid.session.restoring is true), so the handler makes its edit again."""
+(maid.session.restoring is true), so the handler makes its edit again. The data files of himegari.tables are applied \
+here, among this event's handlers in the mods' load order, so a handler here takes its place among them."""
 
 [[event]]
 name = "himegari.data.ready"
@@ -17,5 +18,7 @@ point = "himegari.boot.data_ready"
 description = """
 At boot, once every data table is built and the boot's own work on them is done: TUNE has corrected the saved tuning \
 levels and inventory counts against the item data. An edit made here comes after that work, which does not see it: \
-himegari.data.layered comes before it. The tables are not saved: a load builds them again and raises this again while \
-it restores (maid.session.restoring is true), so the handler makes its edit again."""
+himegari.data.layered comes before it. A handler here runs after every data file of himegari.tables, whatever the load \
+order, because this event comes later in the boot; one that should take its place among them by load order \
+subscribes to himegari.data.layered instead. The tables are not saved: a load builds them again and raises this again \
+while it restores (maid.session.restoring is true), so the handler makes its edit again."""

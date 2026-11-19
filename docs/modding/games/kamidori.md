@@ -123,8 +123,35 @@ Speakers come from `unit_speaker_names` (`enum speaker` in `oms/kamidori/adv.oms
 
 ## Data edits
 
-A boot script can edit the unit, item, skill and stage-enemy tables. This one changes the enemy unit 761, which
-appears in the first stage (`oms/examples/kamidori-gate6/OMSAUTO.oms`):
+A data file ([../data-files.md](../data-files.md)) changes the unit, item and skill tables with no Lua and no script.
+`kamidori-base` accepts the kind `kamidori.tables` and applies each file at `kamidori.data.layered`, after every
+layer has written its tables and before INIT2's own work reads them. This one changes the enemy unit 761
+(緑プテテット), which appears in the first stage; the comments give the game's own values:
+
+```toml
+# data/slimes.toml; the manifest names it with [[data]] kind = "kamidori.tables", file = "slimes.toml"
+[unit.761]
+stats.max_hp = 150         # 12
+experience_reward = 999    # 10
+drop_chance.drop_1 = 100   # 30
+```
+
+- **Tables and fields** are those of `../../global-reference-kamidori.md`, "Tables", by the names in its `field`
+  column: `unit` (records 0 to 999), `item` (0 to 1999) and `skill` (0 to 999). A field with a row takes its columns
+  by the names the reference gives (`stats.max_hp`), and by number only where a column has no name.
+- **Saved fields are refused:** `item.inventory_count`, `item.growth_exp`, `item.growth_level`,
+  `item.costume_enhancement_grid` and `item.costume_gem_sockets`. They lie below the saved prefix, so a load would
+  bring the saved value back over the edit.
+- **`stage_enemy` is not edited by a file yet.** FIELD's loaders write it afresh for each floor, at
+  `kamidori.stage.loaded`, and the kind has no part for that event yet; a file that names it is refused.
+- **A character keeps a copy.** When a unit joins, UNITECH copies its `unit_base_stats` into the saved
+  `character_stats` (`../../kamidori-data-tables.md`, "Runtime character state"). An edit to a unit's stats reaches
+  a character who joins after the edit, and one who has already joined only where the game reads the definition
+  again; what was copied while the mod was on stays in the save.
+- **Old names.** No table or field has been renamed yet. When one is, the old name keeps working until
+  `kamidori-base`'s next major version, and `diagnostics/lua.log` names each old name a file uses.
+
+A boot script does the same with OMS (`oms/examples/kamidori-gate6/OMSAUTO.oms`), and writes the same three cells:
 
 ```text
 with unit[761] {
@@ -205,6 +232,9 @@ read-only:
   after it writes no record table and reads the edited fields: at the load of a save made on a floor it rebuilds the
   field, and SETMAPTEX and READICON read `unit_canonical_character_id`, `unit_graphic_asset_ids` and
   `item_costume_graphic_asset_ids`. An edit at `data.ready` comes after that rebuild.
+- **Data files are applied at `data.layered`,** among its handlers in load order. A handler at `data.ready` runs
+  after every data file, whatever the load order; one that should take its place among them by load order
+  subscribes to `data.layered`.
 - **A load builds the data tables again** and raises `data.layered` and `data.ready` again while it restores
   (`maid.session.restoring` is true), so a handler that edits them makes its edit again.
 - **FIELD runs the layers more than once a floor.** At a floor's start (`field_map_continue_mode` 0) it runs them,

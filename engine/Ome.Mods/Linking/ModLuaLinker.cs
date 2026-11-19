@@ -599,7 +599,7 @@ public static class ModLuaLinker
                 .ToHashSet(StringComparer.Ordinal);
             string Name(ModContribution document) => several.Contains(document.Mod) ? $"{document.Mod} {document.File}" : document.Mod;
             foreach (ModContribution document in documents)
-                yield return $"  {document.Mod} {document.File}: {document.Values} values";
+                yield return $"  {document.Mod} {document.File}: {document.Values} {(document.Values == 1 ? "value" : "values")}";
             if (documents.Count < 2) continue;
             var givers = new Dictionary<string, List<ModContribution>>(StringComparer.Ordinal);
             var paths = new List<string>();

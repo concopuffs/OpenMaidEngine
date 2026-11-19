@@ -15,8 +15,10 @@ enabled mod requires it. A Lua mod reads and writes the game's cells by name thr
 - `lua/init.lua` is hand-written: the helpers the base mod returns to a mod that requires it, each changing the game
   through one of its own scripts (`give_item` through ADDITEM). `[lua] calls` in the manifest lists those scripts.
 - `lua/tables.lua` is hand-written: the handlers of the `kamidori.tables` format (data patches spec §6,
-  `docs/superpowers/specs/2026-11-17-data-patches-design.md`). `apply_boot` checks a document against the record
-  map and writes its boot tables, through `ome-records`, the library the manifest requires.
+  `docs/superpowers/specs/2026-11-17-data-patches-design.md`), which the manifest's `[[accepts]]` declares.
+  `apply_boot`, bound at `kamidori.data.layered`, checks a data file's document against the record map and writes its
+  boot tables, through `ome-records`, the library the manifest requires. The modder's guide to the format is
+  `docs/modding/data-files.md`.
 - `lua/generated/tables.lua` is the record map, generated with `layout/` by `tools/base_mod_build.py --build` from
   the registry's `[[table]]` entries and the profile's saved prefix, with the old names of tables and fields. Do not
   edit it. `lua/tables.lua` hands the applier `maid.log.warn`, so a file that writes an old name gets a line for it

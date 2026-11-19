@@ -1,4 +1,4 @@
-omp = 3
+omp = 4
 id = "himegari-base"
 name = "姫狩りダンジョンマイスター base"
 version = "1.1.0"
@@ -18,3 +18,13 @@ calls = ["ADDITEM"]
 [[requires]]
 id = "ome-records"
 version = ">=1, <2"
+
+# Data files of the game's record tables (data patches spec §6): a mod that requires this base mod ships them under
+# data/, and tables.lua checks and applies each, by the record map lua/generated/tables.lua.
+[[accepts]]
+kind = "himegari.tables"
+description = "Edits to the game's record tables that the boot builds: units, items and skills."
+
+[[accepts.at]]
+event = "himegari.data.layered"
+handler = "tables.lua:apply_boot"

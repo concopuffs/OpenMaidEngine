@@ -391,7 +391,7 @@ public sealed class DataLinkTests : IDisposable
         Assert.True(result.Succeeded, result.Report.Render());
         var kind = result.Report.Lua.SkipWhile(line => !line.StartsWith("kind ", StringComparison.Ordinal)).ToList();
         Assert.Equal("  test.a data/one.toml: 26 values", kind[1]);
-        Assert.Equal("  test.a data/two.toml: 1 values", kind[2]);
+        Assert.Equal("  test.a data/two.toml: 1 value", kind[2]);
         Assert.Equal("  test.b data/a.toml: 26 values", kind[3]);
         // 26 shared paths, in the order the first document gives them: a key that is not bare is quoted.
         Assert.Equal("  \"odd key\": test.a data/one.toml, then test.b (shared path, in delivery order)", kind[4]);

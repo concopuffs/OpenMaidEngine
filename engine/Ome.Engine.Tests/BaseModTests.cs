@@ -3,6 +3,7 @@ using Ome.Engine.Modding;
 using Ome.Engine.Sys4;
 using Ome.Mods.Launch;
 using Ome.Mods.Linking;
+using Ome.Mods.Manifest;
 using Ome.Mods.Packages;
 using Ome.Script.Abi;
 
@@ -74,6 +75,15 @@ public sealed class BaseModTests : IDisposable
             Assert.Equal(folder.Hash, shipped.Hash);
             // Each requires the library, which the engine ships too.
             Assert.Contains(shipped.Manifest.Requires, requirement => requirement.Id == "ome-records");
+            // Each accepts its game's record tables as data files, applied at the boot's data.layered (data patches
+            // spec §6.2), by the same handler.
+            string game = shipped.Manifest.Profile!;
+            Assert.Equal(ModManifest.DataOmpVersion, shipped.Manifest.OmpVersion);
+            ModKind kind = Assert.Single(shipped.Manifest.Accepts);
+            Assert.Equal($"{game}.tables", kind.Kind);
+            Assert.Equal([($"{game}.data.layered", "tables.lua:apply_boot")],
+                         kind.At.Select(at => (at.Event, at.Handler.ToString())));
+            Assert.Empty(shipped.Manifest.Data);
         }
         using (ModPackage library = ShippedPackages.Open("ome-records")!)
         using (ModPackage folder = ModPackage.Open(Path.Combine(Paths.Repo, "mods", "ome-records")))

@@ -51,6 +51,33 @@ The prelude's template is `line(text, speaker = none, voice = none)`:
 Speakers are CNINIT's character names (`enum speaker` in `oms/himegari/adv.oms`). Names that repeat, or that are
 not identifiers such as `？？？？`, carry their id (`speaker_0x10`).
 
+## Data edits
+
+A data file ([../data-files.md](../data-files.md)) changes the unit, item and skill tables with no Lua and no script.
+`himegari-base` accepts the kind `himegari.tables` and applies each file at `himegari.data.layered`, after every
+layer has written its tables and before TUNE reads them. This one raises the experience unit 103 gives; the comment
+gives the game's own value:
+
+```toml
+# data/rewards.toml; the manifest names it with [[data]] kind = "himegari.tables", file = "rewards.toml"
+[unit.103]
+experience_reward = 40     # 30
+```
+
+- **Tables and fields** are those of `../../global-reference.md`, "Tables", by the names in its `field` column:
+  `unit` (records 0 to 999), `item` (0 to 999) and `skill` (0 to 299). A field with a row takes its columns by the
+  names the reference gives (`stat_modifiers.max_fs`), and by number only where a column has no name.
+- **Saved fields are refused:** `unit.story_speaker_seen_flag`, `skill.acquired_flag` and
+  `skill.info_revealed_flag`. They lie below the saved prefix, so a load would bring the saved value back over the
+  edit.
+- **TUNE corrects the save against the edited items.** It lowers each saved tuning level to the last level its
+  item's curve gives a bonus for (below, "Edit the boot's tables at `data.layered`"). A file that gives an item a
+  shorter curve (`item.tuning_curve_ids`) lowers that item's saved levels, and they stay lowered when the mod is
+  removed.
+- **The stage's enemies** (`stage_enemy_*`) have no record table yet, so a file cannot name them.
+- **Old names.** No table or field has been renamed yet. When one is, the old name keeps working until
+  `himegari-base`'s next major version, and `diagnostics/lua.log` names each old name a file uses.
+
 ## Patch points
 
 `himegari.experience.after_calculation` (`ADDEXP.BIN`) is reached once per experience award, after the multipliers.
@@ -117,6 +144,9 @@ register their handlers in, so a handler runs after the base game's and every ap
   to the party's items. An edit at `data.ready` comes after that, so TUNE does not correct the save against it: a
   saved tuning level could then lie past a curve the edit shortened. The correction TUNE makes against an edit is in
   the save from then on, and stays when the mod is removed.
+- **Data files are applied at `data.layered`,** among its handlers in load order. A handler at `data.ready` runs
+  after every data file, whatever the load order; one that should take its place among them by load order
+  subscribes to `data.layered`.
 - **The data tables are not saved** (they lie above the saved range, below). A load builds the tables again and
   raises `data.layered` and `data.ready` again while it restores (`maid.session.restoring` is true), so the handler
   makes its edit again.

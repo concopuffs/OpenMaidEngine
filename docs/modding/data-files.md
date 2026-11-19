@@ -9,8 +9,8 @@ change a unit's stats or an item's price with a file like this one and no Lua at
 experience_reward = 999
 ```
 
-Data files need format version 4 and run in the port only, as Lua does. The kinds each game's base mod accepts, with
-their tables and fields, are in that game's guide (`games/<game>.md`).
+Data files need format version 4 and run in the port only, as Lua does. Each game's base mod accepts `<game>.tables`
+(below, "The record tables"); its tables and fields are in that game's guide (`games/<game>.md`).
 
 ## Words
 
@@ -74,6 +74,59 @@ priority = 0                   # optional; where the file comes among the event'
 - **Bounds.** A document holds at most 400,000 values (a string, a boolean or a number; each element of an array
   counts), nests tables and arrays at most 16 deep, and has keys of at most 128 characters with no control
   character.
+
+## The record tables: `<game>.tables`
+
+Each game's base mod accepts `<game>.tables`: edits to the game's record tables, which it applies at
+`<game>.data.layered`. That event comes once every layer has written the boot's tables (the base game's, then each
+append's) and before the boot's own work reads them, so an edit lands where an append's edit would. The game's guide
+lists its tables, the fields a file cannot set, and what the game does with an edit.
+
+```toml
+[unit.761]                   # a table, then a record id
+stats.max_hp = 150           # one column of a field with a row for each record, by its name
+experience_reward = 999      # a field with one value for each record
+drop_chance.drop_1 = 100
+```
+
+- **The top level names a record table** of the game, and the keys below it are the table's fields, by the names the
+  global reference's "Tables" section gives. They are the names OMS uses: `unit[761].stats.max_hp` is
+  `unit.761.stats.max_hp`.
+- **The record id is decimal,** with no sign and no leading zero, and inside the table.
+- **A field with a row takes its columns,** by name where the reference names the column, and by number only where it
+  has none.
+- **Each cell has one spelling.** A hexadecimal id (`unit.0x2f9`), a named column given by its number
+  (`drop_chance.0`) and an array for a whole row are refused, each with the spelling to use. So two files that set
+  one cell share a path in the report.
+- **A value follows its cell:** a whole number from -2147483648 to 4294967295, a float, or a string that the save's
+  code page (932) can encode.
+- **Every edit is an assignment.** A later file's value replaces an earlier one's, so the mod later in the load
+  order wins.
+- **A field the save holds is refused,** by name: a load would bring the saved value back over the edit.
+- **A table that the boot does not build** (a stage's, which its loaders write when the stage starts) is refused for
+  now.
+- **A file with a problem applies nothing.** The base mod checks the whole file at its first delivery in a session,
+  before it writes, and `diagnostics/lua.log` lists each problem by its path:
+
+  ```text
+  example.a data/a.toml: 2 problems, so nothing of it is applied
+    unit.0x2f9: a record id is written in decimal: 761
+    unit.761.experiance_reward: unit has no field experiance_reward
+  ```
+
+  The file's later deliveries in the session pass it over, with no second error. `--lua-errors halt` ends the run at
+  the first such file.
+- **The tables are not saved.** A load builds them again and raises `<game>.data.layered` again while it restores,
+  and a return to title does the same, so the file is applied again each time. A save made with the mod and loaded
+  without it has the game's own values. What the game itself copies from an edited field into saved state stays in
+  the save; the game's guide names such fields.
+- **An old name keeps working.** When the base mod renames a table or a field, a file may still use the old name
+  until the base mod's next major version. It writes the cell the current name does, and `diagnostics/lua.log` says
+  so once a session: `example.a data/a.toml: units is an old name of the table unit; write unit`. A file that names
+  one cell by its old name and its current one is refused.
+- **A Lua handler on the same tables.** A hook on `<game>.data.layered` runs among the files, in load order. A hook on
+  `<game>.data.ready` runs after every file, whatever the load order, because that event comes later in the boot. A
+  mod whose edits should take their place among the files by load order subscribes to `<game>.data.layered`.
 
 ## Defining a kind
 

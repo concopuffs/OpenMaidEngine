@@ -21,9 +21,10 @@ using Ome.Scripting.Lua;
 /// TUNE then lowers a saved tuning level by the edited curve, at boot and again at a load, where the same edit at
 /// <c>data.ready</c> comes too late. In Kamidori, on both installs, the event comes before <c>data.ready</c> and an edit
 /// made there is still in place at it. And gate 5's cells: the gate 6 example's <c>with</c> block compiles to the three
-/// cells <see cref="DataPatchTests"/> has the applier write.
+/// cells <see cref="DataPatchTests"/> has the applier write. Milestone 1's tests, with data files shipped by mods, are
+/// in DataPatchWorkspaceTests.Files.cs.
 /// </summary>
-public sealed class DataPatchWorkspaceTests : IDisposable
+public sealed partial class DataPatchWorkspaceTests : IDisposable
 {
     private const int T_IMM = 0, T_GINT = 3, T_LINT = 9;
     private readonly string _root = Path.Combine(Path.GetTempPath(), "ome-data-patch-" + Guid.NewGuid().ToString("N"));
@@ -179,11 +180,12 @@ public sealed class DataPatchWorkspaceTests : IDisposable
     /// <summary>An id outside the install's catalog, for the synthetic root a load re-enters.</summary>
     private const uint RootId = 0x7e000000;
 
-    /// <summary>The install's scripts, with the synthetic root by its id and a wait-free CALLBACK_LOAD (the
-    /// install's draws and plays sound, which this test does not need).</summary>
-    private sealed class WithRoot(Sys4ScriptProvider installed, Script root, Script callback) : IScriptProvider
+    /// <summary>The install's scripts, with the synthetic root by its id, a wait-free CALLBACK_LOAD (the install's
+    /// draws and plays sound, which these tests do not need), and a synthetic title as raw script 0 when one is given,
+    /// which op 0x9 loads.</summary>
+    private sealed class WithRoot(Sys4ScriptProvider installed, Script root, Script callback, Script? title = null) : IScriptProvider
     {
-        public Script? GetById(long id) => id == RootId ? root : installed.GetById(id);
+        public Script? GetById(long id) => id == RootId ? root : id == 0 && title is not null ? title : installed.GetById(id);
         public AgeBoxMessage? LoadFailure(long id) => ((IScriptProvider)installed).LoadFailure(id);
         public Script? GetByName(string name)
             => name.Equals("CALLBACK_LOAD.BIN", StringComparison.OrdinalIgnoreCase) ? callback : installed.GetByName(name);
@@ -268,15 +270,7 @@ public sealed class DataPatchWorkspaceTests : IDisposable
     [InlineData(true)]
     public void KamidorisDataLayeredComesBeforeDataReadyAndAnEditThereHolds(bool translated)
     {
-        string gameRoot = translated ? Paths.KamidoriTranslatedDir : Path.Combine(Paths.Workspace, "Kamidori");
-        string[] looseRoots = translated ? [Path.Combine(gameRoot, "patch"), gameRoot] : [gameRoot];
-        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
-        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
-        var catalog = Sys4AssetCatalog.Load(sys4Ini);
-        var store = new Sys4AssetStore(catalog, gameRoot, looseRoots);
-        ModLinkBase linkBase = ModLinkBase.ForInstall("kamidori", sys4Ini, catalog, store, KamidoriTable, Contracts,
-            Paths.GlobalsJson("kamidori"), Paths.OmsModules("kamidori"), Paths.PatchPointsJson("kamidori"));
-        var scripts = new Sys4ScriptProvider(KamidoriTable, catalog, store);
+        var (linkBase, scripts) = Kamidori(translated);
 
         // 緑プテテット (EBINIT unit 761): its experience reward, 10, set to 999 at data.layered.
         ModLinkResult linked = Linked(linkBase, TestMod("kamidori", "\"unit_experience_reward\"", """
