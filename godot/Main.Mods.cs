@@ -66,7 +66,9 @@ public partial class Main
         ModLaunchResult result = ModLaunch.Run(linkBase, persistence.ProfileRoot, persistence.DiagnosticsDirectory, options,
                                                modsTable);
         foreach (ModReportLine line in result.Report.Lines.Where(line => line.Class == ModReportClass.Note
-                                                                          && line.Message.Contains("--forget-mod")))
+                                                                          && (line.Message.Contains("--forget-mod")
+                                                                              || line.Message.StartsWith(ModLinkCache.UnreadNote,
+                                                                                  StringComparison.Ordinal))))
             GD.Print($"[mods] {line}");
         if (result.Failed)
         {

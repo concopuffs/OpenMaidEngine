@@ -26,7 +26,10 @@ public static class ModStack
         // A link that skipped failed mods is cached under a key of the launch's inputs (the installed mods, the user's
         // order and the saved selectors), marked, so the same launch with the same flag hits it instead of linking
         // again, even when a mod fails before an order exists; a launch that does not skip failures never mounts it.
-        if (skipFailedMods && ModLinkCache.TryOpen(cacheRoot, SkipFailedKey(linkBase, mods, userOrder, selectors)) is { } skipped)
+        // An entry that is there but does not read is linked again, with a note saying why (plan §12.6).
+        string? unread = null;
+        if (skipFailedMods && ModLinkCache.TryOpen(cacheRoot, SkipFailedKey(linkBase, mods, userOrder, selectors), out unread)
+                is { } skipped)
         {
             var report = new ModLinkReport { Order = skipped.Manifest.Order.Select(entry => entry.Id).ToList() };
             report.Add(ModReportClass.Note, [], null,
@@ -43,16 +46,20 @@ public static class ModStack
         if (!probe.Stops)
         {
             string stackKey = ModLinkCache.ComputeKey(linkBase, order, allocated);
-            if (ModLinkCache.TryOpen(cacheRoot, stackKey) is { } cached)
+            if (ModLinkCache.TryOpen(cacheRoot, stackKey, out string? stackUnread) is { } cached)
             {
                 allocation.Save(selectorsPath);
                 var report = new ModLinkReport { Order = order.Select(mod => mod.Id).ToList() };
                 report.Add(ModReportClass.Note, [], null, $"link cache hit {stackKey[..16]}");
                 return new ModStackResult(cached, report, true);
             }
+            unread ??= stackUnread;
         }
 
         ModLinkResult result = ModLinker.Link(linkBase, mods, userOrder, selectors, skipFailedMods);
+        if (unread != null)
+            result.Report.Add(ModReportClass.Note, [], null, $"{ModLinkCache.UnreadNote} does not read, so the stack was linked "
+                                                             + $"again: {unread}");
         if (!result.Succeeded) return new ModStackResult(null, result.Report, false);
         var kept = result.Catalogs.ToDictionary(catalog => catalog.ModId, catalog => catalog.Selector, StringComparer.Ordinal);
         // A dropped mod's selector is not kept, so the key uses the allocation saved below: the one the next launch loads.

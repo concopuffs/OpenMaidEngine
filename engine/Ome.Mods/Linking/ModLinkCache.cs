@@ -289,14 +289,19 @@ public sealed record LinkedLuaEntry
         var events = Events.Select(entry => new GameEvent(entry.Name, entry.Owner, entry.Points, entry.Description,
             entry.Fields.Select(field => GameEvent.BuildField(field.Name, field.Type, field.Access, field.At,
                 entry.Points.Count > 0, LayoutFor(entry.Owner))).ToList())).ToList();
-        // Data patches plan §4.2: each kept file is read again with the reader the link used.
+        // Data patches plan §4.2: each kept file is read again with the reader the link used. One that no longer reads,
+        // or reads to another size than the link's (an engine whose reader changed), makes the entry a miss (plan §12.6):
+        // ModLinkCache.TryOpen reads the stack before it hands the entry out.
         var contributions = (Contributions ?? []).Select(entry =>
         {
             string text = File.ReadAllText(Path.Combine(directory, entry.CachePath), Encoding.UTF8);
             DataReadResult read = DataDocumentReader.Read(text, entry.File);
             if (read.Document is not { } document)
-                throw new InvalidDataException($"the link cache's copy of {entry.Mod} {entry.File} no longer reads: "
+                throw new InvalidDataException($"its copy of {entry.Mod} {entry.File} no longer reads: "
                                                + string.Join("; ", read.Problems.Select(problem => problem.Describe(entry.File))));
+            if (document.Values != entry.Values)
+                throw new InvalidDataException($"its copy of {entry.Mod} {entry.File} reads as {document.Values} values, "
+                                               + $"where the link read {entry.Values}");
             return new ModContribution(entry.Kind, entry.Owner, entry.Mod, entry.File, document.Root, document.Values,
                                        entry.Unraised, entry.Requires);
         }).ToList();
@@ -499,9 +504,18 @@ public static class ModLinkCache
         }
     }
 
+    /// <summary>The start of the note a launch logs when an entry is there but does not read, and is linked again.</summary>
+    public const string UnreadNote = "link cache entry";
+
     /// <summary>The cached layer of <paramref name="key"/>, or null when there is none or it is incomplete.</summary>
-    public static MountedModLayer? TryOpen(string cacheRoot, string key)
+    public static MountedModLayer? TryOpen(string cacheRoot, string key) => TryOpen(cacheRoot, key, out _);
+
+    /// <summary>The cached layer of <paramref name="key"/>, or null when there is none, it is incomplete or it does not
+    /// read; <paramref name="unread"/> says why a whole entry did not read (its Lua stack, with its data files, is read
+    /// here, so that a mounted layer's <see cref="MountedModLayer.LuaStack"/> does not throw later).</summary>
+    public static MountedModLayer? TryOpen(string cacheRoot, string key, out string? unread)
     {
+        unread = null;
         string directory = Path.Combine(cacheRoot, key);
         string manifestPath = Path.Combine(directory, MountedModLayer.ManifestFile);
         if (!File.Exists(manifestPath)) return null;
@@ -524,6 +538,16 @@ public static class ModLinkCache
                     || mod.Layout && !File.Exists(Path.Combine(directory, LinkedLuaEntry.LayoutPathOf(mod.Id))))
                 || (manifest.Lua?.Contributions ?? []).Any(entry => !File.Exists(Path.Combine(directory, entry.CachePath))))
                 return null;
+            try
+            {
+                _ = layer.LuaStack;
+            }
+            catch (Exception error) when (error is InvalidDataException or FormatException or IOException
+                                              or UnauthorizedAccessException or JsonException)
+            {
+                unread = error.Message;
+                return null;
+            }
             // A hit counts as recent use, so pruning keeps the entries that are actually launched.
             try
             {

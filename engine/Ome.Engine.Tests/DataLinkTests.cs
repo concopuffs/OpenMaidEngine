@@ -539,6 +539,40 @@ public sealed class DataLinkTests : IDisposable
         Assert.Null(ModLinkCache.TryOpen(cache, "k"));
     }
 
+    /// <summary>Plan §12.6 (the review's defect D): a kept copy that no longer reads, or reads to another size than the
+    /// link's, as after an engine whose reader changed, makes the entry a miss with its reason, so the launch links again
+    /// with a note instead of throwing when the engine mounts the stack.</summary>
+    [Fact]
+    public void ACachedCopyThatNoLongerReadsIsAMissAndTheStackIsLinkedAgainWithANote()
+    {
+        ModLinkBase linkBase = Base();
+        ModPackage owner = Owner(), a = Contributor("test.a", "names = [\"x\", \"y\"]\n", "lists/a.toml");
+        string mods = Path.Combine(_root, "mods");
+        ModStackResult first = ModStack.Prepare(linkBase, [owner, a], ["test.owner", "test.a"], mods);
+        Assert.True(first.Succeeded, first.Report.Render());
+        string kept = Path.Combine(first.Layer!.Directory, "data", "test.a", "lists", "a.toml");
+        string cache = Path.Combine(mods, ModLinkCache.FolderName);
+
+        File.WriteAllText(kept, "names = [\"x\"]\nnames = [\"y\"]\n");
+        Assert.Null(ModLinkCache.TryOpen(cache, first.Layer.Key, out string? unread));
+        Assert.Equal("its copy of test.a data/lists/a.toml no longer reads: data/lists/a.toml:2: The key `names` is already "
+                     + "defined at (1,1) and cannot be redefined", unread);
+
+        ModStackResult again = ModStack.Prepare(linkBase, [owner, a], ["test.owner", "test.a"], mods);
+        Assert.True(again.Succeeded, again.Report.Render());
+        Assert.False(again.FromCache);
+        Assert.Contains(again.Report.Lines, line => line.Class == ModReportClass.Note
+                                                    && line.Message == $"{ModLinkCache.UnreadNote} does not read, so the stack "
+                                                    + $"was linked again: {unread}");
+        Assert.Equal(3, Assert.Single(again.Layer!.LuaStack.ContributionList).Values);
+        Assert.True(ModStack.Prepare(linkBase, [owner, a], ["test.owner", "test.a"], mods).FromCache);
+
+        // A copy that reads to another size than the link counted is a miss too.
+        File.WriteAllText(kept, "names = [\"x\", \"y\", \"z\"]\n");
+        Assert.Null(ModLinkCache.TryOpen(cache, again.Layer.Key, out unread));
+        Assert.Equal("its copy of test.a data/lists/a.toml reads as 4 values, where the link read 3", unread);
+    }
+
     [Fact]
     public void AStackWithoutDataWritesNoContributionsToTheCache()
     {
