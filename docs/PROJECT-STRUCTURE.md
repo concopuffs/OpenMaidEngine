@@ -725,7 +725,9 @@ end hands over (`RequestReload`, `RefuseReload`) and the session rebuilt at a bo
 (`IInterpreterAccess.InsideWait`), keeping each mod's state; `Events` runs the game events' subscribers; `Watches` keeps the
 watch records (spec §7.3): which running instruction owns each write to a watched cell, and their delivery when it
 returns, over the bitmap of watched cells that the script memory native's setters test (`WatchedCells.cs`); `Trace`
-writes `--lua-trace`'s `diagnostics/lua-trace.jsonl`. The runtime it calls is `engine/Ome.Scripting.Lua/`; the link builds its stack and plan in `engine/Ome.Mods/Linking/ModLuaLinker.cs`.
+writes `--lua-trace`'s `diagnostics/lua-trace.jsonl`; `Journal` keeps what a data file's delivery writes and puts it
+back when the delivery fails (data patches plan §12.6): the script memory native's setters keep a global's value in
+`CellJournal.cs`, and Lua reaches the interpreter through an access that keeps a local's. The runtime it calls is `engine/Ome.Scripting.Lua/`; the link builds its stack and plan in `engine/Ome.Mods/Linking/ModLuaLinker.cs`.
 `engine/Ome.Engine.Vm/VirtualMachine.ScriptLifecycle.cs` owns process/frame/root
 exit, native run-state compatibility, initial-root-run query, ordinary cross-script calls, mounted append autoruns,
 and preloaded script-slot load/call dispatch; frame execution, script-provider access, and shared lifecycle state

@@ -57,6 +57,8 @@ public sealed partial class ScriptMemory
     private Scene _scene = new();
     // Lua scripting spec §7.3, §7.5: the cells the plan's watches cover, or null; a global write tests this reference.
     private WatchedCells? _watched;
+    // Data patches plan §12.6: the running deliveries' journal, or null between deliveries.
+    private CellJournal? _journal;
 
     private readonly Encoding _encoding;
     // Op 0x132 creates a queue; ATSEEK/MVSEEK use queue 0. A queue lives for the run (a scene reset keeps it).
@@ -102,10 +104,13 @@ public sealed partial class ScriptMemory
 
     /// <summary>The integer and string setters are every write a script, a native or Lua makes to a global, so they
     /// record a write to a watched cell (Lua scripting spec §7.3). A load's banks, a scene reset's and a tool's seeding
-    /// write the banks directly, which is no write.</summary>
+    /// write the banks directly, which is no write. Every setter keeps the cell's value for the running deliveries'
+    /// journal (data patches plan §12.6).</summary>
     public void SetInteger(int address, long value)
     {
         value = IntegerCell(value);
+        if (_journal != null)
+            _journal.Keep(JournalBank.Integer, address, _scene.Integers.TryGetValue(address, out long old), old, null);
         if (_watched != null && _watched.Integer(address))
             _watched.Record(new CellWrite(CellKind.Integer, address, Integer(address), value, null, null));
         _scene.Integers[address] = value;
@@ -115,10 +120,17 @@ public sealed partial class ScriptMemory
     /// </summary>
     public void SeedInteger(int address, long value) => _scene.Integers[address] = IntegerCell(value);
 
-    public void SetFloat(int address, long value) => _scene.Floats[address] = value;
+    public void SetFloat(int address, long value)
+    {
+        if (_journal != null)
+            _journal.Keep(JournalBank.Float, address, _scene.Floats.TryGetValue(address, out long old), old, null);
+        _scene.Floats[address] = value;
+    }
 
     public void SetString(int address, string value)
     {
+        if (_journal != null)
+            _journal.Keep(JournalBank.String, address, _scene.Strings.TryGetValue(address, out string? old), 0, old);
         if (_watched != null && _watched.String(address))
             _watched.Record(new CellWrite(CellKind.String, address, 0, 0, String(address), value));
         _scene.Strings[address] = value;
@@ -127,9 +139,58 @@ public sealed partial class ScriptMemory
     /// <summary>The scripting native's watches (Lua scripting spec §7.3), or null for none.</summary>
     public void Watch(WatchedCells? watched) => _watched = watched;
 
-    public void SetPointer(int index, int address) => _scene.Pointers[index] = address;
+    /// <summary>The running deliveries' journal (data patches plan §12.6), while one runs; null otherwise, so a write
+    /// costs one test.</summary>
+    internal void Journal(CellJournal? journal) => _journal = journal;
 
-    public void SetStringPointer(int index, int address) => _scene.StringPointers[index] = address;
+    /// <summary>A cell a failed delivery wrote gets the value its journal kept (data patches plan §12.6): through the
+    /// setter for a bank a watch covers, so the watch is told of it, and a cell the bank had not held is taken out
+    /// again.</summary>
+    internal void PutBack(JournalBank bank, int address, bool present, long number, string? text)
+    {
+        switch (bank)
+        {
+            case JournalBank.Integer:
+                SetInteger(address, number);
+                if (!present) _scene.Integers.Remove(address);
+                break;
+            case JournalBank.String:
+                SetString(address, text ?? "");
+                if (!present) _scene.Strings.Remove(address);
+                break;
+            case JournalBank.Float:
+                Restore(_scene.Floats, address, present, number);
+                break;
+            case JournalBank.Pointer:
+                Restore(_scene.Pointers, address, present, (int)number);
+                break;
+            case JournalBank.StringPointer:
+                Restore(_scene.StringPointers, address, present, (int)number);
+                break;
+            default:
+                throw new ArgumentOutOfRangeException(nameof(bank), bank, "a local is the interpreter's");
+        }
+    }
+
+    private static void Restore<T>(Dictionary<int, T> bank, int address, bool present, T value)
+    {
+        if (present) bank[address] = value;
+        else bank.Remove(address);
+    }
+
+    public void SetPointer(int index, int address)
+    {
+        if (_journal != null)
+            _journal.Keep(JournalBank.Pointer, index, _scene.Pointers.TryGetValue(index, out int old), old, null);
+        _scene.Pointers[index] = address;
+    }
+
+    public void SetStringPointer(int index, int address)
+    {
+        if (_journal != null)
+            _journal.Keep(JournalBank.StringPointer, index, _scene.StringPointers.TryGetValue(index, out int old), old, null);
+        _scene.StringPointers[index] = address;
+    }
 
     /// <summary>The integer address pointer cell <paramref name="index"/> names. A cell never set as a pointer reads
     /// the integer cell of that index, as native's banks overlap.</summary>

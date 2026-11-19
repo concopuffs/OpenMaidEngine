@@ -146,8 +146,9 @@ public sealed partial class Scripting
 
     /// <summary>A traced call's line. <paramref name="cost"/> is what it ran and its budget (data patches plan §4.2).
     /// <paramref name="abandoned"/>: the call did not return, because a script it called ended the scene or the run
-    /// (spec §10).</summary>
-    private void TraceEnd(TracedCall call, ModScriptException? error, ModCallCost cost, bool abandoned = false)
+    /// (spec §10). <paramref name="putBack"/>: the cells a failed delivery's journal put back (data patches plan
+    /// §12.6), or -1 for a call that put none back; its writes stay listed, to show how far it got.</summary>
+    private void TraceEnd(TracedCall call, ModScriptException? error, ModCallCost cost, bool abandoned = false, int putBack = -1)
     {
         IReadOnlyList<(string Name, TracedValue Value)> after = FieldValues(call.Context);
         double milliseconds = (Stopwatch.GetTimestamp() - call.Started) * 1000.0 / Stopwatch.Frequency;
@@ -246,6 +247,7 @@ public sealed partial class Scripting
                 json.WriteEndArray();
             }
             if (call.Dropped > 0) json.WriteNumber("writes_not_listed", call.Dropped);
+            if (putBack >= 0) json.WriteNumber("put_back", putBack);
             if (call.Calls.Count > 0)
             {
                 json.WriteStartArray("calls");

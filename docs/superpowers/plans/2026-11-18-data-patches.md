@@ -1310,8 +1310,9 @@ review's.
   The largest, 110.0, is under half of the allowance of 250, so neither the count nor the allowance changed; before
   the count, the same sparse files had an allowance of nothing for their empty tables (`m-partial` ran 867 for each
   of its values). The file of unknown keys at the bound now has 399,001 keys, and is refused at the link in 0.69 s.
-- **Spec §6.1 when the applier stops partway (item 3; not built).** §6.1 has a file with an error apply nothing. It
-  holds for a problem the check finds, since `Applier:apply` checks the whole document before its first write. It
+- **Spec §6.1 when the applier stops partway (item 3; built in the follow-up, below).** §6.1 has a file with an
+  error apply nothing. It holds for a problem the check finds, since `Applier:apply` checks the whole document before
+  its first write. It
   does not hold when a delivery stops after its first write: the writes go through the base mod's accessors with no
   journal (`LuaModSession.Invoke`, `Guarded`), so what was written stays until the tables are built again. Such a stop
   is the budget (`m-partial` before the count: 853 of 2,000 cells), an error the check does not foresee, in an
@@ -1321,8 +1322,7 @@ review's.
   for the rest. The smallest fix: the engine journals each write of a delivery (the cell and its old value, in the
   accessor's path the trace already sees) and, when the delivery fails, puts the old values back in reverse order.
   It has to be the engine's: a budget stop cancels the call and cannot be caught by `pcall`, so a journal in
-  `ome-records` would not run. The backlog has it; `data-files.md` no longer says that a stopped delivery writes
-  nothing.
+  `ome-records` would not run. The backlog had it until the follow-up built it (the journal, below).
 - **A cached copy that no longer reads threw out of `_Ready` (defect D).** The layer read its data files when the port
   first asked for its Lua stack. `ModLinkCache.TryOpen` now reads the stack before it hands an entry out; a copy that
   does not read, or reads to another size than the link counted (an engine whose reader changed, as this count does),
@@ -1368,3 +1368,66 @@ review's.
   with no trim or AOT warning but GodotSharp's own (IL2104, IL3053). Not run: the workspace, runtime and full levels
   of `validate.py`, gate 8 (no change here reaches its CP932 error), §12.2's hand check, and a driven stage of
   `m-steps` on the port (the sparse test delivers a file of its shape and size headless at FIELD instead).
+
+**The follow-up (2026-11-19).** The owner's rule that a gap the branch surfaced is closed on the branch brought six
+items after this section: the journal, the report's size line, the catalog's read, a backlog line on Lua's memory,
+the stage list's own event and the decision on Tomlyn's faults.
+
+- **A delivery that fails is put back (the follow-up's item 1).** Spec §6.1 holds now whatever stops a delivery,
+  where spec §5.6 and §6.2 have what a failed delivery wrote stay: a departure the specs do not record, kept here.
+  - **The mechanism.** `Scripting.Call` opens a journal span (`Natives/CellJournal.cs`, `Scripting.Journal.cs`) for
+    each call that delivers a data file and closes it when the call returns. While a span is open, the script memory
+    native's five setters keep each cell's value before its first write in the span (its bank, its address, whether
+    it was there, its value), and the interpreter access Lua is given (`JournaledInterpreter`, around the VM's
+    `IInterpreterAccess`) keeps a local's, for the frame the delivery runs in (`RunningFrame`). When the call fails
+    (an error, its budget, or another `ModScriptException` out of `session.Invoke`), the span's cells are put back
+    through the same setters, latest first, before the log line, the notice, the trace line or any other handler; a
+    cell that was not there is removed. A span nests: a delivery raised from inside another (an `emit` whose event a
+    data kind takes) has its own, and one that ends well leaves its cells to the span around it, so the outer
+    delivery's failure puts both back. A call the nesting cap refuses has not started and wrote nothing. A call an
+    engine unwind abandons (a script it called ended the scene or the run, Lua spec §10) has its span dropped, since
+    the scene's cells end with the scene. A delivery that succeeds is unchanged, and so is every handler that is not a
+    delivery: Lua spec §5.5 has a handler's writes stay, and nothing about a handler's error says they are wrong, as
+    a data file's are when its kind takes it whole (spec §6.1). The journal opens only for a delivery, so the base
+    mods' own handlers, with no data file, never pay for it.
+  - **The write paths** a delivery has, and the journal's cover of each:
+    - a global cell of any bank, by any route: the base mods' accessors, `maid.vm.g`, `gf`, `gs` and the pointer
+      cells, an event field that is a global, an element or an operand naming one, and the writes of a handler the
+      delivery's `emit` runs, a delivery or not. All end in the five setters, so all are kept;
+    - a script `maid.vm.call` runs: its writes to globals go through the same setters and are put back. Its other
+      effects are not cells and stay: graphics, sound, text, the queues and stacks of ops `0x132`-`0x139`, and its
+      own locals, which end with its frame;
+    - a local of the delivery's frame: `maid.vm.l`, `lf` and `ls`, an event field that is a local, and an operand
+      field that names one (`IInterpreterAccess.LocalCellOf`, local pointers included);
+    - not put back: the owner's Lua values (its module's tables, `maid.state`), which the delivery runs in the
+      owner's session and the engine cannot see into; and the draws a delivery made from its mod's stream
+      (`math.random`, Lua spec §5.6), which advance it;
+    - none: `ctx.args` and `ctx:skip` are a point hook's (`lua.md`, "Point hooks"), and a delivery gets a game event's
+      context, which has neither, so a delivery writes no operand through them and skips no instruction. Were it to,
+      `ctx.args` goes through the same access and would be kept.
+
+    `data-files.md` ("Delivery") lists what goes back and what does not for authors, and `lua.md` and
+    `troubleshooting.md` point there.
+  - **Trace and watches.** A failed delivery's trace line keeps its `writes`, as they were made, and gains
+    `put_back`, the number of cells put back (`DataDeliveryTests`); the log's error says `the N cells it wrote are
+    put back` after its first line. A watch on such a cell is told of both writes, in order, after the instruction:
+    the delivery's, with the contributor as its mod, and the engine's, `ctx.writer` `engine`, whose new value is the
+    one before the delivery. The watch then sees what the cell did, and a mod that mirrors a cell ends with its value
+    right; telling it of neither would hide a write the trace lists.
+  - **Cost.** The journal runs no Lua: gate 10's costs did not move (96.0, 96.6, 96.3 and 107.1 instructions a unit;
+    the sparse files' largest 110.0, each the same to the decimal). Its memory is one entry for each distinct cell
+    the span wrote, whatever the number of writes: about 75 bytes a cell while held (72 at 1,000 cells, 78 at
+    300,000, 76 at 400,000, the Release build), emptied and trimmed when the outermost delivery ends. The number of
+    distinct cells is bounded by the delivery's budget, since each write runs Lua, and each new cell also grows its
+    bank. Gate 10's largest held 374,846 cells (the bound file), about 28 MB for the time of its delivery.
+  - **Tests.** `DataDeliveryTests`: a delivery made to fail after seven writes (five globals of three banks and a
+    local) by an error in the applier, by a write the engine's access refuses (a float to an integer cell) and by its
+    budget leaves every cell as it was, and the next file is still delivered; a watch is told of both writes; a script
+    the delivery called has its global write put back; a delivery that succeeds and a handler that is no delivery keep
+    theirs. `DataPatchWorkspaceTests.ADeliveryTheBudgetStopsAmongItsWritesLeavesItemRankAsTheGameSetIt`: the review's
+    `m-partial` from the record map (2,000 items, 1,500 of them with their eight row tables, size 16,001), its budget
+    forced to the review's 1,500,000, stops after 853 writes, as the review's run did; the trace lists them, 853 cells
+    are put back, and every integer cell is the plain boot's, `item_rank` included.
+    `AnErrorInTheBaseModsAccessorAfterADeliverysFirstWritesLeavesItemRankAsTheGameSetIt`: a mod's own kind at
+    `kamidori.data.layered` sets 500 ranks through `kamidori-base`'s `table`, and the accessor refuses the 501st (a
+    string); the 500 are put back, and the boot is the plain one's.

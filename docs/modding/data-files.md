@@ -358,9 +358,23 @@ kind <game>.tables (<game>-base), at <game>.data.layered and <game>.stage.loaded
   The game goes on, with a notice. Three failures of one file in a row, at whichever of the kind's events, switch
   that file off for the session ("Lua: example.a data/a.toml failed 3 times in a row and is not applied again this
   session"). The owner's handler goes on with the other files. `--lua-errors halt` ends the run at the first failure
-  instead. What a delivery wrote before its error stays. `<game>.tables` checks the whole document before it writes,
-  so a file with a problem the check finds writes nothing; a delivery stopped after its first write, by its budget or
-  by an error the check does not foresee, keeps what it wrote until the tables are built again.
+  instead.
+- **A delivery that fails is put back.** Whatever stops it (an error, its budget, a write the engine refuses), the
+  engine puts back every cell the delivery wrote, the latest first, before anything else runs: the log line, the
+  notice, the next file. So the game's cells take a file whole or not at all, and the next file is delivered as if
+  the failed one had not been. The log line ends `the 452 cells it wrote are put back`. What goes back:
+  - every cell of the game's global banks written while the delivery ran, whichever way: an accessor, `maid.vm`, an
+    event's field, a handler that an emit in it ran, or a script it called with `maid.vm.call`;
+  - the locals of the frame the delivery runs in, written through `maid.vm` or an event's field. A frame a called
+    script ran in is gone when the call returns, so nothing of it is left to put back.
+
+  What does not go back: what a called script did other than write a cell (what it showed or played, the queues and
+  stacks the scripts keep), the owner's own Lua values (its `maid.state` among them), and the random draws the
+  delivery made, after which the generator goes on. A delivery whose called script ends the scene or the run is
+  abandoned, not put back: its cells end with the scene. A delivery that succeeds keeps every write, and a Lua
+  handler that is not a delivery keeps what it wrote before it failed ([lua.md](lua.md), "Errors and budgets").
+  `<game>.tables` still checks the whole document before its first write, so a file with a problem the check finds
+  costs the budget of the check alone.
 - **A mod is on or off as a whole.** A contributor that is off for the session (its own Lua failed, or a mod it
   requires is off) has no deliveries, and a contributor with no Lua is off when a Lua mod it requires is off. When the
   owner is off, so is every mod that requires it. The notice of a mod that is off ends with the files it leaves
@@ -380,6 +394,10 @@ is the contributor, with `file` and the kind's `owner`, and `handler` is the own
 - **A write is the contributor's,** with `through` naming the owner, as a base mod's helper's write names the base
   mod for the mod that called it.
 - **A watch on a cell the file sets** names the contributor as the writer: `"writer":"mod","by":"example.a"`.
+- **A failed delivery's line** keeps its `writes`, to show how far it got, and `put_back` counts the cells the engine
+  put back. A watch on such a cell is told of both writes, after the instruction as any watch is: the delivery's,
+  `"writer":"mod","by":"example.a"`, then the put-back, `"writer":"engine"`, whose `new` is the value the cell held
+  before the delivery.
 - **`budget`** is the delivery's: the handler budget and the allowance for the document's values, its tables and
   arrays counted. `instructions` counts in steps of 1,000 ([lua.md](lua.md)), so a file of a few values reads 0; one
   of every item field of a game runs about 100 for each value, and a file of empty tables about as much for each of

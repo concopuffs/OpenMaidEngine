@@ -353,17 +353,6 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   registry has an old name yet. Done when the report reads each kind's old names from its owner (the record map, or a
   list the kind declares), lists such a pair as a shared path under the current spelling, and a two-mod link test shows
   it.
-- **A `<game>.tables` delivery stopped after its first write keeps what it wrote.** Data patches spec §6.1 has a file
-  with an error apply nothing, and the applier checks the whole document before its first write
-  (`mods/ome-records/lua/init.lua`, `Applier:apply`), so a problem the check finds writes nothing. A stop after the
-  first write keeps the cells written so far, since the writes go through the base mod's accessors with no journal
-  (`LuaModSession.Invoke`, `Guarded`): the delivery's budget (the review's file of 2,000 records stopped after 853
-  writes before tables counted toward it; `superpowers/plans/2026-11-18-data-patches.md` §12.6), or an error the check
-  does not foresee, in an accessor or in the applier. They hold until the tables are built again (a load, a return to
-  title, a stage's loaders). The smallest fix, not built: the engine journals each write of a delivery (cell, old
-  value) and puts the old values back when the delivery fails, whatever stopped it, since a budget stop cannot be
-  caught in Lua. Done when a delivery made to fail after its first write, by its budget and by an error, leaves every
-  cell as it was, in a test, or when the owner decides the gap stays and spec §6.1 says so.
 - **The link cache does not follow the text linker's scan of every script.** An entry records the base scripts its
   link read through `ModLinkBase.ReadScript` and is a miss when one changes (data patches plan §12.6), but the text
   linker scans `ModLinkBase.InstalledScripts`, every script of the install, to say which catalog entries reach no text

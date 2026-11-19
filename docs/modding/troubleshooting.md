@@ -493,7 +493,9 @@ failed on your file; the message is the owner's. For `<game>.tables` it reads "M
 is applied: PATH: REASON" with the first problem by path, then the next ones up to 20, each with what is wrong ([data-files.md](data-files.md), "The record
 tables"); the file is passed over for the rest of the session, with no second error. For another kind, after three
 failures in a row the file is not applied again that session; other files go on. **"… ran out of its instruction budget"**: the owner's handler ran past the delivery's budget
-([data-files.md](data-files.md), "Delivery").
+([data-files.md](data-files.md), "Delivery"). Either way, a line "the N cells it wrote are put back" says that the
+delivery had begun to write, and that the engine gave each of those cells its value back: the game has none of the
+file.
 
 **"Lua: MOD is off for this session: …; not applied: …".** The mod named first is off (the notice says why), and the
 files listed are not delivered this session: its own, those of the kinds it defines, and those of the mods that

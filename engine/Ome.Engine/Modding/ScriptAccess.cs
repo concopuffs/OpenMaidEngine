@@ -294,6 +294,20 @@ public interface IInterpreterAccess
     /// <summary>Whether a frame is running, whose locals the accessors below read.</summary>
     bool HasFrame { get; }
 
+    /// <summary>The running frame as an identity, or null when none runs: the journal of a delivery (data patches plan
+    /// §12.6) puts a local back only in the frame it was written in.</summary>
+    object? RunningFrame => null;
+
+    /// <summary>The local of the running frame that a write to <paramref name="operand"/> changes, directly or through a
+    /// local pointer, or null when it changes none.</summary>
+    (CellKind Kind, int Index)? LocalCellOf(Operand operand) => operand.Type switch
+    {
+        OperandTypes.LocalInteger => (CellKind.Integer, unchecked((int)operand.Value)),
+        OperandTypes.LocalFloat => (CellKind.Float, unchecked((int)operand.Value)),
+        OperandTypes.LocalString => (CellKind.String, unchecked((int)operand.Value)),
+        _ => null,
+    };
+
     long LocalInteger(int index);
     void SetLocalInteger(int index, long value);
     long LocalFloat(int index);

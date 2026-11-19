@@ -95,7 +95,9 @@ public sealed partial class Scripting
         string? mod = null;
         Script? script = null;
         int index = -1;
-        if (_running != null)
+        // Data patches plan §12.6: a failed delivery's cell put back is the engine's write, after the delivery's own.
+        if (_puttingBack) writer = CellWriter.Engine;
+        else if (_running != null)
         {
             writer = CellWriter.Mod;
             mod = RunningMod;

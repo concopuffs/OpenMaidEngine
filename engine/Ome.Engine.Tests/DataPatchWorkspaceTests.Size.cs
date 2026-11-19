@@ -316,8 +316,8 @@ public sealed partial class DataPatchWorkspaceTests
             perValue[name] = (double)instructions / size;
             string line = $"{name}: {refusedLine}size {size} ({values} cells), {Encoding.UTF8.GetByteCount(text)} bytes, "
                           + $"{instructions} instructions ({perValue[name]:F1} a unit of size, {(double)instructions / values:F1} a cell), "
-                          + $"{delivery.GetProperty("result").GetString()}; link {link.TotalSeconds:F2} s, "
-                          + $"boot {boot.TotalSeconds:F2} s against {plainBoot.TotalSeconds:F2} s with no mod";
+                          + $"{delivery.GetProperty("result").GetString()}, the journal at most {native.JournalPeak} cells; "
+                          + $"link {link.TotalSeconds:F2} s, boot {boot.TotalSeconds:F2} s against {plainBoot.TotalSeconds:F2} s with no mod";
             if (name == "items")
             {
                 Assert.Equal("ok", delivery.GetProperty("result").GetString());
@@ -524,5 +524,152 @@ public sealed partial class DataPatchWorkspaceTests
                                 delivery.GetProperty("error").GetString(), StringComparison.Ordinal);
             }
         }
+    }
+
+    // ------------------------------------------------------------------------------------- a stop, plan §12.6
+
+    /// <summary>
+    /// Plan §12.6: the review's <c>m-partial</c>, rebuilt from the record map: each of the 2,000 items with its rank, the
+    /// first 1,500 with their eight row fields as empty tables too (size 16,001), delivered at boot with the budget forced
+    /// down to the review's, 1,500,000, where the allowance is 0. The check of the whole document passes inside it and
+    /// the writes do not: the review's run stopped after 853 of them. Every item's rank is the game's own again, and so
+    /// is every other integer cell; the trace line lists the writes the delivery made before the stop.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void ADeliveryTheBudgetStopsAmongItsWritesLeavesItemRankAsTheGameSetIt()
+    {
+        var (linkBase, scripts) = Kamidori(translated: false);
+        GameSession plain = KamidoriBoot(scripts, null);
+        List<RecordField> rows = RecordFields(linkBase, "item").Where(field => !field.State && field.Columns.Length > 0).ToList();
+        Assert.Equal(8, rows.Count);
+        var text = new StringBuilder();
+        for (int item = 0; item < 2000; item++)
+        {
+            string id = item.ToString(CultureInfo.InvariantCulture);
+            text.Append("[item.").Append(id).Append("]\nrank = 77\n");
+            if (item >= 1500) continue;
+            foreach (RecordField row in rows) text.Append("[item.").Append(id).Append('.').Append(row.Name).Append("]\n");
+        }
+        ModLinkResult linked = LinkedInOrder(linkBase, DataMod("kamidori", "test.partial", "partial.toml", text.ToString()));
+        Assert.Equal(16_001, linked.Lua.Stack.ContributionList.Single().Values);
+        // The review's budget: the handler's 1,000,000 and 250 for each of the file's 2,000 values, tables not counted.
+        var native = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = linked.Lua.Stack, Plan = linked.Lua.Plan, Errors = LuaErrorPolicy.Continue, Trace = true,
+            Limits = ModLimits.Default with { HandlerInstructions = 1_500_000, DataInstructionsPerValue = 0 },
+        });
+        _owned.Add(native);
+
+        GameSession patched = KamidoriBoot(scripts, native);
+
+        JsonElement delivery = Delivery(native, "partial");
+        Assert.Equal("budget", delivery.GetProperty("result").GetString());
+        int writes = delivery.GetProperty("writes").GetArrayLength()
+                     + (delivery.TryGetProperty("writes_not_listed", out JsonElement more) ? more.GetInt32() : 0);
+        Assert.InRange(writes, 1, 1999);
+        Assert.All(delivery.GetProperty("writes").EnumerateArray(), write => Assert.Equal(77, write.GetProperty("after").GetInt32()));
+        Assert.Equal(writes, delivery.GetProperty("put_back").GetInt32());   // each write is a cell of its own
+        int rank = Cell("kamidori", "item_rank", 0);
+        for (int item = 0; item < 2000; item++)
+            Assert.Equal(plain.Globals.GetValueOrDefault(rank + item), patched.Globals.GetValueOrDefault(rank + item));
+        Assert.Empty(Changed(plain.Globals, patched.Globals));
+        Assert.Equal(plain.Globals.Count, patched.Globals.Count);
+        _output?.WriteLine($"stopped after {writes} writes, at {delivery.GetProperty("instructions").GetInt64()} of "
+                           + $"{delivery.GetProperty("budget").GetInt64()} instructions; the journal held {native.JournalPeak} cells at most");
+    }
+
+    /// <summary>
+    /// Plan §12.6: an error raised in the base mod's accessor after a delivery's first writes. A mod's own kind, taken at
+    /// <c>kamidori.data.layered</c>, sets <c>item_rank</c> of its file's first items through the base mod's
+    /// <c>table</c>, then writes a string to the next one, which the accessor refuses. Every rank is the game's own again, and so is every
+    /// other cell.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void AnErrorInTheBaseModsAccessorAfterADeliverysFirstWritesLeavesItemRankAsTheGameSetIt()
+    {
+        var (linkBase, scripts) = Kamidori(translated: false);
+        GameSession plain = KamidoriBoot(scripts, null);
+        string owner = Path.Combine(_root, "test.ranks");
+        Directory.CreateDirectory(Path.Combine(owner, "lua"));
+        File.WriteAllText(Path.Combine(owner, "manifest.toml"), """
+            omp = 4
+            id = "test.ranks"
+            name = "test.ranks"
+            version = "1.0.0"
+
+            [game]
+            profile = "kamidori"
+            target = "extended"
+
+            [lua]
+            api = 1
+            writes = ["item_rank"]
+
+            [[requires]]
+            id = "kamidori-base"
+            version = ">=1.1, <2"
+
+            [[accepts]]
+            kind = "test.ranks"
+            description = "Ranks for the first items."
+
+            [[accepts.at]]
+            event = "kamidori.data.layered"
+            handler = "ranks.lua:apply"
+            """);
+        File.WriteAllText(Path.Combine(owner, "lua", "ranks.lua"), """
+            local rank = require("kamidori-base").table("item_rank")
+            function apply(event, contribution)
+                local data = contribution.data
+                for item = 0, data.count - 1 do rank[item] = data.rank end
+                rank[data.count] = "high"
+            end
+            """);
+        ModPackage ranks = ModPackage.Open(owner);
+        _opened.Add(ranks);
+        string contributor = Path.Combine(_root, "test.rank-file");
+        Directory.CreateDirectory(Path.Combine(contributor, "data"));
+        File.WriteAllText(Path.Combine(contributor, "manifest.toml"), """
+            omp = 4
+            id = "test.rank-file"
+            name = "test.rank-file"
+            version = "1.0.0"
+
+            [game]
+            profile = "kamidori"
+            target = "extended"
+
+            [[requires]]
+            id = "test.ranks"
+            version = ">=1"
+
+            [[data]]
+            kind = "test.ranks"
+            file = "ranks.toml"
+            """);
+        File.WriteAllText(Path.Combine(contributor, "data", "ranks.toml"), "count = 500\nrank = 77\n");
+        ModPackage file = ModPackage.Open(contributor);
+        _opened.Add(file);
+        ModLinkResult linked = LinkedInOrder(linkBase, ranks, file);
+        Scripting native = Native(linked, LuaErrorPolicy.Continue);
+
+        GameSession patched = KamidoriBoot(scripts, native);
+
+        JsonElement delivery = Delivery(native, "ranks");
+        Assert.Equal("error", delivery.GetProperty("result").GetString());
+        Assert.Equal(500, delivery.GetProperty("writes").GetArrayLength()
+                          + (delivery.TryGetProperty("writes_not_listed", out JsonElement more) ? more.GetInt32() : 0));
+        Assert.Equal(500, delivery.GetProperty("put_back").GetInt32());
+        Assert.Contains(Logged(native, "test.rank-file"), line => line.Contains("\nthe 500 cells it wrote are put back", StringComparison.Ordinal));
+        int rank = Cell("kamidori", "item_rank", 0);
+        Assert.NotEqual(77, plain.Globals.GetValueOrDefault(rank));
+        for (int item = 0; item < 501; item++)
+            Assert.Equal(plain.Globals.GetValueOrDefault(rank + item), patched.Globals.GetValueOrDefault(rank + item));
+        Assert.Empty(Changed(plain.Globals, patched.Globals));
+        Assert.Equal(plain.Globals.Count, patched.Globals.Count);
     }
 }

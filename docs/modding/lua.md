@@ -371,7 +371,7 @@ The handler gets:
 | `ctx.name` | the global the cell belongs to; for a cell by address, the base mod's name for it if it has one, else nil |
 | `ctx.index`, `ctx.column` | the cell's row in a table and its column in a 2-D one; nil otherwise |
 | `ctx.old`, `ctx.new` | the value before the write and the value written: a number for an integer cell, a string for a string cell |
-| `ctx.writer` | what wrote: `"script"` (an instruction), `"mod"` (a mod's Lua), `"console"`, or `"engine"` (outside any instruction) |
+| `ctx.writer` | what wrote: `"script"` (an instruction), `"mod"` (a mod's Lua), `"console"`, or `"engine"` (outside any instruction, or putting back a failed data file's delivery, [data-files.md](data-files.md)) |
 | `ctx.script`, `ctx.offset`, `ctx.site` | for `"script"`: the instruction's script, its offset in the linked script and its original offset (nil for one a patch inserted) |
 | `ctx.mod` | for `"mod"`: the mod whose handler wrote, or whose start-up code did; a base mod's helper's write is the calling mod's |
 
@@ -702,7 +702,10 @@ handler fails or runs past its budget:
 
 - `diagnostics/lua.log` gets the mod, the handler, the script and offset it ran at, the error and its traceback;
 - the port's status line shows a notice;
-- the game goes on, and the third failure in a row switches that handler off for the session.
+- the game goes on, and the third failure in a row switches that handler off for the session;
+- what the handler wrote before it failed stays. A data file's delivery is the one exception: the engine puts back
+  every cell it wrote ([data-files.md](data-files.md), "Delivery"). A handler that wants all or nothing checks what
+  it will write before its first write.
 
 `--lua-errors halt` ends the run at the failing instruction instead ([cli.md](cli.md)), which is useful while
 writing a mod. A mod whose start-up code fails is off for the session, and so is every mod that requires it.
@@ -758,6 +761,8 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
   `L[0x1]` or `arg[1] G[0x100]`), `name` when the base mod's layout names the cell, `before` and `after`. A write
   belongs to the handler running, so a base mod's helper's write is named for the mod that called it, with
   `through` naming the base mod. A call's first 1000 writes are listed, and `writes_not_listed` counts the rest.
+- `put_back`, on a failed data file's delivery, counts the cells the engine put back ([data-files.md](data-files.md),
+  "Delivery"); its `writes` stay listed.
 
 ## Editor definitions
 

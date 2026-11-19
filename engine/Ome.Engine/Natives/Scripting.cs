@@ -131,12 +131,17 @@ public sealed partial class Scripting : IDisposable
     /// <summary>Whether Lua is on the stack: a handler, a build or a console chunk is running.</summary>
     public bool LuaRunning => _depth > 0;
 
-    /// <summary>The interpreter's side of <c>maid.vm</c>; the VM attaches itself when it is built.</summary>
+    /// <summary>The interpreter's side of <c>maid.vm</c>; the VM attaches itself when it is built. Lua reaches it
+    /// through the journal's access (Scripting.Journal.cs).</summary>
     public void AttachInterpreter(IInterpreterAccess interpreter)
     {
-        if (_interpreter != null && !ReferenceEquals(_interpreter, interpreter))
-            throw new InvalidOperationException("A scripting native serves one interpreter.");
-        _interpreter = interpreter;
+        if (_interpreter is JournaledInterpreter attached)
+        {
+            if (!ReferenceEquals(attached.Inner, interpreter))
+                throw new InvalidOperationException("A scripting native serves one interpreter.");
+            return;
+        }
+        _interpreter = new JournaledInterpreter(this, interpreter);
     }
 
     /// <summary>The table a frame of <paramref name="script"/> takes when it is entered (spec §7.5), or null.
@@ -394,10 +399,12 @@ public sealed partial class Scripting : IDisposable
     };
 
     /// <summary>One handler call. With <paramref name="contribution"/>, a delivery (data patches spec §5.2): the owner's
-    /// handler gets the contribution, and the call is the contributor's in the trace, the watch records and the log.</summary>
+    /// handler gets the contribution, and the call is the contributor's in the trace, the watch records and the log; if
+    /// it fails, every cell it wrote is put back first (plan §12.6).</summary>
     private string? Call(IModSession session, HandlerId handler, HookContext context, bool frameAccess,
                          ContributionId? contribution = null)
     {
+        // A call the cap refuses has not started, so it wrote nothing.
         if (_depth >= _setup.Limits.NestingCap)
             return Failed(handler, new ModScriptException(ModScriptErrorKind.Depth,
                 $"handlers nest {_depth} deep, the cap is {_setup.Limits.NestingCap}"), Where(context), contribution);
@@ -408,11 +415,15 @@ public sealed partial class Scripting : IDisposable
         _frameAccess = frameAccess;
         _running = handler;
         _runningContribution = contribution;
+        bool delivery = contribution != null;
+        if (delivery) OpenJournal();
         TracedCall? traced = TraceBegin(handler, context, contribution);
         ModScriptException? failure = null;
         string? halt;
-        // Spec §10: a script the handler called that ended the scene or the run unwinds past it; the call is abandoned.
+        // Spec §10: a script the handler called that ended the scene or the run unwinds past it; the call is abandoned,
+        // and its journal is dropped: the scene's cells end with the scene.
         bool ended = false;
+        int putBack = -1;
         try
         {
             session.Invoke(handler, context, contribution);
@@ -425,11 +436,14 @@ public sealed partial class Scripting : IDisposable
         {
             failure = error;
             ended = true;
-            halt = Failed(handler, error, Where(context), contribution);
+            // Plan §12.6: before anything else runs, the log line and the notice included.
+            if (delivery) putBack = PutBackJournal();
+            halt = Failed(handler, error, Where(context), contribution, putBack);
         }
         finally
         {
-            if (traced != null) TraceEnd(traced, failure, session.LastCall, abandoned: !ended);
+            if (delivery) CloseJournal();
+            if (traced != null) TraceEnd(traced, failure, session.LastCall, abandoned: !ended, putBack);
             context.Live = false;
             _frameAccess = outerFrameAccess;
             _running = outerRunning;
@@ -447,8 +461,10 @@ public sealed partial class Scripting : IDisposable
 
     /// <summary>A handler's error (spec §5.5): the log gets the mod, the handler, where it ran and the traceback; the
     /// front end gets a notice; the third failure in a row switches the handler off. Under <c>--lua-errors halt</c> the
-    /// instruction ends with a halt instead. A delivery's error is its file's (data patches spec §5.6).</summary>
-    private string? Failed(HandlerId handler, ModScriptException error, string where, ContributionId? contribution = null)
+    /// instruction ends with a halt instead. A delivery's error is its file's (data patches spec §5.6), and its log line
+    /// says how many cells were put back (<paramref name="putBack"/>; plan §12.6).</summary>
+    private string? Failed(HandlerId handler, ModScriptException error, string where, ContributionId? contribution = null,
+                           int putBack = 0)
     {
         ModRuntimeHandler name = _setup.Stack[handler];
         string what = error.Kind switch
@@ -457,7 +473,7 @@ public sealed partial class Scripting : IDisposable
             ModScriptErrorKind.Depth => "nested too deep",
             _ => "failed",
         };
-        if (contribution is { } file) return DeliveryFailed(file, name, error, what, where);
+        if (contribution is { } file) return DeliveryFailed(file, name, error, what, where, putBack);
         WriteLog(ModLogLevel.Error, name.ModId, $"{name.File}:{name.Function} {what} at {where}: {error.Message}"
                                                 + (error.LuaTraceback is { } trace ? "\n" + trace : ""));
         if (_setup.Errors == LuaErrorPolicy.Halt)
@@ -477,10 +493,11 @@ public sealed partial class Scripting : IDisposable
     /// handler; three in a row, at whichever of the kind's events, switch the file off for the session and leave the
     /// owner's other deliveries alone.</summary>
     private string? DeliveryFailed(ContributionId file, ModRuntimeHandler handler, ModScriptException error, string what,
-                                   string where)
+                                   string where, int putBack)
     {
         ModContribution contribution = _setup.Stack[file];
         WriteLog(ModLogLevel.Error, contribution.Mod, $"{contribution.File} ({handler}) {what} at {where}: {error.Message}"
+                                                      + (putBack > 0 ? "\n" + PutBackLine(putBack) : "")
                                                       + (error.LuaTraceback is { } trace ? "\n" + trace : ""));
         string first = AfterContributor(FirstLine(error.Message), contribution);
         if (_setup.Errors == LuaErrorPolicy.Halt)
@@ -495,6 +512,10 @@ public sealed partial class Scripting : IDisposable
         else Notify($"Lua: {contribution} {what}: {first}");
         return null;
     }
+
+    /// <summary>The log's line for a failed delivery's cells (plan §12.6): <c>the 3 cells it wrote are put back</c>.</summary>
+    private static string PutBackLine(int cells)
+        => cells == 1 ? "the 1 cell it wrote is put back" : $"the {cells:N0} cells it wrote are put back";
 
     /// <summary>The owner's message without the contributor's name when the message opens with it, as a check of the
     /// whole document reports (<c>example.a data/a.toml: 1 problem, …</c>): the notice and the halt reason name the

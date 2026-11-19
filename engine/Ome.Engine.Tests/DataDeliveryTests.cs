@@ -42,6 +42,11 @@ public sealed class DataDeliveryTests : IDisposable
 
     private static readonly byte[] AddExpBytes = ScriptAssembler.AssembleBytes(AddExpCode, [], Table.AbiId);
 
+    /// <summary>SUB, which the owner may call: G[0x400] = 42; return.</summary>
+    private static readonly List<(int, Operand[])> SubCode = [(0x55, [new Operand(T_GINT, 0x400), new Operand(T_IMM, 42)]), (0x5, [])];
+
+    private const string Sub = "SUB.BIN";
+
     public void Dispose()
     {
         // The natives' sessions end before the runtime that built them.
@@ -57,7 +62,9 @@ public sealed class DataDeliveryTests : IDisposable
     {
         Profile = "himegari",
         CatalogFingerprint = "sha256:" + new string('1', 64),
-        ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase) ? AddExpBytes : null,
+        ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase) ? AddExpBytes
+                             : name.Equals(Sub, StringComparison.OrdinalIgnoreCase) ? ScriptAssembler.AssembleBytes(SubCode, [], Table.AbiId)
+                             : null,
         Table = Table,
         Contracts = Contracts,
         Intrinsics = new IntrinsicCatalog(Table, Contracts),
@@ -84,7 +91,10 @@ public sealed class DataDeliveryTests : IDisposable
     /// <summary>
     /// The owner's handler of <c>test.lists</c>: a document lists names and may set G[0x100] (<c>value</c>) and G[0x102]
     /// (<c>mark</c>); <c>fail</c> raises an error, <c>spin</c> never ends, and <c>probe</c> tries to write into the view
-    /// and compares it with the one the file's last delivery got. It records what it saw in <c>seen</c>.
+    /// and compares it with the one the file's last delivery got. It records what it saw in <c>seen</c>. With
+    /// <c>before</c> it writes a cell of each kind (G[0x100], <c>before</c> cells from G[0x201], GS[0x10], GF[0x20] and
+    /// the frame's L[0]), with <c>call</c> it calls SUB, and then it stops as <c>stop</c> says: an <c>error</c>, a write
+    /// the engine's access refuses (<c>access</c>), or the <c>budget</c>. <c>copy_local</c> copies L[0] + 1000 to G[0x300].
     /// </summary>
     private const string Lists = """
         seen = {}
@@ -96,6 +106,18 @@ public sealed class DataDeliveryTests : IDisposable
                 error(contribution.mod .. " " .. contribution.file .. ": 1 problem, so nothing of it is applied: x.y: no", 0)
             end
             if data.spin then while true do end end
+            if data.before then
+                maid.vm.g[0x100] = 99
+                for i = 1, data.before do maid.vm.g[0x200 + i] = i end
+                maid.vm.gs[0x10] = "written"
+                maid.vm.gf[0x20] = 2.5
+                maid.vm.l[0] = 9
+                if data.call then maid.vm.call("SUB") end
+                if data.stop == "error" then error("stopped after its writes") end
+                if data.stop == "access" then maid.vm.g[0x100] = 1.5 end
+                if data.stop == "budget" then while true do end end
+            end
+            if data.copy_local then maid.vm.g[0x300] = maid.vm.l[0] + 1000 end
             local names = {}
             if data.names then for _, name in ipairs(data.names) do names[#names + 1] = name end end
             local unraised = {}
@@ -154,8 +176,8 @@ public sealed class DataDeliveryTests : IDisposable
         return mod;
     }
 
-    private ModPackage Owner(string lists = Lists)
-        => Mod("test.owner", LuaTable + Accepts, new() { ["events/owner.toml"] = OwnerEvents, ["lua/lists.lua"] = lists });
+    private ModPackage Owner(string lists = Lists, string lua = LuaTable)
+        => Mod("test.owner", lua + Accepts, new() { ["events/owner.toml"] = OwnerEvents, ["lua/lists.lua"] = lists });
 
     private static string Requires(params string[] ids)
         => string.Concat((ids.Length == 0 ? ["test.owner"] : ids).Select(id => $"[[requires]]\nid = \"{id}\"\nversion = \">=1\"\n\n"));
@@ -200,8 +222,12 @@ public sealed class DataDeliveryTests : IDisposable
 
     private static VirtualMachine Run(Scripting native)
     {
+        var sub = new Dictionary<string, Script>(StringComparer.OrdinalIgnoreCase)
+        {
+            [Sub] = ScriptAssembler.Assemble(Table, Sub, SubCode, []),
+        };
         var vm = new VirtualMachine(ScriptAssembler.Assemble(Table, AddExp, AddExpCode, []), Table, new HeadlessWaits(),
-                                    scripting: native);
+                                    provider: new MapProvider(new Dictionary<long, Script>(), sub), scripting: native);
         vm.Run();
         return vm;
     }
@@ -493,5 +519,95 @@ public sealed class DataDeliveryTests : IDisposable
                      + "[string \"test.owner/lua/lists.lua\"]:5: refused data/bad.toml", vm.HaltReason);
         Assert.Single(native.RecentTrace);   // the later file is not delivered
         Assert.NotEqual(5, vm.Globals[0x100]);
+    }
+
+    // ------------------------------------------------------------------------- a failed delivery, plan §12.6
+
+    /// <summary>The cells of the trace line's writes, in order.</summary>
+    private static string[] Cells(JsonElement line)
+        => line.GetProperty("writes").EnumerateArray().Select(write => write.GetProperty("cell").GetString()!).ToArray();
+
+    [Theory]
+    [InlineData("error", "error")]
+    [InlineData("access", "error")]
+    [InlineData("budget", "budget")]
+    public void ADeliveryThatFailsAfterItsWritesLeavesEveryCellAsItWasAndTheNextFileIsStillDelivered(string stop, string result)
+    {
+        ModLinkResult linked = Link(Owner(), Contributor("test.bad", $"before = 3\nstop = \"{stop}\"\n"),
+                                    Contributor("test.z", "mark = 5\ncopy_local = true\n"));
+        Scripting native = Native(linked);
+
+        VirtualMachine vm = Run(native);
+
+        Assert.Equal("exit", vm.HaltReason);
+        // ADDEXP's own G[0x100] = 1 holds, and the cells the file wrote that held nothing hold nothing again.
+        Assert.Equal(1, vm.Globals[0x100]);
+        Assert.DoesNotContain(vm.Globals.Keys, address => address is > 0x200 and <= 0x203);
+        Assert.False(vm.GlobalStrings.ContainsKey(0x10));
+        Assert.False(vm.GlobalFloats.ContainsKey(0x20));
+        // The next file is delivered after it, in the same frame, and finds L[0] as the script left it.
+        Assert.Equal(5, vm.Globals[0x102]);
+        Assert.Equal(1000, vm.Globals[0x300]);
+
+        // The trace line keeps the writes, to show how far the delivery got, and says how many cells went back.
+        List<JsonElement> trace = Trace(native);
+        JsonElement bad = Assert.Single(trace, line => line.GetProperty("mod").GetString() == "test.bad");
+        Assert.Equal(result, bad.GetProperty("result").GetString());
+        Assert.Equal(["G[0x100]", "G[0x201]", "G[0x202]", "G[0x203]", "GS[0x10]", "GF[0x20]", "L[0x0]"], Cells(bad));
+        Assert.Equal(7, bad.GetProperty("put_back").GetInt32());
+        JsonElement next = Assert.Single(trace, line => line.GetProperty("mod").GetString() == "test.z");
+        Assert.Equal("ok", next.GetProperty("result").GetString());
+        Assert.False(next.TryGetProperty("put_back", out _));
+        string logged = Assert.Single(native.RecentLog, line => line.Contains(" error test.bad: ", StringComparison.Ordinal));
+        Assert.Contains("\nthe 7 cells it wrote are put back", logged);
+    }
+
+    [Fact]
+    public void AWatchIsToldOfAFailedDeliverysWriteAndThenOfTheEnginePuttingItBack()
+    {
+        ModPackage watcher = Mod("test.w", LuaTable + "[[hooks]]\nwatch = \"G[0x100]\"\nhandler = \"w.lua:on_write\"\n",
+            new() { ["lua/w.lua"] = "function on_write(ctx) end\n" });
+        Scripting native = Native(Link(Owner(), Contributor("test.bad", "before = 1\nstop = \"error\"\n"), watcher));
+
+        VirtualMachine vm = Run(native);
+
+        Assert.Equal(1, vm.Globals[0x100]);
+        var watches = Trace(native).Where(line => line.GetProperty("kind").GetString() == "watch")
+            .Select(line => (line.GetProperty("writer").GetString(), line.TryGetProperty("by", out JsonElement by) ? by.GetString() : null,
+                             line.GetProperty("old").GetInt32(), line.GetProperty("new").GetInt32()))
+            .ToList();
+        Assert.Equal([("script", null, 0, 1), ("mod", "test.bad", 1, 99), ("engine", null, 99, 1)], watches);
+    }
+
+    [Fact]
+    public void AScriptTheDeliveryCalledHasItsGlobalWritesPutBackWithTheDeliverysOwn()
+    {
+        ModLinkResult linked = Link(Owner(lua: "[lua]\napi = 1\ncapabilities = [\"vm\"]\ncalls = [\"SUB\"]\n\n"),
+                                    Contributor("test.bad", "before = 1\ncall = true\nstop = \"error\"\n"));
+        Scripting native = Native(linked);
+
+        VirtualMachine vm = Run(native);
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.False(vm.Globals.ContainsKey(0x400));
+        Assert.Equal(1, vm.Globals[0x100]);
+        JsonElement bad = Assert.Single(Trace(native), line => line.GetProperty("mod").GetString() == "test.bad");
+        Assert.Equal("ok", bad.GetProperty("calls")[0].GetProperty("result").GetString());
+        // SUB's G[0x400] is put back with the delivery's five cells; its frame, gone, has nothing to put back.
+        Assert.Equal(6, bad.GetProperty("put_back").GetInt32());
+    }
+
+    [Fact]
+    public void ADeliveryThatSucceedsKeepsItsWritesAndAHandlerThatIsNoDeliveryKeepsWhatItWroteBeforeItFailed()
+    {
+        ModPackage hook = Mod("test.hook", LuaTable + Requires()
+                                           + "[[hooks]]\nevent = \"test.owner.award\"\nhandler = \"hook.lua:on_award\"\n",
+            new() { ["lua/hook.lua"] = "function on_award(event) maid.vm.g[0x103] = 7 error('after its write') end\n" });
+        Scripting native = Native(Link(Owner(), Contributor("test.a", "value = 10\n"), hook));
+
+        VirtualMachine vm = Run(native);
+
+        Assert.Equal((10, 7), (vm.Globals[0x100], vm.Globals[0x103]));
+        Assert.All(Trace(native), line => Assert.False(line.TryGetProperty("put_back", out _)));
     }
 }

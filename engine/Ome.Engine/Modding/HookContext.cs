@@ -17,7 +17,8 @@ public enum HookKind
 }
 
 /// <summary>What wrote a watched cell (spec §7.3): an instruction, a mod's Lua (the innermost running handler's mod,
-/// spec §12), the console, or the engine outside any instruction.</summary>
+/// spec §12), the console, or the engine: outside any instruction, or putting back a failed delivery's cell (data
+/// patches plan §12.6).</summary>
 public enum CellWriter { Script, Mod, Console, Engine }
 
 /// <summary>Whether a pass over a hooked instruction is skipped (spec §7.1): one per pass, shared by the contexts of its

@@ -36,6 +36,21 @@ public sealed partial class VirtualMachine : IInterpreterAccess
 
     bool IInterpreterAccess.HasFrame => _activeExecutionFrames.Count > 0;
 
+    object? IInterpreterAccess.RunningFrame => _activeExecutionFrames.Count > 0 ? _cur : null;
+
+    (CellKind Kind, int Index)? IInterpreterAccess.LocalCellOf(Operand operand)
+    {
+        if (operand.Type is not (T_LINT or T_LFLOAT or T_LSTR or T_LPTR or T_LSTRPTR)) return null;
+        VmAddress address = BaseAddr(operand);
+        return address.Space switch
+        {
+            VmAddressSpace.LocalInteger => (CellKind.Integer, address.Address),
+            VmAddressSpace.LocalFloat => (CellKind.Float, address.Address),
+            VmAddressSpace.LocalString => (CellKind.String, address.Address),
+            _ => null,
+        };
+    }
+
     long IInterpreterAccess.LocalInteger(int index) => Gi(_cur.Locals.I, index);
     void IInterpreterAccess.SetLocalInteger(int index, long value) => _cur.Locals.SetInteger(index, value);
     long IInterpreterAccess.LocalFloat(int index) => Gi(_cur.Locals.F, index);
