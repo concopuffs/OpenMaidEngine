@@ -1221,7 +1221,7 @@ review's.
   distinct keys was refused with 3 to 6 false repeats at 150,000 keys, 5 to 6 at 200,000, 6 to 8 at 300,000 and 17 to
   20 at 400,000 (three runs each; none at 1,000, 10,000, 50,000 or 100,000). The code is the same in 2.10.2, 2.11.0,
   2.11.1 and `main` (read in a clone of its repository). Nothing was filed upstream; these findings are here for the
-  owner to decide on. Since no release fixes it, the engine has its own check rather than an upgrade:
+  owner to decide on (the owner decided not to file them: the follow-up's item 6, below). Since no release fixes it, the engine has its own check rather than an upgrade:
   `Ome.Mods.TomlStructure` walks Tomlyn's lexer once, with no syntax tree, and holds TOML 1.0's table rules by the
   keys' decoded text (a key or a table defined once; a dotted key's tables closed to headers, a header's to dotted
   keys; inline tables and arrays closed; `[[a]]` over a static array, and `[a]` after `[[a]]`, a redefinition). Every
@@ -1495,3 +1495,9 @@ the stage list's own event and the decision on Tomlyn's faults.
     3 401 and 762, stage 51 again 761), the trace has four deliveries at `SELSTAGE.BIN@0x1408`, each under
     `kamidori.stage.previewed`, and none under `stage.loaded`, and the shot's 出現モンスターリスト reads
     緑プテテット with the cursor on stage 51.
+- **Tomlyn's two faults are not reported upstream (item 6; the owner's decision, 2026-11-19).** The false repeated
+  keys (defect C) and the interrupted array of tables, above, stay written up here and are not filed with Tomlyn's
+  project. The engine's own check (`Ome.Mods.TomlStructure`) stands in for a fix.
+- **Commits:** `8ae4904b` (item 1, the journal), `5d7e5437` (item 2, the size line), `c53dd00f` (item 3, the
+  catalog's lines from the walk), `8845accf` (item 4, the backlog line), `cffa65ba` (item 5, `stage.previewed`) and
+  the commit of this bullet (item 6).
