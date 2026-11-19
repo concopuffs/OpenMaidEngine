@@ -93,7 +93,9 @@ experience_reward = 40     # 30
 - **The stage part holds through the stage.** FIELD runs the stage's loaders at its start, before it places the
   units, and again each time it is entered again during the stage (below, "FIELD runs the loaders more than once a
   stage"), and the part is applied after each run. So the edit changes what the stage places, and ADDEN, which places
-  a slot later when a stage's handler calls it, reads the edited slot too.
+  a slot later when a stage's handler calls it, reads the edited slot too. The placed units are saved
+  (`entity_unit_definition_ids`): a save made on the stage with the mod and loaded without it has the stage's own
+  table again, and the unit the edit placed is still on the field.
 - **Old names.** No table or field has been renamed yet. When one is, the old name keeps working until
   `himegari-base`'s next major version, and `diagnostics/lua.log` names each old name a file uses.
 
@@ -213,4 +215,4 @@ register their handlers in, so a handler runs after the base game's and every ap
 | `oms/examples/mods/example.double-exp-event` | a Lua subscriber of `himegari.experience.award`, without `vm` |
 | `oms/examples/mods/example.lua-random` | `math.random` in a script hook on `SC0000.BIN`, inside a `pairs` loop too; `tools/drive/scenarios/port/himegari-lua-random.steps` checks that `rand-seed 7` gives the same rolls in every run |
 | `oms/examples/mods/example.random-enemies` | a subscriber of `himegari.stage.loaded` that rewrites the stage's enemies and keeps a seed per playthrough in `maid.state`; `tools/drive/scenarios/port/himegari-random-enemies.steps` checks stage 1's draw under `rand-seed 7` |
-| `oms/examples/mods/example.stage-enemies` | a data file that edits two stages' enemy slots, applied at `himegari.stage.loaded`; `example.stage-enemies-mistake` is its twin with a mistake the boot reports |
+| `oms/examples/mods/example.stage-enemies` | a data file that edits two stages' enemy slots, applied at `himegari.stage.loaded`; `example.stage-enemies-mistake` is its twin with a mistake the boot reports; `tools/drive/scenarios/port/himegari-stage-enemies*.steps` drive both, through the camp, a field save and its load with the mod and without |

@@ -1,0 +1,57 @@
+# Port only (scenarios/port/): data patches gate 8 on Himegari (plan §5.3). The data-only example.stage-enemies gives
+# stage 1's enemy slot 2 ハルピュア (unit 810) in place of 緑プテテット (200), and stage 2's slot 3 サーペント (834).
+# himegari-base's tables.lua:apply_stage applies stage 1's part at himegari.stage.loaded, after the stage's loaders:
+# slot 3 keeps the stage's own unit, and FIELD places the edited slot. The run then enters FIELD again from the camp
+# (配下), saves in the field (slot 1) and loads that save, and the part holds each time. The prologue stops at the
+# familiar's name entry (INPUTNAME), whose 決定 keeps the default name. Run on a new sandbox:
+#   py -3.11 -X utf8 tools/drive.py port start --sandbox dp-stage-enemies --mod oms/examples/mods/example.stage-enemies
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-stage-enemies.steps
+# Then, on the same sandbox, himegari-stage-enemies-load.steps loads the save from the title with the mod and without.
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+speed 8
+wait-state script=INPUTNAME click=adv.next every=0.3 timeout=600   # the prologue, to the familiar's name entry
+wait 1
+click 458 465                                                      # 決定: keep the default name
+wait-state script=FIELD click=adv.next every=0.3 timeout=300       # stage 1: its loaders and the data file have run
+lua mod=himegari-base local t = maid.names.table("stage_enemy_unit_id") local e = maid.names.table("entity_unit_definition_ids") local p = {} for i = 0, 49 do if e[i] ~= 0 then p[#p + 1] = e[i] end end local got = string.format("stage=%d slots=%d,%d,%d placed=%s", maid.names.g.current_stage_id, t[1], t[2], t[3], table.concat(p, ",")) assert(got == "stage=1 slots=205,810,200 placed=2,810,205,200", got) return got
+wait-state script=BUNKI click=adv.next every=0.5 timeout=120       # the stage's opening scene, to its question
+speed 1
+wait 1
+click 370 520                                                      # 「大丈夫」: no tutorial
+wait-state script=AIM click=adv.next every=0.5 timeout=120         # STAGE 0-1 START and the stage's aims
+wait 1
+click adv.next                                                     # close the aims; the field's help overlay shows
+wait-state top=FIELD@0x102c waiting=menu timeout=20
+wait 1
+click 400 150                                                      # close the help overlay (an empty tile)
+wait 1.5
+shot stage-enemies-field
+click 265 27                                                       # 配下: the camp's unit list (CAMP > SALLY)
+wait-state script=SALLY timeout=20
+wait 1
+rclick adv.next                                                    # back to the field, which is entered again
+wait-state top=FIELD@0x102c waiting=menu timeout=20
+lua mod=himegari-base local t = maid.names.table("stage_enemy_unit_id") local got = string.format("mode=%d slots=%d,%d,%d", maid.names.g.field_map_continue_mode, t[1], t[2], t[3]) assert(got == "mode=1 slots=205,810,200", got) return got
+click 178 27                                                       # SAVE (field menu choice 9)
+wait-state script=SAVE timeout=20
+wait 1
+click slot.1
+wait 1.5
+click confirm.yes                                                  # セーブしますか？ -> はい
+wait-state top=FIELD@0x102c waiting=menu timeout=20
+click 222 27                                                       # LOAD
+wait-state script=SAVE timeout=20
+wait 1
+click slot.1
+wait 1.5
+click confirm.yes                                                  # ロードしますか？ -> はい
+wait 3
+wait-state top=FIELD@0x102c waiting=menu timeout=60
+lua mod=himegari-base local t = maid.names.table("stage_enemy_unit_id") local got = string.format("stage=%d slots=%d,%d,%d", maid.names.g.current_stage_id, t[1], t[2], t[3]) assert(got == "stage=1 slots=205,810,200", got) return got
+shot stage-enemies-loaded

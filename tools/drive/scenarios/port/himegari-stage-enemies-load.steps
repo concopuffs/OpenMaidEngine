@@ -1,0 +1,20 @@
+# Port only (scenarios/port/): data patches gate 8 on Himegari, the load in a new process. From the title's Data Load,
+# load slot 1, which himegari-stage-enemies.steps saved on stage 1's field with example.stage-enemies. The stage's
+# enemy table is not saved: the load runs stage 1's loaders again, raises himegari.stage.loaded again, and the data
+# file's part is applied again, so slot 2 is ハルピュア (810) and slot 3 the stage's own 緑プテテット (200). The placed
+# units are saved, so the placed ハルピュア is there too. Run on the sandbox that scenario used, with the mod:
+#   py -3.11 -X utf8 tools/drive.py port start --sandbox dp-stage-enemies --mod oms/examples/mods/example.stage-enemies
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-stage-enemies-load.steps
+# himegari-stage-enemies-load-without.steps loads the same save without the mod.
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.load                                             # the slot list (SAVE in load mode)
+wait-state script=SAVE timeout=20
+wait 1
+click slot.1
+wait 1.5
+click confirm.yes                                            # ロードしますか？ -> はい
+wait-state top=FIELD@0x102c waiting=menu timeout=60
+lua mod=himegari-base local t = maid.names.table("stage_enemy_unit_id") local e = maid.names.table("entity_unit_definition_ids") local p = {} for i = 0, 49 do if e[i] ~= 0 then p[#p + 1] = e[i] end end local got = string.format("stage=%d slots=%d,%d,%d placed=%s", maid.names.g.current_stage_id, t[1], t[2], t[3], table.concat(p, ",")) assert(got == "stage=1 slots=205,810,200 placed=2,810,205,200", got) return got
+shot stage-enemies-title-load

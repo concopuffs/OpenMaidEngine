@@ -1,0 +1,21 @@
+# Port only (scenarios/port/): data patches gate 8 on Himegari, the load without the mod. From the title's Data Load,
+# load slot 1, which himegari-stage-enemies.steps saved on stage 1's field with example.stage-enemies, in a port run
+# without that mod. The stage's enemy table is not saved, and the load runs stage 1's loaders again, so slot 2 is the
+# stage's own 緑プテテット (200) again. The units FIELD placed are saved, so the ハルピュア (810) placed while the mod
+# was on stays on the field. The save stamp's warning names the removed mod. Run on the sandbox that scenario used:
+#   py -3.11 -X utf8 tools/drive.py port start --sandbox dp-stage-enemies
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-stage-enemies-load-without.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.load                                             # the slot list (SAVE in load mode)
+wait-state script=SAVE timeout=20
+wait 1
+click slot.1
+wait 1.5
+click confirm.yes                                            # ロードしますか？ -> はい
+wait-state top=FIELD@0x102c waiting=menu timeout=60
+# With no Lua mod the console reads cells by number: current_stage_id 0x4dfbc, entity_unit_definition_ids from
+# 0x4dfbd, stage_enemy_unit_id from 0xe7811 (docs/global-reference.md).
+lua local g = maid.vm.g local p = {} for i = 0, 49 do if g[0x4dfbd + i] ~= 0 then p[#p + 1] = g[0x4dfbd + i] end end local got = string.format("stage=%d slots=%d,%d,%d placed=%s", g[0x4dfbc], g[0xe7812], g[0xe7813], g[0xe7814], table.concat(p, ",")) assert(got == "stage=1 slots=205,200,200 placed=2,810,205,200", got) return got
+shot stage-enemies-title-load-without

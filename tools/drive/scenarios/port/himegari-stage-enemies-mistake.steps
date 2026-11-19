@@ -1,0 +1,23 @@
+# Port only (scenarios/port/): data patches gate 8 on Himegari, the error half. example.stage-enemies-mistake is
+# example.stage-enemies with a field misspelt on purpose (stage.2.enemy.3.unit for unit_id). The boot checks the file
+# whole at its first delivery (himegari.data.layered) and applies nothing of it: the port's status line shows the
+# notice at the title, and diagnostics/lua.log in the sandbox names the file and the path:
+#   example.stage-enemies-mistake data/stages.toml: 1 problem, so nothing of it is applied: stage.2.enemy.3.unit: ...
+# At stage 1 the enemy table is the stage's own, slot 2 included. Run on a new sandbox:
+#   py -3.11 -X utf8 tools/drive.py port start --sandbox dp-stage-enemies-mistake --mod oms/examples/mods/example.stage-enemies-mistake
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-stage-enemies-mistake.steps
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+shot stage-enemies-mistake-title                             # the status line's notice
+click title.start
+wait-state script=GAMESTART timeout=20
+wait 1
+click newgame.begin
+speed 8
+wait-state script=INPUTNAME click=adv.next every=0.3 timeout=600   # the prologue, to the familiar's name entry
+wait 1
+click 458 465                                                      # 決定: keep the default name
+wait-state script=FIELD click=adv.next every=0.3 timeout=300       # stage 1: its loaders have run
+speed 1
+lua mod=himegari-base local t = maid.names.table("stage_enemy_unit_id") local e = maid.names.table("entity_unit_definition_ids") local p = {} for i = 0, 49 do if e[i] ~= 0 then p[#p + 1] = e[i] end end local got = string.format("stage=%d slots=%d,%d,%d placed=%s", maid.names.g.current_stage_id, t[1], t[2], t[3], table.concat(p, ",")) assert(got == "stage=1 slots=205,200,200 placed=2,200,205,200", got) return got

@@ -52,7 +52,11 @@ ran the same scenarios on native AGE.
   `himegari.tables` applies its stage parts at `himegari.stage.loaded`. Stage 1's slot 2 gets ハルピュア (810) in
   place of 緑プテテット (200), and stage 2's slot 3 サーペント (834), so at stage 1 slot 3 keeps the stage's own
   unit. `example.stage-enemies-mistake` is the same file with a field misspelt on purpose (`unit` for `unit_id`):
-  the boot's notice and `diagnostics/lua.log` name the file and the path, and nothing of it is applied.
+  the boot's notice and `diagnostics/lua.log` name the file and the path, and nothing of it is applied. The port
+  scenarios `tools/drive/scenarios/port/himegari-stage-enemies.steps` (a new game to stage 1, the camp and back, a
+  field save and its load), `himegari-stage-enemies-load.steps` and `-load-without.steps` (that save loaded from the
+  title with the mod and without it) and `himegari-stage-enemies-mistake.steps` drive them; their headers give the
+  commands.
 - `example.kamidori-stage-enemies` (data patches gate 8) does the same on Kamidori with `kamidori.tables`: slot 2 of
   ◆開けた涼風西湖畔◆ (stage 51) gets 緑プテテット (761) in place of 水精 (402), and slot 3 of 蒼月の南湖畔 (stage
   52) 赤プテテット (762). Its part is applied again where INFO's third tab runs the floor's loaders again.
