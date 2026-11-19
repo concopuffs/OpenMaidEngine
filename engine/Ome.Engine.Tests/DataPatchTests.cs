@@ -186,8 +186,9 @@ public sealed class DataPatchTests : IDisposable
         { "} }, item = { [\"5\"] = { inventory_count = 9", "item.5.inventory_count", "item.inventory_count is saved state: a load brings the saved value back, so a file does not set it" },
         { "} }, item = { [\"12\"] = { name = 5", "item.12.name", "takes a string, not 5" },
         { "} }, item = { [\"12\"] = { name = \"Lily 한\"", "item.12.name", "a string cell holds text the save can encode (code page 932); U+D55C is not in it" },
-        { "} }, stage_enemy = { [\"3\"] = { unit_id = 761", "stage_enemy", "stage_enemy is built by stage, which this format does not edit" },
-        { "} }, units = { [\"3\"] = { level = 1", "units", "no record table is named units (tables: item, skill, stage_enemy, unit)" },
+        { "} }, stage_enemy = { [\"3\"] = { unit_id = 761", "stage_enemy", "stage_enemy is reached through its scope: write stage.<id>.enemy" },
+        { "} }, stage = { [\"0\"] = { enemy = 1", "stage.0", "stage has ids 1 to 999" },
+        { "} }, units = { [\"3\"] = { level = 1", "units", "no record table is named units (tables: item, skill, unit; scopes: stage)" },
     };
 
     [Theory]
@@ -242,7 +243,8 @@ public sealed class DataPatchTests : IDisposable
     // ------------------------------------------------------------------------------------------------- the library
 
     /// <summary>A base mod with each kind of field: a 1-D integer, a row with a named and an unnamed column and a
-    /// column named like a Lua keyword, a string, a float, state, and a table another part of the game builds.</summary>
+    /// column named like a Lua keyword, a string, a float, state, and a table another part of the game builds; and the
+    /// arrays of ScopedMap's foe.</summary>
     private static readonly GameLayout HeroLayout = GameLayout.Parse("""
         {"layout": 1, "profile": "test", "globals": [
         {"name": "hero_levels", "bank": "G", "address": "0x100", "dims": [4]},
@@ -250,7 +252,9 @@ public sealed class DataPatchTests : IDisposable
         {"name": "hero_names", "bank": "GS", "address": "0x10", "dims": [4]},
         {"name": "hero_speeds", "bank": "GF", "address": "0x20", "dims": [4]},
         {"name": "hero_seen", "bank": "G", "address": "0x40", "dims": [4]},
-        {"name": "wave_sizes", "bank": "G", "address": "0x300", "dims": [2]}
+        {"name": "wave_sizes", "bank": "G", "address": "0x300", "dims": [2]},
+        {"name": "foe_units", "bank": "G", "address": "0x400", "dims": [3]},
+        {"name": "foe_routines", "bank": "G", "address": "0x410", "dims": [3, 2]}
         ]}
         """);
 
@@ -342,6 +346,154 @@ public sealed class DataPatchTests : IDisposable
               hero.0.stats.2: column 2 is named: write hero.0.stats.end
               wave: wave is built by stage, which this format does not edit
             """.ReplaceLineEndings("\n").TrimEnd('\n'), text);
+        Assert.Empty(native.Memory.Integers);
+    }
+
+    // ------------------------------------------------------------------------------------------------- scopes
+
+    /// <summary>HeroMap's hero, and foe, which the stage builds and a document reaches through the scope stage as enemy,
+    /// ids 1 to 9 (data patches spec §6.2).</summary>
+    private const string ScopedMap = """
+        return { format = 1, tables = {
+            hero = { records = 4, built_by = "boot", fields = {
+                level = { global = "hero_levels", kind = "integer" },
+                seen = { global = "hero_seen", kind = "integer", state = true },
+            } },
+            foe = { records = 3, built_by = "stage", fields = {
+                unit = { global = "foe_units", kind = "integer" },
+                routines = { global = "foe_routines", kind = "integer", width = 2 },
+            } },
+        }, scopes = { stage = { first = 1, last = 9, tables = { enemy = "foe" } } } }
+        """;
+
+    private const string ScopedApplier = """
+        local applier = require("ome-records").applier {
+            map = require("generated.tables"), table = maid.names.table, labels = { "boot", "stage" },
+            events = { boot = "test.data.layered", stage = "test.stage.loaded" },
+        }
+        """;
+
+    [Fact]
+    public void AScopedTableIsWrittenForEachIdTheApplyGivesAndABootApplyLeavesItAlone()
+    {
+        Scripting native = Library("""
+            return { doc = { hero = { ["1"] = { level = 7 } },
+                             stage = { ["2"] = { enemy = { ["1"] = { unit = 50, routines = { ["1"] = 4 } } } },
+                                       ["3"] = { enemy = { ["1"] = { unit = 60 }, ["2"] = { unit = 61 } } } } } }
+            """, ScopedMap);
+        ScriptMemory memory = native.Memory;
+        // The boot apply writes hero alone; an apply of the stage label without a scope writes nothing, since every
+        // table it builds is scoped.
+        Assert.Equal("1\t0", Chunk(native, "test-base", ScopedApplier + """
+            local c = { mod = "docs", file = "data/stage.toml", data = require("docs").doc, unraised = {} }
+            return applier:apply(c, { built_by = "boot" }), applier:apply(c, { built_by = "stage" })
+            """));
+        Assert.Equal(7, memory.Integer(0x101));
+        Assert.Single(memory.Integers);
+        // Stage 2's part, then stage 3's: each apply writes its id's records, and an id the document lacks writes none.
+        Assert.Equal("2", Chunk(native, "test-base", ScopedApplier + """
+            local c = { mod = "docs", file = "data/stage.toml", data = require("docs").doc }
+            return applier:apply(c, { built_by = "stage", scope = { stage = 2 } })
+            """));
+        Assert.Equal((50, 4), (memory.Integer(0x401), memory.Integer(0x410 + 1 * 2 + 1)));
+        Assert.Equal("2\t0", Chunk(native, "test-base", ScopedApplier + """
+            local c = { mod = "docs", file = "data/stage.toml", data = require("docs").doc }
+            return applier:apply(c, { built_by = "stage", scope = { stage = 3 } }),
+                   applier:apply(c, { built_by = "stage", scope = { stage = 4 } })
+            """));
+        // Stage 3's unit 1 lands in the cell stage 2's did: the table holds one stage at a time.
+        Assert.Equal((60, 61, 4), (memory.Integer(0x401), memory.Integer(0x402), memory.Integer(0x413)));
+        Assert.Equal(4, memory.Integers.Count);
+    }
+
+    public static TheoryData<string, string, string> ScopeProblems => new()
+    {
+        { "stage = { [\"0\"] = { enemy = {} } }", "stage.0", "stage has ids 1 to 9" },
+        { "stage = { [\"10\"] = { enemy = {} } }", "stage.10", "stage has ids 1 to 9" },
+        { "stage = { [\"0x2\"] = { enemy = {} } }", "stage.0x2", "a stage id is written in decimal: 2" },
+        { "stage = { [\"02\"] = { enemy = {} } }", "stage.02", "a stage id is written without a leading zero: 2" },
+        { "stage = { { enemy = {} } }", "stage.1", "a stage id is a key in decimal, not an array's position" },
+        { "stage = 5", "stage", "stage takes its ids: [stage.<id>.<table>.<record>]" },
+        { "stage = { [\"2\"] = 5 }", "stage.2", "a stage is a table of its tables (enemy), not 5" },
+        { "stage = { [\"2\"] = { enemyy = {} } }", "stage.2.enemyy", "stage has no table enemyy (tables: enemy)" },
+        { "stage = { [\"2\"] = { foe = {} } }", "stage.2.foe", "stage has no table foe (tables: enemy)" },
+        { "stage = { [\"2\"] = { enemy = { [\"3\"] = { unit = 1 } } } }", "stage.2.enemy.3", "foe has records 0 to 2" },
+        { "stage = { [\"2\"] = { enemy = { [\"1\"] = { units = 1 } } } }", "stage.2.enemy.1.units", "foe has no field units" },
+        { "stage = { [\"2\"] = { enemy = { [\"1\"] = { routines = { [\"2\"] = 1 } } } } }", "stage.2.enemy.1.routines.2", "foe.routines has columns 0 to 1" },
+        { "stage = { [\"2\"] = { enemy = { [\"1\"] = { unit = \"x\" } } } }", "stage.2.enemy.1.unit", "takes a whole number, not a string" },
+        { "foe = { [\"1\"] = { unit = 1 } }", "foe", "foe is reached through its scope: write stage.<id>.enemy" },
+        { "ghost = {}", "ghost", "no record table is named ghost (tables: hero; scopes: stage)" },
+    };
+
+    [Theory]
+    [MemberData(nameof(ScopeProblems))]
+    public void EachScopeProblemIsReportedByItsPathAndNothingOfTheFileIsWritten(string part, string path, string reason)
+    {
+        Scripting native = Library("return { bad = { hero = { [\"1\"] = { level = 7 } }, " + part + " } }", ScopedMap);
+        string text = Chunk(native, "test-base", ScopedApplier + """
+            local c = { mod = "docs", file = "data/bad.toml", data = require("docs").bad, unraised = {} }
+            local ok, message = pcall(applier.apply, applier, c, { built_by = "boot" })
+            return tostring(ok), message, applier:apply(c, { built_by = "stage", scope = { stage = 2 } })
+            """);
+        string[] parts = text.Split('\t');
+        Assert.Equal(3, parts.Length);
+        Assert.Equal("false", parts[0]);
+        Assert.Equal($"docs data/bad.toml: 1 problem, so nothing of it is applied: {path}: {reason}", parts[1]);
+        Assert.Equal("0", parts[2]);
+        Assert.Empty(native.Memory.Integers);
+    }
+
+    [Fact]
+    public void ADocumentWithAPartAtAnEventTheInstallDoesNotRaiseIsRefusedWholeAndOneWithoutIsApplied()
+    {
+        // Spec §6.2: the stage part would never be applied, so the boot part is not applied alone.
+        Scripting native = Library("""
+            return { both = { hero = { ["1"] = { level = 7 } }, stage = { ["2"] = { enemy = { ["1"] = { unit = 50 } } } } },
+                     boot = { hero = { ["2"] = { level = 8 } } } }
+            """, ScopedMap);
+        string text = Chunk(native, "test-base", ScopedApplier + """
+            local docs = require("docs")
+            local unraised = { "test.stage.loaded" }
+            local _, refused = pcall(applier.apply, applier, { mod = "docs", file = "data/both.toml", data = docs.both, unraised = unraised }, { built_by = "boot" })
+            local applied = applier:apply({ mod = "docs", file = "data/boot.toml", data = docs.boot, unraised = unraised }, { built_by = "boot" })
+            return refused, applied
+            """);
+        string[] parts = text.Split('\t');
+        Assert.Equal(2, parts.Length);
+        Assert.Equal("docs data/both.toml: 1 problem, so nothing of it is applied: "
+                     + "stage.2.enemy: foe is applied at test.stage.loaded, which this install does not raise", parts[0]);
+        Assert.Equal("1", parts[1]);
+        Assert.Equal(new Dictionary<int, long> { [0x102] = 8 }, native.Memory.Integers.ToDictionary(p => p.Key, p => p.Value));
+
+        // The boot's event unraised refuses a top-level part the same way; an applier without events takes no notice.
+        string boot = Chunk(native, "test-base", ScopedApplier + """
+            local c = { mod = "docs", file = "data/boot.toml", data = require("docs").boot, unraised = { "test.data.layered" } }
+            local _, message = applier:check(c)
+            local plain = require("ome-records").applier { map = require("generated.tables"), table = maid.names.table, labels = { "boot", "stage" } }
+            return message, tostring(plain:check(c))
+            """);
+        Assert.Equal("docs data/boot.toml: 1 problem, so nothing of it is applied: hero: hero is applied at "
+                     + "test.data.layered, which this install does not raise\ttrue", boot);
+    }
+
+    [Fact]
+    public void TheApplierRefusesAScopeItsMapLacksAnIdThatIsNotWholeAndEventsThatAreNotNames()
+    {
+        Scripting native = Library("return { doc = { hero = { [\"1\"] = { level = 7 } } } }", ScopedMap);
+        string text = Chunk(native, "test-base", ScopedApplier + """
+            local c = { mod = "docs", file = "data/doc.toml", data = require("docs").doc }
+            local _, round = pcall(applier.apply, applier, c, { built_by = "stage", scope = { round = 1 } })
+            local _, half = pcall(applier.apply, applier, c, { built_by = "stage", scope = { stage = 1.5 } })
+            local _, events = pcall(require("ome-records").applier, { map = require("generated.tables"), table = maid.names.table,
+                                                                        labels = { "boot" }, events = { boot = 1 } })
+            return round, half, events
+            """);
+        string[] parts = text.Split('\t');
+        Assert.Equal(3, parts.Length);
+        Assert.EndsWith("apply: options.scope names round, which is no scope of the record map", parts[0]);
+        Assert.EndsWith("apply: options.scope.stage is a whole number, not 1.5", parts[1]);
+        Assert.EndsWith("records.applier: events maps each label to the event the caller applies it at, such as "
+                        + "{ boot = \"<game>.data.layered\" }", parts[2]);
         Assert.Empty(native.Memory.Integers);
     }
 
