@@ -591,16 +591,19 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - TITLE: also `0x2c7`, `0x2d1`, `0x2eb`, `0x2ec`, `0x324`, `0x325`, `0x328`, `0x329`, `0x32b`–`0x32e`;
     - SC0000: also `0x26`, `0x36`, `0x2e9`.
 
-    The `0x320` family is a drawing subsystem the port does not have: op `0x320` takes arrays of points and float
-    cells and calls a worker beside the build's new vertex-buffer code (`CalcVertexPos`, `RenderPolygon`). Ops
-    `0x322` and `0x323` build an ARGB value (alpha and colour, each kept when negative) and set it on an object
-    that `0x320` made, by one index or by two. So it reads as retained polygons with a colour at each vertex,
-    which the scripts use at 22,000 sites. The workers (`0x4965c0`, `0x4968a0`, `0x496910`, `0x4969a0`) are not
-    read; the three handlers' plates in the Ghidra image say what is. P2 therefore needs that subsystem designed
-    in the graphics native, not only handlers.
+    Ops `0x320` to `0x323` are AGE 4.38D's polygon objects: retained objects of vertices with a colour each, a
+    colour that multiplies them, a timed fade of that colour, up to two textures and four blends, drawn in handle
+    order with the other retained objects. They are read in full but for five points, and
+    `superpowers/specs/2026-11-19-polygon-objects-design.md` (proposed) is the design for them in the graphics
+    native and the two renderers.
+
+    Ops `0x324` to `0x32f` are a separate module, the title's 3D scene: mesh slots loaded from the two `.X` files,
+    a camera, a light colour, mesh instances, and an effect that takes over the walk between two handles. Its
+    handlers are read, its workers are not. The design proposes handlers that keep its state and draw nothing for
+    P2, with the title's falling leaves then listed here as a fidelity gap.
   - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
-    the two settings keys, the two file types and the font), then step 6, the boot, starting with what `0x2d5` and
-    the `0x320` family are.
+    the two settings keys, the two file types and the font), then step 6, the boot: float pointers, then the
+    polygon objects once their design is accepted.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`
