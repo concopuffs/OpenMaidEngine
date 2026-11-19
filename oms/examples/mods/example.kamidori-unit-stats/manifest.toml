@@ -1,0 +1,17 @@
+omp = 4
+id = "example.kamidori-unit-stats"
+name = "Unit stats (Kamidori)"
+version = "1.0.0"
+description = "A data file that raises ウィル's (unit 1) maximum HP, which reaches only a character who joins after it: the game keeps its own copy of a joined character's stats."
+
+[game]
+profile = "kamidori"
+target = "extended"
+
+[[requires]]
+id = "kamidori-base"
+version = ">=1.1, <2"
+
+[[data]]
+kind = "kamidori.tables"
+file = "units.toml"

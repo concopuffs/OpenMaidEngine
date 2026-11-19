@@ -1,0 +1,6 @@
+# Applied at himegari.data.layered, at each boot and each load. When a unit first joins, UNITECH copies its
+# definition into its saved state (a new game's first party joins in GAMESTART), so a save made with this file keeps
+# the raised value after the mod is removed. The comment gives the game's own value.
+
+[unit.2]                   # リリィ：幼少時代, the first party
+stats.max_hp = 40          # 14

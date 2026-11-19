@@ -66,6 +66,14 @@ ran the same scenarios on native AGE.
   `tools/drive/scenarios/port/kamidori-stage-enemies.steps` (from the Kamidori sweep's workshop save: INFO off a
   floor, the floor entered afresh, INFO on it, a floor save and its load), `kamidori-stage-enemies-load-without.steps`
   (that save loaded from the title without the mod) and `kamidori-stage-enemies-mistake.steps` drive them.
+- `example.unit-stats` and `example.kamidori-unit-stats` (the data patches plan's derived values, §5.3) each raise
+  one unit's maximum HP, which the game copies into the unit's saved stats when it joins (each game's guide page,
+  "A unit keeps a copy of its definition" and "A character keeps a copy of its definition").
+  `tools/drive/scenarios/port/himegari-unit-stats.steps` starts a new game with the Himegari one, where リリィ (unit
+  2) joins and her saved stats take the edit, and saves; `himegari-unit-stats-load-without.steps` loads that save
+  without the mod, where her definition is the game's own and her saved stats keep the edit.
+  `kamidori-unit-stats.steps` loads the Kamidori sweep's workshop save with the Kamidori one: ウィル (unit 1)
+  joined long before, so his definition holds the edit and his saved stats the save's own.
 
 - `example.kamidori-title-hover` makes Kamidori's title draw the hovered button in the same tick that finds it. The
   title's 50 ms mouse callback (`TITLE@0x182`) draws the highlight first and reads the cursor second, so a hover

@@ -490,4 +490,20 @@ public sealed partial class DataPatchWorkspaceTests
                      + $"unit.{game.Unit}.experiance_reward: unit has no field experiance_reward", result.Halt);
         Assert.NotEqual(150, session.Globals.GetValueOrDefault(Cell(profile, "unit_base_stats", game.Unit, "max_hp")));
     }
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [InlineData("himegari", "example.unit-stats", 2, 14L, 40L)]
+    [InlineData("kamidori", "example.kamidori-unit-stats", 1, 18L, 50L)]
+    public void TheUnitStatsExamplesEditTheDefinitionAtBoot(string profile, string example, int unit, long own, long edited)
+    {
+        // The example mods of the derived values' driven runs (plan §5.3), linked and booted headless: the definition
+        // holds the edit. What the game copies from it is driven by tools/drive/scenarios/port/*unit-stats*.steps.
+        GateGame game = Game(profile);
+        ModPackage mod = ModPackage.Open(Path.Combine(Paths.Repo, "oms", "examples", "mods", example));
+        _opened.Add(mod);
+        int cell = Cell(profile, "unit_base_stats", unit, "max_hp");
+        Assert.Equal(own, game.Boot(null).Globals.GetValueOrDefault(cell));
+        Assert.Equal(edited, game.Boot(Native(LinkedInOrder(game.Base, mod), LuaErrorPolicy.Halt)).Globals.GetValueOrDefault(cell));
+    }
 }

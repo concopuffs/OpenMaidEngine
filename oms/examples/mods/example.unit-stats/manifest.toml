@@ -1,0 +1,17 @@
+omp = 4
+id = "example.unit-stats"
+name = "Unit stats"
+version = "1.0.0"
+description = "A data file that raises リリィ's (unit 2) maximum HP, which the game copies into her saved stats when she joins."
+
+[game]
+profile = "himegari"
+target = "extended"
+
+[[requires]]
+id = "himegari-base"
+version = ">=1.1, <2"
+
+[[data]]
+kind = "himegari.tables"
+file = "units.toml"

@@ -175,10 +175,52 @@ drop_chance.drop_1 = 100   # 30
   view run every stage's loaders for what they show and raise no event for those stages, so they show the floors'
   own enemies and dig points, not a file's edit. Off a floor (INFO opened from the town or the workshop) the view
   raises no event at all and leaves `current_stage_id` at 1000.
-- **A character keeps a copy.** When a unit joins, UNITECH copies its `unit_base_stats` into the saved
-  `character_stats` (`../../kamidori-data-tables.md`, "Runtime character state"). An edit to a unit's stats reaches
-  a character who joins after the edit, and one who has already joined only where the game reads the definition
-  again; what was copied while the mod was on stays in the save.
+- **A character keeps a copy of its definition.** When a unit joins, UNITECH copies part of its definition into the
+  character's saved state (`../../kamidori-data-tables.md`, "Runtime character state"), which the game uses from
+  then on. An edit to these fields reaches a character who joins after it, not one who has joined, and what was copied
+  while the mod was on stays in the save when the mod is removed. UNITECH takes the character through
+  `unit.canonical_character_id`, refuses one of 100 or more (`UNITECH@0x6d`), and makes the first join's copies when
+  the character's `character_levels` is 0 (`UNITECH@0x13a`). `example.kamidori-unit-stats` raises ウィル's maximum HP:
+  `tools/drive/scenarios/port/kamidori-unit-stats.steps` loads the sweep's workshop save with it, where his
+  definition holds the edit and his saved stats the save's own.
+
+  | Field | Saved value | When |
+  |---|---|---|
+  | `unit.default_costume_item_id` | `character_costume_item_id`, and the costume itself | each join of a character with no costume yet or at level 0 (`UNITECH@0xf7`); the costume, through ADDITEM, when the inventory has none (`UNITECH@0x129`) |
+  | `unit.initial_party_capacity` | `party_cost_capacity` | character 1's first join (`UNITECH@0x156`) |
+  | `unit.party_cost` | `character_party_cost` | the first join (`UNITECH@0x169`) |
+  | `unit.initial_affinity_tenths` | `character_affinity`, times 10 | the first join (`UNITECH@0x17c`) |
+  | `unit.starting_level` | `character_levels` | the first join (`UNITECH@0x191`) |
+  | `unit.initial_weapon_level` | `character_weapon_level` | the first join (`UNITECH@0x1b0`) |
+  | `unit.stats` | `character_stats`, all 14 columns | the first join (`UNITECH@0x1e1`) |
+  | `unit.initial_stat_caps` | `character_stat_caps` | the first join (`UNITECH@0x208`) |
+  | `unit.element_resistance` | `character_resistances` | the first join (`UNITECH@0x22f`) |
+  | `unit.skill` | `character_skill_list`, with `character_learned_skill_flags` set for each, and the first four in the roster slot's `roster_equipped_skill_ids` | the first join (`UNITECH@0x256`, `0x2a7`); the roster's copy at the character's first place in the roster (`UNITECH@0x4fe`) |
+  | `unit.initial_class_title` | `character_class_titles` | the first join (`UNITECH@0x3ac`) |
+  | `unit.initial_equipment` | the roster slot's `roster_equipment_item_ids` | the character's first place in the roster (`character_join_flags` bit 0 clear, `UNITECH@0x417`; the copy at `0x4ac`), and a new game's first party (`GAMESTART@0xb0d`) |
+  | `unit.stat_growth` | `character_stats` and `character_stat_growth_fractions` | the first join, for each level it adds past the starting level (`UNITECH@0x325`), and each level up (`ADDEXP@0x2a5`). The rate is read each time, so an edit changes later levels' growth, and the growth already added stays |
+
+- **The battle units are copies too.** When FIELD places a unit, SETEN (an enemy) or SETCH (a character) writes its
+  battle slot (the `battle_unit_*` arrays) from the tables: an enemy's level from its slot's `min_level`,
+  `max_level` and `auto_level_scale_divisor` and the unit's `starting_level`, `level_cap` and
+  `auto_level_scale_divisor`, and its `stats`, `element_resistance`, `skill`, `initial_equipment`, `party_cost`,
+  `graphic` and `initial_class_title`, with the slot's `movement_routine_set_ids` and `battle_routine_set_ids`; a
+  character's from its saved state above, with `unit.graphic` and its costume's `item.costume_graphic_asset_ids`.
+  CALCREVISE works out the effective values from the equipment and skills (`item.stat_modifiers`, `min_range`,
+  `max_range`, `critical_rate_bonus`, `affinity_level_deltas`, `costume_battle_variant` and `granted_skill_id`, the
+  skills' ranges, `unit.cutin_element`), and EQUIP the condition floors (`item.equipped_condition_levels`, into
+  `unit_condition_baseline_levels`). The battle units are saved, so a save made on a floor keeps them as they were
+  placed and worked out, with the mod or without it.
+- **Play keeps its results,** as it does without a mod: while the mod is on, an edit changes what an action gives or
+  costs, and the result is saved. `item.price` is paid from `player_money` when an item is bought (SHOP), and its
+  `sell` column is added to it when one is sold (SALE, `CHANGEARM@0x103`, `USEITEM@0x20d`) and for the part of a
+  stock past 999 when an item is added (`ADDITEM@0x8d`); `unit.bestiary_knowledge_gain` is added to
+  `bestiary_knowledge_percent` for each unit beaten (`COMMITBTL@0x50e`); and `item.rank` is added to a saved tally in
+  the shop's settlement (`G[0x63c89]`, unnamed, `CALCSETTLE@0x4ac`).
+- **Every other field** is read where the game uses it, so an edit reaches a save made before it. These lists come
+  from a scan of the installed scripts that follows each field's value through a script's locals and block copies
+  into a cell the save keeps, and from reading each cell it found. The scan does not follow a value from one script
+  into another through a global, so a copy made that way can be missing.
 - **Old names.** No table or field has been renamed yet. When one is, the old name keeps working until
   `kamidori-base`'s next major version, and `diagnostics/lua.log` names each old name a file uses.
 
@@ -303,3 +345,4 @@ read-only:
 | `oms/examples/kamidori-gate6/` | a boot-time data edit and a script called by packed id |
 | `oms/examples/mods/example.kamidori-double-exp-event` | a Lua subscriber of `kamidori.experience.award`, without `vm` |
 | `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake the boot reports; `tools/drive/scenarios/port/kamidori-stage-enemies*.steps` drive both from the sweep's workshop save, through INFO's 獲得地点 view, a floor save and its load with the mod and without |
+| `oms/examples/mods/example.kamidori-unit-stats` | a data file that raises ウィル's maximum HP, which reaches only a character who joins after it; `tools/drive/scenarios/port/kamidori-unit-stats.steps` loads the sweep's workshop save with it |

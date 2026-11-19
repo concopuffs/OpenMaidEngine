@@ -75,6 +75,45 @@ experience_reward = 40     # 30
   item's curve gives a bonus for (below, "Edit the boot's tables at `data.layered`"). A file that gives an item a
   shorter curve (`item.tuning_curve_ids`) lowers that item's saved levels, and they stay lowered when the mod is
   removed.
+- **A unit keeps a copy of its definition.** When a unit joins, UNITECH copies part of its definition into its saved
+  state, which the game uses from then on. An edit to these fields reaches a unit that joins after it, not one that
+  has joined, and what was copied while the mod was on stays in the save when the mod is removed. UNITECH takes the
+  unit through `unit.canonical_id` and `unit.roster_variant_ids` first, and makes the first join's copies for a unit
+  below 100 whose `unit_current_levels` is 0 (`UNITECH@0x2cf`, `0x2e4`); a form change in 配下 (SALLY's first two
+  actions) makes the same copies for a form used for the first time. `example.unit-stats` raises リリィ's maximum HP:
+  `tools/drive/scenarios/port/himegari-unit-stats.steps` shows her saved stats take it at a new game, and
+  `himegari-unit-stats-load-without.steps` that a save made then keeps it without the mod.
+
+  | Field | Saved value | When |
+  |---|---|---|
+  | `unit.canonical_id`, `unit.roster_variant_ids` | the unit a party slot holds (`party_slot_character_id`) | each join (`UNITECH@0x2ab`) and each form change (`SALLY@0x1668`) |
+  | `unit.starting_level` | `unit_current_levels` | the first join (`UNITECH@0x34b`) and a form's first use (`SALLY@0x16aa`) |
+  | `unit.stats` | `unit_current_stats`, all 14 columns | the same (`UNITECH@0x37c`, `SALLY@0x16db`) |
+  | `unit.starting_skill` | `unit_skill_ids` | the same (`UNITECH@0x3a3`, `SALLY@0x1702`) |
+  | `unit.starting_equipment_item_id` | the party slot's item (`G[0x6868]`, unnamed), and the item itself | the slot's item at the first join (`UNITECH@0x338`); the item, through ADDITEM, at each join that equips (`UNITECH@0x27f`) |
+  | `unit.stat_growth` | `unit_current_stats` and `unit_stat_growth_fractions` | the first join, for each level it adds past the starting level (`UNITECH@0x419`), and each level up (`ADDEXP@0x20b`). The rate is read each time, so an edit changes later levels' growth, and the growth already added stays |
+
+- **The battle entities are copies too.** When FIELD places a unit, SETEN (an enemy) or SETCH (a party unit) writes
+  its battle entity (the `entity_*` arrays) from the tables: an enemy's level from its slot's `min_level`,
+  `max_level` and `auto_level_scale_divisor` and the unit's `starting_level`, `level_cap` and
+  `auto_level_scale_divisor`, its stats from `unit.stats` and `unit.stat_growth`, and its routines
+  (`movement_routine_set`, `battle_routine_set`), carried item (`starting_equipment_item_id`), attack
+  (`default_attack_item_id`) and class title (`initial_class_title`); a party unit's stats come from its saved copy
+  above. CALCREVISE works out an entity's effective stats and ranges from its equipment and skills
+  (`item.stat_modifiers`, `min_range`, `max_range` and `granted_skill_id`, `skill.min_range_encoded` and
+  `max_range_encoded`) each time the game calls it, among others when a unit is placed, levels up, or uses an item or
+  a spell. The
+  entities are saved, so a save made on a stage keeps them as they were placed and worked out, with the mod or without
+  it.
+- **Play keeps its results,** as it does without a mod: while the mod is on, an edit changes what an action gives or
+  costs, and the result is saved. `item.essence_recovery_amount` is added to the user's side's essence when the item
+  is used (`USEITEM@0x2fb`; the player's is `current_spirit`); `unit.summon_point_cost` is taken from
+  `shared_spendable_points` at a summon (`SUMMON@0xe13`); and `unit.essence_yield` is added to `current_spirit`, with
+  a change to `familiar_alignment`, when 配下 releases a unit (`SALLY@0xd12`, `0xd49`).
+- **Every other field** is read where the game uses it, so an edit reaches a save made before it. These lists come
+  from a scan of the installed scripts that follows each field's value through a script's locals and block copies
+  into a cell the save keeps, and from reading each cell it found. The scan does not follow a value from one script
+  into another through a global, so a copy made that way can be missing.
 - **A stage's enemies** are the `stage_enemy` table, which a file names through the stage: `stage.1.enemy.2` is
   stage 1's enemy slot 2 (stage ids 1 to 999, of which STINIT writes 1 to 170; slots 0 to 29, and no stage gives
   slot 0 a unit). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`, `max_level`,
@@ -216,3 +255,4 @@ register their handlers in, so a handler runs after the base game's and every ap
 | `oms/examples/mods/example.lua-random` | `math.random` in a script hook on `SC0000.BIN`, inside a `pairs` loop too; `tools/drive/scenarios/port/himegari-lua-random.steps` checks that `rand-seed 7` gives the same rolls in every run |
 | `oms/examples/mods/example.random-enemies` | a subscriber of `himegari.stage.loaded` that rewrites the stage's enemies and keeps a seed per playthrough in `maid.state`; `tools/drive/scenarios/port/himegari-random-enemies.steps` checks stage 1's draw under `rand-seed 7` |
 | `oms/examples/mods/example.stage-enemies` | a data file that edits two stages' enemy slots, applied at `himegari.stage.loaded`; `example.stage-enemies-mistake` is its twin with a mistake the boot reports; `tools/drive/scenarios/port/himegari-stage-enemies*.steps` drive both, through the camp, a field save and its load with the mod and without |
+| `oms/examples/mods/example.unit-stats` | a data file that raises リリィ's maximum HP, which UNITECH copies into her saved stats when she joins; `tools/drive/scenarios/port/himegari-unit-stats*.steps` drive a new game with it and the load of its save without it |

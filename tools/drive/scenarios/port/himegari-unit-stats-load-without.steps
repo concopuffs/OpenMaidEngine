@@ -1,0 +1,20 @@
+# Port only (scenarios/port/): the second half of himegari-unit-stats.steps. From the title, load slot 0, which that
+# scenario saved at SC0000 page 3 with example.unit-stats, in a port run without the mod. The load builds the data
+# tables again, so リリィ's definition (unit_base_stats) is the game's own 14 again, while her saved stats
+# (unit_current_stats), which UNITECH copied from the edited definition when she joined, keep 40. Run on the sandbox
+# that scenario used:
+#   py -3.11 -X utf8 tools/drive.py port start --sandbox dp-unit-stats
+#   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-unit-stats-load-without.steps
+# Cells by number, as in that scenario.
+
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 1.5
+click title.load                                             # the slot list (SAVE in load mode)
+wait-state script=SAVE timeout=20
+wait 1
+click slot.0
+wait 1.5
+click confirm.yes                                            # ロードしますか？ -> はい
+wait-state top=SC0000@0x8a9 timeout=30                       # page 3
+lua local g = maid.vm.g local got = string.format("slot2=%d level=%d base_max_hp=%d max_hp=%d", g[0x67a0 + 2], g[0x6930 + 2], g[0x7af36 + 2 * 14 + 11], g[0x69f8 + 2 * 14 + 11]) assert(got == "slot2=2 level=1 base_max_hp=14 max_hp=40", got) return got
+shot unit-stats-loaded-without

@@ -1,0 +1,7 @@
+# Applied at kamidori.data.layered, at each boot and each load. When a character first joins, UNITECH copies the
+# unit's definition into the character's saved state (character_stats), which the game uses from then on, so this
+# edit reaches ウィル only in a new game: a save made after he joined keeps the stats it holds. The comment gives the
+# game's own value.
+
+[unit.1]                   # ウィル
+stats.max_hp = 50          # 18
