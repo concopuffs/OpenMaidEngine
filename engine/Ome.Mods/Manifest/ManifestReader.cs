@@ -46,7 +46,7 @@ public static partial class ManifestReader
     [GeneratedRegex(@"^(?<file>[A-Za-z0-9_\-]+(?:/[A-Za-z0-9_\-]+)*\.lua):(?<function>[A-Za-z_][A-Za-z0-9_]*)$")]
     private static partial Regex HandlerPattern();
 
-    /// <summary>A dotted name: an event, an engine event or a patch point (<c>himegari.experience.award</c>).</summary>
+    /// <summary>A dotted name: an event, an engine event or a patch point (<c>example.lists.ready</c>).</summary>
     [GeneratedRegex(@"^[a-z0-9_]+(?:-[a-z0-9_]+)*(?:\.[a-z0-9_]+(?:-[a-z0-9_]+)*)+$")]
     private static partial Regex DottedNamePattern();
 

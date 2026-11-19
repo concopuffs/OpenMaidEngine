@@ -439,6 +439,16 @@ public sealed partial class DataPatchWorkspaceTests
         { "himegari", "[unit.103]\nstats.max_hp = 150\nexperience_reward = \"999\"\n", "unit.103.experience_reward", "takes a whole number, not a string" },
         { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[unit.12]\ndisplay_name = \"Lily 한\"\n", "unit.12.display_name",
           "a string cell holds text the save can encode (code page 932); U+D55C is not in it" },
+        // A stage part's problems are the boot's too: the whole file is checked at its first delivery (plan §5.2).
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage.0.enemy.2]\nunit_id = 810\n", "stage.0", "stage has ids 1 to 999" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage.1.enemyy.2]\nunit_id = 810\n", "stage.1.enemyy",
+          "stage has no table enemyy (tables: enemy)" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage_enemy.2]\nunit_id = 810\n", "stage_enemy",
+          "stage_enemy is reached through its scope: write stage.<id>.enemy" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[stage.51.enemy.30]\nunit_id = 810\n", "stage.51.enemy.30",
+          "stage_enemy has records 0 to 29" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[stage.51.enemy.2]\nrequired_story_flags.7 = 1\n",
+          "stage.51.enemy.2.required_story_flags.7", "stage_enemy.required_story_flags has columns 0 to 6" },
     };
 
     [Theory]

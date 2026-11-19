@@ -3,6 +3,7 @@ using Ome.Engine.Modding;
 using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Mods.Linking;
+using Ome.Mods.Manifest;
 using Ome.Mods.Packages;
 using Ome.Script.Abi;
 using Ome.Scripting.Lua;
@@ -13,7 +14,8 @@ using Ome.Scripting.Lua;
 /// engine's own packages, take a document as a Lua table from a console chunk in the base mod's environment (spec §13):
 /// the applier's half of gate 5 (the same cells as <c>oms/examples/kamidori-gate6</c>) and of gate 7 (each problem is
 /// reported with the mod, the file and the path, and nothing of the file is written). The library alone takes a
-/// read-only view, as milestone 1 will hand it one.
+/// read-only view, as milestone 1 will hand it one. Milestone 2 adds the scopes and gate 11: the two base mods declare
+/// their kinds alike, and the engine names no kind, base mod or game event.
 /// </summary>
 public sealed class DataPatchTests : IDisposable
 {
@@ -565,5 +567,72 @@ public sealed class DataPatchTests : IDisposable
                      + "hero.0.st.hp: hero.0.st.hp and hero.0.stats.hp name one cell, hero.0.stats.hp; write it once, as "
                      + "hero.0.stats.hp", parts[1]);
         Assert.Empty(native.Memory.Integers);
+    }
+
+    // ------------------------------------------------------------------------------------------------- gate 11
+
+    private static readonly string[] Games = ["himegari", "kamidori"];
+
+    [Fact]
+    public void BothBaseModsAcceptTheirTablesAtTheSameEventsByTheSameHandlersButForTheGamesName()
+    {
+        // Spec §12, gate 11: the format is one design, which each base mod declares over its own game.
+        var declared = Games.Select(game =>
+        {
+            using ModPackage baseMod = ShippedPackages.Open($"{game}-base")!;
+            return baseMod.Manifest.Accepts.Select(kind => (kind.Kind.Replace(game, "<game>"),
+                                                            kind.Description?.Replace(game, "<game>"),
+                                                            string.Join(", ", kind.At.Select(at => $"{at.Event.Replace(game, "<game>")} {at.Handler}"))))
+                                   .ToList();
+        }).ToList();
+        Assert.Equal([("<game>.tables", "Edits to the game's record tables: units, items and skills, which the boot builds, and "
+                                        + "each stage's enemies, which its loader writes.",
+                       "<game>.data.layered tables.lua:apply_boot, <game>.stage.loaded tables.lua:apply_stage")], declared[0]);
+        Assert.Equal(declared[0], declared[1]);
+    }
+
+    [Fact]
+    public void BothBaseModsTablesLuaAreOneTextButForTheGamesName()
+    {
+        string[] texts = Games.Select(game => File.ReadAllText(Path.Combine(Paths.Repo, "mods", $"{game}-base", "lua", "tables.lua"))
+                                                  .Replace(game, "<game>")).ToArray();
+        Assert.Equal(texts[0], texts[1]);
+        Assert.DoesNotContain("himegari", texts[0], StringComparison.Ordinal);
+        Assert.DoesNotContain("kamidori", texts[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void NoEngineSourceNamesAKindABaseModOrAGameEvent()
+    {
+        // The engine's and the front end's C# sources, without the tests and the spikes (which nothing references):
+        // what a game's base mod declares stays the base mod's (spec §6.2, plan §5.3).
+        var names = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (string game in Games)
+        {
+            string folder = Path.Combine(Paths.Repo, "mods", $"{game}-base");
+            using ModPackage baseMod = ShippedPackages.Open($"{game}-base")!;
+            names.Add(baseMod.Id);
+            foreach (ModKind kind in baseMod.Manifest.Accepts) names.Add(kind.Kind);
+            foreach (string file in Directory.EnumerateFiles(Path.Combine(folder, "events"), "*.toml"))
+                foreach (ModEventDeclaration declaration in ManifestReader.ParseEvents(File.ReadAllText(file), file))
+                    names.Add(declaration.Name);
+        }
+        Assert.Contains("kamidori.stage.loaded", names);
+        Assert.Contains("himegari.tables", names);
+        char separator = Path.DirectorySeparatorChar;
+        string[] sources = new[] { "engine", "godot" }
+            .SelectMany(root => Directory.EnumerateFiles(Path.Combine(Paths.Repo, root), "*.cs", SearchOption.AllDirectories))
+            .Where(path => !path.Contains($"{separator}obj{separator}") && !path.Contains($"{separator}bin{separator}")
+                           && !path.Contains($"{separator}Ome.Engine.Tests{separator}")
+                           && !path.Contains($".Spike{separator}"))
+            .ToArray();
+        Assert.True(sources.Length > 100, $"{sources.Length} sources");
+        var named = sources.SelectMany(path =>
+        {
+            string source = File.ReadAllText(path);
+            return names.Where(name => source.Contains(name, StringComparison.Ordinal))
+                        .Select(name => $"{Path.GetRelativePath(Paths.Repo, path)}: {name}");
+        }).ToList();
+        Assert.Empty(named);
     }
 }

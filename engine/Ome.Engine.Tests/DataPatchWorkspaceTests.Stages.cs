@@ -1,0 +1,143 @@
+using Ome.Engine.Hosting;
+using Ome.Engine.Modding;
+using Ome.Engine.Natives;
+using Ome.Engine.Vm;
+using Ome.Mods.Linking;
+using Ome.Mods.Packages;
+
+/// <summary>
+/// Milestone 2 of docs/superpowers/specs/2026-11-17-data-patches-design.md (plan §5.4, task 6), on the installed games:
+/// a stage's part of a data file, delivered to the base mods' <c>tables.lua:apply_stage</c> at
+/// <c>&lt;game&gt;.stage.loaded</c> while the installed FIELD runs headless from a booted session at a stage's start;
+/// and a file with a stage part where that event is not raised. The stage parts' problems at boot are rows of
+/// <see cref="FileProblems"/>.
+/// </summary>
+public sealed partial class DataPatchWorkspaceTests
+{
+    /// <summary>The game as <see cref="Game"/> gives it, or Kamidori's translated install.</summary>
+    private static GateGame StageGame(string profile, bool translated)
+    {
+        GateGame game = Game(profile);
+        if (!translated) return game;
+        var (linkBase, scripts) = Kamidori(translated: true);
+        return game with { Base = linkBase, Scripts = scripts };
+    }
+
+    /// <summary>The game's INIT2, then its FIELD at <paramref name="stage"/>'s start (the continue mode 0), headless,
+    /// each run with a scripting native of its own from <paramref name="linked"/>, or with no mod. FIELD runs the stage's
+    /// loaders, raises <c>stage.loaded</c> and places the units; it does not leave the field by itself, so it ends at
+    /// the step limit.</summary>
+    private GameSession AtStageStart(GateGame game, ModLinkResult? linked, int stage)
+    {
+        GameSession session = game.Boot(linked is null ? null : Native(linked, LuaErrorPolicy.Halt));
+        session.Seed(Cell(game.Profile, "current_stage_id", 0), stage);
+        session.Seed(Cell(game.Profile, "field_map_continue_mode", 0), 0);
+        SceneResult field = session.RunScene(game.Scripts.RequireByName("FIELD.BIN"), game.Table, new HeadlessWaits(),
+                                             provider: game.Scripts, build: game.Build,
+                                             scripting: linked is null ? null : Native(linked, LuaErrorPolicy.Halt));
+        Assert.Equal("STEP-LIMIT", field.Halt);
+        Assert.Equal(stage, session.Globals.GetValueOrDefault(Cell(game.Profile, "current_stage_id", 0)));
+        return session;
+    }
+
+    /// <summary>Each cell of the stage's enemy table, by the shipped layout: every <c>stage_enemy_*</c> array.</summary>
+    private static int[] StageEnemyCells(string profile)
+    {
+        using ModPackage baseMod = ShippedPackages.Open($"{profile}-base")!;
+        return baseMod.BaseLayout!.Globals.Where(global => global.Name.StartsWith("stage_enemy_", StringComparison.Ordinal))
+            .SelectMany(global => Enumerable.Range(global.Address, 30 * global.RowWidth)).ToArray();
+    }
+
+    /// <summary>A stage and its slots, and another stage, for each game: the slot the file edits, the slot it edits at
+    /// the other stage, and those slots' units as the stage's loaders write them.</summary>
+    public static TheoryData<string, bool, int, int, int, long, long> Stages => new()
+    {
+        // Himegari's stage 1: slot 1 is the boss (unit 205), slots 2 and 3 are unit 200.
+        { "himegari", false, 1, 2, 3, 200, 200 },
+        // Kamidori's stage 51 (開けた涼風西湖畔): slots 2 and 3 are unit 402; on both installs.
+        { "kamidori", false, 51, 2, 3, 402, 402 },
+        { "kamidori", true, 51, 2, 3, 402, 402 },
+    };
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [MemberData(nameof(Stages))]
+    public void AStagePartIsAppliedAtTheInstalledFieldsLoadedEventAndAnotherStagesPartIsNot(
+        string profile, bool translated, int stage, int slot, int otherSlot, long own, long otherOwn)
+    {
+        GateGame game = StageGame(profile, translated);
+        int unit = Cell(profile, "stage_enemy_unit_id", slot), level = Cell(profile, "stage_enemy_min_level", slot);
+        int other = Cell(profile, "stage_enemy_unit_id", otherSlot);
+        GameSession plain = AtStageStart(game, null, stage);
+        Assert.Equal((own, otherOwn), (plain.Globals.GetValueOrDefault(unit), plain.Globals.GetValueOrDefault(other)));
+
+        // The file edits the stage's slot and, at the next stage, another slot.
+        ModLinkResult linked = LinkedInOrder(game.Base, DataMod(profile, "test.stage", "stage.toml", $"""
+            [stage.{stage}.enemy.{slot}]
+            unit_id = 810
+            min_level = 7
+
+            [stage.{stage + 1}.enemy.{otherSlot}]
+            unit_id = 834
+            """));
+        GameSession edited = AtStageStart(game, linked, stage);
+        int[] cells = StageEnemyCells(profile);
+        var before = cells.ToDictionary(cell => cell, cell => plain.Globals.GetValueOrDefault(cell));
+        var after = cells.ToDictionary(cell => cell, cell => edited.Globals.GetValueOrDefault(cell));
+        // The stage's part, and nothing of the other stage's: its slot keeps the stage's own unit.
+        Assert.Equal(new Dictionary<int, long> { [unit] = 810, [level] = 7 }, Changed(before, after));
+        Assert.Equal(otherOwn, edited.Globals.GetValueOrDefault(other));
+        if (profile == "himegari")
+        {
+            // FIELD placed the slot as the file left it.
+            int entities = Cell(profile, "entity_unit_definition_ids", 0);
+            long[] Placed(GameSession session) => Enumerable.Range(entities, 50).Select(cell => session.Globals.GetValueOrDefault(cell)).ToArray();
+            Assert.DoesNotContain(810, Placed(plain));
+            Assert.Contains(810, Placed(edited));
+        }
+    }
+
+    /// <summary><paramref name="game"/>'s link base with another FIELD revision, whose bytes no point names, so the
+    /// stage events are not raised in this install.</summary>
+    private static ModLinkBase WithoutStageEvents(GateGame game)
+    {
+        Func<string, byte[]?> read = game.Base.ReadScript;
+        return game.Base with
+        {
+            ReadScript = name =>
+            {
+                if (read(name) is not { } bytes || !name.Equals("FIELD.BIN", StringComparison.OrdinalIgnoreCase)) return read(name);
+                byte[] other = (byte[])bytes.Clone();
+                other[^1] ^= 1;
+                return other;
+            },
+        };
+    }
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [InlineData("himegari")]
+    [InlineData("kamidori")]
+    public void AFileWithAStagePartIsRefusedWholeWhereStageLoadedIsNotRaisedAndABootFileIsApplied(string profile)
+    {
+        GateGame game = Game(profile);
+        GameSession plain = game.Boot(null);
+        ModLinkResult linked = LinkedInOrder(WithoutStageEvents(game),
+            DataMod(profile, "test.both", "both.toml", $"[unit.{game.Unit}]\nstats.max_hp = 150\n\n[stage.1.enemy.2]\nunit_id = 810\n"),
+            DataMod(profile, "test.boot", "boot.toml", $"[unit.{game.Unit}]\nexperience_reward = 999\n"));
+        string report = linked.Report.Render();
+        Assert.Contains($"kind {profile}.tables ({profile}-base), at {profile}.data.layered; not raised in this install: "
+                        + $"{profile}.stage.loaded", report, StringComparison.Ordinal);
+
+        Scripting native = Native(linked, LuaErrorPolicy.Continue);
+        GameSession booted = game.Boot(native);
+        // The boot file's value alone: nothing of the file with a stage part.
+        Assert.Equal(new Dictionary<int, long> { [Cell(profile, "unit_experience_reward", game.Unit)] = 999 },
+                     Changed(plain.Globals, booted.Globals));
+        string logged = Assert.Single(Logged(native, "test.both"));
+        Assert.StartsWith($"data/both.toml ({profile}-base tables.lua:apply_boot) failed at {profile}.data.layered at "
+                          + $"{game.Layered}: test.both data/both.toml: 1 problem, so nothing of it is applied: "
+                          + $"stage.1.enemy: stage_enemy is applied at {profile}.stage.loaded, which this install does "
+                          + "not raise\nstack traceback:", logged);
+    }
+}
