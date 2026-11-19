@@ -592,8 +592,12 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - SC0000: also `0x26`, `0x36`, `0x2e9`.
 
     The `0x320` family is a drawing subsystem the port does not have: op `0x320` takes arrays of points and float
-    cells and calls a worker beside the build's new vertex-buffer code (`CalcVertexPos`, `RenderPolygon`). P2
-    therefore needs that subsystem designed in the graphics native, not only handlers.
+    cells and calls a worker beside the build's new vertex-buffer code (`CalcVertexPos`, `RenderPolygon`). Ops
+    `0x322` and `0x323` build an ARGB value (alpha and colour, each kept when negative) and set it on an object
+    that `0x320` made, by one index or by two. So it reads as retained polygons with a colour at each vertex,
+    which the scripts use at 22,000 sites. The workers (`0x4965c0`, `0x4968a0`, `0x496910`, `0x4969a0`) are not
+    read; the three handlers' plates in the Ghidra image say what is. P2 therefore needs that subsystem designed
+    in the graphics native, not only handlers.
   - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
     the two settings keys, the two file types and the font), then step 6, the boot, starting with what `0x2d5` and
     the `0x320` family are.
