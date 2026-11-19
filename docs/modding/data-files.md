@@ -106,16 +106,16 @@ drop_chance.drop_1 = 100
 - **A table that the boot does not build** (a stage's, which its loaders write when the stage starts) is refused for
   now.
 - **A file with a problem applies nothing.** The base mod checks the whole file at its first delivery in a session,
-  before it writes, and `diagnostics/lua.log` lists each problem by its path:
+  before it writes, and `diagnostics/lua.log` lists each problem by its path, the first on the first line:
 
   ```text
-  example.a data/a.toml: 2 problems, so nothing of it is applied
-    unit.0x2f9: a record id is written in decimal: 761
+  example.a data/a.toml: 2 problems, so nothing of it is applied: unit.0x2f9: a record id is written in decimal: 761
     unit.761.experiance_reward: unit has no field experiance_reward
   ```
 
-  The file's later deliveries in the session pass it over, with no second error. `--lua-errors halt` ends the run at
-  the first such file.
+  The notice and the halt reason show that first line, so they name the first problem's path too. The file's later
+  deliveries in the session pass it over, with no second error. `--lua-errors halt` ends the run at the first such
+  file.
 - **The tables are not saved.** A load builds them again and raises `<game>.data.layered` again while it restores,
   and a return to title does the same, so the file is applied again each time. A save made with the mod and loaded
   without it has the game's own values. What the game itself copies from an edited field into saved state stays in

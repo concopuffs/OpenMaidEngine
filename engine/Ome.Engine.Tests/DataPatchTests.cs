@@ -200,7 +200,7 @@ public sealed class DataPatchTests : IDisposable
         var (applied, message, again) = ApplyTwice(native, "kamidori", "data/bad.toml",
             "{ unit = { [\"761\"] = { stats = { max_hp = 150 }, " + part + " } } }");
         Assert.False(applied);
-        Assert.Equal($"example.data data/bad.toml: 1 problem, so nothing of it is applied\n  {path}: {reason}", message);
+        Assert.Equal($"example.data data/bad.toml: 1 problem, so nothing of it is applied: {path}: {reason}", message);
         // The second delivery of the file passes it over: nothing written, and no second error.
         Assert.Equal("0", again);
         Assert.Equal(12, native.Memory.Integer(0x2c1524));
@@ -217,8 +217,7 @@ public sealed class DataPatchTests : IDisposable
             """);
         Assert.False(applied);
         Assert.Equal("""
-            example.data data/three.toml: 3 problems, so nothing of it is applied
-              item.5.growth_level: item.growth_level is saved state: a load brings the saved value back, so a file does not set it
+            example.data data/three.toml: 3 problems, so nothing of it is applied: item.5.growth_level: item.growth_level is saved state: a load brings the saved value back, so a file does not set it
               unit.0x2f9: a record id is written in decimal: 761
               unit.761.experiance_reward: unit has no field experiance_reward
             """.ReplaceLineEndings("\n").TrimEnd('\n'), message);
@@ -232,9 +231,10 @@ public sealed class DataPatchTests : IDisposable
             return message
             """);
         string[] lines = text.Split('\n');
-        Assert.Equal("example.data data/many.toml: 25 problems, so nothing of it is applied", lines[0]);
-        Assert.Equal(22, lines.Length);
-        Assert.Equal("  unit.1000: unit has records 0 to 999", lines[1]);
+        Assert.Equal("example.data data/many.toml: 25 problems, so nothing of it is applied: unit.1000: unit has records 0 "
+                     + "to 999", lines[0]);
+        Assert.Equal(21, lines.Length);
+        Assert.Equal("  unit.1001: unit has records 0 to 999", lines[1]);
         Assert.Equal("  and 5 more", lines[^1]);
         Assert.Empty(native.Memory.Integers);
     }
@@ -320,8 +320,8 @@ public sealed class DataPatchTests : IDisposable
         string[] parts = row.Split('\t');
         Assert.Equal(3, parts.Length);
         Assert.Equal("false", parts[0]);
-        Assert.Equal("docs data/row.toml: 1 problem, so nothing of it is applied\n"
-                     + "  hero.2.stats: hero.stats takes its columns by name, or by number where a column has no name, not a whole row as an array",
+        Assert.Equal("docs data/row.toml: 1 problem, so nothing of it is applied: "
+                     + "hero.2.stats: hero.stats takes its columns by name, or by number where a column has no name, not a whole row as an array",
                      parts[1]);
         Assert.EndsWith("apply: options.built_by is one of the applier's labels", parts[2]);
         Assert.Equal(0, memory.Integer(0x200 + 2 * 3));
@@ -337,8 +337,7 @@ public sealed class DataPatchTests : IDisposable
             return message
             """);
         Assert.Equal("""
-            docs data/bad.toml: 4 problems, so nothing of it is applied
-              hero.0.seen: hero.seen is saved state: a load brings the saved value back, so a file does not set it
+            docs data/bad.toml: 4 problems, so nothing of it is applied: hero.0.seen: hero.seen is saved state: a load brings the saved value back, so a file does not set it
               hero.0.stats.0: column 0 is named: write hero.0.stats.hp
               hero.0.stats.2: column 2 is named: write hero.0.stats.end
               wave: wave is built by stage, which this format does not edit
@@ -407,11 +406,11 @@ public sealed class DataPatchTests : IDisposable
             """);
         string[] parts = text.Split('\t');
         Assert.Equal(2, parts.Length);
-        Assert.Equal("docs data/tables.toml: 1 problem, so nothing of it is applied\n"
-                     + "  hero.1.level: hero.1.level and heroes.1.lvl name one cell, hero.1.level; write it once, as hero.1.level",
+        Assert.Equal("docs data/tables.toml: 1 problem, so nothing of it is applied: "
+                     + "hero.1.level: hero.1.level and heroes.1.lvl name one cell, hero.1.level; write it once, as hero.1.level",
                      parts[0]);
-        Assert.Equal("docs data/fields.toml: 1 problem, so nothing of it is applied\n"
-                     + "  hero.0.st.hp: hero.0.st.hp and hero.0.stats.hp name one cell, hero.0.stats.hp; write it once, as "
+        Assert.Equal("docs data/fields.toml: 1 problem, so nothing of it is applied: "
+                     + "hero.0.st.hp: hero.0.st.hp and hero.0.stats.hp name one cell, hero.0.stats.hp; write it once, as "
                      + "hero.0.stats.hp", parts[1]);
         Assert.Empty(native.Memory.Integers);
     }

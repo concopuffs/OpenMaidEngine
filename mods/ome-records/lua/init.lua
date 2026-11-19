@@ -281,9 +281,11 @@ function Applier:result(contribution)
     if count == 0 then
         result = { ok = true }
     else
+        -- The first line carries the first problem, so a notice or a halt reason, which show only that line, give a
+        -- path too. The others follow, one to a line.
         local lines = { mod .. " " .. file .. ": " .. count .. (count == 1 and " problem" or " problems")
-                        .. ", so nothing of it is applied" }
-        for _, found in ipairs(shown) do lines[#lines + 1] = "  " .. found[1] .. ": " .. found[2] end
+                        .. ", so nothing of it is applied: " .. shown[1][1] .. ": " .. shown[1][2] }
+        for k = 2, #shown do lines[#lines + 1] = "  " .. shown[k][1] .. ": " .. shown[k][2] end
         if count > MAX_SHOWN then lines[#lines + 1] = "  and " .. (count - MAX_SHOWN) .. " more" end
         result = { ok = false, message = table.concat(lines, "\n") }
     end

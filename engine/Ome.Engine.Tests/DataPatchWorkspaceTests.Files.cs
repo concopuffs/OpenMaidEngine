@@ -8,6 +8,10 @@ using Ome.Engine.Vm;
 using Ome.Mods.Linking;
 using Ome.Mods.Packages;
 using Ome.Script.Abi;
+using Ome.Script.Compile;
+using Ome.Script.Ir;
+using Ome.Script.Modules;
+using Ome.Script.Syntax;
 using Xunit.Abstractions;
 
 /// <summary>
@@ -15,9 +19,9 @@ using Xunit.Abstractions;
 /// by mods with no Lua, linked with the engine's base mods and delivered to their <c>tables.lua:apply_boot</c> at
 /// <c>&lt;game&gt;.data.layered</c> while the installed INIT2 runs. Gate 3's last part (a handler on
 /// <c>data.ready</c> finds every file applied), gate 5 (spec §1.3's file leaves exactly the cells the
-/// <c>kamidori-gate6</c> example's <c>with</c> block leaves), gate 6 (boot, load, return to title, a load without the
-/// mod, and the save made right after boot) and gate 7 (each problem reported with the contributor, the file and the
-/// path, nothing applied, and the halt).
+/// <c>kamidori-gate6</c> example's <c>with</c> block leaves, and its twin on Himegari), gate 6 (boot, load, return to
+/// title, a load without the mod, and the save made right after boot) and gate 7 (each problem reported with the
+/// contributor, the file and the path, nothing applied, and the halt), gates 6 and 7 on both games.
 /// </summary>
 public sealed partial class DataPatchWorkspaceTests
 {
@@ -243,12 +247,63 @@ public sealed partial class DataPatchWorkspaceTests
         _output?.WriteLine(delivery);
     }
 
-    // ------------------------------------------------------------------------------------------------- gate 6
+    /// <summary>Gate 5's twin on Himegari, whose examples have no <c>with</c> block: unit 103's three cells of the same
+    /// kinds as spec §1.3's (a row's named column, a field with one value, a second row's column), as an OMS
+    /// <c>with</c> block and as a data file.</summary>
+    private const string HimegariWith = """
+        oms 1
+        script "$2$OMSAUTO.BIN"
+        use himegari.globals
 
-    /// <summary>A save identity's store over <paramref name="folder"/>, as the load test above builds it.</summary>
-    private static INativeDatStore Store(string folder)
-        => new SidecarNativeDatStore(new DirectoryNativeDatStore(folder, Identity), folder, Scripting.StateFileSuffix,
-                                     currentSidecar: null);
+            with unit[103] {
+                .stats.max_hp = 150
+                .experience_reward = 999
+                .drop_chance.drop_1_percent = 77
+            }
+            exit
+        """;
+
+    private const string HimegariFile = """
+        [unit.103]
+        stats.max_hp = 150
+        experience_reward = 999              # 30
+        drop_chance.drop_1_percent = 77
+        """;
+
+    /// <summary>The cells an OMS script's <c>mov</c>s of a constant into a global set, by the registry the workspace
+    /// built (its globals.json carries the install's derived rows).</summary>
+    private static Dictionary<int, long> WithBlockCells(string profile, OpcodeTable table, string source)
+    {
+        GameModule globals = GameModule.LoadGlobals(profile, Paths.GlobalsJson(profile));
+        ScriptUnit unit = Parser.ParseScript(source, "OMSAUTO.oms");
+        IrScript compiled = OmsCompiler.Compile(unit, table.AbiId, table, null, new IntrinsicCatalog(table, Contracts),
+            name => name == globals.Name ? globals : null, new List<OmsWarning>());
+        Script script = Sys4Loader.Parse(IrEncoder.Encode(compiled), table, "OMSAUTO.BIN");
+        int mov = table.ByLabel("mov")!.Value;
+        return script.Instructions.Where(instruction => instruction.Opcode == mov && instruction.Args[0].Type == T_GINT
+                                                        && instruction.Args[1].Type == T_IMM)
+            .ToDictionary(instruction => (int)instruction.Args[0].Value, instruction => instruction.Args[1].Value);
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "himegari")]
+    public void OnHimegariAFileLeavesUnit103AsTheSameWithBlockDoesAndNothingElse()
+    {
+        var (linkBase, scripts) = Himegari();
+        GameSession plain = HimegariBoot(scripts, null);
+        ModLinkResult linked = LinkedInOrder(linkBase, DataMod("himegari", "example.tougher-103", "unit103.toml", HimegariFile));
+        GameSession edited = HimegariBoot(scripts, Native(linked, LuaErrorPolicy.Halt));
+
+        Dictionary<int, long> cells = WithBlockCells("himegari", HimegariTable, HimegariWith);
+        Assert.Equal(3, cells.Count);
+        Assert.Equal(cells, Changed(plain.Globals, edited.Globals));
+        Assert.Equal(30, plain.Globals.GetValueOrDefault(Cell("himegari", "unit_experience_reward", 103)));
+        Assert.Equal(plain.GlobalStrings, edited.GlobalStrings);
+        Assert.Equal(plain.GlobalFloats, edited.GlobalFloats);
+    }
+
+    // ------------------------------------------------------------------------------------------------- gate 6
 
     private static void CopyFolder(string from, string to)
     {
@@ -256,20 +311,46 @@ public sealed partial class DataPatchWorkspaceTests
         foreach (string file in Directory.GetFiles(from)) File.Copy(file, Path.Combine(to, Path.GetFileName(file)));
     }
 
-    [Fact]
-    [Trait("Category", "Workspace")]
-    [Trait("Profile", "himegari")]
-    public void TheEditHoldsAtBootAtALoadAndAfterAReturnToTitleAndASaveKeepsNoneOfIt()
+    /// <summary>What gates 6 and 7 need of a game: its install, the opcodes and the build its INIT2 runs, its save
+    /// identity, the unit whose experience reward a file sets with that reward as the boot leaves it, and the place of
+    /// <c>&lt;game&gt;.data.layered</c>.</summary>
+    private sealed record GateGame(string Profile, ModLinkBase Base, Sys4ScriptProvider Scripts, OpcodeTable Table,
+                                   EngineBuild Build, NativeSaveIdentity Identity, int Unit, long Reward, string Layered)
     {
-        var (linkBase, scripts) = Himegari();
-        long own = HimegariBoot(scripts, null).Globals.GetValueOrDefault(Cell("himegari", "unit_experience_reward", 103));
-        Assert.Equal(30, own);
-        int callScript = HimegariTable.ByLabel("call-script")!.Value;
-        uint init2 = scripts.RequireByName("INIT2.BIN").PackedId;
+        public GameSession Boot(Scripting? native)
+            => Profile == "himegari" ? HimegariBoot(Scripts, native) : KamidoriBoot(Scripts, native);
+    }
+
+    private static GateGame Game(string profile)
+    {
+        if (profile == "himegari")
+        {
+            var (himegari, scripts) = Himegari();
+            return new GateGame(profile, himegari, scripts, HimegariTable, EngineBuilds.Age424J, Identity, 103, 30,
+                                "INIT2.BIN@0x180");
+        }
+        var (kamidori, kamidoriScripts) = Kamidori(translated: false);
+        return new GateGame(profile, kamidori, kamidoriScripts, KamidoriTable, EngineBuilds.Age433G, KamidoriIdentity.Value,
+                            761, 10, "INIT2.BIN@0x20d");
+    }
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [InlineData("himegari")]
+    [InlineData("kamidori")]
+    public void TheEditHoldsAtBootAtALoadAndAfterAReturnToTitleAndASaveKeepsNoneOfIt(string profile)
+    {
+        GateGame game = Game(profile);
+        string global = "unit_experience_reward";
+        long own = game.Boot(null).Globals.GetValueOrDefault(Cell(profile, global, game.Unit));
+        Assert.Equal(game.Reward, own);
+        OpcodeTable table = game.Table;
+        int callScript = table.ByLabel("call-script")!.Value;
+        uint init2 = game.Scripts.RequireByName("INIT2.BIN").PackedId;
         // ROOT, as the game's own has it: the prologue calls INIT2, op 0xae ends a load's prologue; then a save to
         // slot 1 right after boot (op 0x1ad, then op 0x19e), and op 0x9, the return to title, which zeroes the banks
         // and loads raw script 0. Script 0 here is a title that calls INIT2 again and exits.
-        Script root = WithId(ScriptAssembler.Assemble(HimegariTable, "ROOT.BIN", new List<(int, Operand[])>
+        Script root = WithId(ScriptAssembler.Assemble(table, "ROOT.BIN", new List<(int, Operand[])>
         {
             (callScript, [new(T_IMM, init2)]),
             (0xae, []),
@@ -277,29 +358,32 @@ public sealed partial class DataPatchWorkspaceTests
             (0x19e, [new(T_GINT, 0x20), new(T_IMM, 1)]),
             (0x9, []),
         }, []), RootId);
-        Script title = WithId(ScriptAssembler.Assemble(HimegariTable, "TITLE.BIN", new List<(int, Operand[])>
+        Script title = WithId(ScriptAssembler.Assemble(table, "TITLE.BIN", new List<(int, Operand[])>
         {
             (callScript, [new(T_IMM, init2)]),
             (0x2, []),
         }, []), 0);
-        Script loader = ScriptAssembler.Assemble(HimegariTable, "LOADER.BIN", new List<(int, Operand[])>
+        Script loader = ScriptAssembler.Assemble(table, "LOADER.BIN", new List<(int, Operand[])>
         {
             (0x1a1, [new(T_LINT, 0), new(T_IMM, 1)]),
             (0x2, []),
         }, []);
-        Script callback = ScriptAssembler.Assemble(HimegariTable, "CALLBACK_LOAD.BIN", new List<(int, Operand[])> { (0x2, []) }, []);
-        var provider = new WithRoot(scripts, root, callback, title);
+        Script callback = ScriptAssembler.Assemble(table, "CALLBACK_LOAD.BIN", new List<(int, Operand[])> { (0x2, []) }, []);
+        var provider = new WithRoot(game.Scripts, root, callback, title);
+        INativeDatStore Saves(string folder)
+            => new SidecarNativeDatStore(new DirectoryNativeDatStore(folder, game.Identity), folder,
+                                         Scripting.StateFileSuffix, currentSidecar: null);
 
-        // The data mod sets unit 103's experience reward; the reader logs it at both boot events of every run.
-        ModLinkResult withMod = LinkedInOrder(linkBase, Reader("himegari", "unit_experience_reward", 103),
-                                              DataMod("himegari", "test.data-a", "a.toml", "[unit.103]\nexperience_reward = 40\n"));
-        ModLinkResult withoutMod = LinkedInOrder(linkBase, Reader("himegari", "unit_experience_reward", 103));
+        // The data mod sets the unit's experience reward; the reader logs it at both boot events of every run.
+        ModLinkResult withMod = LinkedInOrder(game.Base, Reader(profile, global, game.Unit),
+                                              DataMod(profile, "test.data-a", "a.toml", $"[unit.{game.Unit}]\nexperience_reward = 40\n"));
+        ModLinkResult withoutMod = LinkedInOrder(game.Base, Reader(profile, global, game.Unit));
         string[] Run(Script start, ModLinkResult linked, string saves)
         {
             Directory.CreateDirectory(saves);
             Scripting native = Native(linked, LuaErrorPolicy.Halt);
-            var vm = new VirtualMachine(start, HimegariTable, new HeadlessWaits(), provider: provider,
-                                        saves: new SavesAndSettings(store: Store(saves)), scripting: native);
+            var vm = new VirtualMachine(start, table, new HeadlessWaits(), provider: provider,
+                                        saves: new SavesAndSettings(store: Saves(saves)), build: game.Build, scripting: native);
             vm.Run();
             Assert.Equal("exit", vm.HaltReason);
             return Logged(native, "test.reader");
@@ -315,7 +399,8 @@ public sealed partial class DataPatchWorkspaceTests
         // The save made right after boot is the same with and without the mod: the tables lie above the saved prefix,
         // and the file sets no field the game derives a saved value from. Only the time of the save differs.
         NativeSaveComparison comparison = NativeSaveDiff.Compare(
-            new DirectoryNativeDatStore(boot, Identity).LoadNumbered(1)!, new DirectoryNativeDatStore(plainBoot, Identity).LoadNumbered(1)!);
+            new DirectoryNativeDatStore(boot, game.Identity).LoadNumbered(1)!,
+            new DirectoryNativeDatStore(plainBoot, game.Identity).LoadNumbered(1)!);
         Assert.True(comparison.Numbered, comparison.NumberedDecodeError);
         Assert.Empty(comparison.Differences.Where(difference =>
             difference is not { Section: NativeSaveDiff.Metadata, Field: "timestamp" or "play-seconds" }));
@@ -334,53 +419,64 @@ public sealed partial class DataPatchWorkspaceTests
 
     // ------------------------------------------------------------------------------------------------- gate 7
 
-    public static TheoryData<string, string, string> FileProblems => new()
+    public static TheoryData<string, string, string, string> FileProblems => new()
     {
-        // The file's other part, unit 761's max_hp, is valid: a problem anywhere applies nothing.
-        { "[unit.761]\nstats.max_hp = 150\nexperiance_reward = 999\n", "unit.761.experiance_reward", "unit has no field experiance_reward" },
-        { "[unit.761]\nstats.max_hp = 150\n\n[item.5]\ninventory_count = 9\n", "item.5.inventory_count",
+        // The file's other part, the unit's max_hp, is valid: a problem anywhere applies nothing.
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\nexperiance_reward = 999\n", "unit.761.experiance_reward", "unit has no field experiance_reward" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[item.5]\ninventory_count = 9\n", "item.5.inventory_count",
           "item.inventory_count is saved state: a load brings the saved value back, so a file does not set it" },
-        { "[unit.761]\nstats.max_hp = 150\n\n[unit.0x2f9]\nexperience_reward = 999\n", "unit.0x2f9", "a record id is written in decimal: 761" },
-        { "[unit.761]\nstats.max_hp = 150\ndrop_chance.0 = 100\n", "unit.761.drop_chance.0", "column 0 is named: write unit.761.drop_chance.drop_1" },
-        { "[unit.761]\nstats.max_hp = 150\nexperience_reward = \"999\"\n", "unit.761.experience_reward", "takes a whole number, not a string" },
-        { "[unit.761]\nstats.max_hp = 150\n\n[item.12]\nname = \"Lily 한\"\n", "item.12.name",
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[unit.0x2f9]\nexperience_reward = 999\n", "unit.0x2f9", "a record id is written in decimal: 761" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\ndrop_chance.0 = 100\n", "unit.761.drop_chance.0", "column 0 is named: write unit.761.drop_chance.drop_1" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\nexperience_reward = \"999\"\n", "unit.761.experience_reward", "takes a whole number, not a string" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[item.12]\nname = \"Lily 한\"\n", "item.12.name",
+          "a string cell holds text the save can encode (code page 932); U+D55C is not in it" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\nexperiance_reward = 999\n", "unit.103.experiance_reward", "unit has no field experiance_reward" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[skill.5]\nacquired_flag = 1\n", "skill.5.acquired_flag",
+          "skill.acquired_flag is saved state: a load brings the saved value back, so a file does not set it" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[unit.0x67]\nexperience_reward = 999\n", "unit.0x67", "a record id is written in decimal: 103" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\ndrop_chance.0 = 100\n", "unit.103.drop_chance.0",
+          "column 0 is named: write unit.103.drop_chance.drop_1_percent" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\nexperience_reward = \"999\"\n", "unit.103.experience_reward", "takes a whole number, not a string" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[unit.12]\ndisplay_name = \"Lily 한\"\n", "unit.12.display_name",
           "a string cell holds text the save can encode (code page 932); U+D55C is not in it" },
     };
 
     [Theory]
     [Trait("Category", "Workspace")]
-    [Trait("Profile", "kamidori")]
     [MemberData(nameof(FileProblems))]
     public void EachProblemOfAShippedFileIsReportedWithTheContributorTheFileAndThePathAndNothingOfItIsApplied(
-        string text, string path, string reason)
+        string profile, string text, string path, string reason)
     {
-        var (linkBase, scripts) = Kamidori(translated: false);
-        GameSession plain = KamidoriBoot(scripts, null);
-        ModLinkResult linked = LinkedInOrder(linkBase, DataMod("kamidori", "test.bad", "bad.toml", text));
+        GateGame game = Game(profile);
+        GameSession plain = game.Boot(null);
+        ModLinkResult linked = LinkedInOrder(game.Base, DataMod(profile, "test.bad", "bad.toml", text));
         Scripting native = Native(linked, LuaErrorPolicy.Continue);
-        GameSession booted = KamidoriBoot(scripts, native);
+        GameSession booted = game.Boot(native);
 
         Assert.Empty(Changed(plain.Globals, booted.Globals));
         Assert.Equal(plain.GlobalStrings, booted.GlobalStrings);
         string logged = Assert.Single(Logged(native, "test.bad"));
-        Assert.StartsWith("data/bad.toml (kamidori-base tables.lua:apply_boot) failed at kamidori.data.layered at INIT2.BIN@0x20d: "
-                          + $"test.bad data/bad.toml: 1 problem, so nothing of it is applied\n  {path}: {reason}\nstack traceback:", logged);
+        Assert.StartsWith($"data/bad.toml ({profile}-base tables.lua:apply_boot) failed at {profile}.data.layered at {game.Layered}: "
+                          + $"test.bad data/bad.toml: 1 problem, so nothing of it is applied: {path}: {reason}\nstack traceback:", logged);
     }
 
-    [Fact]
+    [Theory]
     [Trait("Category", "Workspace")]
-    [Trait("Profile", "kamidori")]
-    public void UnderHaltAShippedFilesProblemEndsTheBootNamingTheContributorAndItsFile()
+    [InlineData("himegari")]
+    [InlineData("kamidori")]
+    public void UnderHaltAShippedFilesProblemEndsTheBootNamingTheContributorItsFileAndThePath(string profile)
     {
-        var (linkBase, scripts) = Kamidori(translated: false);
-        ModLinkResult linked = LinkedInOrder(linkBase,
-            DataMod("kamidori", "test.bad", "bad.toml", "[unit.761]\nstats.max_hp = 150\nexperiance_reward = 999\n"));
+        GateGame game = Game(profile);
+        ModLinkResult linked = LinkedInOrder(game.Base,
+            DataMod(profile, "test.bad", "bad.toml", $"[unit.{game.Unit}]\nstats.max_hp = 150\nexperiance_reward = 999\n"));
         Scripting native = Native(linked, LuaErrorPolicy.Halt);
         var session = new GameSession();
-        SceneResult result = session.RunScene(scripts.RequireByName("INIT2.BIN"), KamidoriTable, new HeadlessWaits(),
-                                              provider: scripts, build: EngineBuilds.Age433G, scripting: native);
-        Assert.Equal("lua-error: test.bad data/bad.toml (kamidori-base tables.lua:apply_boot) at kamidori.data.layered "
-                     + "at INIT2.BIN@0x20d: test.bad data/bad.toml: 1 problem, so nothing of it is applied", result.Halt);
-        Assert.NotEqual(150, session.Globals.GetValueOrDefault(0x2c1524));
+        SceneResult result = session.RunScene(game.Scripts.RequireByName("INIT2.BIN"), game.Table, new HeadlessWaits(),
+                                              provider: game.Scripts, build: game.Build, scripting: native);
+        // The halt reason is the error's first line, which carries the first problem's path.
+        Assert.Equal($"lua-error: test.bad data/bad.toml ({profile}-base tables.lua:apply_boot) at {profile}.data.layered "
+                     + $"at {game.Layered}: test.bad data/bad.toml: 1 problem, so nothing of it is applied: "
+                     + $"unit.{game.Unit}.experiance_reward: unit has no field experiance_reward", result.Halt);
+        Assert.NotEqual(150, session.Globals.GetValueOrDefault(Cell(profile, "unit_base_stats", game.Unit, "max_hp")));
     }
 }

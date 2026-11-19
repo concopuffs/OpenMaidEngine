@@ -597,17 +597,18 @@ installed games.
 | 2. Link | `DataLinkTests` (each case that stops the load, with a top-level `error()` in every owner's Lua that only running it would show); `DataDocumentTests` (the syntax error with its line, the date, the integer past 2^53, the bounds); `DataPackageTests` (`[[data]]` in a library or a native package, an unnamed file under `data/`, the 64 files and 16 MiB) (core) |
 | 3. Order | `DataDeliveryTests.TwoDataModsAndALuaModRunInTheReportsOrderAndTheLoadOrderDecidesWhichValueHolds` and `APriorityPutsAFileBeforeTheModsLoadedEarlier` (core); `DataPatchWorkspaceTests.AHandlerAtDataReadyFindsEveryFileAppliedWhateverTheLoadOrder` (Workspace, Himegari) |
 | 4. Attribution | `DataDeliveryTests.TheTraceAndAWatchNameTheContributorAndItsFile` and `ThreeFailuresOfOneFileSwitchOffThatFileAndLeaveAnotherModsFileDelivered` (core) |
-| 5. Same cells | `DataPatchWorkspaceTests.TheSpecsFileShippedByAModLeavesUnit761AsTheWithBlockDoesAndNothingElse` (Workspace, both Kamidori installs), with M0's `TheGate6WithBlockCompilesToTheCellsTheApplierWrites` |
-| 6. Loads | `DataPatchWorkspaceTests.TheEditHoldsAtBootAtALoadAndAfterAReturnToTitleAndASaveKeepsNoneOfIt` (Workspace, Himegari) |
-| 7. Errors | `DataPatchWorkspaceTests.EachProblemOfAShippedFileIsReportedWithTheContributorTheFileAndThePathAndNothingOfItIsApplied` (six cases) and `UnderHaltAShippedFilesProblemEndsTheBootNamingTheContributorAndItsFile` (Workspace, Kamidori); `DataDeliveryTests.UnderHaltADeliverysErrorEndsTheRunNamingTheContributorAndItsFile` (core) |
+| 5. Same cells | `DataPatchWorkspaceTests.TheSpecsFileShippedByAModLeavesUnit761AsTheWithBlockDoesAndNothingElse` (Workspace, both Kamidori installs), with M0's `TheGate6WithBlockCompilesToTheCellsTheApplierWrites`; on Himegari, whose examples have no `with` block, `OnHimegariAFileLeavesUnit103AsTheSameWithBlockDoesAndNothingElse` compiles one in the test |
+| 6. Loads | `DataPatchWorkspaceTests.TheEditHoldsAtBootAtALoadAndAfterAReturnToTitleAndASaveKeepsNoneOfIt` (Workspace, both games) |
+| 7. Errors | `DataPatchWorkspaceTests.EachProblemOfAShippedFileIsReportedWithTheContributorTheFileAndThePathAndNothingOfItIsApplied` (six cases on each game) and `UnderHaltAShippedFilesProblemEndsTheBootNamingTheContributorItsFileAndThePath` (Workspace, both games); `DataDeliveryTests.UnderHaltADeliverysErrorEndsTheRunNamingTheContributorAndItsFile` (core) |
 | 9. Not shaped by records | `DataDeliveryTests.TheOwnerGetsTheContributionAsAReadOnlyViewMadeOnceForTheSession`: the kind is a list of strings and the stack has no base mod (core) |
 | 10. Size | §10.1 |
 | 13. Layers | `ProjectBoundaryTests.OnlyTheModsProjectNamesTheTomlLibrary` (core) |
 
 - **Gate 6's return to title** runs op `0x9` into a synthetic script 0 that calls INIT2, as the game's root does in
   its prologue (M0's load test, §8). The installed SYSTEM4 is not run.
-- **One game each.** Gates 3 and 6 run on Himegari, 5, 7 and 10 on Kamidori. The engine code is the same; gate 11
-  (milestone 2) runs both base mods on both games.
+- **Both games.** Gates 5, 6 and 7 run on both games since the corrections after M1's review (2026-11-18); gate 3
+  runs on Himegari and gate 10 on Kamidori, whose item table is the largest. Gate 11 (milestone 2) runs both base mods
+  on both games.
 - **Old names** (§9.1): `tools/test_base_mod_build.py` (the lint, `exports.txt`, the record map and the rename rule,
   on a synthetic registry) and `DataPatchTests.AnOldNameWritesTheCellItsCurrentNameDoesAndIsLoggedOnceForEachFile`
   and `AFileThatNamesOneCellByAnOldNameAndItsCurrentOneIsRefusedWhole` (on a synthetic record map).
@@ -624,8 +625,10 @@ installed games.
 - **An integer's problem names its line, not its path,** since it is found in the syntax tree. The guide says so.
 - **§4.2's log example** gives the place as `INIT2@0x20d`; the engine prints `INIT2.BIN@0x20d`, as every hook's
   place. The guide gives the printed form.
-- **The halt reason has the error's first line** (§4.2): for a `<game>.tables` file that is "N problems, so nothing of
-  it is applied", and the paths are in `diagnostics/lua.log`, as for any Lua error.
+- **The halt reason has the error's first line** (§4.2). For a `<game>.tables` file that was "N problems, so nothing
+  of it is applied", with no path. After M1's review the library puts the first problem on that line
+  ("…, so nothing of it is applied: unit.761.x: unit has no field x"), so the notice and the halt reason name a path;
+  the rest follow in `diagnostics/lua.log`.
 
 ### 10.4 What M1 settled beside §4.2
 

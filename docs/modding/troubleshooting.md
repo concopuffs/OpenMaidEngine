@@ -461,7 +461,7 @@ does not require the mod that declares it, or the handler is not a top-level fun
 
 **"error MOD: data/FILE.toml (OWNER FILE:FUNCTION) failed at EVENT …" in `diagnostics/lua.log`.** The owner's handler
 failed on your file; the message is the owner's. For `<game>.tables` it reads "MOD FILE: N problems, so nothing of it
-is applied", then the first 20 problems by path, each with what is wrong ([data-files.md](data-files.md), "The record
+is applied: PATH: REASON" with the first problem by path, then the next ones up to 20, each with what is wrong ([data-files.md](data-files.md), "The record
 tables"); the file is passed over for the rest of the session, with no second error. For another kind, after three
 failures in a row the file is not applied again that session; other files go on. **"… ran out of its instruction budget"**: the owner's handler ran past the delivery's budget
 ([data-files.md](data-files.md), "Delivery").
