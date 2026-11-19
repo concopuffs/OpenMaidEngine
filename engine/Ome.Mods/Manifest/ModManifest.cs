@@ -34,6 +34,15 @@ public sealed record ModKindEvent(int Index, string Event, ModHandlerRef Handler
 /// events its documents are delivered at.</summary>
 public sealed record ModKind(int Index, string Kind, string? Description, IReadOnlyList<ModKindEvent> At)
 {
+    /// <summary>The folder of the shapes.</summary>
+    public const string ShapesFolder = "shapes";
+
+    /// <summary>The kind's shape (spec §7): a path under <c>shapes/</c>, or null for a kind its owner checks alone.</summary>
+    public string? Shape { get; init; }
+
+    /// <summary>The shape's path in the package, as reports print it: <c>shapes/tables.schema.json</c>.</summary>
+    public string? ShapePath => Shape == null ? null : $"{ShapesFolder}/{Shape}";
+
     /// <summary>How reports name the entry: <c>accepts[0] example.lists</c>.</summary>
     public string Describe() => $"accepts[{Index}] {Kind}";
 }

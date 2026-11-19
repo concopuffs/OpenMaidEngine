@@ -420,13 +420,17 @@ public static partial class ManifestReader
     }
 
     /// <summary>Why a <c>[[data]]</c> file is not a path under <c>data/</c> (plan §4.2), or null.</summary>
-    public static string? DataPathProblem(string file)
+    public static string? DataPathProblem(string file) => PathProblem(file, ModDataEntry.Folder, ".toml");
+
+    /// <summary>Why <paramref name="file"/> is not a path under <paramref name="folder"/> ending in
+    /// <paramref name="extension"/>, or null: <c>data/</c>'s rule (plan §4.2), which <c>shapes/</c> shares (§6.2).</summary>
+    public static string? PathProblem(string file, string folder, string extension)
     {
-        if (file.Contains('\\')) return "has a backslash; a path under data/ uses forward slashes";
+        if (file.Contains('\\')) return $"has a backslash; a path under {folder}/ uses forward slashes";
         if (file.Any(char.IsControl)) return "has a control character";
         if (file.Split('/').Any(part => part is "" or "." or ".."))
-            return "is not a path under data/: no part of it is empty, '.' or '..'";
-        if (!file.EndsWith(".toml", StringComparison.OrdinalIgnoreCase)) return "is not a .toml file";
+            return $"is not a path under {folder}/: no part of it is empty, '.' or '..'";
+        if (!file.EndsWith(extension, StringComparison.OrdinalIgnoreCase)) return $"is not a {extension} file";
         return null;
     }
 
@@ -439,13 +443,10 @@ public static partial class ManifestReader
         if (kind.Length > 0 && !DottedNamePattern().IsMatch(kind))
             entry.Problems.Add($"{entry.Path}kind: '{kind}' is not a dotted name (a kind is named as an event is: "
                                + "example.lists)");
-        // Spec §7: a shape is checked from milestone 3. Taking one now and checking nothing would skip a check unsaid.
-        if (entry.Has("shape"))
-        {
-            entry.Consume("shape");
-            entry.Problems.Add($"{entry.Path}shape: shape checks come with data patches milestone 3; this engine does "
-                               + "not read a shape yet");
-        }
+        // Spec §7, plan §6.2: a shape is a file under shapes/, which the layout checks is there and the link reads.
+        string? shape = entry.String("shape");
+        if (shape != null && PathProblem(shape, ModKind.ShapesFolder, ".json") is { } shapeWhy)
+            entry.Problems.Add($"{entry.Path}shape: '{shape}' {shapeWhy}");
         var at = new List<ModKindEvent>();
         int place = 0;
         foreach (TableReader item in entry.TableArray("at"))
@@ -472,7 +473,7 @@ public static partial class ManifestReader
                      .Where(group => group.Count() > 1))
             entry.Problems.Add($"{entry.Path}at: the event {repeated.Key} is named {repeated.Count()} times");
         entry.RejectUnknown();
-        return new ModKind(index, kind, description, at);
+        return new ModKind(index, kind, description, at) { Shape = shape };
     }
 
     private static void CheckReference(TableReader table, string key, string other, string self)

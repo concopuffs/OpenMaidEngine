@@ -71,7 +71,7 @@ public static class ModLuaLinker
     /// <summary>A kind a mod accepts (data patches spec §5.2), checked: its events that this install raises, each with
     /// the owner's handler there, and those it does not raise, with the reason.</summary>
     private sealed record AcceptedKind(string Owner, ModKind Kind, IReadOnlyList<(ModKindEvent At, DeclaredEvent Event)> Raised,
-                                       IReadOnlyList<(ModKindEvent At, UnavailableEvent Missing)> Unraised);
+                                       IReadOnlyList<(ModKindEvent At, UnavailableEvent Missing)> Unraised, DataShape? Shape);
 
     /// <summary>An event the link read, with its place when it is raised at a point.</summary>
     /// <summary>A declared event and, unless Lua raises it, the instruction each of its points names.</summary>
@@ -340,8 +340,26 @@ public static class ModLuaLinker
                     if (missing != null) unraised.Add((at, missing));
                     else raised.Add((at, declared[at.Event]));
                 }
+                // Spec §7: the kind's shape, read whether or not a file of the kind is in the stack, so that a broken
+                // one is its owner's error at once. The layout checked the file is there.
+                DataShape? shape = null;
+                if (kind.Shape != null && mod.Layout.Shapes.FirstOrDefault(file => file.Path == kind.Shape) is { } shapeFile)
+                {
+                    DataShapeRead read;
+                    try
+                    {
+                        read = DataShape.Read(mod.ReadText(shapeFile.File));
+                    }
+                    catch (ModPackageException error)
+                    {
+                        read = new DataShapeRead(null, [error.Message]);
+                    }
+                    foreach (string problem in read.Problems) Error(null, $"{where}: {kind.ShapePath}: {problem}");
+                    shape = read.Shape;
+                    failed |= shape == null;
+                }
                 if (failed) brokenKinds.Add(kind.Kind);
-                else kinds[kind.Kind] = new AcceptedKind(mod.Id, kind, raised, unraised);
+                else kinds[kind.Kind] = new AcceptedKind(mod.Id, kind, raised, unraised, shape);
             }
             // A base mod is in the session with no Lua of its own: the accessors of the mods that require it read its
             // layout (spec §9.1, §9.3).
@@ -568,6 +586,23 @@ public static class ModLuaLinker
                 if (read.ProblemCount > read.Problems.Count)
                     Error($"{where}: and {read.ProblemCount - read.Problems.Count} more problems");
                 if (read.Document is not { } document) continue;
+                // Spec §7: against the kind's shape, with each problem's path, line and reason; no code runs.
+                if (kind.Shape is { } shape)
+                {
+                    DataShapeResult shaped = DataShapeCheck.Check(shape, read);
+                    if (shaped.StepLimit is { } limit)
+                    {
+                        report.Add(ModReportClass.Error, kind.Owner, null,
+                                   $"{kind.Kind.Describe()}: {kind.Kind.ShapePath}: the shape takes more than {limit:N0} steps "
+                                   + $"on {mod.Id} {where} ({DataShapeCheck.StepsPerValue} for each of its "
+                                   + $"{document.Values:N0} values and {DataShapeCheck.StepsBase:N0}), so it cannot be checked");
+                        continue;
+                    }
+                    foreach (DataProblem problem in shaped.Problems) Error(problem.Describe(where));
+                    if (shaped.ProblemCount > shaped.Problems.Count)
+                        Error($"{where}: and {shaped.ProblemCount - shaped.Problems.Count} more problems");
+                    if (!shaped.Ok) continue;
+                }
                 var requires = mod.Manifest.Requires.Select(requirement => requirement.Id).Where(luaIds.Contains).ToList();
                 found.Add((new ModContribution(entry.Kind, kind.Owner, mod.Id, where, document.Root, document.Values,
                                                kind.Unraised.Select(pair => pair.At.Event).ToList(), requires),

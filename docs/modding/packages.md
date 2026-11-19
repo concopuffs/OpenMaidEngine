@@ -21,6 +21,7 @@ An Open Maid Pack (OMP) is one mod. It comes in two forms that load identically:
 ├── events/         game event declarations (NAME.toml), for a mod that declares events (format version 3; lua.md)
 ├── layout/         a game's base mod only: the names of its cells (format version 3)
 ├── data/           data files (NAME.toml, subfolders allowed), each named by a [[data]] entry (format version 4; data-files.md)
+├── shapes/         for a mod that defines a kind: its shapes (NAME.json), each named by an [[accepts]] shape (format version 4)
 ├── README.md       optional
 └── LICENSE         optional
 ```
@@ -86,6 +87,7 @@ priority = 0                         # optional, as a hook's
 [[accepts]]                          # format version 4; repeatable: a kind this mod defines (data-files.md)
 kind = "example.lists"
 description = "Lists of names."
+shape = "lists.schema.json"          # optional: a file under shapes/ the link checks the kind's files against
 
 [[accepts.at]]                       # one or more: an event the kind's files are delivered at
 event = "example.lists.ready"
@@ -100,9 +102,9 @@ version 2 loader still reads. A version 1 package with any of these, or without 
 `omp = 3` adds the `[lua]` table, `[[hooks]]`, the `lua/` folder and the `extended` target ([lua.md](lua.md)); a
 version 3 loader still reads versions 1 and 2. A package with Lua and an earlier version, or with Lua and
 `target = "native"`, is an error.
-`omp = 4` adds `[[data]]`, `[[accepts]]` and the `data/` folder ([data-files.md](data-files.md)); a version 4 loader
-still reads versions 1 to 3. In a package of an earlier version, a `data/` folder is outside the layout: it is
-ignored and reported as a note. A package with data files targets `extended`, as one with Lua does.
+`omp = 4` adds `[[data]]`, `[[accepts]]` and the `data/` and `shapes/` folders ([data-files.md](data-files.md)); a
+version 4 loader still reads versions 1 to 3. In a package of an earlier version, a `data/` or `shapes/` folder is
+outside the layout: it is ignored and reported as a note. A package with data files targets `extended`, as one with Lua does.
 
 ### Identity
 
@@ -248,6 +250,10 @@ entry with its kind. A file that no entry names is an error, and so is an entry 
 names at most 64 data files, and a file is at most 16 MiB. A data file needs no Lua of its own: the mod that accepts
 its kind applies it. A package with `data/` is never presentation only, since what it holds changes what the game
 stores. See [data-files.md](data-files.md).
+
+`shapes/` (format version 4) holds the shapes of the kinds a mod defines: JSON files, in subfolders if you like, each
+named by an `[[accepts]] shape`, at most 4 MiB each. A file that no kind names is an error, as in `data/`. See
+[data-files.md](data-files.md), "Shapes".
 
 ### Base mods: `layout/`
 

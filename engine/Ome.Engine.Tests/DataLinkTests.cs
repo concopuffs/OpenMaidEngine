@@ -400,6 +400,101 @@ public sealed class DataLinkTests : IDisposable
         Assert.Equal("  and 6 more shared paths", kind[^1]);
     }
 
+    // ------------------------------------------------------------------------------------------- shapes (spec §7)
+
+    /// <summary>test.lists' shape: a list of names and a table of whole numbers.</summary>
+    private const string ListsShape = """
+        {
+          "$schema": "http://json-schema.org/draft-07/schema#",
+          "type": "object",
+          "properties": {
+            "names": { "type": "array", "items": { "type": "string" } },
+            "t": { "type": "object", "properties": { "k": { "type": "integer" }, "j": { "type": "boolean" },
+                   "old": { "type": "null", "description": "t.old is kept by the game: write k" } },
+                   "additionalProperties": false }
+          },
+          "additionalProperties": false
+        }
+        """;
+
+    /// <summary>The owner with test.lists' shape, whose Lua raises an error at its top level as <see cref="Owner"/>'s.</summary>
+    private ModPackage ShapedOwner(string shape = ListsShape)
+        => Mod("test.owner", LuaTable + """
+            [[accepts]]
+            kind = "test.lists"
+            description = "Lists of names."
+            shape = "lists.schema.json"
+
+            [[accepts.at]]
+            event = "test.owner.award"
+            handler = "lists.lua:apply"
+
+            """, new()
+        {
+            ["events/owner.toml"] = OwnerEvents, ["lua/lists.lua"] = NeverAtLink + "function apply(event, contribution) end",
+            ["shapes/lists.schema.json"] = shape,
+        });
+
+    [Fact]
+    public void ADocumentThatPassesItsShapeIsDelivered()
+    {
+        ModLinkResult result = Link(ShapedOwner(), Contributor("test.a", "names = [\"x\"]\n[t]\nk = 1\nj = true\n"));
+        Assert.True(result.Succeeded, result.Report.Render());
+        Assert.Equal(["data/a.toml"], result.Lua.Stack.ContributionList.Select(found => found.File));
+        Assert.Single(result.Lua.Plan.Sites["ADDEXP"].Single().Handlers);
+    }
+
+    [Fact]
+    public void ADocumentThatFailsItsShapeStopsTheLinkWithTheContributorTheFileTheLineThePathAndTheNearestNames()
+    {
+        // Gate 12 at the link: no mod code has run, since the owner's Lua raises at its top level.
+        ModLinkResult result = Link(ShapedOwner(), Contributor("test.a", "names = [\"x\", 2]\n\n[t]\nkk = 1\nold = 3\n"));
+        Assert.False(result.Succeeded);
+        var stops = result.Report.Lines.Where(line => line.Stops).ToList();
+        Assert.Equal([
+            "data/a.toml:1: names[2]: takes a string, not 2",
+            "data/a.toml:4: t.kk: no such key; the nearest names here are k and j",
+            "data/a.toml:5: t.old: t.old is kept by the game: write k",
+        ], stops.Select(line => line.Message));
+        Assert.All(stops, line => Assert.Equal(["test.a"], line.Mods));
+        Assert.Empty(result.Lua.Stack.ContributionList);
+        Assert.DoesNotContain(result.Report.Lines, line => line.Message.Contains("never at link", StringComparison.Ordinal));
+
+        // Past the first 20 problems, the rest are counted.
+        string many = "[t]\n" + string.Concat(Enumerable.Range(0, 25).Select(k => $"x{k} = 1\n"));
+        Stop(Link(ShapedOwner(), Contributor("test.b", many)), "data/a.toml: and 5 more problems");
+    }
+
+    [Theory]
+    [InlineData("""{ "type": "object", "required": ["names"] }""", "#/required: the keyword required is outside the shape subset")]
+    [InlineData("""{ "$ref": "#/definitions/none" }""", "#/$ref: names no definition (#/definitions/none)")]
+    [InlineData("not json", "line 1: not JSON")]
+    public void ABrokenShapeIsItsOwnersErrorAndStopsTheKindWithoutALineForEachContributor(string shape, string problem)
+    {
+        ModLinkResult result = Link(ShapedOwner(shape), Contributor("test.a", "names = [\"x\"]\n"));
+        ModReportLine line = Stop(result, problem);
+        Assert.Equal(["test.owner"], line.Mods);
+        Assert.StartsWith("accepts[0] test.lists: shapes/lists.schema.json: ", line.Message);
+        Assert.DoesNotContain(result.Report.Lines, other => other.Mods.Contains("test.a"));
+
+        // Without a contributor too: the shape is read at the link whether or not a file of its kind is there.
+        Stop(Link(ShapedOwner(shape)), problem);
+    }
+
+    [Fact]
+    public void AShapeThatTakesMoreThanItsStepsIsItsOwnersError()
+    {
+        const string costly = """
+            { "$ref": "#/definitions/deep",
+              "definitions": { "deep": { "oneOf": [ { "$ref": "#/definitions/deep2" }, { "$ref": "#/definitions/deep2" } ] },
+                               "deep2": { "type": "object", "additionalProperties": { "$ref": "#/definitions/deep" } } } }
+            """;
+        ModLinkResult result = Link(ShapedOwner(costly), Contributor("test.a", "a.b.c.d.e.f.g.h.i.j.k.l.m.n.o = 1\n"));
+        ModReportLine line = Stop(result, "the shape takes more than 100,064 steps on test.a data/a.toml");
+        Assert.Equal(["test.owner"], line.Mods);
+        Assert.Empty(result.Lua.Stack.ContributionList);
+    }
+
     // ------------------------------------------------------------------------------------------- the cache
 
     [Fact]

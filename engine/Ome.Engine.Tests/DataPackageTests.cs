@@ -116,8 +116,11 @@ public sealed class DataPackageTests : IDisposable
                 + "[[accepts]]\nkind = \"a.kind\"\n[[accepts.at]]\nevent = \"a.e\"\nhandler = \"a.lua:f\"",
                 "accepts: [[accepts]] needs a [lua] table")]
     [InlineData("omp = 4\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"kamidori\"\ntarget = \"extended\"\n"
-                + "[lua]\napi = 1\n[[accepts]]\nkind = \"a.kind\"\nshape = \"a.schema.json\"\n[[accepts.at]]\nevent = \"a.e\"\nhandler = \"a.lua:f\"",
-                "accepts[0].shape: shape checks come with data patches milestone 3")]
+                + "[lua]\napi = 1\n[[accepts]]\nkind = \"a.kind\"\nshape = \"../a.schema.json\"\n[[accepts.at]]\nevent = \"a.e\"\nhandler = \"a.lua:f\"",
+                "accepts[0].shape: '../a.schema.json' is not a path under shapes/")]
+    [InlineData("omp = 4\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"kamidori\"\ntarget = \"extended\"\n"
+                + "[lua]\napi = 1\n[[accepts]]\nkind = \"a.kind\"\nshape = \"a.schema.toml\"\n[[accepts.at]]\nevent = \"a.e\"\nhandler = \"a.lua:f\"",
+                "accepts[0].shape: 'a.schema.toml' is not a .json file")]
     [InlineData("omp = 4\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"kamidori\"\ntarget = \"extended\"\n"
                 + "[lua]\napi = 1\n[[accepts]]\nkind = \"a.kind\"", "accepts[0].at: a kind is delivered at one event at least")]
     [InlineData("omp = 4\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"kamidori\"\ntarget = \"extended\"\n"
@@ -206,6 +209,62 @@ public sealed class DataPackageTests : IDisposable
         else tree[path] = text;
         var error = Assert.Throws<ModPackageException>(() => ModPackage.Open(WriteFolder(tree)));
         Assert.Contains(error.Problems, problem => problem.Contains(reason, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void AKindsShapeIsUnderShapesAndTheLayoutKeepsIt()
+    {
+        // Spec §7, plan §6.2: the manifest names it, and the link reads it (DataLinkTests).
+        using ModPackage package = ModPackage.Open(WriteFolder(new Dictionary<string, string>
+        {
+            ["manifest.toml"] = Owner.Replace("description = \"Lists of names.\"",
+                                              "description = \"Lists of names.\"\nshape = \"lists/names.schema.json\""),
+            ["shapes/lists/names.schema.json"] = "{ \"type\": \"object\" }",
+            ["data/own.toml"] = "names = []",
+            ["lua/lists.lua"] = "function apply() end function apply_later() end",
+        }));
+        Assert.Equal("lists/names.schema.json", Assert.Single(package.Manifest.Accepts).Shape);
+        Assert.Equal("shapes/lists/names.schema.json", Assert.Single(package.Manifest.Accepts).ShapePath);
+        ModShapeFile shape = Assert.Single(package.Layout.Shapes);
+        Assert.Equal(("lists/names.schema.json", "shapes/lists/names.schema.json"), (shape.Path, shape.File.Path));
+        Assert.Empty(package.Layout.Notes);
+    }
+
+    [Theory]
+    [InlineData("shapes/extra.json", "{}", "'shapes/extra.json' is not named by an [[accepts]] shape, so it would do nothing")]
+    [InlineData("shapes/names.schema.json", null, "accepts[0].shape: the package has no shapes/names.schema.json")]
+    [InlineData("shapes/notes.txt", "x", "'shapes/notes.txt': shapes/ holds *.json shapes; this path is not a .json file")]
+    public void LayoutProblemsOfShapesAreRejectedWithTheirReason(string path, string? text, string reason)
+    {
+        var tree = new Dictionary<string, string>
+        {
+            ["manifest.toml"] = Owner.Replace("description = \"Lists of names.\"",
+                                              "description = \"Lists of names.\"\nshape = \"names.schema.json\""),
+            ["shapes/names.schema.json"] = "{}",
+            ["data/own.toml"] = "names = []",
+            ["lua/lists.lua"] = "function apply() end function apply_later() end",
+        };
+        if (text == null) tree.Remove(path);
+        else tree[path] = text;
+        var error = Assert.Throws<ModPackageException>(() => ModPackage.Open(WriteFolder(tree)));
+        Assert.Contains(error.Problems, problem => problem.Contains(reason, StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void BeforeFormatFourAShapesFolderIsANoteAndALibraryHoldsNone()
+    {
+        using (ModPackage package = ModPackage.Open(WriteFolder(new Dictionary<string, string>
+               {
+                   ["manifest.toml"] = Head.Replace("omp = 4", "omp = 3"),
+                   ["shapes/a.json"] = "{}",
+               }, "old")))
+            Assert.Contains("'shapes/a.json' is outside the package layout and is ignored", package.Layout.Notes);
+        var error = Assert.Throws<ModPackageException>(() => ModPackage.Open(WriteFolder(new Dictionary<string, string>
+        {
+            ["manifest.toml"] = "omp = 4\nid = \"a.lib\"\nname = \"x\"\nversion = \"1.0.0\"\n",
+            ["shapes/a.json"] = "{}",
+        }, "library")));
+        Assert.Contains(error.Problems, problem => problem.Contains("'shapes/a.json': a package without [game] holds no shapes/"));
     }
 
     [Fact]

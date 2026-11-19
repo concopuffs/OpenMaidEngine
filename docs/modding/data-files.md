@@ -157,6 +157,7 @@ A mod with Lua and a `[game]` table can define a kind. A library cannot, as it d
 [[accepts]]
 kind = "example.lists"                 # named as an event is; one mod of a stack declares it
 description = "Lists of names."
+shape = "lists.schema.json"            # optional: a file under shapes/ that the link checks each file against
 
 [[accepts.at]]                         # one or more
 event = "example.lists.ready"          # an event the owner could subscribe to: its own, or a required mod's
@@ -170,8 +171,9 @@ handler = "lists.lua:apply"            # a file under lua/, then a top-level fun
 - **A kind is unique in a stack.** Two mods that declare one kind are a hard conflict.
 - **A kind is part of its owner's API.** Adding to a format is a minor version of the owner; taking a field away,
   or changing what a value means, is a major one.
-- **`shape`** (a description the link checks a file against) is not read yet. A manifest that gives one is refused
-  until the engine checks shapes.
+- **`shape`** names a file under `shapes/` that describes the kind's files (below, "Shapes"). The link checks each
+  file of the kind against it before any code runs, so a mistake it describes stops the load with the file's line.
+  Without a shape, only the owner's handler checks a file, at its first delivery.
 
 ### The handler
 
@@ -197,6 +199,60 @@ end
   handler can tell a file it has seen.
 - **An integer is a Lua number,** exact up to 2^53 in size.
 
+## Shapes
+
+A shape is a JSON file under the owner's `shapes/`, in a small part of JSON Schema (draft-07), so that an editor that
+checks TOML against JSON Schema can read the same file:
+
+```json
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "properties": {
+    "names": { "type": "array", "items": { "type": "string" }, "description": "The names, in order." },
+    "level": { "type": "integer", "minimum": 1, "maximum": 99 },
+    "seen": { "type": "null", "description": "seen is kept by the game: a file does not set it" },
+    "by_id": { "$ref": "#/definitions/by_id" }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "by_id": {
+      "type": "object",
+      "x-ome-decimal-keys": { "minimum": 1, "maximum": 999 },
+      "additionalProperties": { "type": "string" }
+    }
+  }
+}
+```
+
+- **The keywords:** `type`, `properties`, `additionalProperties`, `items` (one schema for every element), `enum`
+  (strings, numbers and booleans), `minimum` and `maximum` (inclusive), `oneOf`, `description`, and `$ref`, which
+  names `#/definitions/NAME` of the same file and takes only a `description` beside it. `$schema` and `definitions`
+  are at the top. `integer` takes `5.0` too, as JSON Schema has it.
+- **`x-ome-decimal-keys`** is the engine's own: an object's keys that `properties` does not name are whole numbers in
+  decimal, with no sign and no leading zero, from `minimum` to `maximum`, and `additionalProperties` checks their
+  values. An editor passes over a keyword it does not know, so give the values under `additionalProperties`, which it
+  does check.
+- **A key the format does not offer** is `{ "type": "null", "description": WHY }`. TOML has no null, so no value
+  passes, and the link's error is the description: `data/a.toml:3: seen: seen is kept by the game: a file does not
+  set it`. Such a key is never suggested as a nearest name.
+- **Anything else is an error of the owner,** at the link: a keyword outside this list (`required`, `pattern`,
+  `x-taplo`, …), a `$ref` to another file or to no definition, a chain of `$ref` that comes back to itself, a range
+  whose minimum is above its maximum, or a file that is not JSON. The report line names the owner, the shape and the
+  place in it as a JSON pointer: `accepts[0] example.lists: shapes/lists.schema.json: #/properties/level/pattern: the
+  keyword pattern is outside the shape subset (…)`. The kind's files are then not delivered.
+- **The files.** `shapes/` holds `*.json` files, at paths with forward slashes and no empty, `.` or `..` part, each at
+  most 4 MiB. Each one is named by an `[[accepts]] shape`, or it is an error, since it would do nothing.
+- **An error of a file** names its contributor, then the file, the line, the path and the reason:
+  `data/a.toml:4: t.kk: no such key; the nearest names here are k and j`. The nearest names are the names the shape
+  offers there that are closest in spelling; with none close, the error lists the names there. A key that should be
+  a whole number says how: `by_id.0x10: a key here is written in decimal: 16`. The link reports the first 20 problems
+  of a file and counts the rest.
+- **What a shape cannot say, the owner still checks.** A shape describes a document's keys and values; the owner's
+  handler checks the rest at the first delivery, and everything when its kind has no shape.
+- **Work.** A check applies at most 64 schemas for each value of a file, and 100,000 more. A shape like the base mods'
+  applies four to six, so only a shape built to cost time reaches the bound, which is its owner's error.
+
 ## What the link checks
 
 The link checks every data file before any mod code runs, and so do `omp check` and `omp build`
@@ -206,13 +262,15 @@ The link checks every data file before any mod code runs, and so do `omp check` 
 - the contributor does not require the kind's owner;
 - the file does not read (a syntax error or a key given twice, with its line), holds a value the owner's Lua cannot
   hold, or passes a bound;
+- the file does not match its kind's shape (above), with its line, the path and the nearest names;
 - none of the kind's events is raised in this install (below).
 
 A file under `data/` that no entry names, a file past 16 MiB, and `[[data]]` in a package without `[game]` or with
 `target = "native"` stop the load sooner, when the package is opened.
 
 The owner's own mistakes are its link errors: a kind two mods declare (a hard conflict naming both), an `at` event no
-mod declares or the owner cannot subscribe to, and a handler that is not a top-level function.
+mod declares or the owner cannot subscribe to, a handler that is not a top-level function, and a shape that is
+broken or uses a keyword outside the subset.
 
 **An event this install does not raise.** A base mod declares its events over the game's scripts, and an event is not
 raised when one of its points does not bind: another revision of a script, or a point the game does not name. Such

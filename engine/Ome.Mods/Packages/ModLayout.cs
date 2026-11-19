@@ -40,6 +40,10 @@ public sealed record ModEventFile(string Name, PackageEntry File);
 /// <summary>A data file under <c>data/</c> and the <c>[[data]]</c> entry that names it (data patches spec §5.1).</summary>
 public sealed record ModDataFile(ModDataEntry Entry, PackageEntry File);
 
+/// <summary>A shape under <c>shapes/</c> (data patches spec §7), by its path inside <c>shapes/</c>, which an
+/// <c>[[accepts]] shape</c> names.</summary>
+public sealed record ModShapeFile(string Path, PackageEntry File);
+
 /// <summary>A base mod's generated layout (Lua scripting spec §9.1): <c>layout/globals.json</c>, the patch points'
 /// copy <c>layout/points.json</c>, and the exported names <c>layout/exports.txt</c>, which the engine does not read.</summary>
 public sealed record ModLayoutFiles(PackageEntry Globals, PackageEntry? Points, PackageEntry? Exports);
@@ -47,10 +51,10 @@ public sealed record ModLayoutFiles(PackageEntry Globals, PackageEntry? Points, 
 /// <summary>
 /// A package's files sorted into the content kinds of spec §3.2 and §4, and the localization spec's <c>text/</c> and
 /// <c>fonts/</c> (§9.1, format version 2), the Lua scripting spec's <c>lua/</c>, <c>events/</c> and a base mod's
-/// <c>layout/</c> (§6.1, §9.1, format version 3), and the data patches spec's <c>data/</c> (§5.1, format version 4).
-/// Directories are matched case-insensitively. Files outside the layout are kept as notes (spec §3.2), as a
-/// <c>data/</c> folder is before format version 4; a wrongly typed or nested file inside a content directory is an
-/// error.
+/// <c>layout/</c> (§6.1, §9.1, format version 3), and the data patches spec's <c>data/</c> and <c>shapes/</c> (§5.1,
+/// §7, format version 4). Directories are matched case-insensitively. Files outside the layout are kept as notes (spec
+/// §3.2), as a <c>data/</c> or <c>shapes/</c> folder is before format version 4; a wrongly typed or nested file inside a
+/// content directory is an error.
 /// </summary>
 public sealed record ModLayout(
     IReadOnlyList<ModPatchFiles> Patches,
@@ -61,7 +65,7 @@ public sealed record ModLayout(
 {
     public const string PlanSuffix = ".omspatch.json";
     public const string TextFolder = "text", FontsFolder = "fonts", LuaFolder = "lua", EventsFolder = "events",
-                        LayoutFolder = "layout", DataFolder = ModDataEntry.Folder;
+                        LayoutFolder = "layout", DataFolder = ModDataEntry.Folder, ShapesFolder = ModKind.ShapesFolder;
     /// <summary>The files a base mod's <c>layout/</c> holds; <c>tools/base_mod_build.py</c> writes them.</summary>
     public const string LayoutGlobalsFile = "globals.json", LayoutPointsFile = "points.json", LayoutExportsFile = "exports.txt";
     /// <summary>Largest Lua source a package may carry, and the most files under <c>lua/</c> (Lua scripting spec
@@ -87,6 +91,8 @@ public sealed record ModLayout(
     /// <summary>The data files under <c>data/</c>, in the manifest order of their <c>[[data]]</c> entries (data patches
     /// spec §5.1).</summary>
     public IReadOnlyList<ModDataFile> Data { get; init; } = [];
+    /// <summary>The shapes under <c>shapes/</c>, by path in ordinal order (data patches spec §7).</summary>
+    public IReadOnlyList<ModShapeFile> Shapes { get; init; } = [];
 
     /// <summary>Whether the package changes no script or asset: it holds only <c>text/</c>, <c>fonts/</c>,
     /// language assets and <c>[[language]]</c> tables (localization spec §8, save stamps). A language asset changes
@@ -112,6 +118,7 @@ public sealed record ModLayout(
         var events = new List<ModEventFile>();
         var layoutFiles = new Dictionary<string, PackageEntry>(StringComparer.Ordinal);
         var dataFiles = new Dictionary<string, PackageEntry>(StringComparer.Ordinal);
+        var shapeFiles = new Dictionary<string, PackageEntry>(StringComparer.Ordinal);
 
         foreach (PackageEntry entry in entries)
         {
@@ -217,6 +224,17 @@ public sealed record ModLayout(
                 case DataFolder when manifest.OmpVersion >= ModManifest.DataOmpVersion:
                     dataFiles[rest] = entry;
                     break;
+                // Spec §7, plan §6.2: shapes/ too, from format version 4; a library declares no kind, so it has none.
+                case ShapesFolder when manifest.OmpVersion >= ModManifest.DataOmpVersion && manifest.TargetsAnyProfile:
+                    problems.Add($"'{entry.Path}': a package without [game] holds no shapes/: it declares no kind");
+                    break;
+                case ShapesFolder when manifest.OmpVersion >= ModManifest.DataOmpVersion:
+                    if (ManifestReader.PathProblem(rest, ShapesFolder, ".json") is { } why)
+                        problems.Add($"'{entry.Path}': shapes/ holds *.json shapes; this path {why}");
+                    else if (entry.Length > DataShape.MaxBytes)
+                        problems.Add($"'{entry.Path}': a shape may be at most {DataShape.MaxBytes >> 20} MiB");
+                    else shapeFiles[rest] = entry;
+                    break;
                 case "patches":
                     problems.Add($"'{entry.Path}': patches/ holds only *.oms fragments and *{PlanSuffix} plans");
                     break;
@@ -303,6 +321,18 @@ public sealed record ModLayout(
         foreach (ModKind kind in manifest.Accepts)
             foreach (ModKindEvent at in kind.At.Where(at => at.Handler.File.Length > 0 && !luaPaths.Contains(at.Handler.File)))
                 problems.Add($"accepts[{kind.Index}].at[{at.Index}].handler: the package has no lua/{at.Handler.File}");
+        // Spec §7: a kind's shape is under shapes/, and every shape there is a kind's, or it would do nothing.
+        var namedShapes = new HashSet<string>(StringComparer.Ordinal);
+        foreach (ModKind kind in manifest.Accepts.Where(kind => kind.Shape != null))
+        {
+            namedShapes.Add(kind.Shape!);
+            if (!shapeFiles.ContainsKey(kind.Shape!))
+                problems.Add($"accepts[{kind.Index}].shape: the package has no {kind.ShapePath}");
+        }
+        foreach (var (path, unnamed) in shapeFiles.Where(pair => !namedShapes.Contains(pair.Key))
+                     .OrderBy(pair => pair.Key, StringComparer.Ordinal))
+            problems.Add($"'{unnamed.Path}' is not named by an [[accepts]] shape, so it would do nothing; name it or remove "
+                         + "it");
 
         ModLayoutFiles? baseLayout = null;
         if (layoutFiles.TryGetValue(LayoutGlobalsFile, out PackageEntry? layoutGlobals))
@@ -315,6 +345,8 @@ public sealed record ModLayout(
         {
             BaseLayout = baseLayout,
             Data = data,
+            Shapes = shapeFiles.Where(pair => namedShapes.Contains(pair.Key)).OrderBy(pair => pair.Key, StringComparer.Ordinal)
+                .Select(pair => new ModShapeFile(pair.Key, pair.Value)).ToList(),
             Lua = lua.OrderBy(file => file.Path, StringComparer.Ordinal).ToList(),
             Events = events.OrderBy(file => file.Name, StringComparer.Ordinal).ToList(),
             Text = text.OrderBy(file => file.Language, StringComparer.Ordinal)
