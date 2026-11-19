@@ -115,7 +115,7 @@ public static class DataShapeCheck
             if (schema.Types != DataShapeTypes.None && !Matches(schema.Types, value))
             {
                 if (Keeps())
-                    Keep(schema.NotOffered ? description ?? "takes no value here" : $"takes {TypesText(schema.Types)}, not {Describe(value)}");
+                    Keep(schema.NotOffered ? description ?? "takes no value here" : KindProblem(schema.Types, value, description));
                 return;
             }
             if (schema.Enum is { } values && Scalar(value) is { } scalar && !values.Any(item => Same(item, scalar)) && Keeps())
@@ -194,6 +194,17 @@ public static class DataShapeCheck
                             || (types & DataShapeTypes.Integer) != 0 && Math.Floor(number.Value) == number.Value,
         _ => false,
     };
+
+    /// <summary>A value of the wrong kind. Where the shape asks for a table or an array, the reason adds the schema's
+    /// description, when it has one: what goes there, and in what words, is the owner's to say, and the engine says
+    /// nothing of it.</summary>
+    private static string KindProblem(DataShapeTypes types, DataValue value, string? description)
+    {
+        string reason = $"takes {TypesText(types)}, not {Describe(value)}";
+        return description != null && (types & (DataShapeTypes.Object | DataShapeTypes.Array)) != 0
+            ? $"{reason} ({description})"
+            : reason;
+    }
 
     private static string TypesText(DataShapeTypes types)
     {

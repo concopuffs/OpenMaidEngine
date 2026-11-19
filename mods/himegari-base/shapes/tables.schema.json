@@ -23,7 +23,7 @@
   "additionalProperties": false,
   "definitions": {
     "record.item": {
-      "description": "item: one record's fields, by name",
+      "description": "item: one record's fields, by name; write item.<id>.<field> = ...",
       "type": "object",
       "properties": {
         "attack_element": {
@@ -39,7 +39,7 @@
           "maximum": 4294967295
         },
         "character_whitelist": {
-          "description": "item.character_whitelist: item_character_whitelist, a row of 5 columns, by name where a column has one",
+          "description": "item.character_whitelist: item_character_whitelist, a row of 5 columns by name; write character_whitelist.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -102,7 +102,7 @@
           "maximum": 4294967295
         },
         "equipped_status_levels": {
-          "description": "item.equipped_status_levels: item_equipped_status_levels, a row of 30 columns, by name where a column has one",
+          "description": "item.equipped_status_levels: item_equipped_status_levels, a row of 30 columns by name where a column has one and by number where it has none; write equipped_status_levels.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -347,7 +347,7 @@
           "maximum": 4294967295
         },
         "resource_recovery_amounts": {
-          "description": "item.resource_recovery_amounts: item_resource_recovery_amounts, a row of 3 columns, by name where a column has one",
+          "description": "item.resource_recovery_amounts: item_resource_recovery_amounts, a row of 3 columns by name; write resource_recovery_amounts.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -396,7 +396,7 @@
           "maximum": 4294967295
         },
         "stat_modifiers": {
-          "description": "item.stat_modifiers: item_stat_modifiers, a row of 14 columns, by name where a column has one",
+          "description": "item.stat_modifiers: item_stat_modifiers, a row of 14 columns by name; write stat_modifiers.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -543,7 +543,7 @@
           "additionalProperties": false
         },
         "status_delta_levels": {
-          "description": "item.status_delta_levels: item_status_delta_levels, a row of 30 columns, by name where a column has one",
+          "description": "item.status_delta_levels: item_status_delta_levels, a row of 30 columns by name where a column has one and by number where it has none; write status_delta_levels.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -770,7 +770,7 @@
           "additionalProperties": false
         },
         "tuning_curve_ids": {
-          "description": "item.tuning_curve_ids: item_tuning_curve_ids, a row of 10 columns, by name where a column has one",
+          "description": "item.tuning_curve_ids: item_tuning_curve_ids, a row of 10 columns by name; write tuning_curve_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -886,7 +886,7 @@
       "additionalProperties": false
     },
     "record.skill": {
-      "description": "skill: one record's fields, by name",
+      "description": "skill: one record's fields, by name; write skill.<id>.<field> = ...",
       "type": "object",
       "properties": {
         "acquired_flag": {
@@ -918,7 +918,7 @@
           "maximum": 4294967295
         },
         "combat_stat_deltas": {
-          "description": "skill.combat_stat_deltas: skill_combat_stat_deltas, a row of 10 columns, by name where a column has one",
+          "description": "skill.combat_stat_deltas: skill_combat_stat_deltas, a row of 10 columns by name; write combat_stat_deltas.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1059,7 +1059,7 @@
           "maximum": 4294967295
         },
         "resource_deltas": {
-          "description": "skill.resource_deltas: skill_resource_deltas, a row of 3 columns, by name where a column has one",
+          "description": "skill.resource_deltas: skill_resource_deltas, a row of 3 columns by name where a column has one and by number where it has none; write resource_deltas.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1098,7 +1098,7 @@
           "maximum": 4294967295
         },
         "status_levels": {
-          "description": "skill.status_levels: skill_status_levels, a row of 30 columns, by name where a column has one",
+          "description": "skill.status_levels: skill_status_levels, a row of 30 columns by name where a column has one and by number where it has none; write status_levels.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1316,7 +1316,7 @@
       "additionalProperties": false
     },
     "record.stage_enemy": {
-      "description": "stage_enemy: one record's fields, by name",
+      "description": "stage_enemy: one record's fields, by name; write stage.<id>.enemy.<id>.<field> = ...",
       "type": "object",
       "properties": {
         "auto_level_scale_divisor": {
@@ -1326,7 +1326,7 @@
           "maximum": 4294967295
         },
         "battle_routine_set_ids": {
-          "description": "stage_enemy.battle_routine_set_ids: stage_enemy_battle_routine_set_ids, a row of 3 columns, by name where a column has one",
+          "description": "stage_enemy.battle_routine_set_ids: stage_enemy_battle_routine_set_ids, a row of 3 columns by name; write battle_routine_set_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1381,7 +1381,7 @@
           "maximum": 4294967295
         },
         "forbidden_story_flags": {
-          "description": "stage_enemy.forbidden_story_flags: stage_enemy_forbidden_story_flags, a row of 5 columns, by name where a column has one",
+          "description": "stage_enemy.forbidden_story_flags: stage_enemy_forbidden_story_flags, a row of 5 columns by name; write forbidden_story_flags.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1450,7 +1450,7 @@
           "maximum": 4294967295
         },
         "movement_routine_set_ids": {
-          "description": "stage_enemy.movement_routine_set_ids: stage_enemy_movement_routine_set_ids, a row of 3 columns, by name where a column has one",
+          "description": "stage_enemy.movement_routine_set_ids: stage_enemy_movement_routine_set_ids, a row of 3 columns by name; write movement_routine_set_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1493,7 +1493,7 @@
           "maximum": 4294967295
         },
         "required_story_flags": {
-          "description": "stage_enemy.required_story_flags: stage_enemy_required_story_flags, a row of 7 columns, by name where a column has one",
+          "description": "stage_enemy.required_story_flags: stage_enemy_required_story_flags, a row of 7 columns by name; write required_story_flags.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1597,7 +1597,7 @@
       "additionalProperties": false
     },
     "record.unit": {
-      "description": "unit: one record's fields, by name",
+      "description": "unit: one record's fields, by name; write unit.<id>.<field> = ...",
       "type": "object",
       "properties": {
         "auto_level_scale_divisor": {
@@ -1607,7 +1607,7 @@
           "maximum": 4294967295
         },
         "battle_cutin_asset_ids": {
-          "description": "unit.battle_cutin_asset_ids: unit_battle_cutin_asset_ids, a row of 2 columns, by name where a column has one",
+          "description": "unit.battle_cutin_asset_ids: unit_battle_cutin_asset_ids, a row of 2 columns by name; write battle_cutin_asset_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1634,7 +1634,7 @@
           "additionalProperties": false
         },
         "battle_portrait_asset_ids": {
-          "description": "unit.battle_portrait_asset_ids: unit_battle_portrait_asset_ids, a row of 2 columns, by name where a column has one",
+          "description": "unit.battle_portrait_asset_ids: unit_battle_portrait_asset_ids, a row of 2 columns by name; write battle_portrait_asset_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1661,7 +1661,7 @@
           "additionalProperties": false
         },
         "battle_routine_set": {
-          "description": "unit.battle_routine_set: unit_battle_routine_set_ids, a row of 3 columns, by name where a column has one",
+          "description": "unit.battle_routine_set: unit_battle_routine_set_ids, a row of 3 columns by name; write battle_routine_set.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1744,7 +1744,7 @@
           "type": "string"
         },
         "drop_chance": {
-          "description": "unit.drop_chance: unit_drop_chance_percent, a row of 8 columns, by name where a column has one",
+          "description": "unit.drop_chance: unit_drop_chance_percent, a row of 8 columns by name; write drop_chance.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1831,7 +1831,7 @@
           "additionalProperties": false
         },
         "drop_item": {
-          "description": "unit.drop_item: unit_drop_item_ids, a row of 8 columns, by name where a column has one",
+          "description": "unit.drop_item: unit_drop_item_ids, a row of 8 columns by name; write drop_item.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -1962,7 +1962,7 @@
           "maximum": 4294967295
         },
         "map_sprite_asset_ids": {
-          "description": "unit.map_sprite_asset_ids: unit_map_sprite_asset_ids, a row of 5 columns, by name where a column has one",
+          "description": "unit.map_sprite_asset_ids: unit_map_sprite_asset_ids, a row of 5 columns by name; write map_sprite_asset_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2019,7 +2019,7 @@
           "additionalProperties": false
         },
         "movement_routine_set": {
-          "description": "unit.movement_routine_set: unit_movement_routine_set_ids, a row of 3 columns, by name where a column has one",
+          "description": "unit.movement_routine_set: unit_movement_routine_set_ids, a row of 3 columns by name; write movement_routine_set.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2068,7 +2068,7 @@
           "maximum": 4294967295
         },
         "roster_variant_ids": {
-          "description": "unit.roster_variant_ids: unit_roster_variant_ids, a row of 2 columns, by name where a column has one",
+          "description": "unit.roster_variant_ids: unit_roster_variant_ids, a row of 2 columns by name; write roster_variant_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2095,7 +2095,7 @@
           "additionalProperties": false
         },
         "sally_action_unlock_requirements": {
-          "description": "unit.sally_action_unlock_requirements: unit_sally_action_unlock_requirements, a row of 4 columns, by name where a column has one",
+          "description": "unit.sally_action_unlock_requirements: unit_sally_action_unlock_requirements, a row of 4 columns by name; write sally_action_unlock_requirements.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2142,7 +2142,7 @@
           "additionalProperties": false
         },
         "sally_event_ids": {
-          "description": "unit.sally_event_ids: unit_sally_event_ids, a row of 8 columns, by name where a column has one",
+          "description": "unit.sally_event_ids: unit_sally_event_ids, a row of 8 columns by name; write sally_event_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2265,7 +2265,7 @@
           "maximum": 4294967295
         },
         "starting_skill": {
-          "description": "unit.starting_skill: unit_starting_skill_ids, a row of 4 columns, by name where a column has one",
+          "description": "unit.starting_skill: unit_starting_skill_ids, a row of 4 columns by name; write starting_skill.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2312,7 +2312,7 @@
           "additionalProperties": false
         },
         "stat_growth": {
-          "description": "unit.stat_growth: unit_stat_growth_rates, a row of 14 columns, by name where a column has one",
+          "description": "unit.stat_growth: unit_stat_growth_rates, a row of 14 columns by name; write stat_growth.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2459,7 +2459,7 @@
           "additionalProperties": false
         },
         "stats": {
-          "description": "unit.stats: unit_base_stats, a row of 14 columns, by name where a column has one",
+          "description": "unit.stats: unit_base_stats, a row of 14 columns by name; write stats.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2606,7 +2606,7 @@
           "additionalProperties": false
         },
         "status_art_asset_ids": {
-          "description": "unit.status_art_asset_ids: unit_status_art_asset_ids, a row of 3 columns, by name where a column has one",
+          "description": "unit.status_art_asset_ids: unit_status_art_asset_ids, a row of 3 columns by name; write status_art_asset_ids.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2669,7 +2669,7 @@
           "maximum": 4294967295
         },
         "trait_notes": {
-          "description": "unit.trait_notes: unit_trait_notes, a row of 2 columns, by name where a column has one",
+          "description": "unit.trait_notes: unit_trait_notes, a row of 2 columns by name; write trait_notes.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2692,7 +2692,7 @@
           "additionalProperties": false
         },
         "voice": {
-          "description": "unit.voice: unit_voice_asset_ids, a row of 30 columns, by name where a column has one",
+          "description": "unit.voice: unit_voice_asset_ids, a row of 30 columns by name where a column has one and by number where it has none; write voice.<column> = ...",
           "type": "object",
           "properties": {
             "0": {
@@ -2996,7 +2996,7 @@
       "additionalProperties": false
     },
     "records.item": {
-      "description": "item: records by id, 0 to 999",
+      "description": "item: records by id, 0 to 999; write item.<id>.<field> = ...",
       "type": "object",
       "x-ome-decimal-keys": {
         "minimum": 0,
@@ -3007,7 +3007,7 @@
       }
     },
     "records.skill": {
-      "description": "skill: records by id, 0 to 299",
+      "description": "skill: records by id, 0 to 299; write skill.<id>.<field> = ...",
       "type": "object",
       "x-ome-decimal-keys": {
         "minimum": 0,
@@ -3018,7 +3018,7 @@
       }
     },
     "records.stage_enemy": {
-      "description": "stage_enemy: records by id, 0 to 29",
+      "description": "stage_enemy: records by id, 0 to 29; write stage.<id>.enemy.<id>.<field> = ...",
       "type": "object",
       "x-ome-decimal-keys": {
         "minimum": 0,
@@ -3029,7 +3029,7 @@
       }
     },
     "records.unit": {
-      "description": "unit: records by id, 0 to 999",
+      "description": "unit: records by id, 0 to 999; write unit.<id>.<field> = ...",
       "type": "object",
       "x-ome-decimal-keys": {
         "minimum": 0,
@@ -3040,14 +3040,14 @@
       }
     },
     "scope.stage": {
-      "description": "stage: each stage's tables by its id, 1 to 999",
+      "description": "stage: each stage's tables by its id, 1 to 999; write stage.<id>.enemy.<id>.<field> = ...",
       "type": "object",
       "x-ome-decimal-keys": {
         "minimum": 1,
         "maximum": 999
       },
       "additionalProperties": {
-        "description": "one stage's tables, by short name",
+        "description": "one stage's tables, by short name; write stage.<id>.enemy.<id>.<field> = ...",
         "type": "object",
         "properties": {
           "enemy": {

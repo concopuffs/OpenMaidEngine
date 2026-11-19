@@ -382,6 +382,11 @@ public sealed partial class DataPatchTests
           "data/a.toml:2: unit.5.experiance_reward: no such key; the nearest name here is experience_reward" },
         { "himegari", "[skill.3]\nacquired_flag = 1\n",
           "data/a.toml:2: skill.3.acquired_flag: skill.acquired_flag is saved state: a load brings the saved value back, so a file does not set it" },
+        // A value of the wrong kind where a table goes says what to write, in the shape's words (plan §12.5).
+        { "kamidori", "[unit.762]\nstats = [1, 2, 3]\n",
+          "data/a.toml:2: unit.762.stats: takes a table, not an array (unit.stats: unit_base_stats, a row of 14 columns by name; write stats.<column> = ...)" },
+        { "himegari", "unit.5 = 3\n",
+          "data/a.toml:1: unit.5: takes a table, not 3 (unit: one record's fields, by name; write unit.<id>.<field> = ...)" },
         // The mistake twins' files before milestone 3 (plan §9.2): each mistake in a stage part fails the link now.
         { "kamidori", "[stage.51.enemy.1]\nunit_id = 761\n\n[stage_enemy.3]\nunit_id = 762\n",
           "data/a.toml:4: stage_enemy: stage_enemy is reached through its scope: write stage.<id>.enemy" },

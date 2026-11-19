@@ -96,9 +96,10 @@ drop_chance.drop_1 = 100
 - **The record id is decimal,** with no sign and no leading zero, and inside the table.
 - **A field with a row takes its columns,** by name where the reference names the column, and by number only where it
   has none.
-- **Each cell has one spelling.** A hexadecimal id (`unit.0x2f9`) and a named column given by its number
-  (`drop_chance.0`) are refused with the spelling to use, and an array for a whole row is refused as a value of the
-  wrong kind. So two files that set one cell share a path in the report.
+- **Each cell has one spelling.** A hexadecimal id (`unit.0x2f9`), a named column given by its number
+  (`drop_chance.0`) and an array for a whole row are refused with the spelling to use:
+  `unit.762.stats: takes a table, not an array (unit.stats: unit_base_stats, a row of 14 columns by name; write
+  stats.<column> = ...)`. So two files that set one cell share a path in the report.
 - **A value follows its cell:** a whole number from -2147483648 to 4294967295, a float, or a string that the save's
   code page (932) can encode.
 - **Every edit is an assignment.** A later file's value replaces an earlier one's, so the mod later in the load
@@ -255,9 +256,11 @@ checks TOML against JSON Schema can read the same file:
   most 4 MiB. Each one is named by an `[[accepts]] shape`, or it is an error, since it would do nothing.
 - **An error of a file** names its contributor, then the file, the line, the path and the reason:
   `data/a.toml:4: t.kk: no such key; the nearest names here are k and j`. The nearest names are the names the shape
-  offers there that are closest in spelling; with none close, the error lists the names there. A key that should be
-  a whole number says how: `by_id.0x10: a key here is written in decimal: 16`. The link reports the first 20 problems
-  of a file and counts the rest.
+  offers there that are closest in spelling.
+  With none close, the error lists the names there. A key that should be a whole number says how: `by_id.0x10: a key
+  here is written in decimal: 16`. A value of the wrong kind where a table or an array goes adds the shape's
+  description of what goes there: `names: takes an array, not a string (The names, in order.)`. The link reports the
+  first 20 problems of a file and counts the rest.
 - **What a shape cannot say, the owner still checks.** A shape describes a document's keys and values; the owner's
   handler checks the rest at the first delivery, and everything when its kind has no shape. `<game>.tables` checks
   three such things there: text the save's code page cannot encode, one cell named twice through an old name, and a

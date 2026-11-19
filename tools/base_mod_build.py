@@ -351,8 +351,11 @@ def _field_shape(table: str, field: str, entry: dict) -> dict:
         return _cell(entry["kind"], f"{name}: {global_name}")
     width = entry["width"]
     columns = entry.get("columns") or {}
+    # A row's description says what to write: the checker quotes it when a file gives the row another kind of value
+    # (a whole row as an array, a single number), and an editor shows it on hover.
     if not columns:
-        return {"description": f"{name}: {global_name}, a row of {width} columns by number, 0 to {width - 1}",
+        return {"description": f"{name}: {global_name}, a row of {width} columns by number, 0 to {width - 1}; "
+                               f"write {field}.<number> = ...",
                 "type": "object", DECIMAL_KEYS: {"minimum": 0, "maximum": width - 1},
                 "additionalProperties": _cell(entry["kind"], f"{name}.<column>: a column of {global_name}")}
     by_index = {index: column for column, index in columns.items()}
@@ -364,7 +367,9 @@ def _field_shape(table: str, field: str, entry: dict) -> dict:
         else:
             properties[column] = _cell(entry["kind"], f"{name}.{column}: column {index} of {global_name}")
             properties[str(index)] = _not_offered(f"column {index} is named: write {column}")
-    return {"description": f"{name}: {global_name}, a row of {width} columns, by name where a column has one",
+    spelling = ("by name" if len(by_index) == width
+                else "by name where a column has one and by number where it has none")
+    return {"description": f"{name}: {global_name}, a row of {width} columns {spelling}; write {field}.<column> = ...",
             "type": "object", "properties": dict(sorted(properties.items())), "additionalProperties": False}
 
 
@@ -384,9 +389,14 @@ def render_shape(profile_id: str, tables: list[dict], source: str, manifest: str
             else:
                 fields[old] = {**fields[current], "description": f"{name}.{old}: an old name of {name}.{current}; "
                                                                  f"write {current}"}
-        definitions[f"record.{name}"] = {"description": f"{name}: one record's fields, by name", "type": "object",
+        # The path a file writes a record's field at, which the checker quotes when a record or the table is given
+        # another kind of value: a scoped table's records are under their scope's id.
+        written = f"{scoped[name][0]}.<id>.{scoped[name][1]}" if name in scoped else name
+        definitions[f"record.{name}"] = {"description": f"{name}: one record's fields, by name; write "
+                                                        f"{written}.<id>.<field> = ...", "type": "object",
                                          "properties": dict(sorted(fields.items())), "additionalProperties": False}
-        definitions[f"records.{name}"] = {"description": f"{name}: records by id, 0 to {last}", "type": "object",
+        definitions[f"records.{name}"] = {"description": f"{name}: records by id, 0 to {last}; write "
+                                                         f"{written}.<id>.<field> = ...", "type": "object",
                                           DECIMAL_KEYS: {"minimum": 0, "maximum": last},
                                           "additionalProperties": {"$ref": f"#/definitions/record.{name}"}}
         if name in scoped:
@@ -401,11 +411,13 @@ def render_shape(profile_id: str, tables: list[dict], source: str, manifest: str
     for scope in scopes:
         scope_name, first, last = scope["name"], scope["first"], scope["last"]
         parts = {short: {"$ref": f"#/definitions/records.{table_name}"} for short, table_name in scope["tables"].items()}
+        write = f"write {scope_name}.<id>.{' or '.join(sorted(parts))}.<id>.<field> = ..."
         definitions[f"scope.{scope_name}"] = {
-            "description": f"{scope_name}: each {scope_name}'s tables by its id, {first} to {last}", "type": "object",
-            DECIMAL_KEYS: {"minimum": first, "maximum": last},
-            "additionalProperties": {"description": f"one {scope_name}'s tables, by short name", "type": "object",
-                                     "properties": dict(sorted(parts.items())), "additionalProperties": False}}
+            "description": f"{scope_name}: each {scope_name}'s tables by its id, {first} to {last}; {write}",
+            "type": "object", DECIMAL_KEYS: {"minimum": first, "maximum": last},
+            "additionalProperties": {"description": f"one {scope_name}'s tables, by short name; {write}",
+                                     "type": "object", "properties": dict(sorted(parts.items())),
+                                     "additionalProperties": False}}
         top[scope_name] = {"$ref": f"#/definitions/scope.{scope_name}"}
     shape = {
         "$schema": SHAPE_DRAFT,

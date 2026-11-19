@@ -504,10 +504,18 @@ def test_table_shape():
         definitions = shape["definitions"]
         check(list(definitions) == sorted(definitions) == ["record.foe", "record.hero", "records.foe", "records.hero",
                                                             "scope.stage"], f"the definitions ({list(definitions)})")
-        check(definitions["records.hero"] == {"description": "hero: records by id, 0 to 3", "type": "object",
-                                              "x-ome-decimal-keys": {"minimum": 0, "maximum": 3},
+        check(definitions["records.hero"] == {"description": "hero: records by id, 0 to 3; write hero.<id>.<field> = ...",
+                                              "type": "object", "x-ome-decimal-keys": {"minimum": 0, "maximum": 3},
                                               "additionalProperties": {"$ref": "#/definitions/record.hero"}},
               "a table's records are keyed by decimal id, from 0 to records - 1")
+        # The descriptions the checker quotes for a value of the wrong kind where a table goes say what to write; a
+        # scoped table's records are written through their scope.
+        check(definitions["record.hero"]["description"] == "hero: one record's fields, by name; write hero.<id>.<field> = ..."
+              and definitions["records.foe"]["description"]
+              == "foe: records by id, 0 to 2; write stage.<id>.enemy.<id>.<field> = ..."
+              and definitions["record.foe"]["description"]
+              == "foe: one record's fields, by name; write stage.<id>.enemy.<id>.<field> = ...",
+              f"a record's and a table's descriptions say what to write ({definitions['records.foe']['description']})")
         record = definitions["record.hero"]
         check(record["additionalProperties"] is False and list(record["properties"]) == sorted(record["properties"])
               == ["end", "level", "lvl", "name", "seen", "seen_flag", "speed", "stats"],
@@ -532,15 +540,25 @@ def test_table_shape():
               and stats["properties"]["2"] == {"description": "column 2 is named: write end", "type": "null"}
               and stats["properties"]["1"]["type"] == "integer" and stats["properties"]["end"]["type"] == "integer",
               f"a named row offers its names and its unnamed columns' numbers, not its named ones ({stats})")
+        check(stats["description"] == "hero.stats: hero_stats, a row of 3 columns by name where a column has one and "
+                                      "by number where it has none; write stats.<column> = ...",
+              f"a row with an unnamed column says it is written by name and by number ({stats['description']})")
         routines = definitions["record.foe"]["properties"]["routines"]
         check(routines["x-ome-decimal-keys"] == {"minimum": 0, "maximum": 1}
-              and routines["additionalProperties"]["type"] == "integer" and "properties" not in routines,
-              "a row without names is keyed by its column numbers")
+              and routines["additionalProperties"]["type"] == "integer" and "properties" not in routines
+              and routines["description"] == "foe.routines: foe_routines, a row of 2 columns by number, 0 to 1; "
+                                             "write routines.<number> = ...",
+              f"a row without names is keyed by its column numbers ({routines['description']})")
         scope = definitions["scope.stage"]
         check(scope["x-ome-decimal-keys"] == {"minimum": 1, "maximum": 99}
               and scope["additionalProperties"]["properties"] == {"enemy": {"$ref": "#/definitions/records.foe"}}
               and scope["additionalProperties"]["additionalProperties"] is False and top["stage"]
-              == {"$ref": "#/definitions/scope.stage"}, "a scope is keyed by its ids and names its tables by short name")
+              == {"$ref": "#/definitions/scope.stage"}
+              and scope["description"] == "stage: each stage's tables by its id, 1 to 99; "
+                                          "write stage.<id>.enemy.<id>.<field> = ..."
+              and scope["additionalProperties"]["description"] == "one stage's tables, by short name; "
+                                                                  "write stage.<id>.enemy.<id>.<field> = ...",
+              f"a scope is keyed by its ids and names its tables by short name ({scope['description']})")
         check(all(list(schema)[0] == "description" for schema in definitions.values())
               and text.endswith("}\n") and "\r" not in text, "each definition's description comes first; LF, one newline")
         again, _ = generate(mods, source)

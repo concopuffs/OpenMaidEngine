@@ -175,6 +175,29 @@ public sealed class DataShapeTests
     }
 
     [Fact]
+    public void AValueOfTheWrongKindWhereATableOrAnArrayGoesSaysWhatGoesThereInTheShapesWords()
+    {
+        const string shape = """
+            { "type": "object", "properties": {
+                "by_id": { "description": "by_id: names by id; write by_id.<id> = ...", "type": "object",
+                           "x-ome-decimal-keys": { "minimum": 0, "maximum": 99 }, "additionalProperties": { "$ref": "#/definitions/name" } },
+                "names": { "description": "The names, in order.", "type": "array", "items": { "type": "string" } },
+                "plain": { "type": "object" },
+                "level": { "description": "level: a whole number", "type": "integer" },
+                "label": { "$ref": "#/definitions/name" } },
+              "definitions": { "name": { "description": "a name", "type": "string" } } }
+            """;
+        // Only where a table or an array goes: a scalar's description adds nothing to "takes a string".
+        Assert.Equal([
+            "data/a.toml:1: by_id: takes a table, not an array (by_id: names by id; write by_id.<id> = ...)",
+            "data/a.toml:2: names: takes an array, not a string (The names, in order.)",
+            "data/a.toml:3: plain: takes a table, not 5",
+            "data/a.toml:4: level: takes a whole number, not a table",
+            "data/a.toml:5: label: takes a string, not 3",
+        ], Problems(shape, "by_id = [1]\nnames = \"x\"\nplain = 5\nlevel = { a = 1 }\nlabel = 3\n"));
+    }
+
+    [Fact]
     public void PastTheFirstTwentyAProblemIsCountedAndOneOfsFormsCountNone()
     {
         // Thirty keys the record does not take and one value of the wrong kind: each is counted, and the first twenty

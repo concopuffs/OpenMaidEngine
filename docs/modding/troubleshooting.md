@@ -448,12 +448,14 @@ problems are listed and the rest counted.
 
 **"data/FILE.toml:N: PATH: no such key; the nearest name here is NAME", and the other errors with a line and a
 path.** The file does not match its kind's shape, and the link stops before any code runs
-([data-files.md](data-files.md), "Shapes"). A misspelt key lists the nearest names, or the names there when none is
-close; a key the format does not offer gives the reason (`unit.761.drop_chance.0: column 0 is named: write drop_1`,
-a saved field, a scoped table's own name); a key that should be a whole number says how (`unit.0x2f9: a key here is
-written in decimal: 761`, `stage.0: a key here is a whole number from 1 to 999, not 0`); and a value of the wrong
-kind or out of range says what the cell takes (`names[2]: takes a string, not 2`). Fix the line it names. An editor
-finds most of these as you type with the shape `omp lua-stubs` writes.
+([data-files.md](data-files.md), "Shapes"). A misspelt key lists the nearest names, or the names
+there when none is close; a key the format does not offer gives the reason (`unit.761.drop_chance.0: column 0 is
+named: write drop_1`, a saved field, a scoped table's own name); a key that should be a whole number says how
+(`unit.0x2f9: a key here is written in decimal: 761`, `stage.0: a key here is a whole number from 1 to 999, not
+0`); and a value of the wrong kind or out of range says what the cell takes (`names[2]: takes a string, not 2`), and
+where a table goes what to write there (`unit.762.stats: takes a table, not an array (unit.stats: unit_base_stats,
+a row of 14 columns by name; write stats.<column> = ...)`). Fix the line it names. An editor finds most of these as
+you type with the shape `omp lua-stubs` writes.
 
 **"accepts[N] K: shapes/FILE: …".** The owner's shape is broken: not JSON, a `$ref` that names no definition, or a
 keyword outside the subset. **"… the shape takes more than N steps on MOD FILE …, so it cannot be checked"**: the

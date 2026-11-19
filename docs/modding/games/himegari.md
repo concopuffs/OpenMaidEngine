@@ -127,10 +127,11 @@ experience_reward = 40     # 30
   stage 1's enemy slot 2 (stage ids 1 to 999, of which STINIT writes 1 to 170; slots 0 to 29, and no stage gives
   slot 0 a unit). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`, `max_level`,
   `auto_level_scale_divisor`, the spawn (`spawn_tile_x` and `spawn_tile_y`, or `spawn_object_slot`), `faction_id`,
-  `difficulty_mask`, `first_clear_only`, `random_selection_weight`, and four rows whose columns have no names and are
-  given by number: `movement_routine_set_ids` and `battle_routine_set_ids` (columns 0 to 2), `required_story_flags`
-  (0 to 6) and `forbidden_story_flags` (0 to 4). None of them is saved. OMS names the slots of the stage being
-  played (`stage_enemy[2].unit_id`), as the loaders leave them. This file puts another unit in stage 1's slot 2:
+  `difficulty_mask`, `first_clear_only`, `random_selection_weight`, and four rows whose columns are given by name:
+  `movement_routine_set_ids` and `battle_routine_set_ids` (`difficulty_0` to `difficulty_2`), `required_story_flags`
+  (`required_flag_1` to `required_flag_7`) and `forbidden_story_flags` (`forbidden_flag_1` to `forbidden_flag_5`).
+  None of them is saved. OMS names the slots of the stage being played (`stage_enemy[2].unit_id`), as the loaders
+  leave them. This file puts another unit in stage 1's slot 2:
 
   ```toml
   # data/stages.toml
