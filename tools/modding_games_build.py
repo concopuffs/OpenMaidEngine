@@ -81,7 +81,7 @@ def identity(profile_id: str) -> list[str]:
     data = manifest(profile_id)
     catalog = data["catalogIdentities"][0]
     persistence = data.get("persistence", {})
-    install = paths._CONVENTIONAL_GAME_ROOTS.get(profile_id)
+    install = paths.conventional_game_root(profile_id)
     tables = load_tables(globals_toml(profile_id)) if globals_toml(profile_id).exists() else []
     points = patch_points(profile_id)
     modules = source_modules(profile_id)
@@ -105,7 +105,7 @@ def identity(profile_id: str) -> list[str]:
         ("Engine ABI", f"`{data['engineAbiId']}`"),
         ("Catalog revision", f"`{catalog['catalogRevision']}`"),
         ("Boot script", f"`{data['naturalBootScript']}`"),
-        ("Conventional install", f"`{install.name}/` beside the repository" if install else "none (pass `--game-root`)"),
+        ("Conventional install", f"`{install.parent.name}/{install.name}/` beside the repository"),
         ("Port saves", saves),
         ("OMS modules", "; ".join(module_cells)),
         ("Speakers", "; ".join(speakers) if speakers else "no dialogue prelude yet"),

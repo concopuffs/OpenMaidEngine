@@ -206,17 +206,17 @@ public class OmsSourceTests
     [Trait("Profile", "himegari")]
     [Fact]
     public void InstalledHimegariCorpusRoundTripsThroughRawSource()
-        => AssertCorpus("Himegari_Game", "SYS4422");
+        => AssertCorpus("himegari", "SYS4422");
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriCorpusRoundTripsThroughRawSource()
-        => AssertCorpus("Kamidori", "SYS4433");
+        => AssertCorpus("kamidori", "SYS4433");
 
-    private static void AssertCorpus(string directory, string abiId)
+    private static void AssertCorpus(string game, string abiId)
     {
-        string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT") ?? Path.Combine(Paths.Workspace, directory);
+        string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT") ?? Paths.GameInstall(game);
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"install not found at {gameRoot}");
         Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);

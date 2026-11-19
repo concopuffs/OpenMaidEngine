@@ -29,7 +29,7 @@ publish_linux = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(publish_linux)
 WORK, OUT, REPO = publish_linux.WORK, publish_linux.OUT, publish_linux.REPO
 SPIKE = WORK / "publish" / "linux-x64-folder" / "Ome.Launcher.Spike"
-GAME = REPO.parent / "Himegari_Game"
+GAME = REPO.parent / "games" / "himegari"
 
 
 def lock_case(folder: Path) -> list:

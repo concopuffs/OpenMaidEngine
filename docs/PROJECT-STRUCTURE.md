@@ -8,41 +8,42 @@ written back into the game folder.
 
 Workspace root: `S:\Game Hacking\Eushully\Himegari\`
 
-The conventional read-only install roots are `Himegari_Game/` and `Kamidori/`. Himegari's legacy
-extracted archive tree is `extracted/`; Kamidori's is `extracted-kamidori/` (needed by the Python
-data-table tooling; production catalog scans read archives directly). Additional extracted roots may be
-selected explicitly.
+Every read-only install sits in `games/`, each under a name of its own. A game's conventional install is
+`games/<game id>/`, and every tool resolves it by that rule (`tools/paths.py`, `engine/Ome.Engine/Sys4/Paths.cs`,
+`run-godot.ps1`), so a new game adds no entry to any of them. The installs moved there on 2026-11-19 from
+`Himegari_Game/`, `Kamidori/`, `Kamidori_Translated/` and `Arterial/創刻のアテリアル/`; documents written before
+then name those folders. Himegari's legacy extracted archive tree is `extracted/`; Kamidori's is
+`extracted-kamidori/` (needed by the Python data-table tooling; production catalog scans read archives directly).
+Additional extracted roots may be selected explicitly.
 
 ```
 S:\Game Hacking\Eushully\Himegari\           ← workspace root
 │
-├── Himegari_Game/                          ← SOURCE — pristine game install (read-only)
-│   │   Never edit, move, or add to this folder. It holds ORIGINALS ONLY.
-│   ├── AGE.EXE, AGERC.DLL, *.dll             shipped engine (packed). Stays intact and
-│   │                                         runnable in place — Frida launches it if needed.
-│   ├── DATA1-5.ALF, APPEND01.ALF/.AAI        shipped archives (~2.3 GB).
-│   ├── *.BIN                                 49 loose patch-override scripts (v1.03) —
-│   │                                         AUTHORITATIVE over DATA1. Plus two root-only
-│   │                                         engine files (SYS4INI=S4IC, SYS4AB=S4AB).
-│   └── *.exe (uninstallers), SAS0099.OGG …   other shipped files.
+├── games/                                   ← SOURCE — every game install (read-only). ORIGINALS ONLY:
+│   │                                          never edit an install or add to one. Native runs use a
+│   │                                          scratch copy (tools/native_scratch.py).
+│   ├── himegari/                             pristine Himegari install.
+│   │   ├── AGE.EXE, AGERC.DLL, *.dll             shipped engine (packed).
+│   │   ├── DATA1-5.ALF, APPEND01.ALF/.AAI        shipped archives (~2.3 GB).
+│   │   ├── *.BIN                                 49 loose patch-override scripts (v1.03) —
+│   │   │                                         AUTHORITATIVE over DATA1. Plus two root-only
+│   │   │                                         engine files (SYS4INI=S4IC, SYS4AB=S4AB).
+│   │   └── *.exe (uninstallers), SAS0099.OGG …   other shipped files.
+│   ├── kamidori/                             clean Kamidori install with the official updates and appends
+│   │                                         (AGE 4.33G). Root .BIN files, 17 `$n$` append records
+│   │                                         included, are the updates' loose records.
+│   ├── kamidori-translated/                  Kamidori with the English fan translation (`patch/`, AGE 4.33F,
+│   │                                         English `$n$*.bin`). No profile of its own: used only by the
+│   │                                         port's translation tests and translated runs
+│   │                                         (docs/asset-resolution-re.md).
+│   └── arterial/                             創刻のアテリアル (AGE 4.38D). No port profile yet: a reference
+│                                             install for comparing engine builds (paths.REFERENCE_INSTALLS,
+│                                             docs/engine-re.md "Comparing engine builds").
 │
 ├── extracted/                               ← DERIVED (game-side) — extracted ALF contents,
 │   │                                          ~3.9 GB, regenerable with a local archive extractor.
 │   └── DATA1/ … DATA5/                         DATA1 = 481 .BIN scripts (the corpus we parse)
 │                                               + AGF/BMP/WAV in the others.
-│
-├── Kamidori/                                ← SOURCE — clean Kamidori install with the official updates and
-│                                               appends (read-only; AGE 4.33G). Root .BIN files, 17 `$n$`
-│                                               append records included, are the updates' loose records.
-│
-├── Kamidori_Translated/                     ← SOURCE — Kamidori with the English fan translation (read-only;
-│                                               `patch/`, AGE 4.33F, English `$n$*.bin`). Used only by the
-│                                               port's translation tests and translated runs
-│                                               (docs/asset-resolution-re.md).
-│
-├── Arterial/創刻のアテリアル/                 ← SOURCE — 創刻のアテリアル (read-only; AGE 4.38D). No port profile: a
-│                                               reference install for comparing engine builds only
-│                                               (paths.REFERENCE_INSTALLS, docs/engine-re.md "Comparing engine builds").
 │
 ├── extracted-kamidori/                      ← DERIVED — Kamidori archives (~4.5 GB), regenerable with
 │   │                                          `bin/BinExtractALF.exe SYS4INI.BIN <dir>` / `APPENDnn.AAI <dir>`.
@@ -761,9 +762,9 @@ spec §6.2–§6.5. With a profile file's `[mods]` table the packages come from 
 
 ## Conventions
 
-- **Three-way separation.** `Himegari_Game/` = untouched originals; `extracted/` =
-  game-derived data (regenerable, game-side); `age-reimpl/` = everything we authored. The first two
-  are consumed, never modified.
+- **Three-way separation.** `games/` = untouched originals, one folder per install; `extracted/` and
+  `extracted-<game>/` = game-derived data (regenerable, game-side); `age-reimpl/` = everything we authored. The
+  first two are consumed, never modified.
 - **Tools never hard-code paths.** `tools/paths.py` resolves an immutable context from common
   `--game`, `--game-root`, and `--extracted-root` options (or matching `OME_*` variables), with
   conventional Himegari defaults. Switching profiles or relocating the tree requires no source edits.

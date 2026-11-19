@@ -143,7 +143,7 @@ public sealed partial class DataPatchWorkspaceTests
 
     private static (ModLinkBase Base, Sys4ScriptProvider Scripts) Kamidori(bool translated)
     {
-        string gameRoot = translated ? Paths.KamidoriTranslatedDir : Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = translated ? Paths.KamidoriTranslatedDir : Paths.KamidoriDir;
         string[] looseRoots = translated ? [Path.Combine(gameRoot, "patch"), gameRoot] : [gameRoot];
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");

@@ -8,19 +8,19 @@ public class Sys4CorpusScannerTests
     [Trait("Profile", "himegari")]
     [Fact]
     public void InstalledHimegariCatalogCorpusDecodesThroughRuntimeStore()
-        => AssertInstalledCorpus("himegari", "Himegari_Game", "SYS4422");
+        => AssertInstalledCorpus("himegari", "SYS4422");
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriCatalogCorpusDecodesThroughRuntimeStore()
-        => AssertInstalledCorpus("kamidori", "Kamidori", "SYS4433");
+        => AssertInstalledCorpus("kamidori", "SYS4433");
 
     private static void AssertInstalledCorpus(
-        string profileId, string directoryName, string abiId)
+        string profileId, string abiId)
     {
         string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT")
-            ?? Path.Combine(Paths.Workspace, directoryName);
+            ?? Paths.GameInstall(profileId);
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"{profileId} install not found at {gameRoot}");
 

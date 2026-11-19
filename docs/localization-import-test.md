@@ -19,11 +19,11 @@ The translated text belongs to its translators. The catalog and the report are l
 
 ```
 dotnet run --project engine/Ome.Cli -- omp text import-scripts --game kamidori ^
-    --from ../Kamidori_Translated --overlay-root patch --allow-bmp-as-agf ^
+    --from ../games/kamidori-translated --overlay-root patch --allow-bmp-as-agf ^
     --output build/games/kamidori/import-en --verify
 ```
 
-- Base: the clean install `Kamidori/` (engine 4.33G). Translated: `Kamidori_Translated/` (4.33F) with its `patch/`
+- Base: the clean install `games/kamidori/` (engine 4.33G). Translated: `games/kamidori-translated/` (4.33F) with its `patch/`
   overlay. Both mount the same archives.
 - The command, its options and its output are in `tools-reference.md` (`omp text import-scripts`). A run takes
   about 5 s. The full report is `import-report.json` beside the catalog: counts, plus up to 200 samples per list.
@@ -206,8 +206,8 @@ and `ComposedStrings.cs` (rule 7).
 with `rand-seed 13`: the title, a new game, then a page click every 2.5 s through SC0000's opening until the first
 stage's field (FIELD). The steps wait on scripts, never on offsets, so they run unchanged on the translated scripts.
 
-- Run A: `Kamidori_Translated/` with `--overlay-root patch --allow-bmp-as-agf`, no catalog.
-- Run B: `Kamidori/` with this catalog as a local package (`build/games/kamidori/import-en-mod`, local only) and
+- Run A: `games/kamidori-translated/` with `--overlay-root patch --allow-bmp-as-agf`, no catalog.
+- Run B: `games/kamidori/` with this catalog as a local package (`build/games/kamidori/import-en-mod`, local only) and
   `--language en`.
 
 Each run wrote its page map with `--page-map`, and `tools/page_map_compare.py A.jsonl B.jsonl` compared them (usage
@@ -268,7 +268,7 @@ text server antialias the same outlines differently.
 **How it runs.** The commands are in the scenario files' headers (`tools/drive/scenarios/geometry/kamidori-translated-
 {native,port}.steps`; usage in `tools-reference.md`, "Geometry pairs").
 
-1. `native_scratch.py --game kamidori --game-root ../Kamidori_Translated --name translated` copies the translated
+1. `native_scratch.py --game kamidori --game-root ../games/kamidori-translated --name translated` copies the translated
    install. The driver recognises its 4.33F AGE.EXE by its hash and takes that build's hook addresses
    (`tools/drive/kamidori.toml`, `[native.build."4.33F"]`).
 2. Native runs its half on the fresh sandbox, then stops: AGE writes `SAVE.DAT`, which keeps the face, only when it

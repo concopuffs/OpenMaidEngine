@@ -5,12 +5,18 @@ public static class Paths
     public static string Workspace => Directory.GetParent(Repo)!.FullName;
     public static string Extracted => Path.Combine(Workspace, "extracted");
     public static string Data1 => Path.Combine(Extracted, "DATA1");
-    public static string GameDir => Path.Combine(Workspace, "Himegari_Game");
+    /// <summary>The folder beside the repository that holds every install, each under a name of its own.</summary>
+    public static string GamesDir => Path.Combine(Workspace, "games");
+    /// <summary>A game's conventional install, <c>games/&lt;game id&gt;</c>: a new game needs no entry here. An install
+    /// with no profile of its own sits beside them under its own name (<see cref="KamidoriTranslatedDir"/>).</summary>
+    public static string GameInstall(string name) => Path.Combine(GamesDir, name);
+    /// <summary>Himegari's install, the default of the tools and tests that name no game.</summary>
+    public static string GameDir => GameInstall("himegari");
     /// <summary>The clean Kamidori install.</summary>
-    public static string KamidoriDir => Path.Combine(Workspace, "Kamidori");
+    public static string KamidoriDir => GameInstall("kamidori");
     /// <summary>A Kamidori install with the English fan translation (patch/, translated AGE.EXE and agerc.dll, root
     /// <c>$n$</c> scripts and BMP graphics), kept beside the clean one for the translation-support tests.</summary>
-    public static string KamidoriTranslatedDir => Path.Combine(Workspace, "Kamidori_Translated");
+    public static string KamidoriTranslatedDir => GameInstall("kamidori-translated");
     public static string Build => Path.Combine(Repo, "build");
     public static string OpcodesJson => Path.Combine(Build, "opcodes.json");
     /// <summary>Per-profile generated build output, <c>build/games/&lt;profile&gt;</c>.</summary>

@@ -94,7 +94,7 @@ _HIMEGARI_ACCESSORS = {
     0x415F30: Accessor("cell", 1, "vm_operand_lvalue"),
 }
 
-# The English fan translation's AGE 4.33F (Kamidori_Translated/), pinned 2026-10-06 before Kamidori moved to 4.33G.
+# The English fan translation's AGE 4.33F (games/kamidori-translated/), pinned 2026-10-06 before Kamidori moved to 4.33G.
 _KAMIDORI_433F_ACCESSORS = {
     0x4198D0: Accessor("read", 1, "vm_operand_fetch"),
     0x419C30: Accessor("read-float", 1, "vm_operand_fetch_float"),

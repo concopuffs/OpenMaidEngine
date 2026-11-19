@@ -894,7 +894,7 @@ public class MovieOpcodeTests
     public void KamidoriModalMoviePayloadAcceptsNativeMpgCatalogNames(
         int resourceId, string expectedName)
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriDir;
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
         var catalog = Sys4AssetCatalog.Load(sys4Ini);

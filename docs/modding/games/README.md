@@ -21,7 +21,7 @@ Use the game id wherever a guide writes `<game>`.
 | Engine ABI | `SYS4422` |
 | Catalog revision | `S4IC422` |
 | Boot script | `SYSTEM4.BIN` |
-| Conventional install | `Himegari_Game/` beside the repository |
+| Conventional install | `games/himegari/` beside the repository |
 | Port saves | enabled, in `games/himegari/` |
 | OMS modules | `himegari.globals`, `himegari.scripts` (generated); `himegari.adv` (`oms/himegari/adv.oms`) |
 | Speakers | 274 in `himegari.adv`'s `enum speaker` |
@@ -40,7 +40,7 @@ Use the game id wherever a guide writes `<game>`.
 | Engine ABI | `SYS4433` |
 | Catalog revision | `S4IC433` |
 | Boot script | `SYSTEM4.BIN` |
-| Conventional install | `Kamidori/` beside the repository |
+| Conventional install | `games/kamidori/` beside the repository |
 | Port saves | enabled, in `games/kamidori/` |
 | OMS modules | `kamidori.globals`, `kamidori.scripts` (generated); `kamidori.adv` (`oms/kamidori/adv.oms`) |
 | Speakers | 114 in `kamidori.adv`'s `enum speaker` |

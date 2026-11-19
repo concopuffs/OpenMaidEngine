@@ -137,18 +137,18 @@ public class OmsIrCodecTests
     [Trait("Profile", "himegari")]
     [Fact]
     public void InstalledHimegariCorpusRoundTripsByteIdentically()
-        => AssertCorpusRoundTrips("Himegari_Game", "SYS4422");
+        => AssertCorpusRoundTrips("himegari", "SYS4422");
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriCorpusRoundTripsByteIdentically()
-        => AssertCorpusRoundTrips("Kamidori", "SYS4433");
+        => AssertCorpusRoundTrips("kamidori", "SYS4433");
 
-    private static void AssertCorpusRoundTrips(string directory, string abiId)
+    private static void AssertCorpusRoundTrips(string game, string abiId)
     {
         string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT")
-            ?? Path.Combine(Paths.Workspace, directory);
+            ?? Paths.GameInstall(game);
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"install not found at {gameRoot}");
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, abiId);

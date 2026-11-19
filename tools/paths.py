@@ -26,10 +26,16 @@ BIN = REPO / "bin"
 SHARED_BUILD = REPO / "build"
 PROFILE_MANIFEST_DIR = REPO / "engine" / "Ome.Engine" / "Profiles"
 
-_CONVENTIONAL_GAME_ROOTS = {
-    "himegari": WORKSPACE / "Himegari_Game",
-    "kamidori": WORKSPACE / "Kamidori",
-}
+# Every install sits in one folder beside the repository, each under a name of its own. A game's conventional
+# install is GAMES/<game id>, so a new game adds no entry here. An install with no profile of its own sits beside
+# them: another install of a game (games/kamidori-translated) or a reference-only one (REFERENCE_INSTALLS).
+GAMES = WORKSPACE / "games"
+
+
+def conventional_game_root(game_id: str) -> Path:
+    """The conventional install of a game: ``<workspace>/games/<game id>``."""
+    return GAMES / game_id
+
 
 _CONVENTIONAL_EXTRACTED_ROOTS = {
     "himegari": WORKSPACE / "extracted",
@@ -40,7 +46,7 @@ _CONVENTIONAL_EXTRACTED_ROOTS = {
 # copies and engine dumps live in ENGINES_BUILD/<id>/ (tools/native_scratch.py and tools/frida/dump_engine.py
 # take ``--reference ID``).
 REFERENCE_INSTALLS = {
-    "arterial": WORKSPACE / "Arterial" / "創刻のアテリアル",
+    "arterial": GAMES / "arterial",   # 創刻のアテリアル
 }
 ENGINES_BUILD = SHARED_BUILD / "engines"
 
@@ -135,8 +141,7 @@ class ToolContext:
         selected_game_root = (
             game_root
             or env.get("OME_GAME_ROOT")
-            or _CONVENTIONAL_GAME_ROOTS.get(selected)
-            or WORKSPACE / selected
+            or conventional_game_root(selected)
         )
         selected_extracted_root = (
             extracted_root

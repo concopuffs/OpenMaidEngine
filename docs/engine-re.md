@@ -127,8 +127,8 @@ translation's hook:
 
 | install | `AGE.EXE` | version | live module | dump |
 |---|---|---|---|---|
-| `Kamidori/`, clean, official updates applied | packed, 1,204,736 bytes, SHA-256 `52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e` | 4.33G (4.33.7.0) | `0x400000`, 2,990,080 bytes | `build/games/kamidori/engine-dump/` (SHA-256 `eed00b04279566d1cb990208c144f470da4587d7e42256d1aa02298d59ffbc14`, captured from an unhooked AGE) |
-| `Kamidori_Translated/`, English fan translation | unpacked plus a `.patch` section, 2,183,936 bytes, SHA-256 `977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4` | 4.33F (4.33.6.0) | `0x400000`, 2,294,528 bytes | `build/games/kamidori/engine-dump-translated/` |
+| `games/kamidori/`, clean, official updates applied | packed, 1,204,736 bytes, SHA-256 `52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e` | 4.33G (4.33.7.0) | `0x400000`, 2,990,080 bytes | `build/games/kamidori/engine-dump/` (SHA-256 `eed00b04279566d1cb990208c144f470da4587d7e42256d1aa02298d59ffbc14`, captured from an unhooked AGE) |
+| `games/kamidori-translated/`, English fan translation | unpacked plus a `.patch` section, 2,183,936 bytes, SHA-256 `977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4` | 4.33F (4.33.6.0) | `0x400000`, 2,294,528 bytes | `build/games/kamidori/engine-dump-translated/` |
 
 Both builds place their sections at the same addresses (`.text` `0x401000..0x574000`, then `.rdata`, `.data`,
 `.rsrc`), but the code differs. Comparing the two dumps:
@@ -195,7 +195,7 @@ revision changes; a sweep then checks the rows that matter. Four builds have dum
 identity and native read checks" below). This table and the revision diff called it 4.22 before, after the script
 ABI `SYS4422`; the ABI and the build are different names.
 
-**Arterial.** `Arterial/創刻のアテリアル/` is a reference install with no port profile (`paths.REFERENCE_INSTALLS`),
+**Arterial.** `games/arterial/` is a reference install with no port profile (`paths.REFERENCE_INSTALLS`),
 kept only for engine comparison. Its packed `AGE.EXE` (1,294,848 bytes, SHA-256
 `c6d4b8d03c834350c996832479ec1faf48b5f7c0ec763a101ec5cd601f76d421`, catalog `S4IC438`) was dumped from a
 `native_scratch.py --reference arterial` copy by `dump_engine.py --reference arterial --spawn`, with the shell

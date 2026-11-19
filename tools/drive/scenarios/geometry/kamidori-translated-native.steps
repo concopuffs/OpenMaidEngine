@@ -5,7 +5,7 @@
 # same names. Run it first, on the fresh sandbox, then stop native: AGE writes SAVE.DAT, which keeps the face, only
 # when it quits, and run B seeds its sandbox from this one (do not start native again before run B starts, which
 # would empty it).
-#   py -3.11 -X utf8 tools/native_scratch.py --game kamidori --game-root ../Kamidori_Translated --name translated
+#   py -3.11 -X utf8 tools/native_scratch.py --game kamidori --game-root ../games/kamidori-translated --name translated
 #   py -3.11 -X utf8 tools/drive.py --game kamidori native start
 #       --exe build/games/kamidori/native-scratch-translated/AGE.EXE
 #   py -3.11 -X utf8 tools/drive.py --game kamidori native run

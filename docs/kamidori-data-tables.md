@@ -29,7 +29,7 @@ SHINIT, SIINIT, AMINIT, CDINIT and BTANINIT.
 
 ## Which files are authored data
 
-`Kamidori/` is a clean install with the official updates and appends applied (2026-11-08). Everything in it is
+`games/kamidori/` is a clean install with the official updates and appends applied (2026-11-08). Everything in it is
 authored data, and data tooling reads it the way native AGE mounts it:
 
 | files | what they are | used by data tooling |
@@ -40,7 +40,7 @@ authored data, and data tooling reads it the way native AGE mounts it:
 
 The loose updates add data the archive records lack: for example `$1$ITINIT` has 25 items where the
 `APPEND01.ALF` record has 19. The table counts below include them. The English fan translation is a separate
-install (`Kamidori_Translated/`, used only by the port's translation tests); it replaces eleven of the 17 `$n$`
+install (`games/kamidori-translated/`, used only by the port's translation tests); it replaces eleven of the 17 `$n$`
 scripts and adds 75 more, all in English ([`asset-resolution-re.md`](asset-resolution-re.md)).
 
 ## Tooling workflow

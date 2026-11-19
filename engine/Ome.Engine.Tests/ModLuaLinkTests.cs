@@ -1482,7 +1482,7 @@ public sealed class ModLuaLinkTests : IDisposable
     {
         // Kamidori's ADDITEM loops over an item's granted skills with the loop index 365 scripts share, inside the
         // award, whose ADDEXP has the index and the scratch value in use.
-        var (linkBase, scripts) = KamidoriBase(Path.Combine(Paths.Workspace, "Kamidori"));
+        var (linkBase, scripts) = KamidoriBase(Paths.KamidoriDir);
         ModLinkResult linked = ModLinker.Link(linkBase, Giver("kamidori", """
             local names = { "current_item_id", "current_item_count_change", "shared_loop_index", "shared_scratch_value" }
             local before = {}
@@ -1598,7 +1598,7 @@ public sealed class ModLuaLinkTests : IDisposable
     public void KamidorisBaseModRaisesItsExperienceAwardAndASubscriberDoesWhatThePatchDoes()
     {
         // Spec gate 13: the Kamidori base mod's event at the Kamidori point, with no engine change.
-        var (linkBase, scripts) = KamidoriBase(Path.Combine(Paths.Workspace, "Kamidori"));
+        var (linkBase, scripts) = KamidoriBase(Paths.KamidoriDir);
         var (withEvent, withPatch, unmodded, linked) = KamidoriAwards(linkBase, scripts, KamidoriAddExp, 7);
 
         GameEvent award = linked.Lua.Stack.Event("kamidori.experience.award")!;
@@ -1688,7 +1688,7 @@ public sealed class ModLuaLinkTests : IDisposable
     {
         var (linkBase, _) = translated
             ? KamidoriBase(Paths.KamidoriTranslatedDir, Path.Combine(Paths.KamidoriTranslatedDir, "patch"), Paths.KamidoriTranslatedDir)
-            : KamidoriBase(Path.Combine(Paths.Workspace, "Kamidori"));
+            : KamidoriBase(Paths.KamidoriDir);
         ModLinkResult linked = ModLinker.Link(linkBase, StageSubscriber("kamidori"), []);
         Assert.True(linked.Succeeded, linked.Report.Render());
         Assert.DoesNotContain(linked.Report.Lines, line => line.Message.Contains("not raised in this install", StringComparison.Ordinal));

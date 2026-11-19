@@ -235,10 +235,10 @@ handle, current position, and readable length in the FileDB stream table.
 
 The different Kamidori title screens produced by native AGE and the reimplementation are not a title-script
 branch, SYS4433 opcode difference, or append-catalog selection. The translated installation (in the workspace,
-`Kamidori_Translated/` since 2026-11-08) contains a translation-owned `patch/` overlay that the translated
+`games/kamidori-translated/` since 2026-11-08) contains a translation-owned `patch/` overlay that the translated
 executable probes ahead of AGE's normal root-loose/archive path. The translated `AGE.EXE` is version 4.33F, SHA-256
 `977923a70f4170a5bb5847cef2a1f05ef1e79b45699c1204af29243be6ee84f4`. A clean install with the official updates
-(`Kamidori/`) runs version 4.33G, SHA-256 `52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e`. The
+(`games/kamidori/`) runs version 4.33G, SHA-256 `52151686545215f350d2453febab91259450cf3fa79bfb218142765ce3f8842e`. The
 two are different engine builds, not one build with and without the hook ([`engine-re.md`](engine-re.md),
 "Kamidori engine builds").
 

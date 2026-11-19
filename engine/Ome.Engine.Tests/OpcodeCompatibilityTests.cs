@@ -82,7 +82,7 @@ public class OpcodeCompatibilityTests
     [Trait("Profile", "kamidori")]
     public void KamidoriTitleEntersSupportedIdleLoop()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriDir;
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
 
@@ -108,7 +108,7 @@ public class OpcodeCompatibilityTests
     [Trait("Profile", "kamidori")]
     public void KamidoriDrawchpExtendedNumericStyleFrontierExecutesWithNativeSpacing()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriDir;
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
 
@@ -157,7 +157,7 @@ public class OpcodeCompatibilityTests
     [Trait("Profile", "kamidori")]
     public void KamidoriArrayFillContractIsAnchoredInCombatAndEnemySetupScripts()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriDir;
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
 
@@ -188,7 +188,7 @@ public class OpcodeCompatibilityTests
     [Trait("Profile", "kamidori")]
     public void KamidoriPatternRevealCorpusUsesTheRecoveredNativeModes()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriDir;
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
 
@@ -225,7 +225,7 @@ public class OpcodeCompatibilityTests
     [Trait("Profile", "kamidori")]
     public void KamidoriDirectionalBlurCorpusUsesTheRecoveredTenOperandContract()
     {
-        string gameRoot = Path.Combine(Paths.Workspace, "Kamidori");
+        string gameRoot = Paths.KamidoriDir;
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
 

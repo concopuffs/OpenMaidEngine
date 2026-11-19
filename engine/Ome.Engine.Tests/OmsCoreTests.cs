@@ -1243,54 +1243,54 @@ public class OmsCoreTests
     [Trait("Profile", "himegari")]
     [Fact]
     public void InstalledHimegariCorpusRoundTripsThroughCoreSource()
-        => AssertCorpus("Himegari_Game", "SYS4422");
+        => AssertCorpus("himegari", "SYS4422");
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "himegari")]
     [Fact]
     public void InstalledHimegariCanonicalRebuildIsAFixedPoint()
-        => AssertCorpus("Himegari_Game", "SYS4422", fixedPoint: true);
+        => AssertCorpus("himegari", "SYS4422", fixedPoint: true);
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "himegari")]
     [Fact]
     public void InstalledHimegariCorpusRoundTripsThroughIdiomaticSource()
-        => AssertCorpus("Himegari_Game", "SYS4422", level: OmsSourceRoundTrip.IdiomaticLevel);
+        => AssertCorpus("himegari", "SYS4422", level: OmsSourceRoundTrip.IdiomaticLevel);
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "himegari")]
     [Fact]
     public void InstalledHimegariIdiomaticRebuildIsAFixedPoint()
-        => AssertCorpus("Himegari_Game", "SYS4422", fixedPoint: true, level: OmsSourceRoundTrip.IdiomaticLevel);
+        => AssertCorpus("himegari", "SYS4422", fixedPoint: true, level: OmsSourceRoundTrip.IdiomaticLevel);
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriCorpusRoundTripsThroughIdiomaticSource()
-        => AssertCorpus("Kamidori", "SYS4433", level: OmsSourceRoundTrip.IdiomaticLevel);
+        => AssertCorpus("kamidori", "SYS4433", level: OmsSourceRoundTrip.IdiomaticLevel);
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriIdiomaticRebuildIsAFixedPoint()
-        => AssertCorpus("Kamidori", "SYS4433", fixedPoint: true, level: OmsSourceRoundTrip.IdiomaticLevel);
+        => AssertCorpus("kamidori", "SYS4433", fixedPoint: true, level: OmsSourceRoundTrip.IdiomaticLevel);
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriCanonicalRebuildIsAFixedPoint()
-        => AssertCorpus("Kamidori", "SYS4433", fixedPoint: true);
+        => AssertCorpus("kamidori", "SYS4433", fixedPoint: true);
 
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]
     [Fact]
     public void InstalledKamidoriCorpusRoundTripsThroughCoreSource()
-        => AssertCorpus("Kamidori", "SYS4433");
+        => AssertCorpus("kamidori", "SYS4433");
 
-    private static void AssertCorpus(string directory, string abiId, bool fixedPoint = false,
+    private static void AssertCorpus(string game, string abiId, bool fixedPoint = false,
                                      string level = OmsSourceRoundTrip.CoreLevel)
     {
-        string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT") ?? Path.Combine(Paths.Workspace, directory);
+        string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT") ?? Paths.GameInstall(game);
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
         Assert.True(File.Exists(sys4Ini), $"install not found at {gameRoot}");
         Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);

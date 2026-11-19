@@ -49,11 +49,11 @@ string? OptionValue(string name)
 
 // The conventional game root follows the game GameProfileSelection.Resolve picks below: the last --game/--profile.
 string? requestedGame = GameProfileSelection.RequestedGameId(args);
-string conventionalGameRoot = requestedGame?.ToLowerInvariant() switch
-{
-    "kamidori" => Path.Combine(Paths.Workspace, "Kamidori"),
-    _ => Paths.GameDir,
-};
+// A game the registry does not know keeps Himegari's root, so the selection below reports the unknown id.
+string conventionalGameRoot =
+    requestedGame?.ToLowerInvariant() is { } requestedId && GameProfileRegistry.BuiltIn.Find(requestedId) != null
+        ? Paths.GameInstall(requestedId)
+        : Paths.GameDir;
 string gameRoot = Path.GetFullPath(OptionValue("--game-root") ?? conventionalGameRoot);
 string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
 GameCatalogIdentity catalogIdentity = GameCatalogIdentity.ReadSys4IniHeader(sys4Ini);

@@ -224,11 +224,11 @@ public sealed class GameProfileSelectionTests
 
     [Theory]
     [Trait("Category", "Workspace")]
-    [InlineData("Himegari_Game", "himegari")]
-    [InlineData("Kamidori", "kamidori")]
-    public void InstalledCatalogAutoSelectsExpectedProfile(string directory, string expectedProfile)
+    [InlineData("himegari")]
+    [InlineData("kamidori")]
+    public void InstalledCatalogAutoSelectsExpectedProfile(string expectedProfile)
     {
-        string path = Path.Combine(Paths.Workspace, directory, "SYS4INI.BIN");
+        string path = Path.Combine(Paths.GameInstall(expectedProfile), "SYS4INI.BIN");
         Assert.True(File.Exists(path), $"installed-data profile gate requires {path}");
 
         GameCatalogIdentity identity = GameCatalogIdentity.ReadSys4IniHeader(path);
@@ -242,11 +242,11 @@ public sealed class GameProfileSelectionTests
     /// engine_load_sys4ini_and_mount_append_catalogs reads into ctx+0xa0bb8; the profile copy must match.</summary>
     [Theory]
     [Trait("Category", "Workspace")]
-    [InlineData("Himegari_Game")]
-    [InlineData("Kamidori")]
-    public void InstalledSys4IniHeaderDeclaresProfileSaveBankDimensions(string directory)
+    [InlineData("himegari")]
+    [InlineData("kamidori")]
+    public void InstalledSys4IniHeaderDeclaresProfileSaveBankDimensions(string game)
     {
-        string path = Path.Combine(Paths.Workspace, directory, "SYS4INI.BIN");
+        string path = Path.Combine(Paths.GameInstall(game), "SYS4INI.BIN");
         Assert.True(File.Exists(path), $"installed-data profile gate requires {path}");
         byte[] header = File.ReadAllBytes(path).AsSpan(0, 0x12c).ToArray();
         int[] savedPrefix = Enumerable.Range(0, 6)

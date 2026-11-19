@@ -5,21 +5,21 @@ patch points) is generated in [README.md](README.md#kamidori-alchemy-meister).
 
 ## Install and options
 
-The expected install is `Kamidori/` beside the repository: the game with its official updates applied. The English
-fan translation is a separate install, `Kamidori_Translated/`, with its overlay in `patch/`. Every `Ome.Cli`
+The expected install is `games/kamidori/` beside the repository: the game with its official updates applied. The English
+fan translation is a separate install, `games/kamidori-translated/`, with its overlay in `patch/`. Every `Ome.Cli`
 command needs the game options:
 
 | Install | Options |
 |---|---|
-| untranslated | `--game kamidori --game-root ../Kamidori` |
-| translated | `--game kamidori --game-root ../Kamidori_Translated --overlay-root patch` |
+| untranslated | `--game kamidori --game-root ../games/kamidori` |
+| translated | `--game kamidori --game-root ../games/kamidori-translated --overlay-root patch` |
 
 - Port: `.\run-godot.cmd -Kamidori`, or `.\run-godot.cmd -Kamidori -TranslationPatch` for the translated install.
   Add `-Mod PATH` for a mod.
 - Driver, translated:
 
   ```text
-  py -3.11 -X utf8 tools/drive.py --game kamidori --game-root ../Kamidori_Translated port start --mod PATH --port-arg=--overlay-root --port-arg=<absolute path to Kamidori_Translated\patch> --port-arg=--allow-bmp-as-agf
+  py -3.11 -X utf8 tools/drive.py --game kamidori --game-root ../games/kamidori-translated port start --mod PATH --port-arg=--overlay-root --port-arg=<absolute path to games\kamidori-translated\patch> --port-arg=--allow-bmp-as-agf
   ```
 
   The game's points include `title.start` (Game Start on the title screen) and `newgame.begin` (Begin Game on
@@ -61,7 +61,7 @@ One command turns the translated install into a package that shows the untransla
 ([languages.md](../languages.md), "From a translation made in place"):
 
 ```text
-Ome.Cli omp text import-scripts --game kamidori --game-root ../Kamidori --from ../Kamidori_Translated --overlay-root patch --allow-bmp-as-agf --output build/games/kamidori/import-en --package --verify
+Ome.Cli omp text import-scripts --game kamidori --game-root ../games/kamidori --from ../games/kamidori-translated --overlay-root patch --allow-bmp-as-agf --output build/games/kamidori/import-en --package --verify
 ```
 
 - The package holds 48,586 entries in 217 catalog files and 232 images: 207 from `patch/`, and the 25 `$n$`

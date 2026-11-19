@@ -9,8 +9,8 @@
 #   .\run-godot.ps1 -PerfLog   write a timestamped frame/compositor CSV under build/perf
 #   .\run-godot.ps1 -FpsCounter  show live rendered FPS and frame time in the top-right corner
 #   .\run-godot.ps1 -SoftwareRenderer  use the retained software correctness oracle
-#   .\run-godot.ps1 -Kamidori  launch the conventional ../Kamidori install as the kamidori game
-#   .\run-godot.ps1 -Kamidori -TranslationPatch  launch the translated ../Kamidori_Translated install with its
+#   .\run-godot.ps1 -Kamidori  launch the conventional ../games/kamidori install as the kamidori game
+#   .\run-godot.ps1 -Kamidori -TranslationPatch  launch the translated ../games/kamidori-translated install with its
 #                                               patch/ English overlay and BMP assets
 #   .\run-godot.ps1 -OverlayRoot <dir> [-OverlayRoot ...] -AllowBmpAsAgf  select generic asset compatibility options
 #   .\run-godot.ps1 -Mod <mod folder or .omp> [-Mod ...]  also load these mods (docs/modding/cli.md)
@@ -130,22 +130,25 @@ $godotArguments = @{
     Description = 'Godot .NET console executable'
 }
 $godot = Resolve-ConfiguredFile @godotArguments
+# Every install sits in games/ beside the repository, each under a name of its own.
+$gamesFolder = Join-Path (Split-Path $repo -Parent) 'games'
 if ($Kamidori) {
     if ($Game -and $Game -ne 'kamidori') {
         throw "-Kamidori conflicts with -Game $Game."
     }
     $Game = 'kamidori'
     if (-not $PSBoundParameters.ContainsKey('GameRoot')) {
-        # The workspace keeps the clean install in Kamidori/ and the English fan translation's in Kamidori_Translated/.
-        $installName = if ($TranslationPatch) { 'Kamidori_Translated' } else { 'Kamidori' }
-        $GameRoot = Join-Path (Split-Path $repo -Parent) $installName
+        # The clean install is games/kamidori, and the English fan translation's is games/kamidori-translated.
+        $installName = if ($TranslationPatch) { 'kamidori-translated' } else { 'kamidori' }
+        $GameRoot = Join-Path $gamesFolder $installName
     }
 }
-$conventionalInstallName = if ($Game -eq 'kamidori') { 'Kamidori' } else { 'Himegari_Game' }
+# A game's conventional install is games/<game id>; with no game named, Himegari's.
+$conventionalInstallName = if ($Game) { $Game.ToLowerInvariant() } else { 'himegari' }
 $gameRootArguments = @{
     ExplicitValue = $GameRoot
     EnvironmentValue = $env:OME_GAME_ROOT
-    ConventionalValue = Join-Path (Split-Path $repo -Parent) $conventionalInstallName
+    ConventionalValue = Join-Path $gamesFolder $conventionalInstallName
 }
 $resolvedGameRoot = Resolve-ConfiguredGameRoot @gameRootArguments
 $requestedOverlayRoots = @()

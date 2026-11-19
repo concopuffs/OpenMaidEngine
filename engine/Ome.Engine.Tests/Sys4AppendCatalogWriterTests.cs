@@ -42,7 +42,7 @@ public class Sys4AppendCatalogWriterTests
     [Trait("Profile", "himegari")]
     public void AGeneratedCatalogMountsBesideTheInstalledBaseCatalog()
     {
-        string install = Path.Combine(Paths.Workspace, "Himegari_Game");
+        string install = Paths.GameDir;
         string scratch = Directory.CreateTempSubdirectory("ome-append-").FullName;
         try
         {

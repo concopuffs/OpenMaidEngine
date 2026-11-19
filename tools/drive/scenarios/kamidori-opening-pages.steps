@@ -3,8 +3,8 @@
 # unchanged on the translated install, whose scripts carry extra instructions, and on the clean one. Run them on the
 # port once per install with a page map each, on a fresh sandbox, then compare the maps:
 #   run A, translated, no catalog:
-#     py -3.11 -X utf8 tools/drive.py --game kamidori --game-root ../Kamidori_Translated port start
-#       --port-arg=--overlay-root --port-arg=<Kamidori_Translated\patch> --port-arg=--allow-bmp-as-agf
+#     py -3.11 -X utf8 tools/drive.py --game kamidori --game-root ../games/kamidori-translated port start
+#       --port-arg=--overlay-root --port-arg=<games\kamidori-translated\patch> --port-arg=--allow-bmp-as-agf
 #       --port-arg=--page-map --port-arg=<A.jsonl>
 #   run B, clean, with the imported catalog:
 #     py -3.11 -X utf8 tools/drive.py --game kamidori port start --mod <catalog package>

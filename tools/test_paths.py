@@ -14,7 +14,7 @@ class ToolContextTests(unittest.TestCase):
     def test_himegari_defaults_preserve_conventional_workspace(self) -> None:
         context = paths.ToolContext.resolve(environ={})
         self.assertEqual("himegari", context.profile_id)
-        self.assertEqual(paths.WORKSPACE / "Himegari_Game", context.game_root)
+        self.assertEqual(paths.WORKSPACE / "games" / "himegari", context.game_root)
         self.assertEqual(paths.WORKSPACE / "extracted", context.extracted_root)
         self.assertEqual(paths.REPO / "build/games/himegari", context.game_build)
 
@@ -44,7 +44,7 @@ class ToolContextTests(unittest.TestCase):
         # argparse's prefix matching once read `--game kamidori` as `--game-root kamidori` (launcher spec §5.8).
         context, remaining = paths._context_from_process(["--game", "kamidori", "--tool-flag"], {})
         self.assertEqual("kamidori", context.profile_id)
-        self.assertEqual(paths.WORKSPACE / "Kamidori", context.game_root)
+        self.assertEqual(paths.WORKSPACE / "games" / "kamidori", context.game_root)
         self.assertEqual(["--tool-flag"], remaining)
 
     def test_profile_is_the_same_option_as_game_and_the_last_wins(self) -> None:
