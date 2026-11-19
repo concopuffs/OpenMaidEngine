@@ -182,9 +182,15 @@ The driver is needed before the port boots: it shows what native does, and it ma
 
 - Write `tools/drive/<id>.toml`: the canvas points (advance, title, new game), the sandbox's settings, and the
   native facts: the context global, the frame-record offsets, the input-polling setter and its call's return, op
-  `0x60`'s `rand` return, the build's hash, and the dialogs to answer. Translate the nearest game's addresses
-  through the revision diff's correspondence (its JSON keeps the function, field and address maps), then check
-  each in Ghidra.
+  `0x60`'s `rand` return, the build's hash, and the dialogs to answer. Each is found from the nearest game's by
+  its code, not by its address (`engine-re.md`, "Driving native AGE", has the three games'):
+  - the context global is where the main routine stores the context constructor's result;
+  - `cur_ctx_index` is the field every operand accessor multiplies by `0x78`, and the frame record's layout has
+    not changed between builds;
+  - the setter's call in the window procedure has the same bytes in every build so far, and occurs once;
+  - `rand` is the runtime function with the `0x343fd` multiplier that op `0x60`'s handler calls first.
+- Read the title's entries from a native screenshot and add them as points. Write the game's opening as a
+  scenario both targets will run (`tools/drive/scenarios/<id>-opening.steps`).
 - **Done when** `drive.py --game <id> native start` reaches the title in a sandbox, `state` reads VM positions,
   `shot` captures, `rand-seed` reports draws, `stop` closes the game its own way, and the install checks
   unchanged.

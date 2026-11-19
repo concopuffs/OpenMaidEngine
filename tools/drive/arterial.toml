@@ -1,0 +1,68 @@
+# Driving facts for 創刻のアテリアル, read by tools/drive.py for both targets (native AGE and the port).
+# Points are native client pixels of the 1024x576 canvas. Its engine is AGE 4.38D (SYS4438), whose EngineCtx is laid
+# out differently from Himegari's (vm-map/engine-ctx.toml describes Himegari's), so the native field offsets are given
+# here. Evidence: docs/engine-re.md, "Driving native AGE" and "Comparing engine builds".
+
+[advance]
+point = "adv.next"        # where `advance` clicks: the middle of the canvas
+
+# The title's entries, read from native on 2026-11-19 (the title shows "Ver 2.00.0022" and lists appends 01 to 03).
+# Game Start goes straight to SC0000. The advance point lies on Game Start, so a scenario must not click it at the
+# title.
+[points]
+"adv.next" = [512, 288]
+"title.afb" = [510, 236]         # Arterial Force Blade (アテリアルフォースブレイド)
+"title.start" = [510, 284]       # Game Start (初めから)
+"title.load" = [510, 334]        # Load Data (続きから)
+"title.room" = [510, 384]        # Eushully-chan Room (回想)
+"title.option" = [510, 434]      # Option (環境設定)
+"title.quit" = [510, 484]        # Quit (ゲームを終了する)
+
+# Settings written into a sandbox profile's SYS4REG.INI before every sandboxed launch (as for the other games).
+[sandbox]
+settings_file = "SYS4REG.INI"
+
+[sandbox.settings]
+"display.ScreenMode" = 1
+"display.VirtualFullScreen" = 1
+
+[sandbox.quiet]
+"sound.Volume0" = 0
+
+# Native AGE only. The [native.*] tables are for the install's AGE.EXE, AGE 4.38D; its unpacked image is
+# build/games/arterial/engine-dump (Ghidra /arterial/4.38D). Each value was found on 2026-11-19 from Kamidori's:
+# - g_pEngineCtx is 0x5fd6e8: WinMain@0x4a0d40 stores engine_ctx_construct's result there, and the window procedure
+#   reads the ctx through it.
+# - The interpreter's frame record keeps the internal layout of the other builds from cur_ctx_index (codebase +0x14,
+#   pc +0x18, resource id +0x50): the operand accessors index ctx+0x5d430 + curCtx*0x78 by ctx+0x5d418, and a handler
+#   stores its instruction length at ctx+0x5d48c + curCtx*0x78 (record +0x24, as in Himegari).
+[native.engine]
+ctx_global = 0x5fd6e8
+frame_stride = 0x78
+frame_count = 20
+cur_ctx_index = 0x5d418
+frame_codebase = 0x5d42c
+frame_pc = 0x5d430
+frame_script_resource_id = 0x5d468
+
+# input_set_polling_enabled is 0x471040, byte for byte Kamidori's 0x465a60 (input manager +0x1820). The window
+# procedure's WM_ACTIVATE case calls it on the input manager at ctx+0x408; the call at 0x49fc67 returns to 0x49fc6c.
+# It is the one place in the image with that case's code (Kamidori has the same bytes once, at 0x48e03c).
+[native.keep_polling]
+setter = 0x471040
+activate_return = 0x49fc6c
+gate = 0x1c28
+
+# The drive step rand-seed replaces op 0x60's rand() draw at the instruction its call returns to: op 0x60's handler
+# at 0x429c90 calls _rand@0x585975 (the MSVC generator, by its 0x343fd multiplier) at 0x429cca, before it fetches an
+# operand, as Kamidori's does at 0x42768a.
+[native.rand]
+op60_rand_return = 0x429ccf
+
+[native.build."4.38D"]
+sha256 = "c6d4b8d03c834350c996832479ec1faf48b5f7c0ec763a101ec5cd601f76d421"   # packed, as installed
+
+[[native.dialog]]
+match = "データが壊れています．"
+answer = "yes"
+reason = "registration check (set:IsReggist == 0) on copied installs; Yes continues, No exits"

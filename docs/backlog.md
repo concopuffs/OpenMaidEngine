@@ -525,10 +525,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     not support yet, with the level, and the Games list leaves it out. Nothing shows a game as "being added".
   - **The drive MCP server serves one game** (`drive_mcp.py --game ID`, registered for Himegari). Its tools take
     no game.
-  - **Native driving facts are found by hand for each build** (`tools/drive/<id>.toml`, `[native.*]`).
-    `revision_diff.py` learns which functions, context fields and globals correspond, and writes only how many;
-    `ghidra_port_names.py` writes the function pairs it used into its plan, which covers the functions. Nothing
-    writes the field and address maps a driver table needs.
+  - **Native driving facts are found by hand for each build** (`tools/drive/<id>.toml`, `[native.*]`). Arterial's
+    took four searches by code (`adding-a-game.md`, step 5), done with a scratch script. A kept command that
+    proposes them from the nearest build's would save the next game that work.
   - **The name port reaches only what an opcode or a unique string reaches.** 397 of 4.33G's 1,015 named or
     commented functions found no partner in 4.38D: start-up code, the frame loop, the renderer. More starting
     pairs (the window procedure, the main tick, import call sites) would reach them.
@@ -572,9 +571,23 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     was not checked (`engine-re.md`, "Runbook"). The Python corpus tools have nothing to read yet: there is no
     `extracted-arterial/`, so `extract_phase2.py` and `compiler_census.py` have not run, and the census is what
     Open Maid Script needs before M1.
+  - **Native AGE is driven (step 5, 2026-11-19).** `tools/drive/arterial.toml` and
+    `tools/drive/scenarios/arterial-opening.steps`: the logo, the title, Game Start and SC0000's first pages, in a
+    save sandbox, with the install unchanged afterwards (`engine-re.md`, "Driving native AGE").
+  - **Where the port's boot stops.** `Ome.Cli play --game arterial SYSTEM4.BIN` halts after five steps at
+    `SYSTEM4@0xa`, op `0x252` with the operand 3. Its handler (`0x4247f0`) only stores the operand at
+    `ctx+0x59e60`; no other instruction names that offset, so its reader goes through an object pointer and is not
+    found yet. The route to the first ADV page needs about twenty of the 45 opcodes:
+    - SYSTEM4, INIT2 and LOGO: `0x252`, `0x2d5`, `0x320`, `0x322`, `0x323`;
+    - TITLE: also `0x2c7`, `0x2d1`, `0x2eb`, `0x2ec`, `0x324`, `0x325`, `0x328`, `0x329`, `0x32b`–`0x32e`;
+    - SC0000: also `0x26`, `0x36`, `0x2e9`.
+
+    The `0x320` family is a drawing subsystem the port does not have: op `0x320` takes arrays of points and float
+    cells and calls a worker beside the build's new vertex-buffer code (`CalcVertexPos`, `RenderPolygon`). P2
+    therefore needs that subsystem designed in the graphics native, not only handlers.
   - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
-    the two settings keys, the two file types and the font); step 5, `tools/drive/arterial.toml` and a native run
-    to the title; step 6, the boot, in the order it reaches the 45 opcodes.
+    the two settings keys, the two file types and the font), then step 6, the boot, starting with what `0x2d5` and
+    the `0x320` family are.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

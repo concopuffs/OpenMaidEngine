@@ -7090,6 +7090,25 @@ differently, so `engine-ctx.toml`'s offsets (Himegari's `/v2` image) do not appl
 - `input_set_polling_enabled` is `0x465a60` (input manager `+0x1820`, as in Himegari, so the gate is `ctx+0x1c28`).
   `age_main_window_proc`'s `WM_ACTIVATE` case calls it with `windowed && wParam == WA_INACTIVE` on the input manager
   at `ctx+0x408`, and the call returns to `0x48e041` (4.33F: windowed flag `ctx+0x9e740`, return `0x48e061`).
+
+**創刻のアテリアル (SYS4438, AGE 4.38D, 2026-11-19).** `tools/drive/arterial.toml` names its own values too. Each
+was found from Kamidori's by its code:
+
+- `g_pEngineCtx` is `0x5fd6e8`: `age_win_main@0x4a0d40` stores `engine_ctx_construct`'s result there.
+- `cur_ctx_index` is `ctx+0x5d418`. The operand accessors read the current instruction through `ctx+0x5d430 +
+  curCtx * 0x78`, and a handler stores its instruction length at `ctx+0x5d48c + curCtx * 0x78`, which is record
+  `+0x24` as in Himegari. So the frame record keeps its layout: codebase `0x5d42c`, pc `0x5d430`, resource id
+  `0x5d468`.
+- `input_set_polling_enabled` is `0x471040`, byte for byte Kamidori's. `age_main_window_proc@0x49f9a0` calls it at
+  `0x49fc67` on the input manager at `ctx+0x408`, and the call returns to `0x49fc6c`. The 26 bytes around that call
+  occur once in the image, as Kamidori's do in its own. The gate is `ctx+0x1c28`, as in both other builds.
+- Op `0x60`'s handler (`0x429c90`) calls `_rand@0x585975` at `0x429cca`, which returns to `0x429ccf`. `_rand` is
+  the runtime function with the `0x343fd` multiplier; the same search finds Kamidori's known `0x42768f`.
+
+A driven native run confirmed them the same day (`tools/drive/scenarios/arterial-opening.steps`): the frame stack
+reads `SYSTEM4 > LOGO`, then `SYSTEM4 > TITLE`, and after Game Start `SYSTEM4 > SC0000`, whose pages advance. The
+title shows `Ver 2.00.0022` and lists appends 01 to 03. Game Start goes straight to SC0000: the game has no
+new-game page. The middle of the canvas lies on Game Start, so clicking it at the title starts a game.
 - Op `0x60`'s handler (`0x427650`) calls `_rand@0x558368`, which returns to `0x42768f` (4.33F: `0x4276f0`,
   `0x42772f`); the drive step `rand-seed` replaces the draw there.
 - A copied install raises the same データが壊れています． registration box, answered Yes.
