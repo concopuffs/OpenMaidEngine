@@ -104,7 +104,8 @@ version 3 loader still reads versions 1 and 2. A package with Lua and an earlier
 `target = "native"`, is an error.
 `omp = 4` adds `[[data]]`, `[[accepts]]` and the `data/` and `shapes/` folders ([data-files.md](data-files.md)); a
 version 4 loader still reads versions 1 to 3. In a package of an earlier version, a `data/` or `shapes/` folder is
-outside the layout: it is ignored and reported as a note. A package with data files targets `extended`, as one with Lua does.
+outside the layout: it is ignored and reported as a note. A package with data files targets `extended`, as one with
+Lua does.
 
 ### Identity
 

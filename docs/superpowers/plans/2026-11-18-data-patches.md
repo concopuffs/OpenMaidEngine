@@ -1080,7 +1080,7 @@ Every gate of spec §12 as it stands after M3. "core" runs in `dotnet test --fil
 | 7. Errors | `DataPatchWorkspaceTests.EachProblemAShapeSaysStopsTheLinkWithTheContributorTheFileTheLineAndThePath` (the misspelt field, the state field, the hexadecimal id, the named column given by its number, the value of the wrong kind, and ids, slots and columns out of range: a link error with the line, and no delivery planned), `EachProblemOfAShippedFileIsReportedWithTheContributorTheFileAndThePathAndNothingOfItIsApplied` (the two strings CP932 cannot encode, at the first delivery) and `UnderHaltAShippedFilesProblemEndsTheBootNamingTheContributorItsFileAndThePath` (a CP932 string) (Workspace, both games); `DataPatchTests.TheShapeAndTheApplierAgreeOnEachFieldEachStateFieldAndEachMistake` (core, both games) | Five of the six mistakes are link errors; a file that fails the link is never delivered, so nothing of it is applied at any event |
 | 8. Stage | §11.1 (driven), and after M3 the twins' new mistake, a unit name with `é`, driven again on both games (§12.2); `DataPatchWorkspaceTests.TheStageExamplesEditTheirSlotAndTheirMistakeTwinsAreReportedAtBoot` runs FIELD after each twin's boot: no error at `stage.loaded`, and the slot keeps the stage's own unit (Workspace, both games). A stage part's mistakes that a shape can say (the scoped table at the top level, a stage, a slot or a column out of range) fail `omp check` with their line: `DataPatchTests`' `ShapeErrors` and the Workspace `ShapeProblems` | §9.2 |
 | 9. Not shaped by records | §10.2 (core) | — (its kind has no shape) |
-| 10. Size | `DataPatchWorkspaceTests.TheLargestFilesCostLessThanHalfTheAllowanceAndTheItemFileStaysUnderTheCeiling` and `AFileAtTheValueBoundIsAppliedInsideItsBudgetAtBootAndAtALoadAndARefusedOneFailsItsCheckNotItsBudget` (Workspace, Kamidori), one run, with the link now checking the shape: the balance file links in 0.01 s; the item file links in 1.44 s, boots in 0.74 s and loads in 1.49 s (0.79 s with no mod); the file at the value bound links in 2.26 s; the refused file is refused at the link in 2.26 s. Each cost a value is §10.1's (102.0, 102.4, 102.9, 114.4) | The refused file fails at the link; the owner's check at the bound runs on a copy of the base mod without its shape, which is what an owner without a shape meets (§9.2) |
+| 10. Size | `DataPatchWorkspaceTests.TheLargestFilesCostLessThanHalfTheAllowanceAndTheItemFileStaysUnderTheCeiling` and `AFileAtTheValueBoundIsAppliedInsideItsBudgetAtBootAndAtALoadAndARefusedOneFailsItsCheckNotItsBudget` (Workspace, Kamidori), one run, with the link now checking the shape: the balance file links in 0.01 s; the item file links in 1.44 s, boots in 0.74 s and loads in 1.49 s (0.79 s with no mod); the file at the value bound links in 2.26 s; the refused file is refused at the link in 2.26 s. Each cost a value is §10.1's (102.0, 102.4, 102.9, 114.4). After M3's review a file at the bound whose every key is unknown is timed at the link too (§12.5) | The refused file fails at the link; the owner's check at the bound runs on a copy of the base mod without its shape, which is what an owner without a shape meets (§9.2) |
 | 11. Second game | §11.1 (core), and every M3 test that takes a game runs both; the two shapes come from the two record maps by one generator | — |
 | 12. Shape | `DataPatchTests.OmpCheckAndOmpBuildRefuseAFileThatFailsItsShapeWithTheFileTheLineThePathAndTheReason` (both games: a misspelt field with its nearest name, `unit.761.experiance_reward: no such key; the nearest name here is experience_reward`; a state field, `item.5.inventory_count: item.inventory_count is saved state: …`; both exit 1, and `omp build` writes no package), `AFileThatPassesItsShapeChecksAndBuilds`, `OmpCheckRefusesAShapeWithAKeywordOutsideTheSubsetAsItsOwnersError` and `EveryShippedDataExampleLinksAndPassesItsShape` (core). By hand: `omp check` over 17 mistakes and Taplo over the same (§12.2) | New |
 | 13. Layers | `ProjectBoundaryTests` (core); the checker is in `Ome.Mods` and reads JSON with System.Text.Json's `JsonDocument` (no reflection); `tools/publish_engine.py --runtime win-x64` publishes at `8c2b20b7` with no trim or AOT warning but GodotSharp's own | — |
@@ -1093,8 +1093,8 @@ Every gate of spec §12 as it stands after M3. "core" runs in `dotnet test --fil
   data/stages.toml failed: 1 problem, so nothing of it is applied: unit.810.display_name: a string cell holds text the
   save can encode (code page 932); U+00E9 is not in it" (Kamidori: `unit.761.display_name`). `diagnostics/lua.log`
   has that error at `INIT2.BIN@0x180` (Kamidori `0x20d`, and once more at the save's load from the title, which starts
-  a new session) and none at the stage. The floor holds its own enemies: `stage=1 slots=205,200,200 placed=2,200,205,200` and `stage=51
-  mode=0 slots=331,402,402 placed=331`.
+  a new session) and none at the stage. The floor holds its own enemies: `stage=1 slots=205,200,200
+  placed=2,200,205,200` and `stage=51 mode=0 slots=331,402,402 placed=331`.
 - **`omp check` over every example** of `oms/examples/mods/`, each with its game: all 18 link,
   `example.kamidori-prologue-line` on the translated install (`--game-root ../Kamidori_Translated --overlay-root
   patch`), as its README says; the three Kamidori data examples link on that install too.
@@ -1114,8 +1114,8 @@ Every gate of spec §12 as it stands after M3. "core" runs in `dotnet test --fil
   the built text.
 - **The twins' mistake** (§6.2, gate 8's row) was "the twins' scoped table at the top level". Only Kamidori's twin was
   that; Himegari's misspelt a field (`stage.2.enemy.3.unit`), which has no nearest name, since `unit_id` is 3 edits
-  away and a 7-letter name allows 2. Both twins now carry the CP932 mistake, and both old mistakes are among gate 12's
-  cases.
+  away and a 7-letter name allows 2 (§12.5 gives it one). Both twins now carry the CP932 mistake, and both old
+  mistakes are among gate 12's cases.
 - **The shape's order** (§6.2): "the keys are written sorted". The generator writes each schema's keywords in one fixed
   order, `description` first, and sorts the names under `properties` and `definitions`; the diff of a registry change
   stays small.
@@ -1137,12 +1137,70 @@ Every gate of spec §12 as it stands after M3. "core" runs in `dotnet test --fil
   written in decimal. The guide says so.
 - **The order of a file's problems** follows the document's tables as the reader gives them, not the lines: a file
   that writes `unit`, then `skill`, then `unit` again lists every `unit` problem first.
-- **An array for a whole row** is "unit.103.stats: takes a table, not an array". The applier said what to write
-  instead ("takes its columns by name, or by number where a column has no name, not a whole row as an array"); the
-  shape's error does not.
+- **An array for a whole row** was "unit.103.stats: takes a table, not an array", where the applier said what to
+  write instead ("takes its columns by name, or by number where a column has no name, not a whole row as an array").
+  §12.5 gives the shape's error the row's description.
 - **The closing checks** (ran, at `8c2b20b7` with this section uncommitted): `tools/validate.py --level core`, 56
   gates passed, with 2,821 engine core tests and 86 launcher tests; the NativeAOT publish above; and the Workspace
   tests by class, ten batches of one to seven classes: 173 passed and 18 failed, the 18 a fresh worktree fails for the
   build outputs it lacks (15 of `MovieOpcodeTests` for the FFmpeg shim, `SharedProfileTests`' one for `CGINIT.json`,
   and `Sys4AssetStoreTests`' two for `asset-index.json` and `bin/BinExtractALF.exe`). `DataPatchWorkspaceTests`: 43
   passed.
+
+### 12.5 After M3's review (2026-11-19)
+
+The review of `326e88e7` accepted M3 with five fixes, made on the branch in `15dab7e1` (the engine's comments),
+`cc45b324` (a reason only for a problem kept), `31454512` (a value of the wrong kind where a table goes), `501b6c8d`
+(a name cut short) and the commit of this section (`packages.md`'s line and this section).
+
+- **A file whose every key is unknown took 22 s to refuse.** The check built each problem's reason before deciding
+  whether to keep it, and an unknown key's reason sorts the names there and measures its distance to each: for all
+  400,000 problems of such a file, of which it keeps 20, and inside oneOf's forms, which keep none. It now builds a
+  reason only for a problem it keeps; past the kept ones, and inside oneOf's forms, it only counts. Measured (ran),
+  `omp check` with the Release CLI on Kamidori over the review's files, the checker of `326e88e7` and the new one on
+  one machine (the review's own figures were 0.5, 22.2 and 22.8 s):
+
+  | File | Before | After |
+  |---|---|---|
+  | One value | 0.83 s | 0.52 s |
+  | 400,000 unknown keys of 30 characters | 22.09 s | 2.65 s |
+  | 110,000 unknown keys of 128 characters | 22.88 s | 1.51 s |
+
+  Gate 10's test (`TheLargestFilesCostLessThanHalfTheAllowanceAndTheItemFileStaysUnderTheCeiling`) builds such a file
+  at the value bound, 1,000 unit records of 400 unknown keys, and times it at the link beside the refused file, under
+  the same ceiling of 10 s, with its 21 stops and "and 399980 more problems": refused in 1.64 s, the refused file in
+  2.46 s, in one Debug run. `DataShapeTests.PastTheFirstTwentyAProblemIsCountedAndOneOfsFormsCountNone` holds the
+  count past the kept 20, and a oneOf form that fails on each of its keys as one problem.
+- **A value of the wrong kind where a table or an array goes** adds the schema's description, when it has one:
+  `unit.762.stats: takes a table, not an array (unit.stats: unit_base_stats, a row of 14 columns by name; write
+  stats.<column> = ...)`. The engine adds the owner's words and has none of its own for what goes there; a scalar's
+  reason is as it was. The generator's descriptions now end with what to write: `write <field>.<column> = ...` for a
+  row (`<number>` for a row by number), `write <table>.<id>.<field> = ...` for a record and its records, and the path
+  through the scope for a scoped table and its scope (`write stage.<id>.enemy.<id>.<field> = ...`). They end in three
+  dots, not U+2026: the CLI writes in the console's code page (here CP932, `81 63`), and not every code page has it.
+  The review's sample read "unit_stats, a row of 13 columns"; Kamidori's global is `unit_base_stats`, of 14.
+  `DataShapeTests` and two shipped-shape cases of gate 12 (a row given as an array on Kamidori, a record given as a
+  number on Himegari) hold it.
+- **The generated descriptions showed a guide's error.** `docs/modding/games/himegari.md` said, since `a53e4dff`,
+  that stage_enemy's four rows have no column names and are given by number. Himegari's record map names them
+  (`difficulty_0` to `difficulty_2`, `required_flag_1` to `required_flag_7`, `forbidden_flag_1` to
+  `forbidden_flag_5`), so the link refuses them by number. The guide now gives the names; Kamidori's rows have none,
+  as its guide says.
+- **A name cut short has its nearest name.** A name that the key starts, or that starts the key, is near when the
+  shorter of the two has three characters or more; such names rank with the others by distance, and three are shown
+  at most. `stage.51.enemy.1.unit` gives `unit_id`, where it listed eight unrelated names "and 7 more", and so does
+  the Himegari twin's old mistake, `stage.2.enemy.3.unit` (§12.3), which gate 12's case now expects.
+  `DataShapeTests.ANameCutShortOrWithAWordTooManyHasItsNearestNames` holds the rule, its ranking and a
+  two-character key that stays far.
+- **The engine's comments** give examples of no game (`by_id`, `by_id.16.namez`, `shapes/lists.schema.json`,
+  `max_count`); no other engine code of M3 names a game's table.
+- **The closing checks** (ran, at `501b6c8d` with this section uncommitted): the shape, link, data and base mod core
+  tests, 299 passed (295 at `cc45b324` and 298 at `31454512`, so each fix's commit builds and passes them);
+  `DataPatchWorkspaceTests`, 43 passed; `test_base_mod_build.py` and `base_mod_build.py --check`;
+  `tools/validate.py --level core`, 56 gates passed, with 2,826 engine core tests and 86 launcher tests; the
+  NativeAOT publish, with no trim or AOT warning but GodotSharp's own; `omp check` over all 18 examples, each with its
+  game (`example.kamidori-prologue-line` on the translated install); and §12.2's hand check again. Its 17 mistakes
+  give the reasons they gave at M3, and Taplo marks the same set: none of them is a table or an array of the wrong
+  kind or a name cut short, so neither message change reaches them. The two reasons that change are in the review's
+  own file of mistakes, `unit.762.stats` and `stage.51.enemy.1.unit` above. Gate 8 was not driven again: what it
+  shows is the CP932 error at the first delivery, which no fix touched.
