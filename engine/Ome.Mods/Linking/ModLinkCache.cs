@@ -355,6 +355,11 @@ public sealed record ModLinkManifest
     /// <summary>The stack's Lua (Lua scripting spec §6, §7.5); absent when no mod ships Lua.</summary>
     [JsonPropertyName("lua"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public LinkedLuaEntry? Lua { get; init; }
+    /// <summary>Every base script the link read, by catalog name, with its fingerprint or <c>missing</c> (plan §12.6):
+    /// the scripts a hook's point, an event's point, a skip, a script hook or a call bound to, beside the patched ones
+    /// the key holds. The entry is used only while the install's are these.</summary>
+    [JsonPropertyName("scripts_read")]
+    public IReadOnlyDictionary<string, string> ScriptsRead { get; init; } = new Dictionary<string, string>();
 }
 
 /// <summary>A linked stack as mounted (spec §6.4–§6.5): the cache directory, its <c>loose/</c> root (first in the
@@ -448,8 +453,10 @@ public sealed record MountedModLayer(string Directory, ModLinkManifest Manifest,
 /// <summary>
 /// The link cache of spec §6.4, under <c>mods/.cache/</c> in the profile's data root. The key is a SHA-256 over the
 /// profile and the base fingerprints of every touched script, each mod's id, version and package hash in load order,
-/// the selector allocation, and the toolchain stamp. It holds only derived files; a directory is written under a
-/// temporary name and renamed, so a failed write never leaves half a cache.
+/// the selector allocation, and the toolchain stamp. An entry also records every other base script its link read
+/// (<see cref="ModLinkManifest.ScriptsRead"/>), which a fan patch's loose files can change under the same catalog, and
+/// is a miss when the install's differ. It holds only derived files; a directory is written under a temporary name and
+/// renamed, so a failed write never leaves half a cache.
 /// </summary>
 public static class ModLinkCache
 {
@@ -460,7 +467,8 @@ public static class ModLinkCache
                                     IReadOnlyDictionary<string, int> selectors)
     {
         var text = new StringBuilder();
-        text.Append("omp-link 1\n").Append("profile ").Append(linkBase.Profile).Append('\n')
+        // 2: an entry records the scripts its link read (plan §12.6), so an entry written before is not used.
+        text.Append("omp-link 2\n").Append("profile ").Append(linkBase.Profile).Append('\n')
             .Append("catalog ").Append(linkBase.CatalogFingerprint).Append('\n');
         foreach (string script in order.SelectMany(TouchedScripts).Distinct(StringComparer.OrdinalIgnoreCase)
                      .Order(StringComparer.Ordinal))
@@ -504,18 +512,35 @@ public static class ModLinkCache
         }
     }
 
-    /// <summary>The start of the note a launch logs when an entry is there but does not read, and is linked again.</summary>
+    /// <summary>The start of the note a launch logs when an entry is there but cannot be used, and is linked again.</summary>
     public const string UnreadNote = "link cache entry";
 
-    /// <summary>The cached layer of <paramref name="key"/>, or null when there is none or it is incomplete.</summary>
-    public static MountedModLayer? TryOpen(string cacheRoot, string key) => TryOpen(cacheRoot, key, out _);
+    /// <summary><paramref name="linkBase"/>, its <see cref="ModLinkBase.ReadScript"/> noting in <paramref name="read"/> each
+    /// script it reads, by catalog name, with its fingerprint or <c>missing</c>: what <see cref="Write"/> records.</summary>
+    public static ModLinkBase Recording(ModLinkBase linkBase, Dictionary<string, string> read)
+        => linkBase with
+        {
+            ReadScript = name =>
+            {
+                byte[]? bytes = linkBase.ReadScript(name);
+                string script = name.ToUpperInvariant();
+                lock (read)
+                    if (!read.ContainsKey(script)) read[script] = bytes == null ? "missing" : OmsPatchPlan.FingerprintOf(bytes);
+                return bytes;
+            },
+        };
 
-    /// <summary>The cached layer of <paramref name="key"/>, or null when there is none, it is incomplete or it does not
-    /// read; <paramref name="unread"/> says why a whole entry did not read (its Lua stack, with its data files, is read
-    /// here, so that a mounted layer's <see cref="MountedModLayer.LuaStack"/> does not throw later).</summary>
-    public static MountedModLayer? TryOpen(string cacheRoot, string key, out string? unread)
+    /// <summary>The cached layer of <paramref name="key"/>, or null when there is none or it is incomplete.</summary>
+    public static MountedModLayer? TryOpen(string cacheRoot, string key) => TryOpen(cacheRoot, key, null, out _);
+
+    /// <summary>The cached layer of <paramref name="key"/>, or null when there is none, it is incomplete or it cannot be
+    /// used; <paramref name="unusable"/> says why a whole entry cannot: a base script it was linked against that
+    /// <paramref name="readScript"/> now reads otherwise, or a Lua stack that does not read (it is read here, with its
+    /// data files, so that a mounted layer's <see cref="MountedModLayer.LuaStack"/> does not throw later).</summary>
+    public static MountedModLayer? TryOpen(string cacheRoot, string key, Func<string, byte[]?>? readScript,
+                                           out string? unusable)
     {
-        unread = null;
+        unusable = null;
         string directory = Path.Combine(cacheRoot, key);
         string manifestPath = Path.Combine(directory, MountedModLayer.ManifestFile);
         if (!File.Exists(manifestPath)) return null;
@@ -538,6 +563,14 @@ public static class ModLinkCache
                     || mod.Layout && !File.Exists(Path.Combine(directory, LinkedLuaEntry.LayoutPathOf(mod.Id))))
                 || (manifest.Lua?.Contributions ?? []).Any(entry => !File.Exists(Path.Combine(directory, entry.CachePath))))
                 return null;
+            if (readScript != null)
+                foreach (var (script, fingerprint) in manifest.ScriptsRead.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                {
+                    string now = readScript(script) is { } bytes ? OmsPatchPlan.FingerprintOf(bytes) : "missing";
+                    if (now == fingerprint) continue;
+                    unusable = $"the install's {script} is not the one it was linked against";
+                    return null;
+                }
             try
             {
                 _ = layer.LuaStack;
@@ -545,7 +578,7 @@ public static class ModLinkCache
             catch (Exception error) when (error is InvalidDataException or FormatException or IOException
                                               or UnauthorizedAccessException or JsonException)
             {
-                unread = error.Message;
+                unusable = error.Message;
                 return null;
             }
             // A hit counts as recent use, so pruning keeps the entries that are actually launched.
@@ -601,8 +634,10 @@ public static class ModLinkCache
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
     }
 
-    /// <summary>Writes a successful link as the cache directory of <paramref name="key"/> and returns it mounted.</summary>
-    public static MountedModLayer Write(string cacheRoot, string key, ModLinkBase linkBase, ModLinkResult result)
+    /// <summary>Writes a successful link as the cache directory of <paramref name="key"/> and returns it mounted;
+    /// <paramref name="scriptsRead"/> are the base scripts the link read (<see cref="Recording"/>).</summary>
+    public static MountedModLayer Write(string cacheRoot, string key, ModLinkBase linkBase, ModLinkResult result,
+                                       IReadOnlyDictionary<string, string>? scriptsRead = null)
     {
         if (!result.Succeeded) throw new InvalidOperationException("a failed link is never cached");
         Directory.CreateDirectory(cacheRoot);
@@ -715,6 +750,8 @@ public static class ModLinkCache
                     .OrderBy(script => script.Name, StringComparer.Ordinal)
                     .ToDictionary(script => script.Name, script => script.Offsets!.ToArrays(), StringComparer.OrdinalIgnoreCase),
                 Lua = lua,
+                ScriptsRead = new SortedDictionary<string, string>((scriptsRead ?? new Dictionary<string, string>()).ToDictionary(),
+                                                                   StringComparer.Ordinal),
             };
             string report = result.Report.Render();
             File.WriteAllText(Path.Combine(temporary, MountedModLayer.ManifestFile), JsonSerializer.Serialize(manifest, Json.ModLinkManifest),

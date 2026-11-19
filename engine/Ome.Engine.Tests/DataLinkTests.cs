@@ -539,6 +539,40 @@ public sealed class DataLinkTests : IDisposable
         Assert.Null(ModLinkCache.TryOpen(cache, "k"));
     }
 
+    /// <summary>Plan §12.6 (the review's item 9): the key holds only the scripts a mod patches, while an event's point
+    /// binds to a script no mod touches, which a fan patch's loose files can change under the same catalog. The entry
+    /// records each base script its link read, and is a miss when the install's is another, so the event raised at the
+    /// point, and the files it delivers, follow the install.</summary>
+    [Fact]
+    public void AnEntryIsAMissWhenAScriptItsLinkReadIsNotTheInstallsAnyMore()
+    {
+        ModLinkBase linkBase = Base();
+        ModPackage owner = Owner(), a = Contributor("test.a", "names = [\"x\"]\n");
+        string mods = Path.Combine(_root, "mods");
+        ModStackResult first = ModStack.Prepare(linkBase, [owner, a], ["test.owner", "test.a"], mods);
+        Assert.True(first.Succeeded, first.Report.Render());
+        Assert.Equal(OmsPatchPlan.FingerprintOf(SyntheticAddExp), first.Layer!.Manifest.ScriptsRead["ADDEXP.BIN"]);
+        Assert.Empty(Assert.Single(first.Layer.LuaStack.ContributionList).Unraised);
+        Assert.True(ModStack.Prepare(linkBase, [owner, a], ["test.owner", "test.a"], mods).FromCache);
+
+        // The same key over another ADDEXP: the point names no site in it, so its event is not raised in this install.
+        ModLinkBase patched = linkBase with
+        {
+            ReadScript = name => name.Equals(AddExp, StringComparison.OrdinalIgnoreCase)
+                ? Encoding.ASCII.GetBytes("patched ADDEXP.BIN") : null,
+        };
+        var none = new Dictionary<string, int>();
+        Assert.Equal(ModLinkCache.ComputeKey(linkBase, [owner, a], none), ModLinkCache.ComputeKey(patched, [owner, a], none));
+        ModStackResult again = ModStack.Prepare(patched, [owner, a], ["test.owner", "test.a"], mods);
+        Assert.True(again.Succeeded, again.Report.Render());
+        Assert.False(again.FromCache);
+        Assert.Contains(again.Report.Lines, line => line.Class == ModReportClass.Note
+            && line.Message == $"{ModLinkCache.UnreadNote} cannot be used, so the stack was linked again: the install's "
+                               + "ADDEXP.BIN is not the one it was linked against");
+        Assert.Equal(["test.owner.award"], Assert.Single(again.Layer!.LuaStack.ContributionList).Unraised);
+        Assert.True(ModStack.Prepare(patched, [owner, a], ["test.owner", "test.a"], mods).FromCache);
+    }
+
     /// <summary>Plan §12.6 (the review's defect D): a kept copy that no longer reads, or reads to another size than the
     /// link's, as after an engine whose reader changed, makes the entry a miss with its reason, so the launch links again
     /// with a note instead of throwing when the engine mounts the stack.</summary>
@@ -554,7 +588,7 @@ public sealed class DataLinkTests : IDisposable
         string cache = Path.Combine(mods, ModLinkCache.FolderName);
 
         File.WriteAllText(kept, "names = [\"x\"]\nnames = [\"y\"]\n");
-        Assert.Null(ModLinkCache.TryOpen(cache, first.Layer.Key, out string? unread));
+        Assert.Null(ModLinkCache.TryOpen(cache, first.Layer.Key, linkBase.ReadScript, out string? unread));
         Assert.Equal("its copy of test.a data/lists/a.toml no longer reads: data/lists/a.toml:2: The key `names` is already "
                      + "defined at (1,1) and cannot be redefined", unread);
 
@@ -562,14 +596,14 @@ public sealed class DataLinkTests : IDisposable
         Assert.True(again.Succeeded, again.Report.Render());
         Assert.False(again.FromCache);
         Assert.Contains(again.Report.Lines, line => line.Class == ModReportClass.Note
-                                                    && line.Message == $"{ModLinkCache.UnreadNote} does not read, so the stack "
-                                                    + $"was linked again: {unread}");
+                                                    && line.Message == $"{ModLinkCache.UnreadNote} cannot be used, so the "
+                                                    + $"stack was linked again: {unread}");
         Assert.Equal(3, Assert.Single(again.Layer!.LuaStack.ContributionList).Values);
         Assert.True(ModStack.Prepare(linkBase, [owner, a], ["test.owner", "test.a"], mods).FromCache);
 
         // A copy that reads to another size than the link counted is a miss too.
         File.WriteAllText(kept, "names = [\"x\", \"y\", \"z\"]\n");
-        Assert.Null(ModLinkCache.TryOpen(cache, again.Layer.Key, out unread));
+        Assert.Null(ModLinkCache.TryOpen(cache, again.Layer.Key, linkBase.ReadScript, out unread));
         Assert.Equal("its copy of test.a data/lists/a.toml reads as 4 values, where the link read 3", unread);
     }
 
