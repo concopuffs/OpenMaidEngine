@@ -35,6 +35,10 @@ internal sealed class TomlStructureOptions
 
     /// <summary>Each integer as it is written (sign, prefix and underscores), with its 1-based line.</summary>
     public Action<string, int>? Integer { get; init; }
+
+    /// <summary>Each top-level <c>[[name]]</c> header that adds a table to its array, with the name's decoded text and
+    /// its 1-based line, in the text's order.</summary>
+    public Action<string, int>? ArrayHeader { get; init; }
 }
 
 /// <summary>
@@ -432,6 +436,7 @@ internal sealed class TomlStructure
         {
             _openArrays.AddRange(arrays);
             Written(at.Line);
+            if (array && keys.Count == 1) _options.ArrayHeader?.Invoke(keys[0], at.Line + 1);
         }
         return named ?? detached;
     }

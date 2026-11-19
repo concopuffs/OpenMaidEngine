@@ -3,7 +3,6 @@ using Ome.Engine.Localization;
 using Ome.Mods.Manifest;
 using Tomlyn;
 using Tomlyn.Model;
-using Tomlyn.Syntax;
 
 namespace Ome.Mods.Localization;
 
@@ -37,10 +36,10 @@ public static partial class TextCatalogFileReader
     public static TextCatalogFile Parse(string text, string origin)
     {
         TomlTable root;
-        DocumentSyntax syntax;
+        IReadOnlyDictionary<string, IReadOnlyList<int>> tableLines;
         try
         {
-            root = TomlDocument.Parse(text, out syntax) ?? new TomlTable();
+            root = TomlDocument.Parse(text, out tableLines) ?? new TomlTable();
         }
         catch (TomlException error)
         {
@@ -49,7 +48,6 @@ public static partial class TextCatalogFileReader
         }
 
         var problems = new List<string>();
-        Dictionary<string, List<int>> tableLines = TableArrayLines(syntax);
         var top = new Fields(root, origin, problems);
         string? fileScript = top.String("script");
         string? fingerprint = top.String("fingerprint");
@@ -97,10 +95,10 @@ public static partial class TextCatalogFileReader
     public static IReadOnlyList<LanguageSettings> ParseLanguages(string text, string origin)
     {
         TomlTable root;
-        DocumentSyntax syntax;
+        IReadOnlyDictionary<string, IReadOnlyList<int>> tableLines;
         try
         {
-            root = TomlDocument.Parse(text, out syntax) ?? new TomlTable();
+            root = TomlDocument.Parse(text, out tableLines) ?? new TomlTable();
         }
         catch (TomlException error)
         {
@@ -108,7 +106,6 @@ public static partial class TextCatalogFileReader
             throw new TextCatalogException([$"{at}: not valid TOML: {error.Message}"]);
         }
         var problems = new List<string>();
-        Dictionary<string, List<int>> tableLines = TableArrayLines(syntax);
         var top = new Fields(root, origin, problems);
         var languages = new List<LanguageSettings>();
         var tags = new HashSet<string>(StringComparer.Ordinal);
@@ -296,25 +293,12 @@ public static partial class TextCatalogFileReader
         }, text != null, obsolete);
     }
 
-    private static string Where(string origin, Dictionary<string, List<int>> lines, string table, int index)
-        => lines.TryGetValue(table, out List<int>? starts) && index < starts.Count
+    /// <summary>Where the <paramref name="index"/>th <c>[[table]]</c> is: its line, from the line of each top-level
+    /// header that <see cref="TomlDocument"/>'s parse gives with the document.</summary>
+    private static string Where(string origin, IReadOnlyDictionary<string, IReadOnlyList<int>> lines, string table, int index)
+        => lines.TryGetValue(table, out IReadOnlyList<int>? starts) && index < starts.Count
             ? $"{origin}:{starts[index]}"
             : $"{origin}: [[{table}]] {index + 1}";
-
-    /// <summary>The 1-based line of each top-level <c>[[name]]</c> header, in order, from the syntax tree the
-    /// document's parse validated.</summary>
-    private static Dictionary<string, List<int>> TableArrayLines(DocumentSyntax document)
-    {
-        var lines = new Dictionary<string, List<int>>(StringComparer.Ordinal);
-        foreach (TableSyntaxBase table in document.Tables)
-        {
-            if (table is not TableArraySyntax || table.Name == null) continue;
-            string name = table.Name.ToString().Trim();
-            if (!lines.TryGetValue(name, out List<int>? starts)) lines[name] = starts = [];
-            starts.Add(table.Span.Start.Line + 1);
-        }
-        return lines;
-    }
 
     /// <summary>Typed access to one TOML table's keys, recording each problem and every key read, so that
     /// <see cref="RejectUnknown"/> can report the rest.</summary>

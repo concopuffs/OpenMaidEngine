@@ -110,6 +110,27 @@ public class TextCatalogFileTests
         Assert.Contains("top.toml: unknown key 'langauge'", error.Problems);
     }
 
+    /// <summary>Data patches plan §12.6: a table's line comes from the parse's walk of the text, by the header's decoded
+    /// name, so a header written quoted, or with spaces, has its line too.</summary>
+    [Fact]
+    public void EachEntrysLineIsItsHeadersWhateverItsSpelling()
+    {
+        var error = Assert.Throws<TextCatalogException>(() => TextCatalogFileReader.Parse("""
+            [[text]]
+            source = "a"
+            text = "x"
+
+            [["text"]]
+            source = 3
+            text = "y"
+
+            [[ 'text' ]]
+            source = 4
+            text = "z"
+            """, "lines.toml"));
+        Assert.Equal(["lines.toml:5: source must be a string", "lines.toml:9: source must be a string"], error.Problems);
+    }
+
     [Fact]
     public void ReportsTomlSyntaxErrorsWithTheirLine()
     {

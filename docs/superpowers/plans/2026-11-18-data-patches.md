@@ -1442,3 +1442,16 @@ the stage list's own event and the decision on Tomlyn's faults.
   before is a miss, since the key holds the build of `Ome.Mods` (`ModLinkBase.ToolchainStamp`). Gate 3 expects
   `1 value in 2 tables` for each of its files; `data-files.md` ("The report") has its sample lines from its own
   example.
+- **The text catalog's read takes its lines from the walk (item 3).** After the review `TomlDocument.Parse(text, out
+  syntax)` walked the text, built the model and parsed a syntax tree, which the catalog reader used for the line of
+  each `[[text]]`, `[[engine]]` and `[[language]]` header. Measured (ran, the Release build, a console program of its
+  own over each tree's `Ome.Mods`, `TextCatalogFileReader.Parse` on the largest converted catalog,
+  `build/games/kamidori/import-en/text/en/_global.toml`, 5.4 million characters, the median of five after a warm-up,
+  three runs of each interleaved): `1364248c` 433 to 464 ms, `5d7e5437` (this follow-up's size line, the review's
+  reader) 466 to 487 ms, about 5% more. Of that read, the walk took 43 to 47 ms, the model 41 to 42, the syntax parse
+  not validated 177 to 209 and validated 213 to 264 (which `1364248c` ran in its place), and the rest is the reader's
+  own work over the model. So the walk now reports each top-level `[[name]]` header that adds a table, with the
+  name's decoded text and its line (`TomlStructureOptions.ArrayHeader`), `TomlDocument.Parse(text, out arrayLines)`
+  gives those lines, and no syntax tree is built: the read takes 208 to 253 ms, about half of either. A header written
+  quoted (`[["text"]]`) now finds its line, where the tree's text did not match the name. M2's follow-up figures
+  (751 and 479 ms, plan §11) were another run's; these three builds were measured side by side.

@@ -29,16 +29,24 @@ public static class TomlDocument
         return table;
     }
 
-    /// <summary><see cref="Parse(string)"/>, giving the syntax tree too, whose spans give each table's line, so that a
-    /// reader that needs lines does not parse the text again: on a converted text catalog of 5 MB a syntax parse takes
-    /// about a quarter of a second (data patches plan §11). The tree is Tomlyn's, not validated.</summary>
-    public static TomlTable? Parse(string text, out DocumentSyntax syntax)
+    /// <summary><see cref="Parse(string)"/>, giving the 1-based line of each top-level <c>[[name]]</c> header too, by
+    /// the name's decoded text, in order, for a reader that names a table by its line. The lines come from the check's
+    /// walk, so the text is parsed no more: on the largest converted text catalog (5.4 million characters) a syntax tree
+    /// for them cost about 185 ms of a 475 ms read (data patches plan §12.6).</summary>
+    public static TomlTable? Parse(string text, out IReadOnlyDictionary<string, IReadOnlyList<int>> arrayLines)
     {
-        TomlStructureResult structure = Checked(text);
+        var lines = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+        TomlStructureResult structure = Checked(text, new TomlStructureOptions
+        {
+            ArrayHeader = (name, line) =>
+            {
+                if (!lines.TryGetValue(name, out List<int>? starts)) lines[name] = starts = [];
+                starts.Add(line);
+            },
+        });
         TomlTable? table = Model(text);
-        syntax = SyntaxParser.Parse(text, null, validate: false);
-        if (syntax.HasErrors) throw new TomlException(syntax.Diagnostics);
         Followed(structure);
+        arrayLines = lines.ToDictionary(pair => pair.Key, pair => (IReadOnlyList<int>)pair.Value, StringComparer.Ordinal);
         return table;
     }
 
@@ -54,9 +62,9 @@ public static class TomlDocument
 
     /// <summary>The walk of <paramref name="text"/>; throws, as Tomlyn's validating parser did, for each problem it
     /// found.</summary>
-    private static TomlStructureResult Checked(string text)
+    private static TomlStructureResult Checked(string text, TomlStructureOptions? options = null)
     {
-        TomlStructureResult structure = TomlStructure.Walk(text);
+        TomlStructureResult structure = TomlStructure.Walk(text, options);
         if (structure.Problems.Count == 0) return structure;
         var diagnostics = new DiagnosticsBag();
         foreach (TomlStructureProblem problem in structure.Problems) diagnostics.Error(Span(problem.At), problem.Message);
