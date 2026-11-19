@@ -1501,8 +1501,10 @@ renderer with the reference on the title, GAMESTART, ADV pages, SC0000's effect 
 first field and its map (`reference-diff`; engine layering spec §6.3, "As built"). The data patches scenarios
 (`himegari-stage-enemies*.steps`, `kamidori-stage-enemies*.steps`, `himegari-unit-stats*.steps` and
 `kamidori-unit-stats.steps`) drive the data-file examples of `oms/examples/mods/`, whose README says what each shows;
-each header gives its start command, with its `--mod`, its `dp-` sandbox and, on Kamidori, the sweep's sandbox it
-seeds from. Most of their `lua` steps read cells by number in the console (`maid.vm.g`): a `lua mod=<game>-base`
+on Kamidori they include the stage list's preview (`-list`) and two saves on 蒼月の南湖畔 (`-lake`). Each header gives
+its start command, with its `--mod`, its `dp-` sandbox and, on Kamidori, the sandbox of saves it seeds from, which
+the repository does not ship (`k1clean`, made on the clean install while native AGE and the port were compared).
+Most of their `lua` steps read cells by number in the console (`maid.vm.g`): a `lua mod=<game>-base`
 step needs the base mod in the stack, which a run without the example lacks.
 
 **Geometry pairs** live in `tools/drive/scenarios/geometry/`: localization gate 12 (spec §18.1), whose results are in

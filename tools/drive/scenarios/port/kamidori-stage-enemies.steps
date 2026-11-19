@@ -2,16 +2,17 @@
 # example.kamidori-stage-enemies gives slot 1 of ◆開けた涼風西湖畔◆ (stage 51) 緑プテテット (761) in place of
 # ハルピュア (331), and slot 3 of 蒼月の南湖畔 (stage 52) 赤プテテット (762). kamidori-base's tables.lua:apply_stage
 # applies stage 51's part at kamidori.stage.loaded, after the floor's loaders: slot 3 keeps the floor's own 水精
-# (402), and slot 1's spawner places the 緑プテテット at the floor's start. From the sweep's workshop save (slot 019,
-# the clean install) the run first opens INFO's third tab (アイテム情報) in the workshop, whose 獲得地点 view runs
+# (402), and slot 1's spawner places the 緑プテテット at the floor's start. From the workshop save (slot 019 of the
+# clean install, when シセティカ湖 has just opened) the run first opens INFO's third tab (アイテム情報) in the workshop, whose 獲得地点 view runs
 # every stage's loaders off a floor; then it enters the floor afresh, opens the same view on the floor, where INFO3
 # runs the floor's loaders again and raises the event (INFO3@0xd20), saves with the floor's SAVE (slot 030) and
 # loads that save. Before each of the last two, a console step marks slot 1 with 12345, so the 761 read after it
 # shows that the loaders wrote the slot again and the part was applied after them.
 # Cells by number (the console has no names): current_stage_id 0x378b, field_map_continue_mode 0x4290,
 # stage_enemy_unit_id from 0x140a2c, battle_unit_unit_ids from 0x53bb2, the battle slots' state flags from 0x53c16
-# (bit 0: FIELD placed a unit there, FIELD@0xba1). Run on a new sandbox seeded with the sweep's sandbox k1clean
-# (from the checkout that holds it), with --lua-trace, whose diagnostics/lua-trace.jsonl then has the deliveries
+# (bit 0: FIELD placed a unit there, FIELD@0xba1). Run on a new sandbox seeded with the sandbox k1clean of the main
+# checkout (saves made on the clean install while native AGE and the port were compared; the repository does not ship
+# them), with --lua-trace, whose diagnostics/lua-trace.jsonl then has the deliveries
 # at INFO3.BIN@0xd20:
 #   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-stage-enemies --seed port:k1clean --mod oms/examples/mods/example.kamidori-stage-enemies --port-arg=--lua-trace
 #   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-stage-enemies.steps

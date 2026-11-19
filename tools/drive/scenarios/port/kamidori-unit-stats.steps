@@ -1,11 +1,12 @@
 # Port only (scenarios/port/): data patches, a copy the game made before the edit (plan §5.3, the derived values).
 # example.kamidori-unit-stats raises ウィル's (unit 1) stats.max_hp from 18 to 50 at kamidori.data.layered. The
-# Kamidori sweep's workshop save (slot 019) was made long after he joined, when UNITECH copied his definition into
-# character_stats and his level ups added to it. Loaded with the mod, his definition holds 50 and his saved stats keep
-# the save's 23 at level 3: the edit reaches a character who joins after it, not one who has joined.
+# Kamidori workshop save (slot 019 of the clean install, when シセティカ湖 has just opened) was made long after he
+# joined, when UNITECH copied his definition into character_stats and his level ups added to it. Loaded with the mod,
+# his definition holds 50 and his saved stats keep the save's 23 at level 3: the edit reaches a character who joins
+# after it, not one who has joined.
 # (himegari-unit-stats.steps drives the other half on Himegari: a join after the edit takes it, and keeps it without
-# the mod.) Run on a new sandbox seeded with the sweep's slot 019 (the clean install; the sandbox k1clean, from the
-# checkout that holds it):
+# the mod.) Run on a new sandbox seeded with the sandbox k1clean of the main checkout, which holds the save (saves
+# made on the clean install while native AGE and the port were compared; the repository does not ship them):
 #   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-unit-stats --seed port:k1clean --mod oms/examples/mods/example.kamidori-unit-stats
 #   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-unit-stats.steps
 # Cells by number: character_levels 0x6432d, character_stats 0x64715 and unit_base_stats 0x2beb7c (int[...][14],

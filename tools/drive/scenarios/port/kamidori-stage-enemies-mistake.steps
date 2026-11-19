@@ -5,8 +5,9 @@
 #   example.kamidori-stage-enemies-mistake data/stages.toml: 1 problem, so nothing of it is applied: stage_enemy: ...
 # Then the route of kamidori-stage-enemies.steps enters ◆開けた涼風西湖畔◆ (stage 51) afresh, and its enemy table
 # and placed units are the floor's own: ハルピュア (331) in slot 1, which its spawner places. Cells by number, as in
-# that scenario. Run on a new sandbox seeded with the Kamidori sweep's slot 019 (the clean install; the sandbox
-# k1clean, from the checkout that holds it):
+# that scenario. The save is slot 019 of the clean install, ウィル's workshop when シセティカ湖 has just opened, in the
+# sandbox k1clean of the main checkout (saves made while native AGE and the port were compared; the repository does
+# not ship them). Run on a new sandbox seeded with k1clean:
 #   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-stage-enemies-mistake --seed port:k1clean --mod oms/examples/mods/example.kamidori-stage-enemies-mistake
 #   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-stage-enemies-mistake.steps
 

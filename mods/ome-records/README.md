@@ -25,9 +25,9 @@ mod passes its record map and its own access in. The engine mounts it when a mou
   applier:apply(contribution, { built_by = "stage", scope = { stage = 12 } })
   ```
 
-  A contribution is `{ mod = id, file = path, data = document, unraised = events }`. `apply` checks the whole document once per Lua
-  session, before its first write: every table, id, field, column and value against the record map, and each string
-  with `maid.text_fits`. A document with a problem writes nothing and raises one error naming the mod, the file, the
+  A contribution is `{ mod = id, file = path, data = document, unraised = events }`. `apply` checks the whole
+  document once per Lua session, before its first write: every table, id, field, column and value against the record
+  map, and each string with `maid.text_fits`. A document with a problem writes nothing and raises one error naming the mod, the file, the
   number of problems and the first 20 by path, the first of them on the error's first line (the line a notice and a
   halt reason show); each later `apply` of it returns 0 and says nothing. A document that passes is written: the
   parts whose table `built_by` names `options.built_by`, at the document's top level, or with `options.scope` the
