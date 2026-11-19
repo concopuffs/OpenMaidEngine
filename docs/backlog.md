@@ -518,6 +518,15 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   `engine/Ome.Cli/Program.cs`, `run-godot.ps1`, and about 25 engine tests. Done when the installs sit under one
   games folder, every table resolves a game's install from that folder, and the docs naming the old locations
   (`PROJECT-STRUCTURE.md`, `AGENTS.md`'s three-way separation, the modding game pages) follow.
+- **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`
+  (2026-11-19, at `6c5972c4`), `WindowTests.TheFirstRunCardAndTheArtQuestionDraw` passed its checks and then failed
+  in `TestHome.Dispose` (`launcher/Ome.Launcher.Tests/TestHome.cs`): `Directory.Delete` could not remove the test
+  home's `SYS4INI.BIN`, "being used by another process". The run before it (`fc694f9c`) and the run after
+  (`f1327fb2`) passed all 86 launcher tests, and the branch changes nothing in `launcher/`. The cause is not known:
+  either something of the launcher still held the synthetic install's catalog open when the window closed (a check
+  of the profile that had not finished), or another process on the machine had the new file open. Done when the
+  cause is found and fixed: the launcher closes what it reads before the window closes, or the test waits for the
+  work it started. A retry until it passes is not a fix.
 - **Deferred by the user:** the `LICENSE` copyright holder is blank; `main` trails `develop` (the GitHub default);
   artifacts published before their notices existed are not backfilled, but taken down or updated if anyone asks:
   the `v0.4.0` packages lack the Godot, .NET and MinGW-w64 notices, and the `deps-ffmpeg-ome-8.1.3-mpeg1-r1` Windows
