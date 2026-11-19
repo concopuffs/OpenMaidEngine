@@ -18,8 +18,10 @@ public sealed partial class Scripting
     private readonly record struct RunningInstruction(Script Script, int Index, int First, long Session);
 
     private readonly PlannedWatch[] _watches;
-    // The handler running, innermost (spec §12: a write is its mod's); null between calls.
+    // The handler running, innermost (spec §12: a write is its mod's); null between calls. With a contribution, the call
+    // is a delivery, and a write is its contributor's (data patches spec §5.7).
     private HandlerId? _running;
+    private ContributionId? _runningContribution;
     // How many console chunks are running.
     private int _consoleDepth;
     // How many session builds and boundary events are running, whose writes go with the next instruction's records.
@@ -93,10 +95,10 @@ public sealed partial class Scripting
         string? mod = null;
         Script? script = null;
         int index = -1;
-        if (_running is { } handler)
+        if (_running != null)
         {
             writer = CellWriter.Mod;
-            mod = _setup.Stack[handler].ModId;
+            mod = RunningMod;
         }
         else if (_consoleDepth > 0) writer = CellWriter.Console;
         else if (_depth > 0 && _faceMod != null)

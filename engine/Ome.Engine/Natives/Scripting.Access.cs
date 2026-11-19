@@ -319,7 +319,7 @@ public sealed partial class Scripting
         {
             TracedCall call = _traced[^1];
             call.Calls.Add(traced = new TracedScriptCall(name + ".BIN",
-                                                         mod.Id == _setup.Stack[call.Handler].ModId ? null : mod.Id));
+                                                         mod.Id == CallMod(call) ? null : mod.Id));
         }
         try
         {

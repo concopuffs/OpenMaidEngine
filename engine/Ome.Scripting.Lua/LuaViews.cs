@@ -11,7 +11,8 @@ internal sealed class Metatables
 {
     public Metatables(LuaModSession session)
     {
-        View = ReadOnlyViews.BuildMetatable(session);
+        View = ReadOnlyViews.BuildMetatable(session, "a table another mod exports");
+        Document = ReadOnlyViews.BuildMetatable(session, "a data file's document");
         Vm = VmView.BuildMetatable(session);
         Bank = BankView.BuildMetatable(session);
         Hook = HookView.BuildMetatable(session);
@@ -25,6 +26,8 @@ internal sealed class Metatables
     }
 
     public LuaTable View { get; }
+    /// <summary>A data file's document and its contribution (data patches spec §5.3).</summary>
+    public LuaTable Document { get; }
     public LuaTable Vm { get; }
     public LuaTable Bank { get; }
     public LuaTable Hook { get; }
@@ -49,9 +52,11 @@ internal sealed class Metatables
 
 /// <summary>
 /// The read-only views of what another mod exports (spec §5.2): a requiring mod reads and calls through them, and
-/// cannot write into the export or a table inside it. What a function returns is not wrapped.
+/// cannot write into the export or a table inside it. What a function returns is not wrapped. With
+/// <paramref name="document"/>, the views of a data file's document and its contribution (data patches spec §5.3),
+/// which the session keeps for every owner.
 /// </summary>
-internal sealed class ReadOnlyViews(Metatables metatables)
+internal sealed class ReadOnlyViews(Metatables metatables, bool document = false)
 {
     private readonly Dictionary<LuaTable, View> _views = new(ReferenceEqualityComparer.Instance);
 
@@ -59,11 +64,12 @@ internal sealed class ReadOnlyViews(Metatables metatables)
     {
         public LuaTable Target { get; } = target;
         public ReadOnlyViews Owner { get; } = owner;
-        public LuaTable? Metatable { get => Owner._metatables.View; set { } }
+        public LuaTable? Metatable { get => Owner._document ? Owner._metatables.Document : Owner._metatables.View; set { } }
         public Span<LuaValue> UserValues => Span<LuaValue>.Empty;
     }
 
     private readonly Metatables _metatables = metatables;
+    private readonly bool _document = document;
 
     public LuaValue Wrap(LuaValue value)
     {
@@ -73,7 +79,8 @@ internal sealed class ReadOnlyViews(Metatables metatables)
         return LuaValue.FromUserData(view);
     }
 
-    public static LuaTable BuildMetatable(LuaModSession session)
+    /// <summary>The views' metatable; a write is refused as "<paramref name="what"/> is read-only".</summary>
+    public static LuaTable BuildMetatable(LuaModSession session, string what)
     {
         var meta = new LuaTable();
         LuaFunction next = session.Fn("next", context =>
@@ -89,7 +96,7 @@ internal sealed class ReadOnlyViews(Metatables metatables)
             view.Target.TryGetValue(context.GetArgument(1), out LuaValue value);
             return context.Return(view.Owner.Wrap(value));
         });
-        meta["__newindex"] = session.Fn("__newindex", context => throw Metatables.ReadOnly(context, "a table another mod exports"));
+        meta["__newindex"] = session.Fn("__newindex", context => throw Metatables.ReadOnly(context, what));
         meta["__len"] = session.Fn("__len", context => context.Return(Metatables.Self<View>(context).Target.ArrayLength));
         meta["__pairs"] = session.Fn("__pairs", context => context.Return(next, context.GetArgument(0), LuaValue.Nil));
         LuaFunction step = session.Fn("ipairs_step", context =>

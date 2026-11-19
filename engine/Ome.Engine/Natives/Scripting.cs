@@ -72,6 +72,9 @@ public sealed partial class Scripting : IDisposable
         public SessionReason Reason;
         public readonly Dictionary<int, int> FailuresInARow = new();
         public readonly HashSet<int> SwitchedOff = new();
+        // Data patches spec §5.6: a delivery's failures are its file's, counted by contribution at all of its events.
+        public readonly Dictionary<int, int> DataFailuresInARow = new();
+        public readonly HashSet<int> DataSwitchedOff = new();
         // Each mod's last good state block (spec §11): the loaded one until a save captures the mod's own. A block for
         // a mod not in the session, or off in it, is carried into every save unchanged.
         public readonly Dictionary<string, ModStateBlock> Blocks = new(StringComparer.Ordinal);
@@ -205,9 +208,11 @@ public sealed partial class Scripting : IDisposable
         _scene.Reason = reason;
         foreach (ModBuildFailure failure in session.Failures)
         {
+            string notApplied = NotApplied(failure.ModId);
             WriteLog(ModLogLevel.Error, failure.ModId, $"off for this session: {failure.Message}"
+                                                       + (notApplied.Length > 0 ? "\n" + notApplied[2..] : "")
                                                        + (failure.Traceback is { } trace ? "\n" + trace : ""));
-            Notify($"Lua: {failure.ModId} is off for this session: {FirstLine(failure.Message)}");
+            Notify($"Lua: {failure.ModId} is off for this session: {FirstLine(failure.Message)}{notApplied}");
             if (_setup.Errors == LuaErrorPolicy.Halt) return $"lua-build-error: {failure.ModId}: {FirstLine(failure.Message)}";
         }
         return RaiseEngineEvent(SessionStartEvent, new KeyValuePair<string, CellValue>("reason", CellValue.String(reason.Name())));
@@ -250,7 +255,7 @@ public sealed partial class Scripting : IDisposable
         for (int i = 0; i < handlers.Count; i++)
         {
             PlannedHandler handler = handlers[i];
-            if (!IsOn(session, handler.Handler)) continue;
+            if (!IsOn(session, handler.Handler, handler.Contribution)) continue;
             // An engine event's subscriber in the instruction's list (ome.save.writing) gets the event's context:
             // its fields, and no frame.
             // An event's subscriber at its point (spec §9.2) gets the event's fields over the frame's cells.
@@ -261,7 +266,7 @@ public sealed partial class Scripting : IDisposable
                     ? GameEventContext(gameEvent, site, instruction, _interpreter)
                     : HookContext.ForPoint(site, instruction, _interpreter, _memory.Encoding.CodePage,
                                            handler.Site ? "before" : null, skip, handler.Skip);
-            if (Call(session, handler.Handler, context, frameAccess: handler.EngineEvent == null) is { } halt)
+            if (Call(session, handler.Handler, context, frameAccess: handler.EngineEvent == null, handler.Contribution) is { } halt)
                 return halt;
         }
         skipped = skip?.Skipped == true;
@@ -288,7 +293,7 @@ public sealed partial class Scripting : IDisposable
         };
         // Spec §7.2, §10: a frame a handler called names the handler's mod, which is running while the frame starts and
         // returns; a base mod's helper calls for the mod that called it.
-        string? caller = cause == FrameCause.ModCall && _running is { } running ? _setup.Stack[running].ModId : null;
+        string? caller = cause == FrameCause.ModCall && _running != null ? RunningMod : null;
         for (int i = 0; i < handlers.Count; i++)
         {
             PlannedHandler handler = handlers[i];
@@ -339,8 +344,42 @@ public sealed partial class Scripting : IDisposable
         return null;
     }
 
-    private bool IsOn(IModSession session, HandlerId handler)
-        => !_scene.SwitchedOff.Contains(handler.Index) && session.IsActive(handler);
+    /// <summary>Whether a handler runs: a delivery (data patches spec §5.6) when its file is on, its contributor and
+    /// the owner are on; any other handler when it is on.</summary>
+    private bool IsOn(IModSession session, HandlerId handler, ContributionId? contribution = null)
+        => contribution is { } file
+            ? !_scene.DataSwitchedOff.Contains(file.Index) && session.IsActive(handler, file)
+            : !_scene.SwitchedOff.Contains(handler.Index) && session.IsActive(handler);
+
+    /// <summary>The mod the running call is attributed to (data patches spec §5.7): a delivery's contributor, else the
+    /// handler's mod. Only while a handler runs.</summary>
+    private string RunningMod
+        => _runningContribution is { } file ? _setup.Stack[file].Mod : _setup.Stack[_running!.Value].ModId;
+
+    /// <summary>How the log, the trace and the halt reason name a call: <c>example.a data/a.toml (kamidori-base
+    /// tables.lua:apply_boot)</c> for a delivery, <c>MOD FILE:FUNCTION</c> otherwise.</summary>
+    private string CallName(HandlerId handler, ContributionId? contribution)
+        => contribution is { } file ? $"{_setup.Stack[file]} ({_setup.Stack[handler]})" : _setup.Stack[handler].ToString();
+
+    /// <summary>The files a mod's being off leaves unapplied (data patches spec §5.6), as the end of its notice:
+    /// its own, those of the kinds it owns, and those of the mods that require it. Empty when there are none.</summary>
+    private string NotApplied(string modId)
+    {
+        IReadOnlyList<ModContribution> contributions = _setup.Stack.ContributionList;
+        if (contributions.Count == 0) return "";
+        List<string> files = contributions
+            .Where(c => c.Mod == modId || c.Owner == modId || c.Requires.Contains(modId, StringComparer.Ordinal))
+            .Select(c => c.ToString())
+            .ToList();
+        if (files.Count == 0) return "";
+        string shown = string.Join(", ", files.Take(NotAppliedShown));
+        return files.Count > NotAppliedShown
+            ? $"; not applied: {shown} and {files.Count - NotAppliedShown} more"
+            : $"; not applied: {shown}";
+    }
+
+    /// <summary>The files an off notice names; the rest are counted.</summary>
+    public const int NotAppliedShown = 10;
 
     /// <summary>Where a handler ran, for its error: the instruction of a point, the name of an event. Formed only
     /// when a call fails, so a call that succeeds formats nothing.</summary>
@@ -354,25 +393,31 @@ public sealed partial class Scripting : IDisposable
         _ => context.Name ?? "",
     };
 
-    private string? Call(IModSession session, HandlerId handler, HookContext context, bool frameAccess)
+    /// <summary>One handler call. With <paramref name="contribution"/>, a delivery (data patches spec §5.2): the owner's
+    /// handler gets the contribution, and the call is the contributor's in the trace, the watch records and the log.</summary>
+    private string? Call(IModSession session, HandlerId handler, HookContext context, bool frameAccess,
+                         ContributionId? contribution = null)
     {
         if (_depth >= _setup.Limits.NestingCap)
             return Failed(handler, new ModScriptException(ModScriptErrorKind.Depth,
-                $"handlers nest {_depth} deep, the cap is {_setup.Limits.NestingCap}"), Where(context));
+                $"handlers nest {_depth} deep, the cap is {_setup.Limits.NestingCap}"), Where(context), contribution);
         bool outerFrameAccess = _frameAccess;
         HandlerId? outerRunning = _running;
+        ContributionId? outerContribution = _runningContribution;
         _depth++;
         _frameAccess = frameAccess;
         _running = handler;
-        TracedCall? traced = TraceBegin(handler, context);
+        _runningContribution = contribution;
+        TracedCall? traced = TraceBegin(handler, context, contribution);
         ModScriptException? failure = null;
         string? halt;
         // Spec §10: a script the handler called that ended the scene or the run unwinds past it; the call is abandoned.
         bool ended = false;
         try
         {
-            session.Invoke(handler, context);
-            _scene.FailuresInARow.Remove(handler.Index);
+            session.Invoke(handler, context, contribution);
+            if (contribution is { } file) _scene.DataFailuresInARow.Remove(file.Index);
+            else _scene.FailuresInARow.Remove(handler.Index);
             halt = null;
             ended = true;
         }
@@ -380,14 +425,15 @@ public sealed partial class Scripting : IDisposable
         {
             failure = error;
             ended = true;
-            halt = Failed(handler, error, Where(context));
+            halt = Failed(handler, error, Where(context), contribution);
         }
         finally
         {
-            if (traced != null) TraceEnd(traced, failure, abandoned: !ended);
+            if (traced != null) TraceEnd(traced, failure, session.LastCall, abandoned: !ended);
             context.Live = false;
             _frameAccess = outerFrameAccess;
             _running = outerRunning;
+            _runningContribution = outerContribution;
             _depth--;
         }
         // A subscriber of an event this call raised halted (--lua-errors halt): the outermost call returns its reason.
@@ -401,8 +447,8 @@ public sealed partial class Scripting : IDisposable
 
     /// <summary>A handler's error (spec §5.5): the log gets the mod, the handler, where it ran and the traceback; the
     /// front end gets a notice; the third failure in a row switches the handler off. Under <c>--lua-errors halt</c> the
-    /// instruction ends with a halt instead.</summary>
-    private string? Failed(HandlerId handler, ModScriptException error, string where)
+    /// instruction ends with a halt instead. A delivery's error is its file's (data patches spec §5.6).</summary>
+    private string? Failed(HandlerId handler, ModScriptException error, string where, ContributionId? contribution = null)
     {
         ModRuntimeHandler name = _setup.Stack[handler];
         string what = error.Kind switch
@@ -411,6 +457,7 @@ public sealed partial class Scripting : IDisposable
             ModScriptErrorKind.Depth => "nested too deep",
             _ => "failed",
         };
+        if (contribution is { } file) return DeliveryFailed(file, name, error, what, where);
         WriteLog(ModLogLevel.Error, name.ModId, $"{name.File}:{name.Function} {what} at {where}: {error.Message}"
                                                 + (error.LuaTraceback is { } trace ? "\n" + trace : ""));
         if (_setup.Errors == LuaErrorPolicy.Halt)
@@ -423,6 +470,28 @@ public sealed partial class Scripting : IDisposable
             Notify($"Lua: {name.ModId} {name.Function} failed {failures} times in a row and is off for this session");
         }
         else Notify($"Lua: {name.ModId} {name.Function} {what}: {FirstLine(error.Message)}");
+        return null;
+    }
+
+    /// <summary>A delivery's error (data patches spec §5.6): logged under the contributor, naming its file and the owner's
+    /// handler; three in a row, at whichever of the kind's events, switch the file off for the session and leave the
+    /// owner's other deliveries alone.</summary>
+    private string? DeliveryFailed(ContributionId file, ModRuntimeHandler handler, ModScriptException error, string what,
+                                   string where)
+    {
+        ModContribution contribution = _setup.Stack[file];
+        WriteLog(ModLogLevel.Error, contribution.Mod, $"{contribution.File} ({handler}) {what} at {where}: {error.Message}"
+                                                      + (error.LuaTraceback is { } trace ? "\n" + trace : ""));
+        if (_setup.Errors == LuaErrorPolicy.Halt)
+            return $"lua-error: {contribution} ({handler}) at {where}: {FirstLine(error.Message)}";
+        int failures = _scene.DataFailuresInARow.GetValueOrDefault(file.Index) + 1;
+        _scene.DataFailuresInARow[file.Index] = failures;
+        if (failures >= FailuresBeforeSwitchOff)
+        {
+            _scene.DataSwitchedOff.Add(file.Index);
+            Notify($"Lua: {contribution} failed {failures} times in a row and is not applied again this session");
+        }
+        else Notify($"Lua: {contribution} {what}: {FirstLine(error.Message)}");
         return null;
     }
 

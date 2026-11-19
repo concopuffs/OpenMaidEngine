@@ -23,9 +23,11 @@ public sealed partial class Scripting
 
     private sealed record TracedWrite(string Cell, string? Name, string? Through, CellValue Before, CellValue After);
 
-    private sealed class TracedCall(HandlerId handler, HookContext context, IReadOnlyList<(string Name, TracedValue Value)> fields)
+    private sealed class TracedCall(HandlerId handler, ContributionId? contribution, HookContext context,
+                                    IReadOnlyList<(string Name, TracedValue Value)> fields)
     {
         public HandlerId Handler { get; } = handler;
+        public ContributionId? Contribution { get; } = contribution;
         public HookContext Context { get; } = context;
         public IReadOnlyList<(string Name, TracedValue Value)> Before { get; } = fields;
         public long Started { get; } = Stopwatch.GetTimestamp();
@@ -57,10 +59,14 @@ public sealed partial class Scripting
     /// <summary>Whether a write now goes into a traced call's line.</summary>
     private bool Tracing => _traced.Count > 0;
 
-    private TracedCall? TraceBegin(HandlerId handler, HookContext context)
+    /// <summary>The mod a traced call is attributed to: a delivery's contributor, else the handler's mod.</summary>
+    private string CallMod(TracedCall call)
+        => call.Contribution is { } file ? _setup.Stack[file].Mod : _setup.Stack[call.Handler].ModId;
+
+    private TracedCall? TraceBegin(HandlerId handler, HookContext context, ContributionId? contribution)
     {
         if (!_setup.Trace) return null;
-        var call = new TracedCall(handler, context, FieldValues(context));
+        var call = new TracedCall(handler, contribution, context, FieldValues(context));
         _traced.Add(call);
         if (context.Kind == HookKind.Point)
         {
@@ -102,7 +108,7 @@ public sealed partial class Scripting
             call.Dropped++;
             return;
         }
-        string? through = faceMod == _setup.Stack[call.Handler].ModId ? null : faceMod;
+        string? through = faceMod == CallMod(call) ? null : faceMod;
         call.Writes.Add(new TracedWrite(cell, name, through, before, after));
     }
 
@@ -138,9 +144,10 @@ public sealed partial class Scripting
         }
     }
 
-    /// <summary>A traced call's line. <paramref name="abandoned"/>: the call did not return, because a script it called
-    /// ended the scene or the run (spec §10).</summary>
-    private void TraceEnd(TracedCall call, ModScriptException? error, bool abandoned = false)
+    /// <summary>A traced call's line. <paramref name="cost"/> is what it ran and its budget (data patches plan §4.2).
+    /// <paramref name="abandoned"/>: the call did not return, because a script it called ended the scene or the run
+    /// (spec §10).</summary>
+    private void TraceEnd(TracedCall call, ModScriptException? error, ModCallCost cost, bool abandoned = false)
     {
         IReadOnlyList<(string Name, TracedValue Value)> after = FieldValues(call.Context);
         double milliseconds = (Stopwatch.GetTimestamp() - call.Started) * 1000.0 / Stopwatch.Frequency;
@@ -152,7 +159,15 @@ public sealed partial class Scripting
         using (var json = new Utf8JsonWriter(buffer, new JsonWriterOptions { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping }))
         {
             json.WriteStartObject();
-            json.WriteString("mod", handler.ModId);
+            // Data patches spec §5.7: a delivery is its contributor's, with its file and the kind's owner.
+            if (call.Contribution is { } file)
+            {
+                ModContribution contribution = _setup.Stack[file];
+                json.WriteString("mod", contribution.Mod);
+                json.WriteString("file", contribution.File);
+                json.WriteString("owner", handler.ModId);
+            }
+            else json.WriteString("mod", handler.ModId);
             json.WriteString("handler", $"{handler.File}:{handler.Function}");
             // A site hook not at a point is named as its manifest names it: the script and the original offset.
             json.WriteString("hook", context.Name ?? (context.Kind == HookKind.Point && context.Site >= 0
@@ -183,6 +198,8 @@ public sealed partial class Scripting
                     ? context.Script
                     : string.Create(CultureInfo.InvariantCulture, $"{context.Script}@0x{context.Offset:x}"));
             json.WriteNumber("ms", Math.Round(milliseconds, 3));
+            json.WriteNumber("instructions", cost.Instructions);
+            json.WriteNumber("budget", cost.Budget);
             json.WriteString("result", abandoned ? "abandoned" : error?.Kind switch
             {
                 null => "ok",
@@ -196,7 +213,8 @@ public sealed partial class Scripting
             if (_traced.Count > 0)
             {
                 json.WriteStartArray("within");
-                for (int i = _traced.Count - 1; i >= 0; i--) json.WriteStringValue(_setup.Stack[_traced[i].Handler].ToString());
+                for (int i = _traced.Count - 1; i >= 0; i--)
+                    json.WriteStringValue(CallName(_traced[i].Handler, _traced[i].Contribution));
                 json.WriteEndArray();
             }
             if (call.Before.Count > 0)

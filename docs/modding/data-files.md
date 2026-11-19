@@ -99,6 +99,30 @@ handler = "lists.lua:apply"            # a file under lua/, then a top-level fun
 - **`shape`** (a description the link checks a file against) is not read yet. A manifest that gives one is refused
   until the engine checks shapes.
 
+### The handler
+
+The handler named by an `at` entry takes the event and the contribution, once for each file at each raising of the
+event:
+
+```lua
+function apply(event, contribution)
+    -- event:                 the event's context, as any subscriber gets it
+    -- contribution.mod:      "example.tougher-slimes", the contributor
+    -- contribution.file:     "data/slimes.toml", the path in its package, as the report and the log print it
+    -- contribution.data:     the document
+    -- contribution.unraised: the kind's events this install does not raise, in the order of the at entries; usually empty
+end
+```
+
+- **The contribution is read-only,** and so is every table of the document: a write raises "a data file's document
+  is read-only".
+- **It is not a Lua table.** `type()` gives `"userdata"`. It answers indexing, `#`, `pairs` and `ipairs`; code that
+  uses `next` or the `table` functions on it cannot be relied on. `pairs` gives the keys in an order that repeats
+  between runs and need not be the file's, so a format that needs an order uses an array.
+- **One contribution for each file and session.** Every delivery of a file in a session gets the same one, so the
+  handler can tell a file it has seen.
+- **An integer is a Lua number,** exact up to 2^53 in size.
+
 ## What the link checks
 
 The link checks every data file before any mod code runs, and so do `omp check` and `omp build`
@@ -145,3 +169,45 @@ kind <game>.tables (<game>-base), at <game>.data.layered
   and file where the mod ships more than one file of the kind.
 - Each place the files are delivered also lists its handlers in the order they run, a delivery as
   `example.a data/a.toml (<game>-base tables.lua:apply_boot)`.
+
+## Delivery
+
+- **Where and when.** A file is delivered at each of its kind's events that this install raises, each time the event
+  is raised, to the handler its `at` entry names. Data files, like Lua, run in the port only.
+- **Order.** At an event, the deliveries and the hooks run in one order: ascending priority, then load order, and at
+  one priority a mod's files come before its hooks, in its manifest's order. A file's `priority` places it as a
+  hook's places the hook. The report lists the order (above).
+- **Which value holds** is the kind's rule. With `<game>.tables`, a later file replaces an earlier one's value, so the
+  mod later in the load order wins.
+- **An error is the file's.** When the owner's handler fails on a file, `diagnostics/lua.log` names the contributor,
+  its file and the owner's handler, then where it ran:
+
+  ```text
+  … error example.a: data/a.toml (<game>-base tables.lua:apply_boot) failed at <game>.data.layered at INIT2.BIN@0x20d: …
+  ```
+
+  The game goes on, with a notice. Three failures of one file in a row, at whichever of the kind's events, switch
+  that file off for the session ("Lua: example.a data/a.toml failed 3 times in a row and is not applied again this
+  session"). The owner's handler goes on with the other files. `--lua-errors halt` ends the run at the first failure
+  instead. What a delivery wrote before its error stays, unless the owner checks the whole document before it writes;
+  `<game>.tables` does.
+- **A mod is on or off as a whole.** A contributor that is off for the session (its own Lua failed, or a mod it
+  requires is off) has no deliveries, and a contributor with no Lua is off when a Lua mod it requires is off. When the
+  owner is off, so is every mod that requires it. The notice of a mod that is off ends with the files it leaves
+  unapplied: `Lua: <game>-base is off for this session: …; not applied: example.a data/a.toml, …`.
+- **Budget.** A delivery may run the handler budget, 1,000,000 Lua instructions, and 1,000 more for each value of its
+  document. The allowance is one constant of the engine; a kind has no setting for it.
+
+## The trace
+
+With `--lua-trace` ([lua.md](lua.md), "The link report and the trace"), a delivery's line is the contributor's: `mod`
+is the contributor, with `file` and the kind's `owner`, and `handler` is the owner's.
+
+```json
+{"mod":"example.a","file":"data/a.toml","owner":"<game>-base","handler":"tables.lua:apply_boot","hook":"<game>.data.layered","kind":"event","at":"INIT2.BIN@0x20d","ms":0.412,"instructions":21000,"budget":1003000,"result":"ok","writes":[…]}
+```
+
+- **A write is the contributor's,** with `through` naming the owner, as a base mod's helper's write names the base
+  mod for the mod that called it.
+- **A watch on a cell the file sets** names the contributor as the writer: `"writer":"mod","by":"example.a"`.
+- **`budget`** is the delivery's: the handler budget and the allowance for the document's values.

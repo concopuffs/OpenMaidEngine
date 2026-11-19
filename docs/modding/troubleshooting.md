@@ -430,6 +430,40 @@ whole number, where Lua 5.2 truncates. Pass `math.floor(x)`.
 **The game hangs with a Lua mod enabled.** A pattern that backtracks (`string.find` and the other pattern functions)
 is not bounded by the budget. Disable mods and enable them again one at a time to find the one.
 
+## Data files
+
+**"data/FILE.toml: no mod of the stack accepts the kind K (it accepts …)".** The kind is misspelt, or the mod that
+defines it is not enabled; the parenthesis lists the kinds the stack has. **"… X accepts K, and the mod does not
+require it"**: add `[[requires]] id = "X"` ([data-files.md](data-files.md)).
+
+**"data/FILE.toml:N: …" or "data/FILE.toml: PATH: …".** The file does not read, or holds something a data file
+cannot: a syntax error or a key given twice (with the line), an integer past 2^53, a date or a time, `inf` or `nan`, a
+key with a control character, or more than a bound allows ([data-files.md](data-files.md), "The file"). The first 20
+problems are listed and the rest counted.
+
+**"'data/FILE.toml' is not named by a [[data]] entry", "data[N].file: the package has no data/FILE.toml".** Every file
+under `data/` is named by one entry, and every entry names a file the package has.
+
+**"data/FILE.toml: none of the events of K is raised in this install, so the file would never be delivered".** The
+kind's events are declared over scripts this install does not have as the base mod knows them. The reason follows
+each event. **A note "kind K (OWNER): E is not raised in this install, so its data files are not delivered there …"**
+is not an error: the other events of the kind deliver the files.
+
+**"X and Y both accept the kind K".** A hard conflict: a kind has one owner.
+
+**"accepts[N] K: at[M] E: …".** The owner's own error: the event is not declared by any mod of the stack, the owner
+does not require the mod that declares it, or the handler is not a top-level function of its file.
+
+**"error MOD: data/FILE.toml (OWNER FILE:FUNCTION) failed at EVENT …" in `diagnostics/lua.log`.** The owner's handler
+failed on your file; the message is the owner's. For `<game>.tables` it names the path and what is wrong with it, and
+nothing of the file is applied. After three failures in a row the file is not applied again that session; other
+files go on. **"… ran out of its instruction budget"**: the owner's handler ran past the delivery's budget
+([data-files.md](data-files.md), "Delivery").
+
+**"Lua: MOD is off for this session: …; not applied: …".** The mod named first is off (the notice says why), and the
+files listed are not delivered this session: its own, those of the kinds it defines, and those of the mods that
+require it.
+
 ## Game-specific problems
 
 Each game guide lists its quirks and current limits, such as installs with several bases, missing patch points, or

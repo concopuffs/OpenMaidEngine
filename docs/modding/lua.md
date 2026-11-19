@@ -690,6 +690,7 @@ each mod's draws since the last `rand-seed`, as `mods=<id>x<count>`.
 | Bound | Value |
 |---|---|
 | A handler call | 1,000,000 Lua instructions |
+| A data file's delivery to its kind's handler ([data-files.md](data-files.md)) | 1,000,000 instructions, and 1,000 more for each value of the file |
 | A mod's start-up code (`init.lua` and its handler files, together) | 10,000,000 instructions |
 | Handlers nested inside handlers (a subscriber inside an emit, a hook inside a called script), and rounds of watch handlers firing on each other's writes | 32 |
 | A script a handler calls (`maid.vm.call`), with the scripts it calls | 1,000,000 script instructions |
@@ -728,9 +729,14 @@ Two mods whose `[lua] writes` lists name one global give an `interaction` line, 
 starts the file anew. Two mods on one award, one dividing the amount and one doubling it, read:
 
 ```json
-{"mod":"mod.gap","handler":"gap.lua:on_award","hook":"<game>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.041,"result":"ok","fields":[{"name":"amount","before":50,"after":25}]}
-{"mod":"mod.double","handler":"double.lua:on_award","hook":"<game>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
+{"mod":"mod.gap","handler":"gap.lua:on_award","hook":"<game>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.041,"instructions":0,"budget":1000000,"result":"ok","fields":[{"name":"amount","before":50,"after":25}]}
+{"mod":"mod.double","handler":"double.lua:on_award","hook":"<game>.experience.award","kind":"event","at":"ADDEXP.BIN@0x9a","ms":0.012,"instructions":0,"budget":1000000,"result":"ok","fields":[{"name":"amount","before":25,"after":50}]}
 ```
+
+- `mod` is the handler's mod. A data file's delivery is the contributor's: `mod` names it, with `file` and the
+  kind's `owner`, and `handler` is the owner's ([data-files.md](data-files.md), "The trace").
+- `instructions` is what the call ran, counted in steps of 1,000, so a short handler reads 0; `budget` is what it
+  could run ("Errors and budgets").
 
 - `hook` is the point, the script, the engine event, the game event or the watch, and for a site hook not at a
   point the script and the site as the manifest gives it (`SC0000.BIN@0x83c`); `kind` is `point`, `site`,
@@ -744,7 +750,8 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
   instruction.
 - `calls` lists the scripts the handler ran with `maid.vm.call`: `script`, `result` (`ok`, `refused` with `error`,
   or `abandoned`), and `through` naming the base mod when its helper called.
-- `within` lists the handlers the call ran inside, innermost first: a subscriber inside an emit has one.
+- `within` lists the handlers the call ran inside, innermost first: a subscriber inside an emit has one. A delivery
+  is listed as `example.a data/a.toml (<game>-base tables.lua:apply_boot)`.
 - `fields` gives each declared field, and an engine event's, before and after the call. A write to a field shows
   here, not in `writes`.
 - `writes` gives each write through `maid.vm`, the game names or `ctx.args`: `cell` (such as `G[0x11]`, `GS[0x0]`,

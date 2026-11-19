@@ -112,13 +112,17 @@ public sealed partial class Scripting
             _scene.Reason = SessionReason.Reload;
             _scene.FailuresInARow.Clear();
             _scene.SwitchedOff.Clear();
+            _scene.DataFailuresInARow.Clear();
+            _scene.DataSwitchedOff.Clear();
             foreach (var (modId, block) in capture.Blocks) _scene.Blocks[modId] = block;
             _reloadedMods.Clear();
             foreach (ModBuildFailure failure in session.Failures)
             {
+                string notApplied = NotApplied(failure.ModId);
                 WriteLog(ModLogLevel.Error, failure.ModId, $"still off for this session: {failure.Message}"
+                                                           + (notApplied.Length > 0 ? "\n" + notApplied[2..] : "")
                                                            + (failure.Traceback is { } trace ? "\n" + trace : ""));
-                Notify($"Lua: {failure.ModId} is still off for this session: {FirstLine(failure.Message)}");
+                Notify($"Lua: {failure.ModId} is still off for this session: {FirstLine(failure.Message)}{notApplied}");
             }
             WriteLog(ModLogLevel.Info, null, $"reloaded {reloaded}: the session was rebuilt, keeping maid.state");
             Notify($"Lua: reloaded {reloaded}");

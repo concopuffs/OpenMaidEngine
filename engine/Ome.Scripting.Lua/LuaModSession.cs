@@ -43,6 +43,9 @@ internal sealed partial class LuaModSession : IModSession
     private long _used, _budget;
     private bool _budgetStop;
     private ExceptionDispatchInfo? _kept;
+    // Each contribution's view (data patches spec §5.3): made at its first delivery and kept for the session.
+    private readonly LuaValue[] _contributions;
+    private ReadOnlyViews? _documents;
 
     private LuaModSession(ModRuntimeStack stack, IScriptAccess access, ModState saved, SessionReason reason,
                           ModLimits limits)
@@ -53,6 +56,7 @@ internal sealed partial class LuaModSession : IModSession
         _reason = reason;
         _limits = limits;
         _handlers = new LuaValue[stack.Handlers.Count];
+        _contributions = new LuaValue[stack.ContributionList.Count];
         _state = LuaState.Create();
         _state.OpenBasicLibrary();
         _state.OpenStringLibrary();
@@ -84,7 +88,21 @@ internal sealed partial class LuaModSession : IModSession
 
     public IReadOnlyList<ModBuildFailure> Failures => _failures;
 
-    public bool IsActive(HandlerId handler) => _handlers[handler.Index].Type == LuaValueType.Function;
+    public bool IsActive(HandlerId handler, ContributionId? contribution = null)
+        => _handlers[handler.Index].Type == LuaValueType.Function
+           && (contribution is not { } delivered || ContributorOn(_stack[delivered]));
+
+    /// <summary>Data patches spec §5.6: a contributor off for the session has no deliveries. One with no Lua of its own
+    /// is off when a mod it requires is.</summary>
+    private bool ContributorOn(ModContribution contribution)
+    {
+        if (_mods.TryGetValue(contribution.Mod, out ModEnvironment? own) && own.Off) return false;
+        foreach (string required in contribution.Requires)
+            if (_mods.TryGetValue(required, out ModEnvironment? environment) && environment.Off) return false;
+        return true;
+    }
+
+    public ModCallCost LastCall { get; private set; }
 
     /// <summary>Spec §5.7 steps 2 and 3 for one mod: its environment with its saved state, its <c>init.lua</c>, the
     /// files its hooks name, and each handler's function. An error switches the mod off for the session; the scripting
@@ -157,19 +175,24 @@ internal sealed partial class LuaModSession : IModSession
         _failures.Add(new ModBuildFailure(environment.Id, message, traceback));
     }
 
-    public void Invoke(HandlerId handler, HookContext context)
+    public void Invoke(HandlerId handler, HookContext context, ContributionId? contribution = null)
     {
         LuaValue function = _handlers[handler.Index];
         if (function.Type != LuaValueType.Function)
             throw new InvalidOperationException($"{_stack[handler]} is not active in this session");
+        // Data patches spec §5.2: a delivery's second argument is the contribution, and its budget grows with it (§5.6).
+        ModContribution? delivered = contribution is { } id ? _stack[id] : null;
+        LuaValue second = contribution is { } index ? Contribution(index) : LuaValue.Nil;
         // A static body with its state passed in, so a call allocates no closure (plan §3.2's dispatch budget).
-        Guarded(_limits.HandlerInstructions, startup: false, (Session: this, Function: function, View: new HookView(context, this)),
+        Guarded(_limits.BudgetFor(delivered), startup: false,
+            (Session: this, Function: function, View: new HookView(context, this), Second: second, Delivery: delivered != null),
             static (state, token) =>
             {
                 LuaState lua = state.Session._state;
                 int frame = lua.Stack.Count;
                 lua.Push(state.Function);
                 lua.Push(LuaValue.FromUserData(state.View));
+                if (state.Delivery) lua.Push(state.Second);
                 try
                 {
                     return Sync(lua.CallAsync(frame, frame, token));
@@ -179,6 +202,60 @@ internal sealed partial class LuaModSession : IModSession
                     lua.Stack.PopUntil(frame);
                 }
             });
+    }
+
+    /// <summary>
+    /// A contribution as its owner's handler gets it (data patches spec §5.2, §5.3; plan §4.2): a read-only view of
+    /// <c>{ mod, file, data, unraised }</c>. The document becomes Lua tables once, keys inserted in the file's order, and
+    /// is read through views that refuse every write ("a data file's document is read-only"). Made at the
+    /// contribution's first delivery in the session and handed to every later one.
+    /// </summary>
+    private LuaValue Contribution(ContributionId id)
+    {
+        if (_contributions[id.Index].Type != LuaValueType.Nil) return _contributions[id.Index];
+        ModContribution contribution = _stack[id];
+        var unraised = new LuaTable(contribution.Unraised.Count, 0);
+        for (int i = 0; i < contribution.Unraised.Count; i++) unraised[i + 1] = contribution.Unraised[i];
+        var table = new LuaTable(0, 4)
+        {
+            ["mod"] = contribution.Mod,
+            ["file"] = contribution.File,
+            ["data"] = ToLua(contribution.Document),
+            ["unraised"] = unraised,
+        };
+        _documents ??= new ReadOnlyViews(Metatables, document: true);
+        return _contributions[id.Index] = _documents.Wrap(table);
+    }
+
+    /// <summary>A document's value as Lua holds it: a table, an array from 1, a string, a boolean or a number. An integer
+    /// is at most 2^53 in size, so a Lua number holds it exactly.</summary>
+    private static LuaValue ToLua(DataValue value)
+    {
+        switch (value)
+        {
+            case DataTable table:
+            {
+                var lua = new LuaTable(0, table.Count);
+                foreach (var (key, item) in table.Entries) lua[key] = ToLua(item);
+                return lua;
+            }
+            case DataArray array:
+            {
+                var lua = new LuaTable(array.Items.Count, 0);
+                for (int i = 0; i < array.Items.Count; i++) lua[i + 1] = ToLua(array.Items[i]);
+                return lua;
+            }
+            case DataString text:
+                return text.Value;
+            case DataBoolean flag:
+                return flag.Value;
+            case DataInteger integer:
+                return (double)integer.Value;
+            case DataFloat number:
+                return number.Value;
+            default:
+                throw new InvalidOperationException($"a document holds no {value.GetType().Name}");
+        }
     }
 
     public ConsoleResult RunChunk(string? modId, string code)
@@ -296,6 +373,7 @@ internal sealed partial class LuaModSession : IModSession
         finally
         {
             _callDepth--;
+            LastCall = new ModCallCost(_used, budget);
             if (nested)
             {
                 _source.Dispose();

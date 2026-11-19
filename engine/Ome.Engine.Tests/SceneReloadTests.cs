@@ -143,9 +143,10 @@ public class SceneReloadTests
             "_depth", "_frameAccess", "_nestedHalt",
             // How many sessions the run has ended, which an after hook compares across its instruction.
             "_sessionsEnded",
-            // The plan's watches; and the handler running, the console chunks and the builds running, the latest face's
-            // mod and the delivery's depth, all set and cleared within a call (the records are the Scene's).
-            "_watches", "_running", "_consoleDepth", "_looseDepth", "_faceMod", "_delivering",
+            // The plan's watches; and the handler running with the contribution it delivers, the console chunks and the
+            // builds running, the latest face's mod and the delivery's depth, all set and cleared within a call (the
+            // records are the Scene's).
+            "_watches", "_running", "_runningContribution", "_consoleDepth", "_looseDepth", "_faceMod", "_delivering",
             // Whether a session is being built, where maid.vm.call is refused: set and cleared within the build.
             "_building",
             // The undeclared writes --lua-dev has logged, once each for the run.

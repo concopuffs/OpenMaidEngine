@@ -37,8 +37,10 @@ public sealed partial class Scripting
         IReadOnlyList<PlannedHandler> subscribers = _setup.Plan.SubscribersOf(name);
         for (int i = 0; i < subscribers.Count; i++)
         {
-            if (!IsOn(session, subscribers[i].Handler)) continue;
-            if (Call(session, subscribers[i].Handler, HookContext.ForGameEvent(gameEvent, values), frameAccess: false) is { } halt)
+            PlannedHandler subscriber = subscribers[i];
+            if (!IsOn(session, subscriber.Handler, subscriber.Contribution)) continue;
+            if (Call(session, subscriber.Handler, HookContext.ForGameEvent(gameEvent, values), frameAccess: false,
+                     subscriber.Contribution) is { } halt)
             {
                 _nestedHalt ??= halt;
                 break;

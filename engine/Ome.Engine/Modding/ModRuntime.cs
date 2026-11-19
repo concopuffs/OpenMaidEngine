@@ -48,6 +48,13 @@ public static class SessionReasons
 public sealed record ModLimits
 {
     public long HandlerInstructions { get; init; } = 1_000_000;
+    /// <summary>What a delivery (data patches spec §5.6) may run beyond <see cref="HandlerInstructions"/> for each value
+    /// of its document. One constant of the engine: an owner has no setting for it (data patches plan §4.3).</summary>
+    public long DataInstructionsPerValue { get; init; } = 1_000;
+
+    /// <summary>The instructions a call may run: a delivery's grows with its document.</summary>
+    public long BudgetFor(ModContribution? contribution)
+        => HandlerInstructions + (contribution == null ? 0 : DataInstructionsPerValue * contribution.Values);
     public long StartupInstructions { get; init; } = 10_000_000;
     public int NestingCap { get; init; } = 32;
     /// <summary>The script instructions one <c>maid.vm.call</c> may run, its called frames' included (spec §10).</summary>
@@ -131,18 +138,27 @@ public interface IModRuntime : IDisposable
                              ModLimits limits);
 }
 
+/// <summary>What a call into Lua ran (data patches plan §4.2, the trace's <c>instructions</c> and <c>budget</c>): the
+/// instructions it ran, counted in steps of the count hook's interval, and its budget.</summary>
+public readonly record struct ModCallCost(long Instructions, long Budget);
+
 /// <summary>A built session (spec §5.7). Engine thread only.</summary>
 public interface IModSession : IDisposable
 {
     /// <summary>The mods the build switched off, in load order.</summary>
     IReadOnlyList<ModBuildFailure> Failures { get; }
 
-    /// <summary>Whether the handler's mod is on and its function was found.</summary>
-    bool IsActive(HandlerId handler);
+    /// <summary>Whether the handler's mod is on and its function was found. With <paramref name="contribution"/>, a
+    /// delivery (data patches spec §5.6): its contributor is on too, and so is every mod the contributor requires.</summary>
+    bool IsActive(HandlerId handler, ContributionId? contribution = null);
 
-    /// <summary>Call a handler with its context. Throws <see cref="ModScriptException"/> for its error; an engine
-    /// exception raised inside it comes out unchanged.</summary>
-    void Invoke(HandlerId handler, HookContext context);
+    /// <summary>Call a handler with its context, and for a delivery the contribution as its second argument (data
+    /// patches spec §5.2), with a budget that grows with the document (§5.6). Throws <see cref="ModScriptException"/> for
+    /// its error; an engine exception raised inside it comes out unchanged.</summary>
+    void Invoke(HandlerId handler, HookContext context, ContributionId? contribution = null);
+
+    /// <summary>What the latest call that returned or failed ran: the innermost call's until the one around it ends.</summary>
+    ModCallCost LastCall { get; }
 
     /// <summary>Run a console chunk (spec §13) in the console's environment, or in the environment of the mod
     /// <paramref name="modId"/>. Its error is the result's text; an engine exception comes out unchanged.</summary>

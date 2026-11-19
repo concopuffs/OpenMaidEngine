@@ -809,7 +809,8 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   declared fields before and after, and each write through `maid.vm`, an accessor or `ctx.args` (`Scripting.Trace.cs`);
   a site or script hook's `when` and `cause` (with `caller` for a frame `maid.vm.call` ran), `skip` on the handler
   that skipped, a watch's cell, old and new values and writer, and the scripts the handler called (`calls`: script,
-  result, `through` for a base mod's helper).
+  result, `through` for a base mod's helper). Every line has `instructions` (in steps of 1,000) and `budget`; a data
+  file's delivery names its contributor as `mod`, with `file` and `owner` (data patches spec §5.7).
   The `[lua]` line says when it is on. Format: `docs/modding/lua.md`, "The link report and the trace".
 - `--lua-reload` — while writing a mod (spec §13): each unpacked mod that ships Lua has its `lua/` watched
   (`LuaReloadWatcher`, `godot/Main.LuaReload.cs`; a `[lua] --lua-reload watches` line names the folders). Once its
