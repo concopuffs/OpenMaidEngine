@@ -191,7 +191,7 @@ public sealed partial class DataPatchWorkspaceTests
     {
         var (linkBase, scripts) = Himegari();
         // The reader comes first in the load order: at data.layered it runs before both files, and at data.ready,
-        // which comes later in the boot, after them.
+        // which comes later in the boot, after them. Each file's size counts its two tables and its value (plan §12.6).
         ModPackage reader = Reader("himegari", "unit_experience_reward", 103);
         ModPackage a = DataMod("himegari", "test.data-a", "a.toml", "[unit.103]\nexperience_reward = 40\n");
         ModPackage b = DataMod("himegari", "test.data-b", "b.toml", "[unit.103]\nexperience_reward = 41\n");
@@ -200,8 +200,8 @@ public sealed partial class DataPatchWorkspaceTests
         string report = linked.Report.Render();
         Assert.Contains($"""
               kind himegari.tables (himegari-base), at himegari.data.layered and himegari.stage.loaded
-                {first} data/{first[^1..]}.toml: 1 value
-                {second} data/{second[^1..]}.toml: 1 value
+                {first} data/{first[^1..]}.toml: 3 values
+                {second} data/{second[^1..]}.toml: 3 values
                 unit.103.experience_reward: {first}, then {second} (shared path, in delivery order)
             """.ReplaceLineEndings("\n"), report.ReplaceLineEndings("\n"));
 
