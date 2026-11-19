@@ -92,6 +92,32 @@ public class ProjectBoundaryTests
                 name => name.Name!.StartsWith("Lua", StringComparison.Ordinal) || name.Name == "MoonSharp.Interpreter");
     }
 
+    [Fact]
+    public void OnlyTheModsProjectNamesTheTomlLibrary()
+    {
+        // Data patches spec §8 and gate 13: Ome.Engine and Ome.Engine.Vm reference no TOML library. A data file's
+        // document reaches the engine as Ome.Engine.Modding.DataValue, which Ome.Mods reads with Tomlyn.
+        var projects = Directory.EnumerateFiles(Path.Combine(Paths.Repo, "engine"), "*.csproj", SearchOption.AllDirectories)
+            .Append(Path.Combine(Paths.Repo, "godot", "OME.csproj"))
+            .Concat(Directory.EnumerateFiles(Path.Combine(Paths.Repo, "launcher"), "*.csproj", SearchOption.AllDirectories))
+            .Where(path => !path.Replace('\\', '/').Split('/').Any(part => part is "obj" or "bin"));
+        var naming = new List<string>();
+        foreach (string path in projects)
+            if (XDocument.Load(path).Descendants("PackageReference").Any(reference =>
+                    reference.Attribute("Include")?.Value is { } package
+                    && (package.Contains("Toml", StringComparison.OrdinalIgnoreCase)
+                        || package.StartsWith("Tommy", StringComparison.OrdinalIgnoreCase)
+                        || package.StartsWith("Nett", StringComparison.OrdinalIgnoreCase))))
+                naming.Add(Path.GetFileNameWithoutExtension(path));
+        Assert.Equal(["Ome.Mods"], naming);
+        foreach (string name in new[] { "Ome.Engine", "Ome.Engine.Vm", "Ome.Engine.Devices" })
+            Assert.DoesNotContain("Ome.Mods", ProjectReferences(name));
+        foreach (Assembly assembly in new[] { Handlers, Natives, Devices })
+            Assert.DoesNotContain(assembly.GetReferencedAssemblies(),
+                name => name.Name!.Contains("Toml", StringComparison.OrdinalIgnoreCase) || name.Name == "Ome.Mods");
+        Assert.Same(Natives, typeof(Ome.Engine.Modding.DataValue).Assembly);
+    }
+
     /// <summary>
     /// The natives' interfaces (spec §9, acceptance 1): every interface the Ome.Engine assembly exports, except the
     /// seams the natives call out through to what the front end and the platform supply, each with its reason.

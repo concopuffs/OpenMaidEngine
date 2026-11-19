@@ -63,9 +63,13 @@ priority = 0                   # optional; where the file comes among the event'
 
 ## The file
 
-- **TOML 1.0, in UTF-8.**
+- **TOML 1.0, in UTF-8.** A key given twice is an error, as TOML has it.
 - **Values are strings, booleans, integers and floats.** An integer of more than 2^53 in size, a float that is not
   finite (`inf`, `nan`), and a date or a time are errors: the owner's Lua cannot hold them as they were written.
+- **An error names the line** where the parser gives one, and otherwise the path to the value:
+  `data/slimes.toml:3: the integer 18446744073709551615 is past 2^53 in size, …`, or
+  `data/slimes.toml: unit.12.when: a date or a time has no value here`. The link reports the first 20 problems of a
+  file and counts the rest.
 - **Keys are strings.** `[unit.761]` has the key `"761"`. What a key means is the kind's.
 - **Bounds.** A document holds at most 400,000 values (a string, a boolean or a number; each element of an array
   counts), nests tables and arrays at most 16 deep, and has keys of at most 128 characters with no control
