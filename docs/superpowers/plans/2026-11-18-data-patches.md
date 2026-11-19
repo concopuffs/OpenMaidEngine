@@ -789,3 +789,89 @@ installed games.
   M2 adds the stage's enemies with the stage event.
 - **The report counts "1 value"** in the singular.
 - **The allowance is 250** (§10.1), and `ome-records` keeps only the first 20 problems and a count.
+
+## 11. What M2 found
+
+M2 landed on `feature/data-patches` on 2026-11-18 and 2026-11-19, tasks 1 to 9 of §5.4 (`50224d09` to `92b94c47`).
+"Ran", "read" and "driven" are as in §1; "driven" is a port run through `tools/drive.py port` on a `dp-` sandbox of
+the worktree's build.
+
+### 11.1 The gates and their proofs
+
+- **Gate 8, Himegari** (driven: `tools/drive/scenarios/port/himegari-stage-enemies.steps`, `-load.steps`,
+  `-load-without.steps` and `-mistake.steps`). A new game reaches stage 1 with `example.stage-enemies`: slot 2 holds
+  ハルピュア (810), slot 3 the stage's own unit, and FIELD placed 810 (`entity_unit_definition_ids`). The camp and
+  back (the mode 1), the field's save command and its load, and a title load with the mod keep the edit; a title load
+  without it has the stage's own table and the placed 810 still on the field. The mistake twin's notice shows at the
+  title and `diagnostics/lua.log` names the file and the path. Gap: the shots do not show the enemies (stage 1 is
+  dark until explored, at turn 1), so the placement is shown by the cells only.
+- **Gate 8, Kamidori** (driven: `kamidori-stage-enemies.steps`, `-load-without.steps` and `-mistake.steps`, from the
+  sweep's slot 019 of the clean install, the sandbox seeded from the main checkout's `k1clean`). INFO's third tab
+  opened off a floor raises no event (`--lua-trace`). ◆開けた涼風西湖畔◆ (stage 51) entered afresh holds 緑プテテット
+  (761) in slot 1, stage 51's slot 3 keeps 水精 (402), and slot 1's spawner placed 761. A console mark in the slot
+  before INFO's 獲得地点 view on the floor and before a floor save's load is replaced by 761 each time: the event at
+  `INFO3@0xd20` and at `FIELD@0x527` after the load. Loaded without the mod, slot 1 is ハルピュア (331) again and the
+  placed 761 stays. The mistake twin as on Himegari.
+- **Gate 11** (ran, core: `DataPatchTests.BothBaseModsAcceptTheirTablesAtTheSameEventsByTheSameHandlersButForTheGamesName`,
+  `BothBaseModsTablesLuaAreOneTextButForTheGamesName` and `NoEngineSourceNamesAKindABaseModOrAGameEvent`). Every
+  driven run used one engine build for both games.
+- **The derived values** (read and driven; §11.3). The backlog item is gone.
+
+### 11.2 Where §5.1 and the scripts disagreed
+
+- **The scripts an install runs are not always DATA1's.** §5.1 read Kamidori's INFO3 in the main checkout's
+  `extracted-kamidori` DATA1 (`e850c07a…`); both installs run another revision (`3b5e1175…`, the bytes of the
+  translated install's `patch/INFO3.BIN`), which the main checkout's `build/games/kamidori/disasm/` shows. So the
+  point has one fingerprint, for both installs, where §5.2 said two. In DATA1's revision the restore loop's test
+  falls through to `0xd20` off a floor; in the one the installs run, `INFO3@0xcdc` jumps past it to `0xd5d`, and the
+  loop leaves `current_stage_id` at 1000. Driven: no event off a floor, the event on one.
+- **INFO's third tab is アイテム情報, not a list of enemies.** Its loader loop belongs to the 獲得地点 view of the
+  selected item, which looks through every stage's dig points for it. The point's and the event's descriptions, the
+  base mod's README and the guide say so.
+- **Kamidori's slots are not all placed at a floor's start.** A slot whose `random_selection_weight` is not 0 joins
+  the pool of the spawner its `spawn_object_slot` names (`FIELD@0xb42` to `0xb67`); spawners place from their pools
+  at the start (`FIELD@0xc8a`) and send reinforcements later (`FIELD@0xa040`). The example's slot 2 was in a pool, so
+  nothing showed it at the start; the example edits slot 1, the one placed in the sweep's story state. The guide
+  says which slots a floor places, and the Workspace test checks the placement.
+- **Himegari's placed units are saved** (`entity_unit_definition_ids`, below the prefix): a save made with a stage
+  edit and loaded without the mod keeps the unit the edit placed. Kamidori's battle slots likewise
+  (`battle_unit_unit_ids`, with the slot state `G[0x53c16]` bit 0 set for a placed slot; stale slots keep old
+  units).
+- **SELSTAGE** runs every stage's loaders for the stage list's preview and raises no event, so the preview shows the
+  floors' own enemies, not a file's edit (read; the guide says so).
+- **The port's Kamidori title loop** waits at `TITLE@0x9ab`, where the steps first tried `0x9a6`.
+- **One doc comment** in `ManifestReader` named a Himegari event as an example; it names the guide's example.
+
+### 11.3 The derived values
+
+- **Each claim of §8 was read again** at its offset in the scripts the installs run, with its condition: Himegari's
+  UNITECH makes the first join's copies for a unit below 100 at level 0 (`UNITECH@0x2cf`, `0x2e4`), after taking the
+  unit through `unit_canonical_id` and `unit_roster_variant_ids`; Kamidori's when `character_levels` is 0
+  (`UNITECH@0x13a`), through `unit_canonical_character_id`. Both read the growth rates again at each level up
+  (`ADDEXP@0x20b`, `ADDEXP@0x276`).
+- **The second scan** (a scratch script, not kept) followed each field's value through a script's locals in any
+  order, through the array each lookup binds a pointer to and through `take-address` and `copy-dwords` block
+  copies, into a cell below the saved prefix, and each cell it found was read by hand. Beside §8's list it found
+  SALLY's form change on Himegari (the same copies for a form used for the first time, `SALLY@0x15c4`), and on
+  Kamidori the roster's copies at a character's first place in the roster (`unit_initial_equipment_item_ids` into
+  `roster_equipment_item_ids`, also at `GAMESTART@0xb0d`, and the first four skills into
+  `roster_equipped_skill_ids`) and `unit_initial_class_titles` into `character_class_titles`. The rest were shared
+  temporaries (`G[0xfec0c]`, a few of FIELD's locals), the battle units, or the results of play. Its limit: a value
+  passed from one script to another through a global is not followed.
+- **The guide pages** list the copies, the battle copies and the results of play, and say the rest is read where it is
+  used.
+- **Driven:** `example.unit-stats` raises リリィ's (unit 2) maximum HP from 14 to 40; a new game with it gives her saved
+  stats 40, and its save at SC0000 page 3, loaded without the mod, keeps 40 while her definition is 14
+  (`himegari-unit-stats.steps`, `-load-without.steps`). `example.kamidori-unit-stats` raises ウィル's from 18 to 50;
+  the sweep's slot 019 loaded with it has his definition at 50 and his saved stats at the save's 23
+  (`kamidori-unit-stats.steps`). `DataPatchWorkspaceTests.TheUnitStatsExamplesEditTheDefinitionAtBoot` boots both.
+
+### 11.4 What M2 settled beside §5.2
+
+- **A notice names the file once.** The applier's first line opens with the contributor and the file, and
+  `Scripting.DeliveryFailed` put them in front again; the notice and the halt reason now drop the repeat
+  (`ANoticeAndAHaltReasonNameTheContributorOnceWhereTheOwnersMessageOpensWithIt`), and the port's status line wraps
+  upward instead of running off the window. It also showed "Lua: " twice, which the port no longer adds; that was
+  older than this branch.
+- **Stage 52 was not run.** The tests and the drives show stage 52's part leaving stage 51 as authored; no run enters
+  蒼月の南湖畔 itself.

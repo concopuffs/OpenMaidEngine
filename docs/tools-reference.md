@@ -1498,7 +1498,12 @@ on the title and back to `ja` on GAMESTART with `language`, and the VM stays whe
 package defining a language, English changes only the shell's text; add `--mod` with a language package to switch the
 game text and its images too. `himegari-reference-diff.steps` and `kamidori-reference-diff.steps` compare the GPU
 renderer with the reference on the title, GAMESTART, ADV pages, SC0000's effect band, the history and Kamidori's
-first field and its map (`reference-diff`; engine layering spec §6.3, "As built").
+first field and its map (`reference-diff`; engine layering spec §6.3, "As built"). The data patches scenarios
+(`himegari-stage-enemies*.steps`, `kamidori-stage-enemies*.steps`, `himegari-unit-stats*.steps` and
+`kamidori-unit-stats.steps`) drive the data-file examples of `oms/examples/mods/`, whose README says what each shows;
+each header gives its start command, with its `--mod`, its `dp-` sandbox and, on Kamidori, the sweep's sandbox it
+seeds from. Most of their `lua` steps read cells by number in the console (`maid.vm.g`): a `lua mod=<game>-base`
+step needs the base mod in the stack, which a run without the example lacks.
 
 **Geometry pairs** live in `tools/drive/scenarios/geometry/`: localization gate 12 (spec §18.1), whose results are in
 `docs/localization-import-test.md`. `<game>-translated-native.steps` runs native AGE on an install translated in
