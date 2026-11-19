@@ -353,6 +353,22 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   registry has an old name yet. Done when the report reads each kind's old names from its owner (the record map, or a
   list the kind declares), lists such a pair as a shared path under the current spelling, and a two-mod link test shows
   it.
+- **Nothing bounds a Lua mod's memory.** The Lua scripting spec states it (§15: "a managed interpreter has no hard
+  memory cap, so a mod can still exhaust memory"), and so does `modding/lua.md` ("Errors and budgets": "a mod can use
+  up memory"), but neither §16's future work nor this list holds it. Lua-CSharp's API has nothing for memory or for
+  string length (`superpowers/plans/2026-11-14-lua-scripting.md` §2; its 0.5.8 assembly names no allocator hook or
+  memory limit, read on 2026-11-19), and the user's acceptance of 2026-11-14 in that plan's §3.4 is for the pattern
+  functions only. The instruction budget
+  bounds a call's work, not what it allocates: a loop that fills a table stops at its budget with what it built still
+  held by the mod, and one library call (`string.rep` with a large count, a long `table.concat`) allocates between two
+  of the count hook's checks (`LuaModSession.HookInterval`, every 1,000 instructions). Spec §15 lists string length
+  among the bounds, and the runtime has no such check. `maid.state` is bounded when a save captures it
+  (`ModLimits.StateCharacters`, `LuaStateCodec`), not while it grows. A data file's view is bounded by its document's
+  size (`DataBounds`), and a delivery's journal by the cells it wrote (data patches plan §12.6). A possible bound: the
+  count hook reads `GC.GetAllocatedBytesForCurrentThread` and stops a call past an allowance, as the budget does, with
+  the string functions that build a long string checking the length they would make. Done when a bound is built and
+  measured against the base mods' largest delivery and a runaway handler, or the owner accepts the gap and spec §15's
+  successor says so.
 - **The link cache does not follow the text linker's scan of every script.** An entry records the base scripts its
   link read through `ModLinkBase.ReadScript` and is a miss when one changes (data patches plan §12.6), but the text
   linker scans `ModLinkBase.InstalledScripts`, every script of the install, to say which catalog entries reach no text

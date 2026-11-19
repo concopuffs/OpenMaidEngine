@@ -1455,3 +1455,6 @@ the stage list's own event and the decision on Tomlyn's faults.
   gives those lines, and no syntax tree is built: the read takes 208 to 253 ms, about half of either. A header written
   quoted (`[["text"]]`) now finds its line, where the tree's text did not match the name. M2's follow-up figures
   (751 and 479 ms, plan §11) were another run's; these three builds were measured side by side.
+- **A Lua mod's memory (item 4).** Neither the backlog nor the Lua spec's future work (§16) recorded that nothing
+  bounds it; spec §15 and `lua.md` state it as a limit. The backlog has it now, with the evidence and a possible
+  bound.
