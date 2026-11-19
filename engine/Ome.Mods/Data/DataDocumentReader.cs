@@ -21,6 +21,10 @@ public sealed record DataDocument(DataTable Root, int Values);
 public sealed record DataReadResult(DataDocument? Document, IReadOnlyList<DataProblem> Problems, int ProblemCount)
 {
     public bool Ok => Document != null;
+
+    /// <summary>The syntax tree of the validating parse, kept with a document so that a shape's check can give each
+    /// problem its line without parsing the text again (plan §6.2); null without a document.</summary>
+    internal DocumentSyntax? Syntax { get; init; }
 }
 
 /// <summary>
@@ -90,7 +94,8 @@ public static class DataDocumentReader
 
         var walk = new Walk(problems);
         DataTable? root = walk.Table(model, depth: 1);
-        return problems.Result(root == null || problems.Count > 0 ? null : new DataDocument(root, walk.Values));
+        if (root == null || problems.Count > 0) return problems.Result(null);
+        return problems.Result(new DataDocument(root, walk.Values)) with { Syntax = syntax };
     }
 
     /// <summary>Whether an integer as TOML writes it (sign, prefix and underscores) is at most 2^53 in size. The
