@@ -548,3 +548,39 @@ spelling for each cell, except an old name kept after a rename.
 
 **Where it is built:** §4.2 (the formats) and §4.4, task 6. No registry renames a table or a field today, so the
 tests use a synthetic registry and a synthetic record map.
+
+## 10. What M1 found
+
+### 10.1 Gate 10, measured (task 8, 2026-11-18)
+
+Ran: `DataPatchWorkspaceTests.TheLargestFilesCostLessThanHalfTheAllowanceAndTheItemFileStaysUnderTheCeiling`
+(Workspace), on the untranslated Kamidori, in the engine's Debug test build on this machine. Each file is built from
+the record map and a plain boot's values, shipped by a mod with no Lua, linked with the shipped base mod, and
+delivered while the installed INIT2 runs. The instructions are the delivery's trace line (in steps of 1,000), measured
+with an allowance no file reaches. The times are one run each, after a warm-up boot, and the ranges are over the three runs made while the library
+changed below; the instructions did not change between them.
+
+| File | Values | Size | Instructions | A value | Link | Boot | Load |
+|---|---|---|---|---|---|---|---|
+| the first 1,000 values of the item file, a balance mod's size | 1,000 | 34 KB | 102,000 | 102.0 | 0.01 s | 0.02 s | not run |
+| every item field a file may set (2,000 records, 48 fields, 150 cells a record) | 300,000 | 10.0 MB | 30,708,000 | 102.4 | 1.5 to 2.0 s | 0.8 to 1.2 s | 1.6 to 1.7 s |
+| the item file and unit records up to the value bound | 400,000 | 12.6 MB | 41,146,000 | 102.9 | 1.8 to 2.0 s | 1.1 to 1.3 s | not run |
+| the bound file, every value of the wrong kind | 400,000 | 13.3 MB | 45,777,000 | 114.4 | 1.9 to 2.4 s | 0.9 to 1.0 s | not run |
+
+- **The ceiling holds.** A boot with no mod takes 0.02 s and a load 0.8 to 0.9 s. The item file adds about 2.5 to 3
+  seconds to a boot (its link and its delivery) and about 0.8 s to a load (the view, the check and the writes again in
+  the new session), against the 10 seconds of §4.3. The test asserts both, with the margin a timing check needs.
+- **The allowance is 250 instructions a value:** the largest cost, 114.4, doubled and rounded up. The test fails when
+  a measured cost passes half the allowance, so a slower applier shows there first.
+- **The bounds stand.** The full item file fits under all of them: 300,000 values of the 400,000, 10 MB of the
+  16 MiB, well under the 16 levels, and keys far under 128 characters. No number changed.
+- **The budget at the bound.** `AFileAtTheValueBoundIsAppliedInsideItsBudgetAtBootAndAtALoadAndARefusedOneFailsItsCheckNotItsBudget`
+  runs the two bound files with the engine's own limits, at boot and at a load: the valid one is applied, and the
+  refused one fails its check with "400000 problems", not the budget.
+- **What the measuring changed in `ome-records`.** The first run of the refused file took 22 s at boot, against 1 s
+  for the valid one, with no more than twice its instructions. The library kept every problem in a list and sorted
+  it; with LuaCSharp, appending 400,000 entries to one table cost the time (a list kept to its first 20 took 1.2 s).
+  It now keeps the count, the first 20 problems by path, and each old name once.
+- **A file a balance mod writes** costs nothing a player sees: 1,000 values link in 0.01 s, and the boot takes the
+  0.02 s it takes with no mod. The Lua runtime was already started in the test process, so its own start is not in
+  these numbers.

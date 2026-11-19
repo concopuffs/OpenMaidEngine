@@ -114,10 +114,22 @@ local function field_of(spec, field)
     return nil
 end
 
--- Every problem of a document, as { path, reason }, and the old names it uses, as sorted lines without the file.
+-- A document's problems: how many it has and the first MAX_SHOWN by path, as { path, reason }; and the old names it
+-- uses, as sorted lines without the file. Only those MAX_SHOWN are kept, and each old name once: a file may hold
+-- 400,000 values, and a list as long costs the session seconds (data patches plan §10).
 function Applier:problems(data)
-    local problems = {}
-    local function problem(path, reason) problems[#problems + 1] = { path, reason } end
+    local count, shown, kept = 0, {}, 0
+    local function problem(path, reason)
+        count = count + 1
+        if kept == MAX_SHOWN and path >= shown[kept][1] then return end
+        if kept < MAX_SHOWN then kept = kept + 1 end
+        local at = kept
+        while at > 1 and path < shown[at - 1][1] do
+            shown[at] = shown[at - 1]
+            at = at - 1
+        end
+        shown[at] = { path, reason }
+    end
     local tables = self.map.tables
     -- Each cell the document names, by its current spelling, to the paths that name it; and the old names it uses.
     local cells, old_names = {}, {}
@@ -181,13 +193,13 @@ function Applier:problems(data)
 
     if not is_table(data) then
         problem("(the file)", "a document is a table of record tables, not " .. describe(data))
-        return problems
+        return count, shown, {}
     end
     for name, records_of in pairs(data) do
         local spec, current = self:table_of(name)
         local path = tostring(name)
         if spec ~= nil and current ~= name then
-            old_names[#old_names + 1] = name .. " is an old name of the table " .. current .. "; write " .. current
+            old_names[name .. " is an old name of the table " .. current .. "; write " .. current] = true
         end
         if spec == nil then
             problem(path, "no record table is named " .. path .. " (tables: "
@@ -212,8 +224,8 @@ function Applier:problems(data)
                         local field_spec, field_name = field_of(spec, field)
                         local canonical = current .. "." .. key .. "." .. tostring(field_name)
                         if field_spec ~= nil and field_name ~= field then
-                            old_names[#old_names + 1] = field .. " is an old name of the field " .. current .. "."
-                                                        .. field_name .. "; write " .. field_name
+                            old_names[field .. " is an old name of the field " .. current .. "." .. field_name
+                                      .. "; write " .. field_name] = true
                         end
                         if field_spec == nil then
                             problem(field_path, name .. " has no field " .. tostring(field))
@@ -245,12 +257,7 @@ function Applier:problems(data)
                     .. canonical)
         end
     end
-    table.sort(old_names)
-    local unique = {}
-    for _, line in ipairs(old_names) do
-        if unique[#unique] ~= line then unique[#unique + 1] = line end
-    end
-    return problems, unique
+    return count, shown, sorted_names(old_names)
 end
 
 -- The kept result of a contribution's check: { ok = true } or { ok = false, message = … }, made once for the applier's
@@ -266,21 +273,18 @@ function Applier:result(contribution)
     local key = mod .. "\n" .. file
     local result = self.results[key]
     if result then return result end
-    local problems, old_names = self:problems(contribution.data)
+    local count, shown, old_names = self:problems(contribution.data)
     -- One line for each old name the file uses, once in the applier's life (one session).
     if self.log ~= nil then
         for _, line in ipairs(old_names) do self.log(mod .. " " .. file .. ": " .. line) end
     end
-    if #problems == 0 then
+    if count == 0 then
         result = { ok = true }
     else
-        table.sort(problems, function(a, b) return a[1] < b[1] end)
-        local lines = { mod .. " " .. file .. ": " .. #problems .. (#problems == 1 and " problem" or " problems")
+        local lines = { mod .. " " .. file .. ": " .. count .. (count == 1 and " problem" or " problems")
                         .. ", so nothing of it is applied" }
-        for i = 1, math.min(#problems, MAX_SHOWN) do
-            lines[#lines + 1] = "  " .. problems[i][1] .. ": " .. problems[i][2]
-        end
-        if #problems > MAX_SHOWN then lines[#lines + 1] = "  and " .. (#problems - MAX_SHOWN) .. " more" end
+        for _, found in ipairs(shown) do lines[#lines + 1] = "  " .. found[1] .. ": " .. found[2] end
+        if count > MAX_SHOWN then lines[#lines + 1] = "  and " .. (count - MAX_SHOWN) .. " more" end
         result = { ok = false, message = table.concat(lines, "\n") }
     end
     self.results[key] = result

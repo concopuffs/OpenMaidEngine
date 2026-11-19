@@ -690,7 +690,7 @@ each mod's draws since the last `rand-seed`, as `mods=<id>x<count>`.
 | Bound | Value |
 |---|---|
 | A handler call | 1,000,000 Lua instructions |
-| A data file's delivery to its kind's handler ([data-files.md](data-files.md)) | 1,000,000 instructions, and 1,000 more for each value of the file |
+| A data file's delivery to its kind's handler ([data-files.md](data-files.md)) | 1,000,000 instructions, and 250 more for each value of the file |
 | A mod's start-up code (`init.lua` and its handler files, together) | 10,000,000 instructions |
 | Handlers nested inside handlers (a subscriber inside an emit, a hook inside a called script), and rounds of watch handlers firing on each other's writes | 32 |
 | A script a handler calls (`maid.vm.call`), with the scripts it calls | 1,000,000 script instructions |

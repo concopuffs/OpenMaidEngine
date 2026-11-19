@@ -251,7 +251,7 @@ kind <game>.tables (<game>-base), at <game>.data.layered
   requires is off) has no deliveries, and a contributor with no Lua is off when a Lua mod it requires is off. When the
   owner is off, so is every mod that requires it. The notice of a mod that is off ends with the files it leaves
   unapplied: `Lua: <game>-base is off for this session: …; not applied: example.a data/a.toml, …`.
-- **Budget.** A delivery may run the handler budget, 1,000,000 Lua instructions, and 1,000 more for each value of its
+- **Budget.** A delivery may run the handler budget, 1,000,000 Lua instructions, and 250 more for each value of its
   document. The allowance is one constant of the engine; a kind has no setting for it.
 
 ## The trace
@@ -260,10 +260,12 @@ With `--lua-trace` ([lua.md](lua.md), "The link report and the trace"), a delive
 is the contributor, with `file` and the kind's `owner`, and `handler` is the owner's.
 
 ```json
-{"mod":"example.a","file":"data/a.toml","owner":"<game>-base","handler":"tables.lua:apply_boot","hook":"<game>.data.layered","kind":"event","at":"INIT2.BIN@0x20d","ms":0.412,"instructions":21000,"budget":1003000,"result":"ok","writes":[…]}
+{"mod":"example.a","file":"data/a.toml","owner":"<game>-base","handler":"tables.lua:apply_boot","hook":"<game>.data.layered","kind":"event","at":"INIT2.BIN@0x20d","ms":0.162,"instructions":0,"budget":1000750,"result":"ok","writes":[…]}
 ```
 
 - **A write is the contributor's,** with `through` naming the owner, as a base mod's helper's write names the base
   mod for the mod that called it.
 - **A watch on a cell the file sets** names the contributor as the writer: `"writer":"mod","by":"example.a"`.
-- **`budget`** is the delivery's: the handler budget and the allowance for the document's values.
+- **`budget`** is the delivery's: the handler budget and the allowance for the document's values. `instructions`
+  counts in steps of 1,000 ([lua.md](lua.md)), so a file of a few values reads 0; one of every item field of a game
+  runs about 100 for each value.

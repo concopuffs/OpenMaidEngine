@@ -23,8 +23,8 @@ mod passes its record map and its own access in. The engine mounts it when a mou
 
   A contribution is `{ mod = id, file = path, data = document }`. `apply` checks the whole document once per Lua
   session, before its first write: every table, id, field, column and value against the record map, and each string
-  with `maid.text_fits`. A document with a problem writes nothing and raises one error naming the mod, the file and
-  each problem's path; each later `apply` of it returns 0 and says nothing. A document that passes is written: the
+  with `maid.text_fits`. A document with a problem writes nothing and raises one error naming the mod, the file, the
+  number of problems and the first 20 by path; each later `apply` of it returns 0 and says nothing. A document that passes is written: the
   parts whose table `built_by` names `options.built_by`. `apply` returns the number of cells written.
 - A document may be a Lua table or a read-only view of one (a userdata): the library walks it with `pairs` and
   indexing only.
