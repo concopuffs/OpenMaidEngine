@@ -125,6 +125,9 @@ public sealed partial class DataPatchWorkspaceTests
         string logged = Assert.Single(Logged(native, $"{example}-mistake"));
         Assert.Contains($"{example}-mistake data/stages.toml: 1 problem, so nothing of it is applied: {mistake}\n", logged,
                         StringComparison.Ordinal);
+        // The port's status line shows this notice: the file once, then the problem's path.
+        Assert.Equal($"Lua: {example}-mistake data/stages.toml failed: 1 problem, so nothing of it is applied: {mistake}",
+                     native.LatestNotice);
     }
 
     /// <summary><paramref name="game"/>'s link base with another FIELD revision, whose bytes no point names, so the

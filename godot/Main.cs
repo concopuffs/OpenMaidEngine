@@ -332,6 +332,11 @@ public partial class Main : Godot.Control
         AddChild(_status);
         _status.SetAnchorsAndOffsetsPreset(LayoutPreset.BottomWide);
         _status.OffsetLeft = 40; _status.OffsetTop = -60;
+        // A long line (a data file's notice names the file and the first problem's path) wraps upward from the bottom
+        // edge rather than running off the window's right edge.
+        _status.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+        _status.VerticalAlignment = VerticalAlignment.Bottom;
+        _status.GrowVertical = GrowDirection.Begin;
         _locatorHudVisible = _portOptions.Effective.LocatorHud;
         _locatorHud = new Label { Visible = false, MouseFilter = MouseFilterEnum.Ignore };
         _locatorHud.Position = new Vector2(8, 8);
@@ -1122,7 +1127,7 @@ public partial class Main : Godot.Control
         _luaNoticesSeen = notices;
         if (_scripting.LatestNotice is { } notice)
         {
-            _status.Text = $"Lua: {notice}";
+            _status.Text = notice;   // every notice opens with "Lua: "
             GD.PushWarning($"[lua] {notice}");
         }
     }

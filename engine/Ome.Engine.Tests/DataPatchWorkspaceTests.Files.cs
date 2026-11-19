@@ -483,9 +483,10 @@ public sealed partial class DataPatchWorkspaceTests
         var session = new GameSession();
         SceneResult result = session.RunScene(game.Scripts.RequireByName("INIT2.BIN"), game.Table, new HeadlessWaits(),
                                               provider: game.Scripts, build: game.Build, scripting: native);
-        // The halt reason is the error's first line, which carries the first problem's path.
+        // The halt reason is the error's first line, which carries the first problem's path; it names the contributor
+        // once.
         Assert.Equal($"lua-error: test.bad data/bad.toml ({profile}-base tables.lua:apply_boot) at {profile}.data.layered "
-                     + $"at {game.Layered}: test.bad data/bad.toml: 1 problem, so nothing of it is applied: "
+                     + $"at {game.Layered}: 1 problem, so nothing of it is applied: "
                      + $"unit.{game.Unit}.experiance_reward: unit has no field experiance_reward", result.Halt);
         Assert.NotEqual(150, session.Globals.GetValueOrDefault(Cell(profile, "unit_base_stats", game.Unit, "max_hp")));
     }

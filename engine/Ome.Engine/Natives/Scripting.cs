@@ -482,8 +482,9 @@ public sealed partial class Scripting : IDisposable
         ModContribution contribution = _setup.Stack[file];
         WriteLog(ModLogLevel.Error, contribution.Mod, $"{contribution.File} ({handler}) {what} at {where}: {error.Message}"
                                                       + (error.LuaTraceback is { } trace ? "\n" + trace : ""));
+        string first = AfterContributor(FirstLine(error.Message), contribution);
         if (_setup.Errors == LuaErrorPolicy.Halt)
-            return $"lua-error: {contribution} ({handler}) at {where}: {FirstLine(error.Message)}";
+            return $"lua-error: {contribution} ({handler}) at {where}: {first}";
         int failures = _scene.DataFailuresInARow.GetValueOrDefault(file.Index) + 1;
         _scene.DataFailuresInARow[file.Index] = failures;
         if (failures >= FailuresBeforeSwitchOff)
@@ -491,8 +492,17 @@ public sealed partial class Scripting : IDisposable
             _scene.DataSwitchedOff.Add(file.Index);
             Notify($"Lua: {contribution} failed {failures} times in a row and is not applied again this session");
         }
-        else Notify($"Lua: {contribution} {what}: {FirstLine(error.Message)}");
+        else Notify($"Lua: {contribution} {what}: {first}");
         return null;
+    }
+
+    /// <summary>The owner's message without the contributor's name when the message opens with it, as a check of the
+    /// whole document reports (<c>example.a data/a.toml: 1 problem, …</c>): the notice and the halt reason name the
+    /// contributor already, and a notice that names it twice runs off the status line before the problem's path.</summary>
+    private static string AfterContributor(string line, ModContribution contribution)
+    {
+        string named = $"{contribution}: ";
+        return line.StartsWith(named, StringComparison.Ordinal) ? line[named.Length..] : line;
     }
 
     private IModRuntime Runtime()

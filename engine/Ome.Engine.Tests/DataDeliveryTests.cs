@@ -92,6 +92,9 @@ public sealed class DataDeliveryTests : IDisposable
         function apply(event, contribution)
             local data = contribution.data
             if data.fail then error("refused " .. contribution.file) end
+            if data.problem then
+                error(contribution.mod .. " " .. contribution.file .. ": 1 problem, so nothing of it is applied: x.y: no", 0)
+            end
             if data.spin then while true do end end
             local names = {}
             if data.names then for _, name in ipairs(data.names) do names[#names + 1] = name end end
@@ -400,6 +403,23 @@ public sealed class DataDeliveryTests : IDisposable
         Assert.Equal(["ok", "error", "ok", "error", "ok", "error", "ok"],
                      Trace(native).Select(line => line.GetProperty("result").GetString()));
         Assert.Equal("test.bad", Trace(native)[1].GetProperty("mod").GetString());
+    }
+
+    [Fact]
+    public void ANoticeAndAHaltReasonNameTheContributorOnceWhereTheOwnersMessageOpensWithIt()
+    {
+        // The owner reports as ome-records does, "<mod> <file>: 1 problem, …"; the log keeps the message as it is.
+        ModLinkResult result = Link(Owner(), Contributor("test.bad", "problem = true\n"));
+        Scripting native = Native(result);
+        Run(native);
+        Assert.Equal("Lua: test.bad data/bad.toml failed: 1 problem, so nothing of it is applied: x.y: no", native.LatestNotice);
+        Assert.Contains(native.RecentLog, line => line.Contains(
+            " error test.bad: data/bad.toml (test.owner lists.lua:apply) failed at test.owner.award at ADDEXP.BIN@0x5: "
+            + "test.bad data/bad.toml: 1 problem, so nothing of it is applied: x.y: no", StringComparison.Ordinal));
+
+        VirtualMachine halted = Run(Native(result, LuaErrorPolicy.Halt));
+        Assert.Equal("lua-error: test.bad data/bad.toml (test.owner lists.lua:apply) at test.owner.award at ADDEXP.BIN@0x5: "
+                     + "1 problem, so nothing of it is applied: x.y: no", halted.HaltReason);
     }
 
     [Fact]

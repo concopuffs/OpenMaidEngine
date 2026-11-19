@@ -130,7 +130,8 @@ drop_chance.drop_1 = 100
     unit.761.experiance_reward: unit has no field experiance_reward
   ```
 
-  The notice and the halt reason show that first line, so they name the first problem's path too. The file's later
+  The notice and the halt reason show that first line after the file's name, so they name the first problem's path
+  too: `Lua: example.a data/a.toml failed: 2 problems, so nothing of it is applied: unit.0x2f9: …`. The file's later
   deliveries in the session pass it over, with no second error. `--lua-errors halt` ends the run at the first such
   file.
 - **The tables are not saved.** A load builds them again and raises `<game>.data.layered` again while it restores,
