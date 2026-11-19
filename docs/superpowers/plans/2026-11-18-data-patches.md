@@ -320,4 +320,69 @@ Not built by this stretch. What M0 leaves for it, and what M0 must not get in th
 
 ## 8. What M0 found
 
-Filled in as M0 lands.
+M0 landed on `feature/data-patches` on 2026-11-18, tasks 2 to 9 of §3. "Ran" and "read" are as in §1.
+
+- **The moment, on both games** (ran: `DataPatchWorkspaceTests`, Workspace).
+  - Himegari at boot: a handler at `himegari.data.layered` gives item 999 category 10 and a curve with a bonus at its
+    first two levels, and TUNE lowers a seeded saved level of 5 to 2. The same edit at `himegari.data.ready` leaves
+    5. INIT2's INIT scripts and the append leave the saved level alone until TUNE.
+  - Himegari at a load: a synthetic root calls the installed INIT2 in its prologue, then op `0xae`, sets the level
+    to 5 and saves, and a full load of that slot follows. Both events come again with `restoring` true. At
+    `data.layered` the level is the 5 the save brought back. The handler makes its edit again on the rebuilt tables,
+    and TUNE lowers the level to 2.
+  - Kamidori, on both installs: INIT2 runs headless with the headless waits and `EngineBuilds.Age433G`, so the
+    fallback of §7 was not needed. `data.layered` comes before `data.ready`. At `data.layered`, unit 761's experience
+    reward is EBINIT's 10, and the 999 set there is still in place at `data.ready` and after INIT2.
+- **The applier** (ran: `DataPatchTests`, 26 cases, core).
+  - §1.3's file writes exactly `G[0x2c1524] = 150`, `G[0x2c9285] = 999` and `G[0x2cb9c1] = 100`. These are the cells
+    the shipped layout gives for those names, and the cells `oms/examples/kamidori-gate6`'s `with` block compiles to
+    (`TheGate6WithBlockCompilesToTheCellsTheApplierWrites`, Workspace).
+  - Each problem of gate 7, and the others of §2.5, is reported with the contributor, the file and the path.
+    Nothing is written, and a second `apply` returns 0 and says nothing.
+  - The library takes a read-only view, here a library's export, as it takes a Lua table.
+- **The messages as built.** §2.2's sample lines were a sketch. The built lines read
+  `unit.0x2f9: a record id is written in decimal: 761`, `unit.761.drop_chance.0: column 0 is named: write
+  unit.761.drop_chance.drop_1` and `item.12.name: a string cell holds text the save can encode (code page 932);
+  U+D55C is not in it`. A single problem is counted as "1 problem".
+- **The cost.** Not measured. The largest document M0's tests apply has 25 records, and it runs inside one console
+  chunk's budget. Gate 10 in M1 measures the cost per value.
+- **The derived values** (read: a time-boxed scan of both games' disassembly, then the strongest candidates by hand).
+  The scan follows values through the locals of one script, in program order. It does not follow branches, local
+  calls or block copies (`copy-dwords`), so the block copies below were found by hand. These are candidates for the
+  guide pages of M2, and the backlog carries them.
+  - **When a unit joins, both games copy its definition into saved state** (UNITECH, which adds a unit to the roster;
+    GAMESTART calls it for the first party, `docs/engine-re.md`). An edit to one of these fields reaches a unit that
+    joins after it, not one that has already joined. What was copied while the mod was on stays in the save after the
+    mod is removed.
+    - Himegari (the condition UNITECH tests before it copies was not read): `unit_starting_level` into `unit_current_levels` (`UNITECH@0x34b`); `unit_base_stats` into
+      `unit_current_stats`, 14 cells (`UNITECH@0x37c`); `unit_starting_skill_ids` into `unit_skill_ids`
+      (`UNITECH@0x3a3`); `unit_starting_equipment_item_id` into the party slot's `G[0x6868]` (`UNITECH@0x338`); and
+      `unit_stat_growth_rates` into `unit_stat_growth_fractions` for each level the join adds (`UNITECH@0x419`, and
+      at each level up, `ADDEXP@0x20b`).
+    - Kamidori, when `character_levels` is 0 (`UNITECH@0x13a`): `unit_default_costume_item_id`, given as an item
+      through ADDITEM (`UNITECH@0x129`) and kept in `character_costume_item_id`; `unit_initial_party_capacity` into
+      `party_cost_capacity` (character 1); `unit_party_cost` into `character_party_cost`;
+      `unit_initial_affinity_tenths`, times 10, into `character_affinity`; `unit_starting_level` into
+      `character_levels`; and `unit_initial_weapon_level` into `character_weapon_level`. The block copies are
+      `unit_base_stats` into `character_stats` (`UNITECH@0x1e1`), `unit_initial_stat_caps` into
+      `character_stat_caps` (`0x208`), `unit_element_resistance_levels` into `character_resistances` (`0x22f`), and
+      `unit_skill_ids` into `character_skill_list` (`0x256`), with `character_learned_skill_flags` set for each
+      (`0x2a7`). `unit_stat_growth` feeds `character_stat_growth_fractions` (`UNITECH@0x349`, `ADDEXP@0x276`).
+  - **The battle copies.** SETEN, SETCH, CALCREVISE and EQUIP, in both games, write unit, item and skill fields into
+    the battle entity arrays (Himegari's `entity_*`, Kamidori's `battle_unit_*`), which lie below the prefix. A save
+    made during a stage keeps the entities as they were placed.
+  - **Himegari's TUNE** (spec §6.5) lowers the saved levels through its loop's branches, which the scan does not
+    follow. The moment test above runs it.
+- **The spec and the code.** Each disagreement of §1 was handled as follows:
+  - the stale `data_ready` descriptions were rewritten (task 4);
+  - "the fingerprints the profile lists" is wording only: they are in `vm-map/patch-points-kamidori.toml`;
+  - `LuaStubs.Inputs` links the shipped base mod with what it requires (task 6);
+  - the launcher shows `ome-records` as an engine row. Its note now names the shipped package that requires it,
+    "Mounted because kamidori-base requires it." (`ModsViewModel`), where before it would have said only "mounted by
+    the link";
+  - save stamps and the Compatibility mode behave as §1 says, and need no change.
+- **For M1.**
+  - Both boot events' descriptions gain the sentence of spec §6.6 about data files (a handler at `data.ready` runs
+    after every data file; one that should take its place among them by load order moves to `data.layered`) when the
+    format is bound. M0 left it out, since no data file reaches the event yet.
+  - The question of §7, one spelling against aliases, is still open.

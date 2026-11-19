@@ -339,10 +339,24 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   launcher is built: `superpowers/specs/2026-11-15-launcher-design.md`, `launcher/`):
   - mod-owned sites (patching another mod's inserted code);
   - declarative data patches: designed, and accepted on 2026-11-18
-    (`superpowers/specs/2026-11-17-data-patches-design.md`, which replaces that spec's sentence). Not built yet;
-    the work is on `feature/data-patches`. Done when the gates of its §12 pass;
+    (`superpowers/specs/2026-11-17-data-patches-design.md`, which replaces that spec's sentence). Milestone 0 is
+    built on `feature/data-patches` (`superpowers/plans/2026-11-18-data-patches.md`): the record map, `ome-records`,
+    `<game>.data.layered` and `maid.text_fits`. No data file reaches a game yet. Done when the gates of its §12
+    pass;
   - mod merging;
   - precompiled new scripts.
+- **What each game copies from a field a data file can set.** A data file or a Lua edit at `<game>.data.layered`
+  changes a unit's definition, but both games copy part of a definition into saved state when the unit joins, and
+  into the battle entities when a stage places them. An edit then reaches a unit that has already joined only as
+  far as the game reads the definition again, and what was copied while the mod was on stays in the save. A
+  time-boxed scan of the disassembly found the copies (read, not run;
+  `superpowers/plans/2026-11-18-data-patches.md` §8): Himegari's UNITECH copies `unit_starting_level`,
+  `unit_base_stats`, `unit_starting_skill_ids`, `unit_starting_equipment_item_id` and the growth rates. Kamidori's
+  UNITECH copies the costume, party cost and capacity, affinity, starting and weapon levels, base stats, stat
+  caps, resistances and skills. SETEN, SETCH, CALCREVISE and EQUIP copy into the battle entities in both games.
+  The scan does not follow branches, local calls or block copies, so the list may be short. Done for a game when
+  its guide page (`modding/games/<game>.md`) says, for each field a data file can set, which saved values the game
+  derives from it and when, each claim checked on the game's scripts, with a driven run for at least one copy.
 - **Accepted future work** in the Lua scripting design (`superpowers/specs/2026-11-10-lua-scripting-design.md` §16).
   The UI and settings items below are two of its entries; the others are kept there only:
   - Lua that waits, and queued script calls;
