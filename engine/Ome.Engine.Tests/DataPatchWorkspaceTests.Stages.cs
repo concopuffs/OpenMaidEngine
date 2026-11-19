@@ -49,6 +49,24 @@ public sealed partial class DataPatchWorkspaceTests
             .SelectMany(global => Enumerable.Range(global.Address, 30 * global.RowWidth)).ToArray();
     }
 
+    /// <summary>The units FIELD has placed on the field. Himegari: every nonzero <c>entity_unit_definition_ids</c> cell.
+    /// Kamidori: <c>battle_unit_unit_ids</c> of each enemy battle slot (10 to 49) whose state flags (<c>G[0x53c16]</c>,
+    /// unnamed in the registry) have bit 0, which FIELD sets when it places a unit there (<c>FIELD@0xba1</c>); a slot it
+    /// has not placed this floor may keep a unit from an earlier one.</summary>
+    private static long[] PlacedEnemies(string profile, GameSession session)
+    {
+        if (profile == "himegari")
+        {
+            int entities = Cell(profile, "entity_unit_definition_ids", 0);
+            return Enumerable.Range(entities, 50).Select(cell => session.Globals.GetValueOrDefault(cell))
+                .Where(unit => unit != 0).ToArray();
+        }
+        const int BattleSlotStateFlags = 0x53c16;
+        int units = Cell(profile, "battle_unit_unit_ids", 0);
+        return Enumerable.Range(10, 40).Where(slot => (session.Globals.GetValueOrDefault(BattleSlotStateFlags + slot) & 1) != 0)
+            .Select(slot => session.Globals.GetValueOrDefault(units + slot)).ToArray();
+    }
+
     /// <summary>A stage and its slots, and another stage, for each game: the slot the file edits, the slot it edits at
     /// the other stage, and those slots' units as the stage's loaders write them.</summary>
     public static TheoryData<string, bool, int, int, int, long, long> Stages => new()
@@ -88,20 +106,17 @@ public sealed partial class DataPatchWorkspaceTests
         // The stage's part, and nothing of the other stage's: its slot keeps the stage's own unit.
         Assert.Equal(new Dictionary<int, long> { [unit] = 810, [level] = 7 }, Changed(before, after));
         Assert.Equal(otherOwn, edited.Globals.GetValueOrDefault(other));
-        if (profile == "himegari")
-        {
-            // FIELD placed the slot as the file left it.
-            int entities = Cell(profile, "entity_unit_definition_ids", 0);
-            long[] Placed(GameSession session) => Enumerable.Range(entities, 50).Select(cell => session.Globals.GetValueOrDefault(cell)).ToArray();
-            Assert.DoesNotContain(810, Placed(plain));
-            Assert.Contains(810, Placed(edited));
-        }
+        // FIELD placed the slot as the file left it. Kamidori's slot 2 of stage 51 is in a spawner's pool, which places
+        // nothing at the floor's start; the example's test checks the placement on its slot 1.
+        Assert.DoesNotContain(810, PlacedEnemies(profile, plain));
+        if (profile == "himegari") Assert.Contains(810, PlacedEnemies(profile, edited));
+        else Assert.DoesNotContain(810, PlacedEnemies(profile, edited));
     }
 
     [Theory]
     [Trait("Category", "Workspace")]
     [InlineData("himegari", "example.stage-enemies", 1, 2, 810L, 3, 200L, "stage.2.enemy.3.unit: stage_enemy has no field unit")]
-    [InlineData("kamidori", "example.kamidori-stage-enemies", 51, 2, 761L, 3, 402L,
+    [InlineData("kamidori", "example.kamidori-stage-enemies", 51, 1, 761L, 3, 402L,
                 "stage_enemy: stage_enemy is reached through its scope: write stage.<id>.enemy")]
     public void TheStageExamplesEditTheirSlotAndTheirMistakeTwinsAreReportedAtBoot(
         string profile, string example, int stage, int slot, long unit, int otherSlot, long otherOwn, string mistake)
@@ -118,6 +133,7 @@ public sealed partial class DataPatchWorkspaceTests
         GameSession edited = AtStageStart(game, LinkedInOrder(game.Base, Open(example)), stage);
         Assert.Equal(unit, edited.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", slot)));
         Assert.Equal(otherOwn, edited.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", otherSlot)));
+        Assert.Contains(unit, PlacedEnemies(profile, edited));
 
         ModLinkResult twin = LinkedInOrder(game.Base, Open($"{example}-mistake"));
         Scripting native = Native(twin, LuaErrorPolicy.Continue);

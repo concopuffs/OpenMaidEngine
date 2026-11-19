@@ -2,7 +2,7 @@ omp = 4
 id = "example.kamidori-stage-enemies"
 name = "Stage enemies (Kamidori)"
 version = "1.0.0"
-description = "A data file that puts other units in two floors' enemy slots: slot 2 of ◆開けた涼風西湖畔◆ (stage 51) and slot 3 of 蒼月の南湖畔 (stage 52)."
+description = "A data file that puts other units in two floors' enemy slots: slot 1 of ◆開けた涼風西湖畔◆ (stage 51) and slot 3 of 蒼月の南湖畔 (stage 52)."
 
 [game]
 profile = "kamidori"

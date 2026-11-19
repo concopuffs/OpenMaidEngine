@@ -8,9 +8,10 @@ description = """
 The stage's loaders have run (the base's and each append's). At the stage's start nothing is placed yet, and a \
 handler that rewrites the stage's enemy or object slots changes what the stage places. FIELD runs the loaders, and \
 raises this, again each time it is entered again during the stage (back from the camp screens, or a load of a save \
-made in the field), and INFO's third tab, opened on the floor, runs them again and raises this there: the loaders \
-write their tables afresh and nothing new is placed, so a handler makes the same change each time. The floor reads \
-the enemy table again later, for its reinforcements."""
+made in the field), and INFO's third tab (アイテム情報) runs every stage's loaders for its 獲得地点 view and, on a \
+floor, that floor's again, and raises this there: the loaders write their tables afresh and nothing new is placed, \
+so a handler makes the same change each time. The floor reads the enemy table again later, for its \
+reinforcements."""
 
 [[event.field]]
 name = "stage"

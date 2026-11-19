@@ -57,11 +57,15 @@ ran the same scenarios on native AGE.
   field save and its load), `himegari-stage-enemies-load.steps` and `-load-without.steps` (that save loaded from the
   title with the mod and without it) and `himegari-stage-enemies-mistake.steps` drive them; their headers give the
   commands.
-- `example.kamidori-stage-enemies` (data patches gate 8) does the same on Kamidori with `kamidori.tables`: slot 2 of
-  ◆開けた涼風西湖畔◆ (stage 51) gets 緑プテテット (761) in place of 水精 (402), and slot 3 of 蒼月の南湖畔 (stage
-  52) 赤プテテット (762). Its part is applied again where INFO's third tab runs the floor's loaders again.
-  `example.kamidori-stage-enemies-mistake` names the enemy table at the top level (`stage_enemy.3`) on purpose,
-  which the base mod refuses with the spelling to use.
+- `example.kamidori-stage-enemies` (data patches gate 8) does the same on Kamidori with `kamidori.tables`: slot 1 of
+  ◆開けた涼風西湖畔◆ (stage 51), which its spawner places at the floor's start, gets 緑プテテット (761) in place of
+  ハルピュア (331), and slot 3 of 蒼月の南湖畔 (stage 52) 赤プテテット (762), so stage 51's slot 3 keeps its own 水精
+  (402). Its part is applied again where INFO's third tab, アイテム情報, runs the floor's loaders again for its
+  獲得地点 view. `example.kamidori-stage-enemies-mistake` names the enemy table at the top level (`stage_enemy.3`) on
+  purpose, which the base mod refuses with the spelling to use. The port scenarios
+  `tools/drive/scenarios/port/kamidori-stage-enemies.steps` (from the Kamidori sweep's workshop save: INFO off a
+  floor, the floor entered afresh, INFO on it, a floor save and its load), `kamidori-stage-enemies-load-without.steps`
+  (that save loaded from the title without the mod) and `kamidori-stage-enemies-mistake.steps` drive them.
 
 - `example.kamidori-title-hover` makes Kamidori's title draw the hovered button in the same tick that finds it. The
   title's 50 ms mouse callback (`TITLE@0x182`) draws the highlight first and reads the cursor second, so a hover

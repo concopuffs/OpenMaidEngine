@@ -53,7 +53,7 @@ The floor ends and every layer's close handler has run (stage_close_handler_scri
 
 Script: `INFO3.BIN`
 
-INFO's third tab (INFO3, which FIELD opens from its menu) has run every stage's loaders for its list of enemies (INFO3@0xb88 to 0xc12), and then, on a floor (G[0x428c] set), put current_stage_id back and run that stage's loaders again (INFO3@0xcdc to 0xd1a): the floor's enemy slots, objects and rules hold the stage as authored, and the units on the field are where they were. Off a floor control does not reach here. current_stage_id is the floor's stage.
+INFO's third tab (INFO3, アイテム情報, which FIELD opens from its menu) has run, for its 獲得地点 view of the selected item, every stage's loaders to find the floors whose dig points yield it (INFO3@0xb88 to 0xc12), and then, on a floor (G[0x428c] set), put current_stage_id back and run that stage's loaders again (INFO3@0xcdc to 0xd1a): the floor's enemy slots, objects and rules hold the stage as authored, and the units on the field are where they were. Off a floor control does not reach here (INFO3@0xcdc jumps past it), and the loop leaves current_stage_id at 1000. current_stage_id is the floor's stage.
 
 | Revision | Site |
 |---|---|

@@ -145,27 +145,36 @@ drop_chance.drop_1 = 100   # 30
   bring the saved value back over the edit.
 - **A floor's enemies** are the `stage_enemy` table, which a file names through the stage: `stage.51.enemy.3` is
   stage 51's enemy slot 3 (stage ids 1 to 999, of which STINIT writes 1 to 968 and the appends up to 977; slots 0 to
-  29, of which FIELD places 1 to 29). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`,
+  29, of which FIELD reads 1 to 29). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`,
   `max_level`, `auto_level_scale_divisor`, the spawn (`spawn_tile_x` and `spawn_tile_y`, or `spawn_object_slot`),
   `faction_id`, `difficulty_mask`, `first_visit_only`, `random_selection_weight`, and four rows whose columns have no
   names and are given by number: `movement_routine_set_ids` and `battle_routine_set_ids` (columns 0 to 2),
-  `required_story_flags` (0 to 6) and `forbidden_story_flags` (0 to 4). None of them is saved. This file puts
-  another unit in slot 2 of ◆開けた涼風西湖畔◆ at シセティカ湖:
+  `required_story_flags` (0 to 6) and `forbidden_story_flags` (0 to 4). None of them is saved.
+- **Which slots the floor places.** At a floor's start FIELD goes through slots 1 to 29 (`FIELD@0xaa5`) and skips a
+  slot whose gates fail: an empty `unit_id`, a `difficulty_mask` without the current difficulty, `first_visit_only` 2
+  on a cleared floor, a required story flag not set or a forbidden one set (`FIELD@0x49a6`). A slot whose
+  `random_selection_weight` is 0 is placed there and then. One whose weight is not 0 joins the pool of the spawner
+  its `spawn_object_slot` names; spawners place from their pools at the floor's start (`FIELD@0xc8a`) and send
+  reinforcements from them later (`FIELD@0xa040`). So an edit shows at the start only on a slot placed then: at
+  ◆開けた涼風西湖畔◆ (stage 51) in the sweep's story state, only slot 1, ハルピュア, whose spawner places it. This file
+  puts 緑プテテット there:
 
   ```toml
   # data/stages.toml
-  [stage.51.enemy.2]
-  unit_id = 761              # 402, 水精; 761 is 緑プテテット
+  [stage.51.enemy.1]
+  unit_id = 761              # 331, ハルピュア; 761 is 緑プテテット
   ```
 
 - **The stage part holds through the floor.** FIELD runs the floor's loaders at its start, before it places the
-  units, and again each time it is entered again during the floor; INFO's third tab, opened on the floor, runs them
-  again too (below, "FIELD runs the layers more than once a floor"). The part is applied after each run, so the edit
-  changes what the floor places, and the reinforcements a spawner sends later, which FIELD takes from the table
-  (`FIELD@0xa040`), follow it.
-- **The stage list and INFO show a floor as authored.** The stage list's preview (SELSTAGE) and INFO's third tab,
-  which lists each stage's enemies, run the loaders for what they show and raise no event, so they show a floor's own
-  enemies, not a file's edit.
+  units, and again each time it is entered again during the floor; INFO's third tab, アイテム情報, runs them again
+  too when its 獲得地点 view is opened on the floor (below, "FIELD runs the layers more than once a floor"). The part
+  is applied after each run, so the edit changes what the floor places, and the reinforcements a spawner sends later
+  follow it. A save made on the floor keeps the units placed (`battle_unit_unit_ids`): loaded without the mod, the
+  table is the floor's own again, and a unit the edit placed is still on the field.
+- **The stage list and INFO show the floors as authored.** The stage list's preview (SELSTAGE) and INFO's 獲得地点
+  view run every stage's loaders for what they show and raise no event for those stages, so they show the floors'
+  own enemies and dig points, not a file's edit. Off a floor (INFO opened from the town or the workshop) the view
+  raises no event at all and leaves `current_stage_id` at 1000.
 - **A character keeps a copy.** When a unit joins, UNITECH copies its `unit_base_stats` into the saved
   `character_stats` (`../../kamidori-data-tables.md`, "Runtime character state"). An edit to a unit's stats reaches
   a character who joins after the edit, and one who has already joined only where the game reads the definition
@@ -245,7 +254,7 @@ read-only:
 |---|---|---|
 | `kamidori.data.layered` | `kamidori.boot.data_layered` (INIT2, after op `0x143`): every layer has written its tables, the appends' included, and the boot has not used them yet | none |
 | `kamidori.data.ready` | `kamidori.boot.data_ready` (INIT2's exit): every data table is built, and INIT2's own work on them is done | none |
-| `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run; and `kamidori.stage.after_info_reload` (INFO3): INFO's third tab, opened on the floor, has run them again. A data file's stage part is applied there | `stage` (`current_stage_id`) |
+| `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run; and `kamidori.stage.after_info_reload` (INFO3): INFO's third tab, アイテム情報, has run them again for its 獲得地点 view on the floor. A data file's stage part is applied there | `stage` (`current_stage_id`) |
 | `kamidori.stage.ready` | `kamidori.stage.after_ready_handlers`: once per floor, at its start, with the units placed | `stage` |
 | `kamidori.stage.round` | `kamidori.stage.after_round_handlers`: each player turn after the first | `stage`, `turn` (`current_stage_turn`) |
 | `kamidori.stage.close` | `kamidori.stage.after_close_handlers`: the floor ends | `stage`, `result` (`stage_result`: 1 won, 2 lost), `turn` |
@@ -262,8 +271,9 @@ read-only:
 - **FIELD runs the layers more than once a floor.** At a floor's start (`field_map_continue_mode` 0) it runs them,
   places the units and walks the ready chain. When FIELD is entered again during the floor (at the load of a save made
   on it, for one) it runs them again and raises `stage.loaded` again, but places nothing and raises no `stage.ready`.
-  INFO's third tab (FIELD's menu, then INFO) runs every stage's loaders for its list of enemies, then the floor's
-  again, and `stage.loaded` is raised after that second run (`kamidori.stage.after_info_reload`, `INFO3@0xd20`).
+  INFO's third tab, アイテム情報 (FIELD's menu, then INFO), runs every stage's loaders when its 獲得地点 view is
+  opened for an item, to find the floors whose dig points yield it, then the floor's again, and `stage.loaded` is
+  raised after that second run (`kamidori.stage.after_info_reload`, `INFO3@0xd20`).
   A handler that rewrites the layers' tables makes the same change each time.
 - **`result`.** Withdrawing from a free floor (撤退, 探索を終了しますか？) closes it with 1, as winning does, and the
   floor's clear screen follows; forfeiting an arena match (試合を放棄しますか？) closes it with 2.
@@ -292,4 +302,4 @@ read-only:
 | `oms/examples/mods/example.kamidori-prologue-line` | a patch against the translated opening |
 | `oms/examples/kamidori-gate6/` | a boot-time data edit and a script called by packed id |
 | `oms/examples/mods/example.kamidori-double-exp-event` | a Lua subscriber of `kamidori.experience.award`, without `vm` |
-| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake the boot reports |
+| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake the boot reports; `tools/drive/scenarios/port/kamidori-stage-enemies*.steps` drive both from the sweep's workshop save, through INFO's 獲得地点 view, a floor save and its load with the mod and without |

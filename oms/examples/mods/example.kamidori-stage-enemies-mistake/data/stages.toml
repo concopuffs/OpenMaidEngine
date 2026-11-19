@@ -1,8 +1,8 @@
 # example.kamidori-stage-enemies with a mistake on purpose: the enemy table is reached through its stage
 # (stage.52.enemy.3), not by its own name. The file is checked whole at its first delivery, so its valid part,
-# stage 51's slot 2, is not applied either.
+# stage 51's slot 1, is not applied either.
 
-[stage.51.enemy.2]
+[stage.51.enemy.1]
 unit_id = 761
 
 [stage_enemy.3]

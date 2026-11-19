@@ -12,7 +12,7 @@ enabled mod requires it. A Lua mod reads and writes the game's cells by name thr
   (`kamidori.data.layered`, once every layer has written its data tables and before the boot uses them, and
   `kamidori.data.ready`, once the boot's own work on them is done) and `stage.toml` (`kamidori.stage.loaded`, `.ready`, `.round` and `.close`, around
   FIELD's walks of the stage chains the appends register their handlers in; `kamidori.stage.loaded` is raised too
-  where INFO's third tab runs a floor's loaders again).
+  where INFO's third tab, アイテム情報, runs a floor's loaders again for its 獲得地点 view).
 - `lua/init.lua` is hand-written: the helpers the base mod returns to a mod that requires it, each changing the game
   through one of its own scripts (`give_item` through ADDITEM). `[lua] calls` in the manifest lists those scripts.
 - `lua/tables.lua` is hand-written: the handlers of the `kamidori.tables` format (data patches spec §6,

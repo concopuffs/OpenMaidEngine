@@ -1,0 +1,22 @@
+# Port only (scenarios/port/): data patches gate 8 on Kamidori, the load without the mod. From the title's Load Data,
+# load slot 030, which kamidori-stage-enemies.steps saved on ◆開けた涼風西湖畔◆ with example.kamidori-stage-enemies,
+# in a port run without that mod. The floor's enemy table is not saved, and the load runs the floor's loaders again,
+# so slot 1 is the floor's own ハルピュア (331) again. The battle slots are saved, so the 緑プテテット (761) the edit
+# placed stays on the field. Run on the sandbox that scenario used:
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-stage-enemies
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-stage-enemies-load-without.steps
+# Cells by number, as in that scenario.
+
+wait-state top=TITLE@0x9ab click=adv.next every=3 timeout=120   # the title's input loop
+wait 4
+move 775 362
+click 775 362                                                    # Load Data
+wait 2
+click 62 153                                                     # slots 30-39
+wait 1.5
+click 360 102                                                    # slot 030
+wait 1.5
+click 470 298                                                    # はい
+wait-state top=FIELD@0x1495 waiting=menu timeout=60
+lua local g = maid.vm.g local p = {} for i = 10, 49 do if g[0x53c16 + i] % 2 == 1 then p[#p + 1] = g[0x53bb2 + i] end end local got = string.format("stage=%d slots=%d,%d,%d placed=%s", g[0x378b], g[0x140a2d], g[0x140a2e], g[0x140a2f], table.concat(p, ",")) assert(got == "stage=51 slots=331,402,402 placed=761", got) return got
+shot kamidori-stage-enemies-load-without

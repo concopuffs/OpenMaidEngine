@@ -1,0 +1,109 @@
+# Port only (scenarios/port/): data patches gate 8 on Kamidori (plan §5.3). The data-only
+# example.kamidori-stage-enemies gives slot 1 of ◆開けた涼風西湖畔◆ (stage 51) 緑プテテット (761) in place of
+# ハルピュア (331), and slot 3 of 蒼月の南湖畔 (stage 52) 赤プテテット (762). kamidori-base's tables.lua:apply_stage
+# applies stage 51's part at kamidori.stage.loaded, after the floor's loaders: slot 3 keeps the floor's own 水精
+# (402), and slot 1's spawner places the 緑プテテット at the floor's start. From the sweep's workshop save (slot 019,
+# the clean install) the run first opens INFO's third tab (アイテム情報) in the workshop, whose 獲得地点 view runs
+# every stage's loaders off a floor; then it enters the floor afresh, opens the same view on the floor, where INFO3
+# runs the floor's loaders again and raises the event (INFO3@0xd20), saves with the floor's SAVE (slot 030) and
+# loads that save. Before each of the last two, a console step marks slot 1 with 12345, so the 761 read after it
+# shows that the loaders wrote the slot again and the part was applied after them.
+# Cells by number (the console has no names): current_stage_id 0x378b, field_map_continue_mode 0x4290,
+# stage_enemy_unit_id from 0x140a2c, battle_unit_unit_ids from 0x53bb2, the battle slots' state flags from 0x53c16
+# (bit 0: FIELD placed a unit there, FIELD@0xba1). Run on a new sandbox seeded with the sweep's sandbox k1clean
+# (from the checkout that holds it), with --lua-trace, whose diagnostics/lua-trace.jsonl then has the deliveries
+# at INFO3.BIN@0xd20:
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-stage-enemies --seed port:k1clean --mod oms/examples/mods/example.kamidori-stage-enemies --port-arg=--lua-trace
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-stage-enemies.steps
+
+wait-state top=TITLE@0x9ab click=adv.next every=3 timeout=120   # the title's input loop
+wait 4
+move 775 362
+click 775 362                                                    # Load Data
+wait 2
+click 62 111                                                     # slots 10-19
+wait 1.5
+click 360 525                                                    # slot 019: the workshop, before the lake
+wait 1.5
+click 470 298                                                    # はい
+wait-state top=STUDIO@0x424 waiting=menu timeout=30
+wait 1
+
+# Off a floor: INFO3's 獲得地点 runs every stage's loaders and leaves current_stage_id past the last stage (1000).
+click 125 35                                                     # 情報
+wait-state script=INFO1 timeout=30
+wait 1
+click 125 135                                                    # アイテム情報 (INFO3)
+wait-state script=INFO3 waiting=menu timeout=30
+wait 1
+click 420 103                                                    # 001 水色の木の実
+wait 1.5
+click 745 345                                                    # 獲得地点
+wait 3
+lua local g = maid.vm.g local got = string.format("stage=%d", g[0x378b]) assert(got == "stage=1000", got) return got
+rclick 512 288                                                   # back to the workshop
+wait-state top=STUDIO@0x424 waiting=menu timeout=30
+wait 1
+
+click 125 235                                                    # 街へ行く
+wait-state top=TOWN@0x2df waiting=menu timeout=30
+wait 1
+click 936 465                                                    # 街を出る: the world map
+wait-state script=ALLMAP timeout=30
+wait 2
+click 655 125                                                    # シセティカ湖
+wait-state script=SELSTAGE waiting=menu timeout=30
+wait 1
+click 902 212                                                    # ◆開けた涼風西湖畔◆
+wait-state script=ORGANIZE waiting=menu timeout=30
+wait 1
+click 126 80                                                     # 探索開始: FIELD enters the floor afresh
+wait-state script=AIM waiting=menu timeout=60
+lua local g = maid.vm.g local p = {} for i = 10, 49 do if g[0x53c16 + i] % 2 == 1 then p[#p + 1] = g[0x53bb2 + i] end end local got = string.format("stage=%d mode=%d slots=%d,%d,%d placed=%s", g[0x378b], g[0x4290], g[0x140a2d], g[0x140a2e], g[0x140a2f], table.concat(p, ",")) assert(got == "stage=51 mode=0 slots=761,402,402 placed=761", got) return got
+click 512 200                                                    # close the floor's aims
+wait-state top=FIELD@0x1495 waiting=menu timeout=30
+wait 1
+shot kamidori-stage-enemies-floor
+
+# On the floor: INFO3's 獲得地点 runs every stage's loaders, then the floor's again, and raises the event.
+click 672 25                                                     # 情報
+wait-state script=INFO1 timeout=30
+wait 1
+click 125 135                                                    # アイテム情報 (INFO3)
+wait-state script=INFO3 waiting=menu timeout=30
+wait 1
+click 420 103                                                    # 001 水色の木の実
+wait 1.5
+lua maid.vm.g[0x140a2d] = 12345 return maid.vm.g[0x140a2d]
+click 745 345                                                    # 獲得地点
+wait 3
+lua local g = maid.vm.g local got = string.format("stage=%d slots=%d,%d,%d", g[0x378b], g[0x140a2d], g[0x140a2e], g[0x140a2f]) assert(got == "stage=51 slots=761,402,402", got) return got
+rclick 512 288                                                   # back to the floor
+wait-state top=FIELD@0x1495 waiting=menu timeout=30
+wait 1
+
+# The floor's SAVE (slot 030), then its LOAD: the load runs the floor's loaders and raises the event again.
+click 730 25                                                     # SAVE
+wait-state script=SAVE timeout=30
+wait 1
+click 62 153                                                     # slots 30-39
+wait 1.5
+click 360 102                                                    # slot 030
+wait 1.5
+click 470 298                                                    # セーブしますか？ -> はい
+wait-state top=FIELD@0x1495 waiting=menu timeout=30
+wait 1
+lua maid.vm.g[0x140a2d] = 12345 return maid.vm.g[0x140a2d]
+click 790 25                                                     # LOAD
+wait-state script=SAVE timeout=30
+wait 1
+click 62 153                                                     # slots 30-39
+wait 1.5
+click 360 102                                                    # slot 030
+wait 1.5
+click 470 298                                                    # ロードしますか？ -> はい
+wait 4
+wait-state top=FIELD@0x1495 waiting=menu timeout=60
+lua local g = maid.vm.g local p = {} for i = 10, 49 do if g[0x53c16 + i] % 2 == 1 then p[#p + 1] = g[0x53bb2 + i] end end local got = string.format("stage=%d slots=%d,%d,%d placed=%s", g[0x378b], g[0x140a2d], g[0x140a2e], g[0x140a2f], table.concat(p, ",")) assert(got == "stage=51 slots=761,402,402 placed=761", got) return got
+lua mod=kamidori-base local got = maid.session.reason assert(got == "load", got) return got
+shot kamidori-stage-enemies-loaded

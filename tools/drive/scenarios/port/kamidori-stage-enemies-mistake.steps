@@ -1,0 +1,40 @@
+# Port only (scenarios/port/): data patches gate 8 on Kamidori, the error half. example.kamidori-stage-enemies-mistake
+# names the enemy table at the top level (stage_enemy.3) on purpose. The boot checks the file whole at its first
+# delivery (kamidori.data.layered) and applies nothing of it: the port's status line shows the notice at the title,
+# and diagnostics/lua.log names the file and the path:
+#   example.kamidori-stage-enemies-mistake data/stages.toml: 1 problem, so nothing of it is applied: stage_enemy: ...
+# Then the route of kamidori-stage-enemies.steps enters ◆開けた涼風西湖畔◆ (stage 51) afresh, and its enemy table
+# and placed units are the floor's own: ハルピュア (331) in slot 1, which its spawner places. Cells by number, as in
+# that scenario. Run on a new sandbox seeded with the Kamidori sweep's slot 019 (the clean install; the sandbox
+# k1clean, from the checkout that holds it):
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-stage-enemies-mistake --seed port:k1clean --mod oms/examples/mods/example.kamidori-stage-enemies-mistake
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-stage-enemies-mistake.steps
+
+wait-state top=TITLE@0x9ab click=adv.next every=3 timeout=120   # the title's input loop
+wait 4
+shot kamidori-stage-enemies-mistake-title                        # the status line's notice
+move 775 362
+click 775 362                                                    # Load Data
+wait 2
+click 62 111                                                     # slots 10-19
+wait 1.5
+click 360 525                                                    # slot 019: the workshop, before the lake
+wait 1.5
+click 470 298                                                    # はい
+wait-state top=STUDIO@0x424 waiting=menu timeout=30
+wait 1
+click 125 235                                                    # 街へ行く
+wait-state top=TOWN@0x2df waiting=menu timeout=30
+wait 1
+click 936 465                                                    # 街を出る: the world map
+wait-state script=ALLMAP timeout=30
+wait 2
+click 655 125                                                    # シセティカ湖
+wait-state script=SELSTAGE waiting=menu timeout=30
+wait 1
+click 902 212                                                    # ◆開けた涼風西湖畔◆
+wait-state script=ORGANIZE waiting=menu timeout=30
+wait 1
+click 126 80                                                     # 探索開始: FIELD enters the floor afresh
+wait-state script=AIM waiting=menu timeout=60
+lua local g = maid.vm.g local p = {} for i = 10, 49 do if g[0x53c16 + i] % 2 == 1 then p[#p + 1] = g[0x53bb2 + i] end end local got = string.format("stage=%d mode=%d slots=%d,%d,%d placed=%s", g[0x378b], g[0x4290], g[0x140a2d], g[0x140a2e], g[0x140a2f], table.concat(p, ",")) assert(got == "stage=51 mode=0 slots=331,402,402 placed=331", got) return got
