@@ -1,0 +1,8 @@
+# example.stage-enemies with a mistake on purpose: stage_enemy has no field "unit" (it is unit_id). The file is
+# checked whole at its first delivery, so its valid part, stage 1's slot 2, is not applied either.
+
+[stage.1.enemy.2]
+unit_id = 810
+
+[stage.2.enemy.3]
+unit = 834

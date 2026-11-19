@@ -1,0 +1,17 @@
+omp = 4
+id = "example.stage-enemies-mistake"
+name = "Stage enemies, with a mistake"
+version = "1.0.0"
+description = "example.stage-enemies with a misspelt field on purpose: the boot reports the file and the path, and nothing of it is applied."
+
+[game]
+profile = "himegari"
+target = "extended"
+
+[[requires]]
+id = "himegari-base"
+version = ">=1.1, <2"
+
+[[data]]
+kind = "himegari.tables"
+file = "stages.toml"

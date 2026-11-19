@@ -48,6 +48,17 @@ ran the same scenarios on native AGE.
   `tools/drive/scenarios/port/himegari-random-enemies.steps` plays a new game to stage 1 under `rand-seed 7` and fails
   unless the draw is the one every seeded run gives.
 
+- `example.stage-enemies` (data patches gate 8) is a data file and nothing else: `himegari-base`'s
+  `himegari.tables` applies its stage parts at `himegari.stage.loaded`. Stage 1's slot 2 gets ハルピュア (810) in
+  place of 緑プテテット (200), and stage 2's slot 3 サーペント (834), so at stage 1 slot 3 keeps the stage's own
+  unit. `example.stage-enemies-mistake` is the same file with a field misspelt on purpose (`unit` for `unit_id`):
+  the boot's notice and `diagnostics/lua.log` name the file and the path, and nothing of it is applied.
+- `example.kamidori-stage-enemies` (data patches gate 8) does the same on Kamidori with `kamidori.tables`: slot 2 of
+  ◆開けた涼風西湖畔◆ (stage 51) gets 緑プテテット (761) in place of 水精 (402), and slot 3 of 蒼月の南湖畔 (stage
+  52) 赤プテテット (762). Its part is applied again where INFO's third tab runs the floor's loaders again.
+  `example.kamidori-stage-enemies-mistake` names the enemy table at the top level (`stage_enemy.3`) on purpose,
+  which the base mod refuses with the spelling to use.
+
 - `example.kamidori-title-hover` makes Kamidori's title draw the hovered button in the same tick that finds it. The
   title's 50 ms mouse callback (`TITLE@0x182`) draws the highlight first and reads the cursor second, so a hover
   shows one tick late, 50 to 100 ms after the cursor arrives, on native AGE and the port alike. Himegari's title and

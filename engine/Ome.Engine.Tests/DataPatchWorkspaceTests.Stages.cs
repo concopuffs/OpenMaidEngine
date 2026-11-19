@@ -1,6 +1,7 @@
 using Ome.Engine.Hosting;
 using Ome.Engine.Modding;
 using Ome.Engine.Natives;
+using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 using Ome.Mods.Linking;
 using Ome.Mods.Packages;
@@ -95,6 +96,35 @@ public sealed partial class DataPatchWorkspaceTests
             Assert.DoesNotContain(810, Placed(plain));
             Assert.Contains(810, Placed(edited));
         }
+    }
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [InlineData("himegari", "example.stage-enemies", 1, 2, 810L, 3, 200L, "stage.2.enemy.3.unit: stage_enemy has no field unit")]
+    [InlineData("kamidori", "example.kamidori-stage-enemies", 51, 2, 761L, 3, 402L,
+                "stage_enemy: stage_enemy is reached through its scope: write stage.<id>.enemy")]
+    public void TheStageExamplesEditTheirSlotAndTheirMistakeTwinsAreReportedAtBoot(
+        string profile, string example, int stage, int slot, long unit, int otherSlot, long otherOwn, string mistake)
+    {
+        // The example mods of oms/examples/mods/ that gate 8 drives (plan §5.3), linked and run headless here.
+        GateGame game = Game(profile);
+        string examples = Path.Combine(Paths.Repo, "oms", "examples", "mods");
+        ModPackage Open(string id)
+        {
+            ModPackage mod = ModPackage.Open(Path.Combine(examples, id));
+            _opened.Add(mod);
+            return mod;
+        }
+        GameSession edited = AtStageStart(game, LinkedInOrder(game.Base, Open(example)), stage);
+        Assert.Equal(unit, edited.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", slot)));
+        Assert.Equal(otherOwn, edited.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", otherSlot)));
+
+        ModLinkResult twin = LinkedInOrder(game.Base, Open($"{example}-mistake"));
+        Scripting native = Native(twin, LuaErrorPolicy.Continue);
+        game.Boot(native);
+        string logged = Assert.Single(Logged(native, $"{example}-mistake"));
+        Assert.Contains($"{example}-mistake data/stages.toml: 1 problem, so nothing of it is applied: {mistake}\n", logged,
+                        StringComparison.Ordinal);
     }
 
     /// <summary><paramref name="game"/>'s link base with another FIELD revision, whose bytes no point names, so the

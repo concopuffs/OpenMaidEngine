@@ -149,7 +149,15 @@ drop_chance.drop_1 = 100   # 30
   `max_level`, `auto_level_scale_divisor`, the spawn (`spawn_tile_x` and `spawn_tile_y`, or `spawn_object_slot`),
   `faction_id`, `difficulty_mask`, `first_visit_only`, `random_selection_weight`, and four rows whose columns have no
   names and are given by number: `movement_routine_set_ids` and `battle_routine_set_ids` (columns 0 to 2),
-  `required_story_flags` (0 to 6) and `forbidden_story_flags` (0 to 4). None of them is saved.
+  `required_story_flags` (0 to 6) and `forbidden_story_flags` (0 to 4). None of them is saved. This file puts
+  another unit in slot 2 of ◆開けた涼風西湖畔◆ at シセティカ湖:
+
+  ```toml
+  # data/stages.toml
+  [stage.51.enemy.2]
+  unit_id = 761              # 402, 水精; 761 is 緑プテテット
+  ```
+
 - **The stage part holds through the floor.** FIELD runs the floor's loaders at its start, before it places the
   units, and again each time it is entered again during the floor; INFO's third tab, opened on the floor, runs them
   again too (below, "FIELD runs the layers more than once a floor"). The part is applied after each run, so the edit
@@ -284,3 +292,4 @@ read-only:
 | `oms/examples/mods/example.kamidori-prologue-line` | a patch against the translated opening |
 | `oms/examples/kamidori-gate6/` | a boot-time data edit and a script called by packed id |
 | `oms/examples/mods/example.kamidori-double-exp-event` | a Lua subscriber of `kamidori.experience.award`, without `vm` |
+| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake the boot reports |

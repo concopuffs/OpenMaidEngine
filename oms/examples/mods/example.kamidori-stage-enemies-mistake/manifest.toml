@@ -1,0 +1,17 @@
+omp = 4
+id = "example.kamidori-stage-enemies-mistake"
+name = "Stage enemies (Kamidori), with a mistake"
+version = "1.0.0"
+description = "example.kamidori-stage-enemies with the enemy table named at the top level on purpose: the boot reports the file and the path, and nothing of it is applied."
+
+[game]
+profile = "kamidori"
+target = "extended"
+
+[[requires]]
+id = "kamidori-base"
+version = ">=1.1, <2"
+
+[[data]]
+kind = "kamidori.tables"
+file = "stages.toml"

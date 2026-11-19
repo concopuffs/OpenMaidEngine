@@ -85,9 +85,9 @@ experience_reward = 40     # 30
   played (`stage_enemy[2].unit_id`), as the loaders leave them. This file puts another unit in stage 1's slot 2:
 
   ```toml
-  # data/stage1.toml
+  # data/stages.toml
   [stage.1.enemy.2]
-  unit_id = 810              # 200
+  unit_id = 810              # 200, 緑プテテット; 810 is ハルピュア
   ```
 
 - **The stage part holds through the stage.** FIELD runs the stage's loaders at its start, before it places the
@@ -213,3 +213,4 @@ register their handlers in, so a handler runs after the base game's and every ap
 | `oms/examples/mods/example.double-exp-event` | a Lua subscriber of `himegari.experience.award`, without `vm` |
 | `oms/examples/mods/example.lua-random` | `math.random` in a script hook on `SC0000.BIN`, inside a `pairs` loop too; `tools/drive/scenarios/port/himegari-lua-random.steps` checks that `rand-seed 7` gives the same rolls in every run |
 | `oms/examples/mods/example.random-enemies` | a subscriber of `himegari.stage.loaded` that rewrites the stage's enemies and keeps a seed per playthrough in `maid.state`; `tools/drive/scenarios/port/himegari-random-enemies.steps` checks stage 1's draw under `rand-seed 7` |
+| `oms/examples/mods/example.stage-enemies` | a data file that edits two stages' enemy slots, applied at `himegari.stage.loaded`; `example.stage-enemies-mistake` is its twin with a mistake the boot reports |

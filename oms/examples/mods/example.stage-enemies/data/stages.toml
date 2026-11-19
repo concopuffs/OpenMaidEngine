@@ -1,0 +1,8 @@
+# Each stage's part is applied at himegari.stage.loaded, each time FIELD has run that stage's loaders.
+# The comments give the game's own values.
+
+[stage.1.enemy.2]          # stage 1, slot 2
+unit_id = 810              # 200
+
+[stage.2.enemy.3]          # stage 2, slot 3; stage 1's slot 3 keeps its own unit
+unit_id = 834
