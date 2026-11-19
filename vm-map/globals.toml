@@ -5037,10 +5037,13 @@ depends_on = ["0x1519f8"]
 # ---------------------------------------------------------------------------------------------- tables
 # Open Maid Script tables (design spec §5.3): record views over the parallel arrays above. A field names a
 # global by name; its leading dimension must be the record count. Generated into globals.json `tables`.
+# `built_by` says which part of the game writes the table: `boot` for INIT2's layers, `stage` for a stage's
+# loaders. The base mod's Lua maps a label to its event, and its record map copies it (data patches spec §6.3).
 
 [[table]]
 name = "unit"
 records = 1000
+built_by = "boot"
 usage = "EBINIT unit records keyed by unit id, with the CNINIT/CVINIT voice maps and the per-unit story flags. `unit[id].stats.max_hp` is `unit_base_stats[id].max_hp`."
 
 [table.fields]
@@ -5097,6 +5100,7 @@ large_battle_sprite = "unit_large_battle_sprite"
 [[table]]
 name = "item"
 records = 1000
+built_by = "boot"
 usage = "ITINIT item records keyed by item id."
 
 [table.fields]
@@ -5123,6 +5127,7 @@ handler_script_id = "item_handler_script_id"
 [[table]]
 name = "skill"
 records = 300
+built_by = "boot"
 usage = "SKINIT skill records keyed by skill id, with the per-skill acquisition state."
 
 [table.fields]

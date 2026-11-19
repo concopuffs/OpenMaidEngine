@@ -9,6 +9,8 @@ Open Maid Script tables (design spec §5.3): `table[record].field` is the field'
 
 ### unit[1000]
 
+Built by: `boot`.
+
 EBINIT unit records keyed by unit id, with the per-unit runtime arrays (history face, voice family and setting slot). `unit[761].stats.max_hp` is `unit_base_stats[761].max_hp`.
 
 | field | global | address | type |
@@ -59,6 +61,8 @@ EBINIT unit records keyed by unit id, with the per-unit runtime arrays (history 
 | habitat_area | unit_habitat_area_ids | `0x2d1074` | `int[1000][4]` |
 
 ### item[2000]
+
+Built by: `boot`.
 
 ITINIT item records keyed by item id, with the per-item inventory and growth state.
 
@@ -120,6 +124,8 @@ ITINIT item records keyed by item id, with the per-item inventory and growth sta
 
 ### skill[1000]
 
+Built by: `boot`.
+
 SKINIT skill records keyed by skill id.
 
 | field | global | address | type |
@@ -153,6 +159,8 @@ SKINIT skill records keyed by skill id.
 | area_effect_blend_mode | skill_area_effect_blend_mode | `0x3b1e50` | `int[1000]` |
 
 ### stage_enemy[30]
+
+Built by: `stage`.
 
 The current stage's enemy placements, keyed by placement slot: STINIT2 writes them and FIELD spawns from them.
 

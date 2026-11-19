@@ -9,6 +9,8 @@ Open Maid Script tables (design spec §5.3): `table[record].field` is the field'
 
 ### unit[1000]
 
+Built by: `boot`.
+
 EBINIT unit records keyed by unit id, with the CNINIT/CVINIT voice maps and the per-unit story flags. `unit[id].stats.max_hp` is `unit_base_stats[id].max_hp`.
 
 | field | global | address | type |
@@ -65,6 +67,8 @@ EBINIT unit records keyed by unit id, with the CNINIT/CVINIT voice maps and the 
 
 ### item[1000]
 
+Built by: `boot`.
+
 ITINIT item records keyed by item id.
 
 | field | global | address | type |
@@ -90,6 +94,8 @@ ITINIT item records keyed by item id.
 | handler_script_id | item_handler_script_id | `0xa6a71` | `int[1000]` |
 
 ### skill[300]
+
+Built by: `boot`.
 
 SKINIT skill records keyed by skill id, with the per-skill acquisition state.
 

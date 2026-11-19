@@ -222,19 +222,24 @@ def test_tables_lint():
                ("G", 0x20): {**base, "_addr": 0x20, "name": "hero_stats", "type": "int[4][3]"},
                ("G", 0x40): {**base, "_addr": 0x40, "name": "hero_grid", "type": "int[4][3][2]"},
                ("G", 0x60): {**base, "_addr": 0x60, "name": "open_rows", "type": "int[][3]"}}
-    good = [{"name": "hero", "records": 4, "fields": {"level": "hero_levels", "stats": "hero_stats"}}]
+    good = [{"name": "hero", "records": 4, "built_by": "boot",
+             "fields": {"level": "hero_levels", "stats": "hero_stats"}}]
     check(G.lint_tables(good, entries) == [], "a table over 1-D and 2-D arrays of its record count lints clean")
-    bad = [{"name": "hero_levels", "records": 4, "fields": {"level": "hero_levels"}},
-           {"name": "Hero", "records": 4, "fields": {"level": "hero_levels"}},
-           {"name": "short", "records": 5, "fields": {"level": "hero_levels"}},
-           {"name": "deep", "records": 4, "fields": {"grid": "hero_grid", "open": "open_rows", "x": "nope"}},
-           {"name": "empty", "records": 4, "fields": {}},
-           {"name": "dup", "records": 4, "fields": {"level": "hero_levels"}},
-           {"name": "dup", "records": 4, "fields": {"Level": "hero_levels"}}]
+    boot = {"built_by": "boot"}
+    bad = [{"name": "hero_levels", "records": 4, **boot, "fields": {"level": "hero_levels"}},
+           {"name": "Hero", "records": 4, **boot, "fields": {"level": "hero_levels"}},
+           {"name": "short", "records": 5, **boot, "fields": {"level": "hero_levels"}},
+           {"name": "deep", "records": 4, **boot, "fields": {"grid": "hero_grid", "open": "open_rows", "x": "nope"}},
+           {"name": "empty", "records": 4, **boot, "fields": {}},
+           {"name": "dup", "records": 4, **boot, "fields": {"level": "hero_levels"}},
+           {"name": "dup", "records": 4, **boot, "fields": {"Level": "hero_levels"}},
+           {"name": "unbuilt", "records": 4, "fields": {"level": "hero_levels"}},
+           {"name": "loud", "records": 4, "built_by": "Boot", "fields": {"level": "hero_levels"}}]
     errors = G.lint_tables(bad, entries)
     for needle in ("'hero_levels': also names a global", "'Hero': name must be", "field level needs a fully sized [5]",
                    "field grid needs", "field open needs", "unknown global 'nope'", "needs a [table.fields] map",
-                   "'dup': defined twice", "field 'Level' must be"):
+                   "'dup': defined twice", "field 'Level' must be", "'unbuilt': built_by must be",
+                   "'loud': built_by must be"):
         check(any(needle in e for e in errors), f"lint_tables flags {needle!r}")
     for toml in sorted(Path(G.TOML_DEFAULT).parent.glob("globals*.toml")):
         entries, _ = G.load_toml(toml)

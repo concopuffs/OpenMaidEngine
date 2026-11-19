@@ -154,8 +154,9 @@ def load_tables(path) -> list[dict]:
 
 def lint_tables(tables: list[dict], entries: dict) -> list[str]:
     """Errors: a table or field name that is not a lowercase identifier, a repeated table, a table named like
-    a global, and a field whose global is missing or is not a fully sized 1-D or 2-D array of `records` entries
-    or rows."""
+    a global, a `built_by` label that is missing or not a lowercase identifier (which part of the game writes the
+    table, data patches spec §6.3), and a field whose global is missing or is not a fully sized 1-D or 2-D array of
+    `records` entries or rows."""
     errors: list[str] = []
     by_name: dict[str, dict] = {}
     for e in entries.values():
@@ -173,6 +174,10 @@ def lint_tables(tables: list[dict], entries: dict) -> list[str]:
         seen.add(name)
         if name in by_name:
             errors.append(f"{tag}: also names a global")
+        built_by = t.get("built_by")
+        if not isinstance(built_by, str) or not IDENTIFIER.fullmatch(built_by):
+            errors.append(f"{tag}: built_by must be a lowercase identifier, the part of the game that writes the "
+                          f"table (boot, stage)")
         records = t.get("records")
         if not isinstance(records, int) or isinstance(records, bool) or records <= 0:
             errors.append(f"{tag}: records must be a positive integer")
@@ -309,8 +314,8 @@ def emit_json(merged: Registry, meta: dict, tables: list[dict] = ()) -> str:
     out = {"meta": {**GEN_JSON_META, **meta},
            "globals": legacy,
            "cells": {cell_key(bank, addr): e for (bank, addr), e in sorted(merged.items())},
-           "tables": [{"name": t["name"], "records": t["records"], "usage": t.get("usage", ""),
-                       "fields": dict(t["fields"])} for t in tables]}
+           "tables": [{"name": t["name"], "records": t["records"], "built_by": t["built_by"],
+                       "usage": t.get("usage", ""), "fields": dict(t["fields"])} for t in tables]}
     return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
 
 
@@ -326,7 +331,7 @@ def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
         L += ["## Tables", "",
               "Open Maid Script tables (design spec §5.3): `table[record].field` is the field's array element.", ""]
         for t in tables:
-            L += [f"### {t['name']}[{t['records']}]", ""]
+            L += [f"### {t['name']}[{t['records']}]", "", f"Built by: `{t['built_by']}`.", ""]
             if t.get("usage"):
                 L += [t["usage"], ""]
             L += ["| field | global | address | type |", "|---|---|---|---|"]

@@ -6390,10 +6390,13 @@ confidence = "high"
 # ---------------------------------------------------------------------------------------------- tables
 # Open Maid Script tables (design spec §5.3): record views over the parallel arrays above. A field names a
 # global by name; its leading dimension must be the record count. Generated into globals.json `tables`.
+# `built_by` says which part of the game writes the table: `boot` for INIT2's layers, `stage` for a stage's
+# loaders. The base mod's Lua maps a label to its event, and its record map copies it (data patches spec §6.3).
 
 [[table]]
 name = "unit"
 records = 1000
+built_by = "boot"
 usage = "EBINIT unit records keyed by unit id, with the per-unit runtime arrays (history face, voice family and setting slot). `unit[761].stats.max_hp` is `unit_base_stats[761].max_hp`."
 
 [table.fields]
@@ -6445,6 +6448,7 @@ habitat_area = "unit_habitat_area_ids"
 [[table]]
 name = "item"
 records = 2000
+built_by = "boot"
 usage = "ITINIT item records keyed by item id, with the per-item inventory and growth state."
 
 [table.fields]
@@ -6505,6 +6509,7 @@ growth_mastery_story_flag = "item_growth_mastery_story_flags"
 [[table]]
 name = "skill"
 records = 1000
+built_by = "boot"
 usage = "SKINIT skill records keyed by skill id."
 
 [table.fields]
@@ -6539,6 +6544,7 @@ area_effect_blend_mode = "skill_area_effect_blend_mode"
 [[table]]
 name = "stage_enemy"
 records = 30
+built_by = "stage"
 usage = "The current stage's enemy placements, keyed by placement slot: STINIT2 writes them and FIELD spawns from them."
 
 [table.fields]
