@@ -470,7 +470,10 @@ LocalAppData/Desktop with the game's saves and `SYS4REG.INI`; port: the `--data-
 `drive/port/desktop/` is the Desktop of a run on a player profile root (`start --data-root`), which makes no sandbox.
 `drive/native/backups/` holds copies of the live save folder.
 `engine/Ome.Engine/Sys4/Sys4CorpusScanner.cs` owns the production-store script decode/histogram pass;
-`engine/Ome.Cli` exposes it as `catalog-scan` for validation and diagnostic reports, and exposes the
+`engine/Ome.Cli` exposes it as `catalog-scan` for validation and diagnostic reports.
+`engine/Ome.Engine/Sys4/InstallIntake.cs` reads an install that has no profile yet, with the whole opcode
+catalog and a lenient catalog reader, and `engine/Ome.Cli` exposes it as `intake` (`adding-a-game.md`, step 1).
+`engine/Ome.Cli` also exposes the
 `Ome.Script` round trips as `oms-roundtrip` (with `oms-residue` for its literal leftovers and `oms-temps` for its
 temporary-allocator residue), decompiled source as `oms-decompile`, and fragments (spec §10) as `oms-patch`. The source modules in `oms/<game>/` are
 authored, like `vm-map/`, not derived: the compiler links them, and `--level idiomatic` lifts their library subs

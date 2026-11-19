@@ -93,7 +93,21 @@ public sealed class Sys4AssetCatalog
     }
 
     public static Sys4AssetCatalog Parse(byte[] data, string name = "SYS4INI.BIN")
+        => Parse(data, name, lenient: false, out _, out _);
+
+    /// <summary>As <see cref="Parse(byte[], string)"/>, for a first look at an install the engine has no profile for
+    /// (<see cref="InstallIntake"/>): what the settings trailer holds beyond what this reader knows comes back in
+    /// <paramref name="unreadTrailer"/> with <paramref name="trailerProblem"/>, instead of being refused. A game is
+    /// never run from this reading.</summary>
+    internal static Sys4AssetCatalog ParseLeniently(
+        byte[] data, string name, out byte[] unreadTrailer, out string? trailerProblem)
+        => Parse(data, name, lenient: true, out unreadTrailer, out trailerProblem);
+
+    private static Sys4AssetCatalog Parse(
+        byte[] data, string name, bool lenient, out byte[] unreadTrailer, out string? trailerProblem)
     {
+        unreadTrailer = [];
+        trailerProblem = null;
         bool isBase = data.Length >= 4 && data.AsSpan(0, 4).SequenceEqual("S4IC"u8);
         bool isAppend = data.Length >= 4 && data.AsSpan(0, 4).SequenceEqual("S4AC"u8);
         if (!isBase && !isAppend)
@@ -156,9 +170,9 @@ public sealed class Sys4AssetCatalog
 
         string magic = ReadCString(data.AsSpan(0, Math.Min(8, data.Length)));
         string title = ReadCString(data.AsSpan(8, Math.Min(256, data.Length - 8)));
-        Sys4StartupSettings startupSettings = isBase
-            ? Sys4StartupSettings.ParseTrailer(blob, ref p, name)
-            : Sys4StartupSettings.Empty;
+        Sys4StartupSettings startupSettings = !isBase ? Sys4StartupSettings.Empty
+            : lenient ? Sys4StartupSettings.ParseTrailerLeniently(blob, ref p, name, out unreadTrailer, out trailerProblem)
+            : Sys4StartupSettings.ParseTrailer(blob, ref p, name);
         return new Sys4AssetCatalog(magic, title, packId, archives, slots, startupSettings);
     }
 

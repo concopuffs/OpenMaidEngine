@@ -130,6 +130,46 @@ public sealed class Sys4StartupSettings
 
     internal static Sys4StartupSettings ParseTrailer(byte[] blob, ref int offset, string source)
     {
+        Sys4StartupSettings settings = ReadTrailer(blob, ref offset, source, out bool emptyBlock);
+        if (offset != blob.Length)
+            throw new InvalidDataException(emptyBlock
+                ? $"{source}: zero-length settings block has trailing data"
+                : $"{source}: settings block has {blob.Length - offset} trailing bytes");
+        return settings;
+    }
+
+    /// <summary>
+    /// As <see cref="ParseTrailer"/>, for a first look at an install the engine has no profile for
+    /// (<see cref="InstallIntake"/>): bytes after the settings pairs come back in <paramref name="unread"/> instead of
+    /// being refused. A trailer that does not parse at all gives no settings, all of it unread, and the reason in
+    /// <paramref name="problem"/>. A game is never run from this reading.
+    /// </summary>
+    internal static Sys4StartupSettings ParseTrailerLeniently(
+        byte[] blob, ref int offset, string source, out byte[] unread, out string? problem)
+    {
+        int start = offset;
+        try
+        {
+            Sys4StartupSettings settings = ReadTrailer(blob, ref offset, source, out _);
+            unread = blob.AsSpan(offset).ToArray();
+            problem = unread.Length == 0 ? null : $"{unread.Length} bytes follow the settings pairs";
+            offset = blob.Length;
+            return settings;
+        }
+        catch (InvalidDataException error)
+        {
+            unread = blob.AsSpan(start).ToArray();
+            problem = error.Message;
+            offset = blob.Length;
+            return Empty;
+        }
+    }
+
+    /// <summary>Reads the trailer's known blocks and leaves <paramref name="offset"/> after the last one.
+    /// <paramref name="emptyBlock"/> tells that the settings block had no strings.</summary>
+    private static Sys4StartupSettings ReadTrailer(byte[] blob, ref int offset, string source, out bool emptyBlock)
+    {
+        emptyBlock = false;
         if (offset == blob.Length) return Empty;
 
         uint vmMetadataBytes = ReadU32(blob, ref offset, source, "VM metadata length");
@@ -142,8 +182,7 @@ public sealed class Sys4StartupSettings
         uint stringBytes = ReadU32(blob, ref offset, source, "settings string length");
         if (stringBytes == 0)
         {
-            if (offset != blob.Length)
-                throw new InvalidDataException($"{source}: zero-length settings block has trailing data");
+            emptyBlock = true;
             return Empty;
         }
         if (offset > blob.Length - 4)
@@ -168,8 +207,6 @@ public sealed class Sys4StartupSettings
         if (offset != end)
             throw new InvalidDataException(
                 $"{source}: settings pair count consumed {offset} bytes through the blob, expected {end}");
-        if (end != blob.Length)
-            throw new InvalidDataException($"{source}: settings block has {blob.Length - end} trailing bytes");
         return new Sys4StartupSettings(pairs);
     }
 
