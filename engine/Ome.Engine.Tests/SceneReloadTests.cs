@@ -63,6 +63,8 @@ public class SceneReloadTests
             "_deterministicRandomMods",
             // The scripting native's watched cells, which the link's plan decides (Lua scripting spec §7.3).
             "_watched",
+            // The running deliveries' journal (data patches plan §12.6): null between deliveries, and op 0x9 runs no Lua.
+            "_journal",
         ],
         [typeof(Audio)] =
         [
@@ -147,8 +149,9 @@ public class SceneReloadTests
             // builds running, the latest face's mod and the delivery's depth, all set and cleared within a call (the
             // records are the Scene's).
             "_watches", "_running", "_runningContribution", "_consoleDepth", "_looseDepth", "_faceMod", "_delivering",
-            // Whether a session is being built, where maid.vm.call is refused: set and cleared within the build.
-            "_building",
+            // Whether a session is being built, where maid.vm.call is refused: set and cleared within the build. Whether a
+            // failed delivery's cells are being put back (data patches plan §12.6): set and cleared within the put-back.
+            "_building", "_puttingBack",
             // The undeclared writes --lua-dev has logged, once each for the run.
             "_devWrites",
             // The composition's setup, whose stack a reload gives a mod's new files for the run; and a reload due and the
