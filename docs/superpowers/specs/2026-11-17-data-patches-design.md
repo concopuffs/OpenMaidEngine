@@ -1,8 +1,11 @@
 # Data patches design
 
 **Date:** 2026-11-17; accepted 2026-11-18
-**Status:** accepted by the user on 2026-11-18, after their own review of the whole text. Nothing in it is built
-yet. The work is on `feature/data-patches`, and its plan goes in `docs/superpowers/plans/`.
+**Status:** accepted by the user on 2026-11-18, after their own review of the whole text. Built on
+`feature/data-patches`, milestones 0 to 3, and merged into develop on 2026-11-19. The plan,
+`docs/superpowers/plans/2026-11-18-data-patches.md`, keeps what each milestone found and what changed after this
+spec (its §9 and §12.6). Two of those changes depart from this text: a document's size counts its tables and
+arrays as it counts its values (§5.3), and the engine puts back what a failed delivery wrote (§5.6, §6.2).
 **How it was decided:** on 2026-11-18 the user decided the eight questions of §14, and the boot readings of §6.5
 were made. The same day an agent that had no part in writing the draft reviewed it against the repository. §15
 lists what that changed. Four of the changes touched what the user had read or decided. The user accepted them the

@@ -5,7 +5,9 @@
 (`docs/superpowers/specs/2026-11-10-lua-scripting-design.md`) is cited as "Lua §n". The spec stays the design's home.
 This plan keeps what each milestone checks and builds, and what that settles for the later ones.
 **Status:** written before milestone 0 was built; §4, §5 and §6 were expanded before milestones 1, 2 and 3. §8 keeps
-what M0 found, §9 what changed since the spec was accepted, §10 what M1 found and §11 what M2 found.
+what M0 found, §9 what changed since the spec was accepted, §10 what M1 found, §11 what M2 found and §12 what M3
+found and what its reviews changed (§12.5, §12.6). The branch was merged into develop on 2026-11-19; the backlog
+keeps the follow-ups.
 **Branch:** `feature/data-patches`, off `develop` at `8970fbe6`.
 
 Paths are relative to `age-reimpl/`.
