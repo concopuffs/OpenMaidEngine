@@ -270,6 +270,7 @@ public sealed partial class VirtualMachine
             ["fill-surface-rect"] = static (vm, ins, pc) => vm.OpFillSurfaceRect(ins, pc),
             ["select-render-target"] = static (vm, ins, pc) => vm.OpSelectRenderTarget(ins, pc),
             ["clear-render-target"] = static (vm, ins, pc) => vm.OpClearRenderTarget(ins, pc),
+            ["set-present-clear"] = static (vm, ins, pc) => vm.OpSetPresentClear(ins, pc),
             ["release-transient-surfaces"] = static (vm, ins, pc) => vm.OpReleaseTransientSurfaces(ins, pc),
             ["set-tiled-surface-edge-length"] = static (vm, ins, pc) => vm.OpSetTiledSurfaceEdgeLength(ins, pc),
             ["load-raw-texture-surface"] = static (vm, ins, pc) => vm.OpLoadRawTextureSurface(ins, pc),

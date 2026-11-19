@@ -40,7 +40,7 @@ public sealed partial class VirtualMachine : IInterpreterAccess
 
     (CellKind Kind, int Index)? IInterpreterAccess.LocalCellOf(Operand operand)
     {
-        if (operand.Type is not (T_LINT or T_LFLOAT or T_LSTR or T_LPTR or T_LSTRPTR)) return null;
+        if (operand.Type is not (T_LINT or T_LFLOAT or T_LSTR or T_LPTR or T_LFLOATPTR or T_LSTRPTR)) return null;
         VmAddress address = BaseAddr(operand);
         return address.Space switch
         {
@@ -60,7 +60,7 @@ public sealed partial class VirtualMachine : IInterpreterAccess
 
     CellValue IInterpreterAccess.ReadOperand(Operand operand) => operand.Type switch
     {
-        T_FLOAT or T_GFLOAT or T_LFLOAT => CellValue.Float(CellRules.ReadFloat(FloatBits(operand))),
+        T_FLOAT or T_GFLOAT or T_LFLOAT or T_LFLOATPTR => CellValue.Float(CellRules.ReadFloat(FloatBits(operand))),
         T_STR or T_GSTR or T_GSTRPTR or T_LSTR or T_LSTRPTR => CellValue.String(ReadStr(operand)),
         _ => CellValue.Integer(CellRules.ReadInteger(Read(operand))),
     };

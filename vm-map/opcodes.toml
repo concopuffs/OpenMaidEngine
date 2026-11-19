@@ -416,7 +416,7 @@ leaves = ["ends"]
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x9_reset_scene_and_reload_root@0x418f50 clears EngineCtx+0x54ff0, disposes all 40 interpreter-frame slots with script_frame_dispose@0x40e610, zeroes every global bank (each integer global becomes ctx->anti_tamper_b, the encoded zero; the float, string, integer-pointer, string-pointer and local-pointer-scratch banks are cleared; both bank sets under set:EnableMemFlip), aborts timed/input callback state, calls scene_context_init_reset@0x40b3b0, resets hotspot/input services, releases all 1000 surfaces only when (set:CreateObject & 2) && (set:AutoFreeTex & 1), then calls script_frame_load_resource(...,0). After the hotspot resets it calls save_container_playtime_reset@0x42fa80 (SYS4433 0x430430): the save playtime base and pending value become 0 and the clock restarts, so saves made after a return to title count from there. SYS4433's op_0x9_reset_scene_and_reload_root_sys4433@0x423b50 has the same bank reset, playtime reset and gate; the registered AutoFreeTex default is 0 in both, Kamidori sets 3 and Himegari leaves it unset. The scene reset clears interpreter/ADV/input/retained-gfx state, reinitializes both surface-record tables and deletes the 1000 slots' movie objects (ctx+0x52bd4), but keeps their textures; engine configuration is untouched. A native Kamidori read (2026-11-07) at TITLE after a turn-limit game over found FIELD's G[0x428c] and SC5300's G[0x19c1]/G[0xfd435] back at zero, so INIT2 draws no field objects over the title. A native read (2026-11-07) found SC0000's slots 5 and 14 still textured at TITLE after a Himegari return to title, with record id -1. Corpus sites are terminal scene/control exits rather than ordinary local returns."
+evidence = "Ghidra /v2: op_0x9_reset_scene_and_reload_root@0x418f50 clears EngineCtx+0x54ff0, disposes all 40 interpreter-frame slots with script_frame_dispose@0x40e610, zeroes every global bank (each integer global becomes ctx->anti_tamper_b, the encoded zero; the float, string, integer-pointer, float-pointer and string-pointer banks are cleared; both bank sets under set:EnableMemFlip), aborts timed/input callback state, calls scene_context_init_reset@0x40b3b0, resets hotspot/input services, releases all 1000 surfaces only when (set:CreateObject & 2) && (set:AutoFreeTex & 1), then calls script_frame_load_resource(...,0). After the hotspot resets it calls save_container_playtime_reset@0x42fa80 (SYS4433 0x430430): the save playtime base and pending value become 0 and the clock restarts, so saves made after a return to title count from there. SYS4433's op_0x9_reset_scene_and_reload_root_sys4433@0x423b50 has the same bank reset, playtime reset and gate; the registered AutoFreeTex default is 0 in both, Kamidori sets 3 and Himegari leaves it unset. The scene reset clears interpreter/ADV/input/retained-gfx state, reinitializes both surface-record tables and deletes the 1000 slots' movie objects (ctx+0x52bd4), but keeps their textures; engine configuration is untouched. A native Kamidori read (2026-11-07) at TITLE after a turn-limit game over found FIELD's G[0x428c] and SC5300's G[0x19c1]/G[0xfd435] back at zero, so INIT2 draws no field objects over the title. A native read (2026-11-07) found SC0000's slots 5 and 14 still textured at TITLE after a Himegari return to title, with record id -1. Corpus sites are terminal scene/control exits rather than ordinary local returns."
 details = "Implemented as a whole-stack root-reload boundary in the persistent VM. A request propagates through every nested call-script frame without resuming caller instructions, clears VM/host scene presentation and input state, keeps every surface unless VmOptions.CreateObject/AutoFreeTex ask for the release (the surface records, reload flags and movies are cleared), cancels deferred SFX starts while preserving active/process-owned audio, zeroes the global banks and restarts the playtime clock from 0 (both 2026-11-07), preserves process-owned host configuration/caches, then resolves raw resource 0 through the script provider and starts it at offset zero. The retained history backlog is deliberately preserved pending a separate proof of its native lifetime; recording suppression is reset."
 
 [[opcode]]
@@ -11676,18 +11676,23 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00423000"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-present-clear"
+category = "draw"
+summary = "(flags) — make the present workers clear the render target to black before they draw: bit 0 the frame render (op 0x20c and the engine's tick), bit 1 a range present (op 0x222)."
+details = "Without a flag a present draws over the pixels its target holds, and only op 0x20e clears. The port keeps the flags in the graphics native (Graphics.SetPresentClear) and clears as op 0x20e does, before each present of that kind."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler and the two present workers; the opcode is observed only in 創刻のアテリアル", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x252_set_present_clear@0x4247f0 stores operand 1 at the graphics manager's +0xb55c (ctx+0x59e60), which the manager's constructor sets to 0 and nothing else writes. gfx_render_frame@0x49ab00 tests bit 0 and gfx_present_object_range@0x49adf0 bit 1; each then calls d3d_clear_render_target_black before it begins its scene, the call op 0x20e's handler makes. The only site in 創刻のアテリアル is SYSTEM4@0xa, with 3." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "flags: bit 0 = clear before a frame render, bit 1 = clear before a range present"
 observed_types = ["imm"]
 access = ["read"]
 

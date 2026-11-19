@@ -2,9 +2,13 @@ using Ome.Engine.Natives;
 
 namespace Ome.Engine.Vm;
 
+/// <summary>The bank an address names a cell of. <see cref="Global"/> is the integer bank for an integer pointer and
+/// the string bank for a string pointer; a float cell has its own two spaces, so that a pointer keeps what it was
+/// bound to.</summary>
 public enum VmAddressSpace
 {
     Global,
+    GlobalFloat,
     LocalInteger,
     LocalFloat,
     LocalString,
@@ -13,6 +17,7 @@ public enum VmAddressSpace
 public readonly record struct VmAddress(VmAddressSpace Space, int Address)
 {
     public static VmAddress Global(int address) => new(VmAddressSpace.Global, address);
+    public static VmAddress GlobalFloat(int address) => new(VmAddressSpace.GlobalFloat, address);
     public static VmAddress LocalInteger(int address) => new(VmAddressSpace.LocalInteger, address);
     public static VmAddress LocalFloat(int address) => new(VmAddressSpace.LocalFloat, address);
     public static VmAddress LocalString(int address) => new(VmAddressSpace.LocalString, address);
@@ -29,6 +34,7 @@ public sealed class Frame
     public Dictionary<int, string> S = new(); // local-string
     public Dictionary<int, VmAddress> P = new();  // local-ptr (retains local/global address domain)
     public Dictionary<int, VmAddress> SP = new(); // local-string-ptr (same, for the string banks)
+    public Dictionary<int, VmAddress> FP = new(); // local-float-ptr (AGE 4.38D; a float cell of a frame or of the globals)
 
     public void SetInteger(int index, long value) => _integers[index] = ScriptMemory.IntegerCell(value);
 }

@@ -36,6 +36,11 @@ public sealed partial class Graphics
 
     private Scene _scene = new();
 
+    // Op 0x252's flags (AGE 4.38D). Native's graphics manager sets the field to 0 when it is built and only the
+    // opcode writes it, so the scene reset leaves it.
+    private int _presentClear;
+    private const int ClearBeforeFrameRender = 1, ClearBeforeRangePresent = 2;
+
     private readonly List<RenderObject> _terminalSample = new();   // engine thread only: CommitTerminalSample
 
     // ---- publication (ops 0x222 and 0x20c) ----
@@ -45,6 +50,7 @@ public sealed partial class Graphics
     /// returns, so the caller presents.</summary>
     public bool PresentObjectRange(long firstHandle, long count)
     {
+        if ((_presentClear & ClearBeforeRangePresent) != 0) ClearRenderTarget();
         if (State.CurrentRenderTargetSlot >= 0)
         {
             PublishObjectRangeToSurface(firstHandle, count);
@@ -62,6 +68,7 @@ public sealed partial class Graphics
     /// presents.</summary>
     public bool PresentFrame()
     {
+        if ((_presentClear & ClearBeforeFrameRender) != 0) ClearRenderTarget();
         if (State.CurrentRenderTargetSlot >= 0)
         {
             int slot = State.CurrentRenderTargetSlot;
@@ -88,6 +95,11 @@ public sealed partial class Graphics
         return true;
     }
 
+    /// <summary>Op 0x252 (AGE 4.38D): whether a present clears its render target to black before it draws, as op
+    /// 0x20e does. Bit 0 is the frame render's (gfx_render_frame: op 0x20c, and every frame the engine draws by
+    /// itself); bit 1 is a range present's (gfx_present_object_range: op 0x222).</summary>
+    public void SetPresentClear(int flags) => _presentClear = flags;
+
     /// <summary>Native renders the terminal sample in the tick that ends an effect wait, and a render commits every
     /// channel it samples past its end: sample once on the engine thread, so the next burst starts from the committed
     /// endpoints.</summary>
@@ -107,7 +119,8 @@ public sealed partial class Graphics
         bool preserveExistingPixels;
         range = _scene.BackbufferRange;
         preserveExistingPixels =
-            _scene.BackbufferPublicationPreservesExistingPixels && !_scene.BackbufferClearPending;
+            _scene.BackbufferPublicationPreservesExistingPixels && !_scene.BackbufferClearPending
+            && (_presentClear & ClearBeforeFrameRender) == 0;
         _scene.BackbufferClearPending = false;
         int write = 0;
         for (int read = 0; read < snapshot.Count; read++)

@@ -84,6 +84,9 @@ public class SceneReloadTests
             "_images", "_surfaceImages", "_surfaceColorKeys", "_surfaceResources", "_slotDims", "_renderTargetSnapshots",
             // The front end's frames and the presentation request (the reset makes one).
             "_frames", "_frameObjects", "_frameScreenTransitions", "_nextFrame", "_presentRequested", "_terminalSample",
+            // Op 0x252's flags: native's graphics manager zeroes the field when it is built, and only the opcode
+            // writes it afterwards (AGE 4.38D; vm-map/opcodes.toml, set-present-clear).
+            "_presentClear",
             // Parts set after construction, and tracing.
             "_movies", "_listeners", "TraceOps", "OpTrace",
         ],

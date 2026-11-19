@@ -318,14 +318,44 @@ type = "int"
 note = "live integer-pointer globals bank size used to allocate the VM bank (copied from sys4ini_int_pointer_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0); save_data_deserialize_and_begin_restore@0x40fd10 zeroes the whole bank to this size before copying a numbered save's prefix (layouts 2 and 3)"
 [[field]]
 offset = 0x53c8c
+name = "bank_size_float_pointer_globals"
+type = "int"
+note = "the fifth bank, bank_float_pointer_globals: nothing in 4.24J or 4.33G binds a cell of it (4.33G's float write has a case for operand type 7), and AGE 4.38D's accessors read and write through it as the global float pointers (operand type 7). Named the string-pointer bank until 2026-11-19, and the sixth bank the local pointer scratch; op 0x9's reset and the accessors pair each size with its bank. Live float-pointer globals bank size used to allocate the VM bank (copied from sys4ini_float_pointer_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0); save_data_deserialize_and_begin_restore@0x40fd10 zeroes the whole bank to this size before copying a numbered save's prefix (layouts 2 and 3)"
+[[field]]
+offset = 0x53c90
 name = "bank_size_string_pointer_globals"
 type = "int"
 note = "live string-pointer globals bank size used to allocate the VM bank (copied from sys4ini_string_pointer_globals_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0); save_data_deserialize_and_begin_restore@0x40fd10 zeroes the whole bank to this size before copying a numbered save's prefix (layouts 2 and 3)"
 [[field]]
-offset = 0x53c90
-name = "bank_size_local_pointer_scratch"
-type = "int"
-note = "live local pointer scratch bank size used to allocate the VM bank (copied from sys4ini_local_pointer_scratch_count by engine_load_sys4ini_and_mount_append_catalogs@0x4099f0); save_data_deserialize_and_begin_restore@0x40fd10 zeroes the whole bank to this size before copying a numbered save's prefix (layouts 2 and 3)"
+offset = 0x53c94
+name = "bank_int_globals"
+type = "void*"
+note = "the integer globals bank (operand type 3), each cell encoded with the anti-tamper key; +4 holds the second bank set's, used under set:EnableMemFlip, and so for each bank below. save_data_deserialize_and_begin_restore@0x40fd10 copies a save's integers here and context_state_serialize@0x40d320 decodes them from here."
+[[field]]
+offset = 0x53c9c
+name = "bank_float_globals"
+type = "void*"
+note = "the float globals bank (operand type 4). op_0x9_reset_scene_and_reload_root@0x418f50 zeroes it to bank_size_float_globals. A numbered save's layout 3 neither writes it (context_state_serialize@0x40d320 steps over the section) nor copies it back (save_data_deserialize_and_begin_restore@0x40fd10 zeroes the bank and steps over the section)."
+[[field]]
+offset = 0x53ca4
+name = "bank_string_globals"
+type = "void*"
+note = "the string globals bank (operand type 5), 0x1c-byte string records."
+[[field]]
+offset = 0x53cac
+name = "bank_int_pointer_globals"
+type = "void*"
+note = "the integer pointer bank (operand type 6): each cell is the address of an integer cell (vm_pointer_operand_bind_element@0x416180, case 6). The one pointer bank a numbered save writes and copies back."
+[[field]]
+offset = 0x53cb4
+name = "bank_float_pointer_globals"
+type = "void*"
+note = "the fifth bank, between the integer and the string pointers: allocated, zeroed by op 0x9 and by a load to bank_size_float_pointer_globals, and bound by no accessor of 4.24J. AGE 4.38D's accessors bind and read it as the global float pointers (operand type 7). A numbered save steps over its section when writing and when loading."
+[[field]]
+offset = 0x53cbc
+name = "bank_string_pointer_globals"
+type = "void*"
+note = "the string pointer bank (operand type 8): each cell is the address of a 0x1c-byte string record (vm_pointer_operand_bind_element@0x416180, case 8), sized by the sixth count. A numbered save steps over its section when writing and when loading."
 [[field]]
 offset = 0x53d14
 name = "cur_ctx_index"
@@ -843,14 +873,14 @@ type = "int"
 note = "SYS4INI header +0xfc (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the integer-pointer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
 [[field]]
 offset = 0xa0cb8
-name = "sys4ini_saved_string_pointer_globals_count"
+name = "sys4ini_saved_float_pointer_globals_count"
 type = "int"
-note = "SYS4INI header +0x100 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the string-pointer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
+note = "SYS4INI header +0x100 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the float-pointer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
 [[field]]
 offset = 0xa0cbc
-name = "sys4ini_saved_local_pointer_scratch_count"
+name = "sys4ini_saved_string_pointer_globals_count"
 type = "int"
-note = "SYS4INI header +0x104 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the local pointer scratch bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
+note = "SYS4INI header +0x104 (the loader reads the first 300 header bytes into ctx+0xa0bb8): saved-prefix length of the string-pointer globals bank that numbered layout-3 saves serialize; Himegari/Kamidori 1/1"
 [[field]]
 offset = 0xa0cc0
 name = "screen_w"
@@ -888,14 +918,14 @@ type = "int"
 note = "SYS4INI header +0x120: full integer-pointer globals bank size, copied to bank_size_int_pointer_globals; Himegari/Kamidori 2/2"
 [[field]]
 offset = 0xa0cdc
-name = "sys4ini_string_pointer_globals_count"
+name = "sys4ini_float_pointer_globals_count"
 type = "int"
-note = "SYS4INI header +0x124: full string-pointer globals bank size, copied to bank_size_string_pointer_globals; Himegari/Kamidori 2/2"
+note = "SYS4INI header +0x124: full float-pointer globals bank size, copied to bank_size_float_pointer_globals; Himegari/Kamidori 2/2"
 [[field]]
 offset = 0xa0ce0
-name = "sys4ini_local_pointer_scratch_count"
+name = "sys4ini_string_pointer_globals_count"
 type = "int"
-note = "SYS4INI header +0x128: full local pointer scratch bank size, copied to bank_size_local_pointer_scratch; Himegari/Kamidori 2/2"
+note = "SYS4INI header +0x128: full string-pointer globals bank size, copied to bank_size_string_pointer_globals; Himegari/Kamidori 2/2"
 [[field]]
 offset = 0xa0ce4
 name = "run_state_flags"

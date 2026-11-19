@@ -554,28 +554,40 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
     strings, where both supported games have 2 floats. The saved prefix is 260,993 integers, 1 float and 231
     strings.
-  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 39 have no handler,
-    at 23,042 sites (45 at 56,206 before the float family below): `0x323` (9,793 sites), `0x322` (8,633), `0x320`
-    (3,856), `0x2e9` (579), `0x321` (42), `0x2e5` (16), `0x26` (15), `0x2c7` (14), `0x102` (11), `0x2e7` (10), and 29
-    more with fewer than ten sites each: `0x36`, `0xc1`, `0x103`, `0x104`, `0x10e`, `0x1c4`, `0x1cd`, `0x1fc`,
-    `0x225`, `0x252`, `0x253`, `0x256`, `0x2e1`, `0x2e3`, `0x2e6`, `0x2e8`, `0x2ea`, `0x2eb`, `0x2ec`,
-    `0x324`–`0x329` and `0x32b`–`0x32e`. Of these, `0x252`–`0x256`, `0x2e1`–`0x2ec` and the `0x320` family exist
+  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 38 have no handler,
+    at 23,041 sites (45 at 56,206 before the float family and op `0x252` below): `0x323` (9,793 sites), `0x322`
+    (8,633), `0x320` (3,856), `0x2e9` (579), `0x321` (42), `0x2e5` (16), `0x26` (15), `0x2c7` (14), `0x102` (11),
+    `0x2e7` (10), and 28 more with fewer than ten sites each: `0x36`, `0xc1`, `0x103`, `0x104`, `0x10e`, `0x1c4`,
+    `0x1cd`, `0x1fc`, `0x225`, `0x253`, `0x256`, `0x2e1`, `0x2e3`, `0x2e6`, `0x2e8`, `0x2ea`, `0x2eb`, `0x2ec`,
+    `0x324`–`0x329` and `0x32b`–`0x32e`. Of these, `0x253`–`0x256`, `0x2e1`–`0x2ec` and the `0x320` family exist
     only in 4.38D's engine; the rest are in 4.33G's too, and Kamidori's scripts never use them.
-    `build/games/arterial/catalog-opcode-coverage.json` lists every site. Op `0x320` is read in part (its plate in
-    the Ghidra image).
+    `build/games/arterial/catalog-opcode-coverage.json` lists every site as it stood before the float family.
   - **Float arithmetic is implemented (2026-11-19):** `0x2d0`–`0x2d3` (add, subtract, multiply, divide), `0x2d5`
     (move) and `0x2d7` (float to integer), 33,164 sites, read in the 4.38D image (`vm-map/opcodes.toml`;
-    `FloatArithmeticOpsTests`). Two things are open:
-    - **Float pointers.** 584 operands in the catalog are local float pointers (type `0xd`), 89 of them in this
-      family, the rest in ops `0x61`, `0x63`, `0x12c`, `0x1fd` and `0x320`. The port's float accessors have no such
-      cell, so the run stops there. Done when the accessors read and write through a float pointer as native's do,
-      with how a pointer gets bound read in the image.
+    `FloatArithmeticOpsTests`). So are the local float references its scripts pass at 584 operands (type `0xd`)
+    and float cells as array bases (`engine-re.md`, "Float cells as arrays, and float references", which lists
+    the four ways the port differs from native where no retail script goes). One thing is open:
     - **x87 precision.** The port computes in double and stores a float. Whether native runs scripts with the
       x87's precision lowered (Direct3D can lower it) is not checked; it could change a result by one unit in the
       last place only when an operand is an integer too large for a float.
+  - **Op `0x252` is implemented (2026-11-19):** `set-present-clear`, which makes a present clear its render target
+    first (`engine-re.md`, the Arterial paragraph; `GfxLifecycleOpsTests`). Not compared with native: the port
+    clears where op `0x20e` would, and no frame of the two was put side by side.
   - **Not proven:** its save layout. The build's save stamp (`438D`) follows the version and its record size is
     4.33G's; the revision diff shows other constants in the numbered save and load opcodes. The image holds the
     same `S4SD` and `S3SD` magics as 4.33G's.
+  - **Numbered saves: the sections native steps over.** To resolve on this branch, before it merges. Reading the
+    float references showed that 4.24J's layout 3 writes and restores three of its six bank sections: the
+    integers, the strings and the integer pointers (`sys4-format-notes.md`, the six counts). It steps over the
+    float section, the float pointers' and the string pointers'. The port writes the float globals and the string
+    pointers, the latter into the fifth section, which is the float pointers' (`NativeNumberedSaveState` and
+    `NativeSaveBankDimensions` still call the fifth `PointerStrings` and the sixth `LocalPointerScratch`, and so
+    do the manifests' `bankDimensions` and `save-diff`'s section names), and restores both. No script of Himegari
+    or Kamidori has a global float, pointer or string pointer operand (counted with `Ome.Cli intake`), so nothing
+    shows there. 創刻のアテリアル has 49,876 global float operands, and its saved float prefix is one cell: after a
+    load the port would keep float global 0 where native has 0. Done when the same is read in 4.33G and 4.38D,
+    the port writes and restores what native does, the two sections carry their right names, and what native
+    leaves in a section it steps over is known (a test fixture has -1 in the sixth).
   - **Left out of steps 2 and 3:** whether the Ghidra image's packer API sites are restored and its imports typed
     was not checked (`engine-re.md`, "Runbook"). The Python corpus tools have nothing to read yet: there is no
     `extracted-arterial/`, so `extract_phase2.py` and `compiler_census.py` have not run, and the census is what
@@ -583,12 +595,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Native AGE is driven (step 5, 2026-11-19).** `tools/drive/arterial.toml` and
     `tools/drive/scenarios/arterial-opening.steps`: the logo, the title, Game Start and SC0000's first pages, in a
     save sandbox, with the install unchanged afterwards (`engine-re.md`, "Driving native AGE").
-  - **Where the port's boot stops.** `Ome.Cli play --game arterial SYSTEM4.BIN` halts after five steps at
-    `SYSTEM4@0xa`, op `0x252` with the operand 3. Its handler (`0x4247f0`) only stores the operand at
-    `ctx+0x59e60`; no other instruction names that offset, so its reader goes through an object pointer and is not
-    found yet. The route to the first ADV page needs about twenty of the 45 opcodes:
-    - SYSTEM4, INIT2 and LOGO: `0x252`, `0x2d5`, `0x320`, `0x322`, `0x323`;
-    - TITLE: also `0x2c7`, `0x2d1`, `0x2eb`, `0x2ec`, `0x324`, `0x325`, `0x328`, `0x329`, `0x32b`–`0x32e`;
+  - **Where the port's boot stops.** `Ome.Cli play --game arterial SYSTEM4.BIN` runs SYSTEM4 and INIT2, 832,361
+    steps, and halts at `LOGO@0x4e`, op `0x320`: the first polygon. The route to the first ADV page still needs:
+    - LOGO: `0x320`, `0x322`, `0x323`;
+    - TITLE: also `0x2c7`, `0x2eb`, `0x2ec`, `0x324`, `0x325`, `0x328`, `0x329`, `0x32b`–`0x32e`;
     - SC0000: also `0x26`, `0x36`, `0x2e9`.
 
     Ops `0x320` to `0x323` are AGE 4.38D's polygon objects: retained objects of vertices with a colour each, a
@@ -602,8 +612,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     handlers are read, its workers are not. The design proposes handlers that keep its state and draw nothing for
     P2, with the title's falling leaves then listed here as a fidelity gap.
   - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
-    the two settings keys, the two file types and the font), then step 6, the boot: float pointers, then the
-    polygon objects once their design is accepted.
+    the two settings keys, the two file types and the font), then step 6, the boot: the polygon objects once their
+    design is accepted, then the title's opcodes.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

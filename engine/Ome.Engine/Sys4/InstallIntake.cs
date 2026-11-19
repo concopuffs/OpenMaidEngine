@@ -47,7 +47,7 @@ public sealed record InstallIntakeReport
     public IntakeExecutable? Executable { get; init; }
 
     /// <summary>The header's saved-prefix counts, a profile's <c>bankDimensions</c> (sys4-format-notes.md, "SYS4INI
-    /// file header"): integers, floats, strings, integer pointers, string pointers, local pointer scratch.</summary>
+    /// file header"): integers, floats, strings, integer pointers, float pointers, string pointers.</summary>
     public IReadOnlyList<int> SavedPrefix { get; init; } = [];
     /// <summary>The header's full bank sizes, in the same order.</summary>
     public IReadOnlyList<int> BankSizes { get; init; } = [];

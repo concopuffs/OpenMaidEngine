@@ -62,6 +62,53 @@ public class GfxLifecycleOpsTests
     }
 
     [Fact]
+    public void APresentClearsItsTargetFirstWhenOpTwoFiveTwoSaysSo()
+    {
+        // AGE 4.38D, op 0x252: bit 0 makes the frame render clear its target first, bit 1 a range present
+        // (vm-map/opcodes.toml). 創刻のアテリアル sets both at SYSTEM4@0xa.
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4438");
+        VirtualMachine Run(long flags, int renderTarget)
+        {
+            var scene = ScriptAssembler.Assemble(table, "GFX-PRESENT-CLEAR", new List<(int, Operand[])>
+            {
+                (0x252, new[] { I(flags) }),
+                (0x20d, new[] { I(renderTarget) }),
+                Exit(),
+            }, System.Array.Empty<string>());
+            var vm = new VirtualMachine(scene, table, new RecordingWaits());
+            vm.Graphics.PublishSurfacePixels(7, GraphicsTestSupport.Image(2, 2, (x, y) => [9, 9, 9, 255]));
+            vm.Run();
+            return vm;
+        }
+        var objects = new List<RenderObject>();
+
+        // A frame render on the backbuffer: without the flag it draws over the pixels there.
+        foreach ((long flags, bool keeps) in new[] { (0L, true), (1L, false), (2L, true), (3L, false) })
+        {
+            VirtualMachine vm = Run(flags, renderTarget: 1000);
+            Assert.True(vm.Graphics.PresentFrame());
+            Assert.Equal(keeps, vm.Graphics.SnapshotBackbufferObjects(0, objects).PreserveExistingPixels);
+            Assert.Equal(keeps, vm.Graphics.SnapshotBackbufferObjects(0, objects).PreserveExistingPixels);
+        }
+
+        // A range present and a frame render into a surface: each clears the surface when its own flag is set.
+        byte[] kept = [9, 9, 9, 255], cleared = new byte[4];
+        foreach ((long flags, byte[] afterRange, byte[] afterFrame) in new[]
+                 {
+                     (0L, kept, kept), (1L, kept, cleared), (2L, cleared, kept), (3L, cleared, cleared),
+                 })
+        {
+            VirtualMachine range = Run(flags, renderTarget: 7);
+            Assert.False(range.Graphics.PresentObjectRange(0, 10));
+            Assert.Equal(afterRange, range.Graphics.PixelAt(7, 1, 1));
+
+            VirtualMachine frame = Run(flags, renderTarget: 7);
+            Assert.False(frame.Graphics.PresentFrame());
+            Assert.Equal(afterFrame, frame.Graphics.PixelAt(7, 1, 1));
+        }
+    }
+
+    [Fact]
     public void OpEightyRetainsItsLatestSelectionAsTheCurrentLayout()
     {
         var table = T();

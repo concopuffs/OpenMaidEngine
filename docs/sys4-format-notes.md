@@ -157,7 +157,7 @@ The global-bank dimensions live in the **uncompressed file header**, not in the 
 
 | Header offset | Field | Himegari | Kamidori |
 |---|---|---:|---:|
-| `+0xf0` … `+0x104` | saved-prefix counts: integer, float, string, integer-pointer, string-pointer, local-pointer scratch | 402459, 1, 789, 1, 1, 1 | 1037327, 1, 802, 1, 1, 1 |
+| `+0xf0` … `+0x104` | saved-prefix counts: integer, float, string, integer-pointer, float-pointer, string-pointer | 402459, 1, 789, 1, 1, 1 | 1037327, 1, 802, 1, 1, 1 |
 | `+0x108`, `+0x10c`, `+0x110` | default screen width, height, bpp (before `SCREENX`/`SCREENY` override) | 640, 480, 16 | 640, 480, 16 |
 | `+0x114` … `+0x128` | full bank sizes in the same order | 1419442, 2, 18180, 2, 2, 2 | 4014849, 2, 55284, 2, 2, 2 |
 
@@ -505,8 +505,20 @@ The variable section starts with six DWORD counts in this order:
 2. raw float storage;
 3. string globals;
 4. integer-pointer globals;
-5. string-pointer globals;
-6. local pointer scratch.
+5. float-pointer globals;
+6. string-pointer globals.
+
+The fifth and sixth were read as the string pointers and a local pointer scratch until 2026-11-19. Op `0x9`'s reset
+and the operand accessors pair each count with its bank (`engine-re.md`, "Float cells as arrays, and float
+references"): the sixth sizes the bank operand type 8 binds, and the fifth the bank between it and the integer
+pointers, which AGE 4.38D uses for operand type 7.
+
+Layout 3 fills three of the six sections. `context_state_serialize@0x40d320` writes the integers, the string blob
+and the integer pointers, and steps over the float section and the last two pointer sections;
+`save_data_deserialize_and_begin_restore@0x40fd10` copies the same three back and steps over the others, after
+zeroing every bank (read in Himegari's 4.24J image, 2026-11-19; not yet in 4.33G or 4.38D). The port writes and
+restores the float section and one pointer section more than that (`backlog.md`, "Numbered saves: the sections
+native steps over").
 
 The integer and float arrays follow their counts. String count comes from bank count 3, but its storage
 begins with an additional `string_blob_dwords` followed by that many DWORDs of concatenated NUL-terminated
@@ -759,7 +771,7 @@ off   field  meaning                                    evidence
 0x0C  F1     local float count
 0x10  F2     local string count
 0x14  F3     local integer-pointer count
-0x18  F4     second pointer-family count (exact subtype unresolved)
+0x18  F4     local float-pointer count (operand type 0xd, bound only by AGE 4.38D)
 0x1C  F5     local string-pointer count
 0x20  F6     = 0x1C always                              481/481 == 0x1C  (header-size marker)
 0x24  F7     table-1 entry count                        see below

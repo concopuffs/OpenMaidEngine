@@ -18,7 +18,7 @@ public sealed partial class VirtualMachine
     private const int HotspotReturnMarker = int.MinValue + 2;
     private const int T_IMM = 0, T_FLOAT = 1, T_STR = 2, T_GINT = 3, T_GFLOAT = 4, T_GSTR = 5, T_GPTR = 6,
                       T_GSTRPTR = 8, T_LINT = 9, T_LFLOAT = 10, T_LSTR = 11, T_LPTR = 12,
-                      T_LSTRPTR = 14;
+                      T_LFLOATPTR = 13, T_LSTRPTR = 14;
 
     private readonly Script _s;
     private readonly OpcodeTable _t;
@@ -546,9 +546,9 @@ public sealed partial class VirtualMachine
 
     /// <summary>An operand's integer value, as native's integer accessor (vm_operand_fetch) reads it: a float form is
     /// truncated toward zero (<see cref="NativeTruncate"/>), and a string is parsed by <c>atol</c>
-    /// (<see cref="NativeAtol"/>). The types that accessor throws on (string references, and those the port has no
-    /// cell for) halt the VM, as they end native's script with an error (docs/engine-re.md, "VM value, array and call
-    /// semantics").</summary>
+    /// (<see cref="NativeAtol"/>). The types that accessor throws on (string references, float references, and those
+    /// the port has no cell for) halt the VM, as they end native's script with an error (docs/engine-re.md, "VM value,
+    /// array and call semantics").</summary>
     private long Read(Operand op) => op.Type switch
     {
         T_IMM => ScriptMemory.IntegerCell(op.Value),   // an int32, as the loader keeps its bits zero-extended
@@ -564,7 +564,7 @@ public sealed partial class VirtualMachine
 
     /// <summary>Stores an integer as native's integer accessor (vm_operand_write) does: into an integer cell or what an
     /// integer reference names, and as <c>(float)value</c> into a float cell. Native throws on any other destination
-    /// (an immediate, a string), and so does this.</summary>
+    /// (an immediate, a string, a local float reference), and so does this.</summary>
     private void Write(Operand op, long val)
     {
         switch (op.Type)
@@ -579,11 +579,13 @@ public sealed partial class VirtualMachine
         }
     }
 
-    /// <summary>An operand's value as SYS4433's float accessor (vm_operand_fetch_float) reads it: a float form as is, an
-    /// integer converted, and a string parsed by <c>atof</c> (<see cref="NativeAtof"/>).</summary>
+    /// <summary>An operand's value as the float accessor (vm_operand_fetch_float) reads it: a float form as is, an
+    /// integer converted, and a string parsed by <c>atof</c> (<see cref="NativeAtof"/>). A float form is a float
+    /// literal, a float cell, or the cell a float reference names.</summary>
     private float ReadFloat(Operand op) => op.Type switch
     {
-        T_FLOAT or T_GFLOAT or T_LFLOAT => BitConverter.Int32BitsToSingle(unchecked((int)FloatBits(op))),
+        T_FLOAT or T_GFLOAT or T_LFLOAT or T_LFLOATPTR
+            => BitConverter.Int32BitsToSingle(unchecked((int)FloatBits(op))),
         T_STR or T_GSTR or T_LSTR => (float)NativeAtof(ReadStr(op)),
         _ => unchecked((int)Read(op)),
     };
@@ -594,32 +596,62 @@ public sealed partial class VirtualMachine
     private double ReadFloatExact(Operand op) => op.Type switch
     {
         // Each arm is a double: a float arm beside an int one would make the switch a float and round the integer.
-        T_FLOAT or T_GFLOAT or T_LFLOAT or T_STR or T_GSTR or T_LSTR => (double)ReadFloat(op),
+        T_FLOAT or T_GFLOAT or T_LFLOAT or T_LFLOATPTR or T_STR or T_GSTR or T_LSTR => (double)ReadFloat(op),
         _ => (double)unchecked((int)Read(op)),
     };
 
-    /// <summary>Stores a float as SYS4433's float accessor (vm_operand_write_float) does: its bits into a float cell,
-    /// and truncated toward zero into an integer cell or what an integer reference names.</summary>
+    /// <summary>Stores a float as the float accessor (vm_operand_write_float) does: its bits into a float cell or what
+    /// a float reference names, and truncated toward zero into an integer cell or what an integer reference names.
+    /// </summary>
     private void WriteFloat(Operand op, float value)
     {
         switch (op.Type)
         {
             case T_GFLOAT: _memory.SetFloat((int)op.Value, FloatToBits(value)); break;
             case T_LFLOAT: _cur.Locals.F[(int)op.Value] = FloatToBits(value); break;
+            case T_LFLOATPTR: WriteFloatCell(FloatPointer(op), FloatToBits(value)); break;
             case T_GINT or T_GPTR or T_LINT or T_LPTR: Write(op, NativeTruncate(value)); break;
             default: throw RejectedOperand(op, "write");
         }
     }
 
-    /// <summary>The bits a float form holds: the immediate's, or the float cell's. Formatting and Lua read them as the
-    /// float they are.</summary>
+    /// <summary>The bits a float form holds: the immediate's, the float cell's, or those of the cell a float reference
+    /// names. Formatting and Lua read them as the float they are.</summary>
     private long FloatBits(Operand op) => op.Type switch
     {
         T_FLOAT => op.Value,
         T_GFLOAT => _memory.Float((int)op.Value),
         T_LFLOAT => Gi(_cur.Locals.F, (int)op.Value),
+        T_LFLOATPTR => ReadFloatCell(FloatPointer(op)),
         _ => throw new ArgumentException($"operand type {op.Type} is not a float form", nameof(op)),
     };
+
+    /// <summary>The cell a local float reference (operand type 0xd) names. AGE 4.38D keeps the cell's address there and
+    /// reads and writes through it (docs/engine-re.md, "Float cells as arrays, and float references"); one never
+    /// bound is a null pointer there, so the run halts.</summary>
+    private VmAddress FloatPointer(Operand op)
+        => _cur.Locals.FP.TryGetValue((int)op.Value, out VmAddress address)
+            ? address
+            : throw new VmHaltException($"float-reference-unbound:local 0x{op.Value:x}");
+
+    /// <summary>The bits of the float cell at <paramref name="address"/>. A float reference bound to a cell of another
+    /// kind reads that cell's bytes as a float in native; the port has no such view of a cell, and halts.</summary>
+    private long ReadFloatCell(VmAddress address) => address.Space switch
+    {
+        VmAddressSpace.LocalFloat => Gi(_cur.Locals.F, address.Address),
+        VmAddressSpace.GlobalFloat => _memory.Float(address.Address),
+        _ => throw new VmHaltException($"float-reference-names:{address.Space} 0x{address.Address:x}"),
+    };
+
+    private void WriteFloatCell(VmAddress address, long bits)
+    {
+        switch (address.Space)
+        {
+            case VmAddressSpace.LocalFloat: _cur.Locals.F[address.Address] = bits; break;
+            case VmAddressSpace.GlobalFloat: _memory.SetFloat(address.Address, bits); break;
+            default: throw new VmHaltException($"float-reference-names:{address.Space} 0x{address.Address:x}");
+        }
+    }
 
     /// <summary>Operand <paramref name="index"/> of <paramref name="ins"/> as its handler reads a number: through the
     /// float accessor where this ABI's contract says <c>read-float</c> (<see cref="OpcodeDefinition.FloatOperands"/>),
@@ -723,7 +755,9 @@ public sealed partial class VirtualMachine
         T_LSTRPTR => ReadStringCell(Ga(_cur.Locals.SP, (int)op.Value)),
         T_IMM or T_GINT or T_GPTR or T_LINT or T_LPTR => AsciiToFullwidth(
             unchecked((int)Read(op)).ToString(System.Globalization.CultureInfo.InvariantCulture)),
-        T_FLOAT or T_GFLOAT or T_LFLOAT => AsciiToFullwidth(
+        // vm_operand_format_as_string formats what a float reference names; the two other string accessors throw
+        // on one, which the port does not tell apart.
+        T_FLOAT or T_GFLOAT or T_LFLOAT or T_LFLOATPTR => AsciiToFullwidth(
             BitConverter.Int32BitsToSingle(unchecked((int)FloatBits(op)))
                 .ToString("F6", System.Globalization.CultureInfo.InvariantCulture)),
         _ => "",
@@ -808,6 +842,7 @@ public sealed partial class VirtualMachine
     {
         VmAddressSpace.LocalInteger => Gi(_cur.Locals.I, address.Address),
         VmAddressSpace.LocalFloat => Gi(_cur.Locals.F, address.Address),
+        VmAddressSpace.GlobalFloat => _memory.Float(address.Address),
         _ => _memory.Integer(address.Address),
     };
 
@@ -817,6 +852,7 @@ public sealed partial class VirtualMachine
         {
             case VmAddressSpace.LocalInteger: _cur.Locals.SetInteger(address.Address, value); break;
             case VmAddressSpace.LocalFloat: _cur.Locals.F[address.Address] = value; break;
+            case VmAddressSpace.GlobalFloat: _memory.SetFloat(address.Address, value); break;
             default: _memory.SetInteger(address.Address, value); break;
         }
     }
@@ -832,14 +868,20 @@ public sealed partial class VirtualMachine
         else _memory.SetString(address.Address, value);
     }
 
+    /// <summary>An operand's cell address, as vm_operand_resolve_address gives it: a cell's own, or the one a
+    /// reference holds. AGE 4.38D resolves float cells and float references too; 4.24J and 4.33G throw on them, and
+    /// the port resolves them for every build (docs/engine-re.md, "Float cells as arrays, and float references").
+    /// </summary>
     private VmAddress BaseAddr(Operand op) => op.Type switch
     {
         T_LINT => VmAddress.LocalInteger((int)op.Value),
         T_LFLOAT => VmAddress.LocalFloat((int)op.Value),
         T_LSTR => VmAddress.LocalString((int)op.Value),
+        T_GFLOAT => VmAddress.GlobalFloat((int)op.Value),
         T_GPTR => VmAddress.Global(GlobalPointer((int)op.Value)),
         T_GSTRPTR => VmAddress.Global(GlobalStringPointer((int)op.Value)),
         T_LPTR => Ga(_cur.Locals.P, (int)op.Value),
+        T_LFLOATPTR => Ga(_cur.Locals.FP, (int)op.Value),
         T_LSTRPTR => Ga(_cur.Locals.SP, (int)op.Value),
         _ => VmAddress.Global((int)op.Value),
     };
@@ -864,6 +906,7 @@ public sealed partial class VirtualMachine
         switch (destination.Type)
         {
             case T_LPTR: _cur.Locals.P[(int)destination.Value] = address; return true;
+            case T_LFLOATPTR: _cur.Locals.FP[(int)destination.Value] = address; return true;
             case T_LSTRPTR: _cur.Locals.SP[(int)destination.Value] = address; return true;
             case T_GPTR: _memory.SetPointer((int)destination.Value, address.Address); return true;
             case T_GSTRPTR: _memory.SetStringPointer((int)destination.Value, address.Address); return true;
@@ -895,6 +938,7 @@ public sealed partial class VirtualMachine
                 _memory.SetInteger(checked(GlobalPointer((int)destination.Value) + index), value);
                 break;
             case T_LPTR: WriteIntCell(Ga(_cur.Locals.P, (int)destination.Value).Offset(index), value); break;
+            case T_LFLOATPTR: WriteFloatCell(FloatPointer(destination).Offset(index), value); break;
         }
     }
 
@@ -907,6 +951,7 @@ public sealed partial class VirtualMachine
             T_GINT => ReadGlobal(checked((int)operand.Value + offset)),
             T_GFLOAT => _memory.Float(checked((int)operand.Value + offset)),
             T_LPTR => ReadIntCell(Ga(_cur.Locals.P, (int)operand.Value).Offset(offset)),
+            T_LFLOATPTR => ReadFloatCell(FloatPointer(operand).Offset(offset)),
             T_GPTR => _memory.Integer(checked(GlobalPointer((int)operand.Value) + offset)),
             _ => _memory.Integer(checked((int)operand.Value + offset)),
         };
@@ -917,7 +962,9 @@ public sealed partial class VirtualMachine
         {
             T_LINT => (VmAddressSpace.LocalInteger, checked((int)operand.Value + offset)),
             T_LFLOAT => (VmAddressSpace.LocalFloat, checked((int)operand.Value + offset)),
+            T_GFLOAT => (VmAddressSpace.GlobalFloat, checked((int)operand.Value + offset)),
             T_LPTR => PointerIdentity(Ga(_cur.Locals.P, (int)operand.Value).Offset(offset)),
+            T_LFLOATPTR => PointerIdentity(Ga(_cur.Locals.FP, (int)operand.Value).Offset(offset)),
             T_GPTR => (VmAddressSpace.Global,
                        checked(GlobalPointer((int)operand.Value) + offset)),
             _ => (VmAddressSpace.Global, checked((int)operand.Value + offset)),
@@ -929,7 +976,7 @@ public sealed partial class VirtualMachine
     private string FormatDiagnosticOperand(Operand operand)
     {
         if (IsStr(operand)) return ReadStr(operand);
-        if (operand.Type is T_FLOAT or T_GFLOAT or T_LFLOAT)
+        if (operand.Type is T_FLOAT or T_GFLOAT or T_LFLOAT or T_LFLOATPTR)
         {
             float value = BitConverter.Int32BitsToSingle(unchecked((int)FloatBits(operand)));
             return value.ToString("F6", System.Globalization.CultureInfo.InvariantCulture);

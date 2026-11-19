@@ -155,6 +155,12 @@ public sealed partial class VirtualMachine
         _graphics.ClearRenderTarget(); return StepResult.Next;
     }
 
+    // 0x252 (flags): a present clears its render target first (AGE 4.38D)
+    private StepResult OpSetPresentClear(Instruction ins, int pc)
+    {
+        _graphics.SetPresentClear(unchecked((int)Read(ins.Args[0]))); return StepResult.Next;
+    }
+
     // 0x1fa (surface slot)
     private StepResult OpGfxElemRelease(Instruction ins, int pc)
     {

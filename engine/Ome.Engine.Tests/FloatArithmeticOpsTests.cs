@@ -13,13 +13,15 @@ using Xunit;
 /// </summary>
 public class FloatArithmeticOpsTests
 {
-    private const int Imm = 0, Float = 1, GlobalInt = 3, GlobalFloat = 4, LocalFloatPointer = 0xd;
-    private const int Exit = 0x2;
+    private const int Imm = 0, Float = 1, GlobalInt = 3, GlobalFloat = 4, LocalFloat = 0xa, LocalFloatPointer = 0xd;
+    private const int Exit = 0x2, Add = 0x50, LookupArray = 0x61, TakeAddress = 0x63, LookupArray2d = 0x12c, CopyDwords = 0x1b0;
     private const int AddFloat = 0x2d0, SubFloat = 0x2d1, MulFloat = 0x2d2, DivFloat = 0x2d3, MovFloat = 0x2d5, FloatToInt = 0x2d7;
 
     private static Operand F(float value) => new(Float, unchecked((uint)BitConverter.SingleToInt32Bits(value)));
     private static Operand G(int address) => new(GlobalInt, address);
     private static Operand GF(int address) => new(GlobalFloat, address);
+    private static Operand LF(int index) => new(LocalFloat, index);
+    private static Operand FP(int index) => new(LocalFloatPointer, index);
     private static Operand I(long value) => new(Imm, value);
 
     private static VirtualMachine Run(params (int, Operand[])[] instructions)
@@ -99,12 +101,70 @@ public class FloatArithmeticOpsTests
     }
 
     [Fact]
-    public void AFloatPointerOperandStopsTheRunUntilThePortHasOne()
+    public void AFloatReferenceReadsAndWritesTheCellItNames()
     {
-        // 創刻のアテリアル passes local float pointers (type 0xd) to these opcodes. The port's float accessors have no
-        // such cell yet (docs/backlog.md, "Onboard 創刻のアテリアル"), so the run stops instead of computing a wrong value.
-        VirtualMachine vm = Run((MovFloat, [new Operand(LocalFloatPointer, 0), F(1.0f)]));
+        // 創刻のアテリアル binds local float references (type 0xd) with lookup-array, lookup-array-2d and take-address,
+        // and its float opcodes and op 0x320 read and write through them (docs/engine-re.md, "Float cells as arrays,
+        // and float references").
+        VirtualMachine vm = Run(
+            (MovFloat, [GF(0x12), F(2.5f)]),
+            (LookupArray, [FP(0), GF(0x10), I(2)]),          // -> global float 0x12
+            (AddFloat, [GF(1), FP(0), F(1.0f)]),             // read through it
+            (MovFloat, [FP(0), F(8.0f)]),                    // write through it
+            (LookupArray2d, [FP(1), GF(0x20), I(2), I(3), I(1)]),   // -> global float 0x20 + 2 * 3 + 1
+            (MovFloat, [FP(1), F(4.0f)]),
+            (TakeAddress, [FP(2), FP(1)]),                   // a reference copies what another names
+            (MulFloat, [FP(2), FP(2), I(3)]),
+            (LookupArray, [FP(3), LF(4), I(1)]),             // -> local float 5
+            (MovFloat, [FP(3), F(0.5f)]),
+            (AddFloat, [GF(2), LF(5), FP(3)]),
+            (FloatToInt, [G(0x300), FP(2)]));
 
-        Assert.NotEqual("exit", vm.HaltReason);
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal((3.5f, 8.0f, 12.0f, 1.0f), (FloatAt(vm, 1), FloatAt(vm, 0x12), FloatAt(vm, 0x27), FloatAt(vm, 2)));
+        Assert.Equal(12L, vm.Globals[0x300]);
+    }
+
+    [Fact]
+    public void TheIntegerAccessorsRefuseAFloatReference()
+    {
+        // vm_operand_fetch and vm_operand_write have no case for type 0xd in AGE 4.38D: the script ends with an error.
+        VirtualMachine read = Run(
+            (LookupArray, [FP(0), GF(0x10), I(0)]),
+            (Add, [G(0x300), FP(0), I(1)]));
+        VirtualMachine write = Run(
+            (LookupArray, [FP(0), GF(0x10), I(0)]),
+            (Add, [FP(0), I(1), I(2)]));
+
+        Assert.Equal("operand-type-rejected:read:type 0xd", read.HaltReason);
+        Assert.Equal("operand-type-rejected:write:type 0xd", write.HaltReason);
+    }
+
+    [Fact]
+    public void AFloatReferenceThatNamesNoFloatCellStopsTheRun()
+    {
+        // Native reads through a null pointer for one never bound, and reads an integer cell's bytes as a float for
+        // one bound to an integer array. The port has neither, and stops instead of computing a wrong value.
+        VirtualMachine unbound = Run((MovFloat, [GF(1), FP(0)]));
+        VirtualMachine integer = Run(
+            (LookupArray, [FP(0), G(0x300), I(0)]),
+            (MovFloat, [GF(1), FP(0)]));
+
+        Assert.Equal("float-reference-unbound:local 0x0", unbound.HaltReason);
+        Assert.Equal("float-reference-names:Global 0x300", integer.HaltReason);
+    }
+
+    [Fact]
+    public void AFloatCellIsAnArrayBaseForAnIntegerReference()
+    {
+        // vm_operand_resolve_address gives a float cell's address in AGE 4.38D, so an integer reference bound to a
+        // float array copies its bits (copy-dwords, op 0x1b0).
+        VirtualMachine vm = Run(
+            (MovFloat, [GF(0x10), F(1.5f)]),
+            (MovFloat, [GF(0x11), F(-2.0f)]),
+            (CopyDwords, [GF(0x10), GF(0x40), I(2)]));
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal((1.5f, -2.0f), (FloatAt(vm, 0x40), FloatAt(vm, 0x41)));
     }
 }

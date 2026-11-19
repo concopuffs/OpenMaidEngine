@@ -56,9 +56,11 @@ integers. The colour `0xffffffff` leaves the vertices as they are (`gfx_polygon_
 - from then on, or at once when manager `+0xb590` is set, the colour becomes the target and the fade ends.
 
 While a fade runs, each draw sets two manager flags: `+0xb58c`, the dirty flag every polygon worker sets, and
-`+0xb594`. The logo script starts its two fades and then runs op `0x21c`, the effect wait, so `+0xb594` reads as
-what keeps that wait waiting and `+0xb590` as the force-complete request a click or fast-forward makes. Neither
-flag's other readers were read; acceptance 3 checks the wait against native.
+`+0xb594`. `gfx_render_frame@0x49ab00` clears both before its walk; after it, a walk that left `+0xb594` clear
+calls `0x492d10`, and the frame render clears `+0xb590`. The logo script starts its two fades and then runs op
+`0x21c`, the effect wait, so `+0xb594` reads as what keeps that wait waiting and `+0xb590` as the force-complete
+request a click or fast-forward makes. `0x492d10` and the flags' other readers were not read; acceptance 3 checks
+the wait against native.
 
 **The draw** (`gfx_draw_polygon_primitive@0x4895b0`): alpha blending is on, and the blend mode chooses how the
 polygon lands:
@@ -75,10 +77,10 @@ left, which is the same one, zero. With one texture, the texture is multiplied b
 is blended over stage 0 by stage 1's alpha, then multiplied by the diffuse. Textures clamp and are filtered
 linearly. With none, the routine sets no stage state; the diffuse alone is expected, and acceptance 3 checks it.
 
-**The order.** The frame renderer and the two present workers walk the retained objects' map and the polygons'
-together, and draw each polygon in its turn. The walk reads as a merge of the two maps by handle, so that a
-polygon is drawn where its handle falls among the objects and is part of a presented range; the comparison itself
-was not read line by line.
+**The order.** `gfx_render_frame@0x49ab00` and `gfx_present_object_range@0x49adf0` walk the retained objects'
+map (manager `+0x40c`) and the polygons' (`+0x42c`) together. The frame render takes the object while its handle
+is below the polygon's, and the polygon otherwise, so a polygon is drawn where its handle falls among the
+objects. The range present walks the same way within its range; its comparison was not read line by line.
 
 **Not read yet:** what sets flag `0x10000` (each walk clears it after the polygon's turn); how
 `gfx-elem-erase` and the scene reset remove a polygon; whether a numbered save keeps polygons; how the z of a
@@ -128,10 +130,10 @@ mesh loader and a 3D pass, which is a design of its own. For P2 the proposal is 
 scripts set and draw nothing, with the missing leaves listed in the backlog as a fidelity gap, and the 3D pass
 designed after P2. The title, its menu and Game Start do not depend on it.
 
-**Float pointers.** The scripts pass local float pointers (operand type `0xd`) at 584 places, among them op
-`0x320`'s arrays. The port's float accessors have no such cell. It is VM work, not graphics work, and comes
-first: read how a float pointer is bound and addressed, then give the accessors and the address resolver the
-cell.
+**Float references.** The scripts pass local float references (operand type `0xd`) at 584 places, among them op
+`0x320`'s arrays. It is VM work, not graphics work, and it is done (2026-11-19; `engine-re.md`, "Float cells as
+arrays, and float references"): `create-polygon` reads its float arrays through the address resolver as it reads
+its integer ones.
 
 ## 5. Acceptance
 
@@ -146,7 +148,7 @@ cell.
 
 ## 6. Milestones
 
-1. Float pointers in the VM.
+1. Float references in the VM (done 2026-11-19, ahead of this design's acceptance: it stands alone).
 2. The polygon map, the four handlers and the fade, with their tests; the frame item and the reference renderer.
    The port reaches the logo's end on the reference renderer.
 3. The GPU renderer draws polygon items.

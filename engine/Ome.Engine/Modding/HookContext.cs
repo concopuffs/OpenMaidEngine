@@ -278,7 +278,8 @@ public sealed class HookContext
 
     private static OperandKind KindOf(int type) => type switch
     {
-        OperandTypes.Float or OperandTypes.GlobalFloat or OperandTypes.LocalFloat => OperandKind.Float,
+        OperandTypes.Float or OperandTypes.GlobalFloat or OperandTypes.LocalFloat or OperandTypes.LocalFloatPointer
+            => OperandKind.Float,
         OperandTypes.StringLiteral or OperandTypes.GlobalString or OperandTypes.GlobalStringPointer or OperandTypes.LocalString
             or OperandTypes.LocalStringPointer => OperandKind.String,
         _ => OperandKind.Integer,
@@ -298,5 +299,5 @@ public static class OperandTypes
 {
     public const int Immediate = 0, Float = 1, StringLiteral = 2, GlobalInteger = 3, GlobalFloat = 4, GlobalString = 5,
                      GlobalPointer = 6, GlobalStringPointer = 8, LocalInteger = 9, LocalFloat = 10, LocalString = 11,
-                     LocalPointer = 12, LocalStringPointer = 14;
+                     LocalPointer = 12, LocalFloatPointer = 13, LocalStringPointer = 14;
 }

@@ -204,8 +204,8 @@ under `%LOCALAPPDATA%` were not touched. The module is based at `0x400000` and s
 (`build/games/arterial/engine-dump/`, moved from `build/engines/arterial/` with the profile). The dispatch-table
 finder (`lea edi,[reg+table]; mov ecx,0x400; rep stosd`) located the constructor, and `operand_access.py
 --align-accessors --align-to kamidori` aligned all 14 accessors unanimously. A fifteenth is new in 4.38D:
-`vm_operand_resolve_float_address@0x4291a0`, read by hand, which only op `0x320`'s handler calls. The Ghidra image
-is `/arterial/4.38D/range_00400000.bin`.
+`vm_operand_resolve_float_address@0x4291a0`, read by hand, which only op `0x320`'s handler calls: it is the same
+code as `vm_operand_resolve_address`, case for case. The Ghidra image is `/arterial/4.38D/range_00400000.bin`.
 
 The image carries names since 2026-11-19. `tools/ghidra_port_names.py kamidori arterial` paired 2,666 functions:
 same-opcode handlers, their callees to the leaves, and 303 pairs of functions that are each the only one in their
@@ -214,7 +214,17 @@ plate ending with a `[Ported from …]` note that says its addresses are 4.33G's
 `op_0xNN_handler`, and the 15 accessors carry their pinned names. 397 of 4.33G's names were not reached: start-up
 code, the frame loop and the C runtime's own. Read by hand since: `engine_load_sys4ini_catalog@0x414290`, the
 catalog loader (`sys4-format-notes.md`, "The font list"), which `WinMain@0x4a0d40` calls for `SYS4INI.BIN` and,
-when that fails, for `SYS3INI.BIN`; and op `0x320`'s handler in part (its plate).
+when that fails, for `SYS3INI.BIN`; the polygon objects, ops `0x320` to `0x323` and their seventeen functions
+(`superpowers/specs/2026-11-19-polygon-objects-design.md`, §2); the accessors' float cases ("Float cells as arrays,
+and float references"); and op `0x252` with the two present workers, `gfx_render_frame@0x49ab00` and
+`gfx_present_object_range@0x49adf0`.
+
+**Op `0x252` (`set-present-clear`).** The graphics manager sits at `ctx+0x4e904` in this build. The handler stores
+its operand at the manager's `+0xb55c`, which the manager's constructor zeroes and nothing else writes.
+`gfx_render_frame` tests bit 0 and `gfx_present_object_range` bit 1, and each then calls
+`d3d_clear_render_target_black`, the call op `0x20e` makes, before it begins its scene. So with a bit set a present
+of that kind starts from black instead of drawing over what its target holds. 創刻のアテリアル sets both, once, at
+`SYSTEM4@0xa`. The port keeps the flags in the graphics native (`Graphics.SetPresentClear`).
 Function ID names start at `0x566214` (the NFM compression library). The DirectShow base classes follow, and the C
 runtime begins at the `operator new[]` thunk `0x583dd8` (150 callers; `__security_check_cookie` at `0x5843fe`).
 Unlike 4.24J and 4.33, most of 4.38D's engine code from about `0x4a0000` on is not 16-aligned, so alignment does
@@ -753,7 +763,7 @@ handler clears every global bank, once per bank set (two when `set:EnableMemFlip
 
 - every integer global (`bank_size_int_globals + 1` of them) becomes `EngineCtx.anti_tamper_b`, the encoded zero;
 - the float bank is zeroed and every global string erased;
-- the integer-pointer, string-pointer and local-pointer-scratch banks are zeroed.
+- the integer-pointer, float-pointer and string-pointer banks are zeroed.
 
 SYS4433's `op_0x9_reset_scene_and_reload_root_sys4433@0x423b50` does the same. Engine configuration and the shared
 profile are untouched; SYSTEM4 re-authors what it needs when it runs again. A Kamidori game over shows the effect.
@@ -3894,7 +3904,7 @@ counted regions). Before copying the prefixes, layouts 2 and 3 of
 - integers `ctx+0x53c7c` (Himegari 1,419,442 cells);
 - floats `+0x53c80`;
 - strings `+0x53c84` (18,180, each erased);
-- the integer-pointer and string-pointer banks `+0x53c88` and `+0x53c8c`, and the local pointer scratch `+0x53c90`.
+- the integer-pointer, float-pointer and string-pointer banks `+0x53c88`, `+0x53c8c` and `+0x53c90`.
 
 The definitions past the prefix come back because every restored frame re-runs its prologue from its entry to
 `0xae`. SYSTEM4's `0xae` is at `0x235`, after LOADCONFIG or INITCONFIG, the op-`0x64` table copy at `0x1ca`, and
@@ -7758,8 +7768,8 @@ native's within 1 per channel (2026-11-16).
 **Values.**
 
 - **Generic reads.** `vm_operand_fetch` always yields an int32. Float forms (types 1/4/0xa) truncate toward zero
-  (`__ftol2_sse`). Inline and variable strings (types 2/5/0xb) parse with `atol`. String references (8, 0xe), float
-  references (0xd) and type 7 throw.
+  (`__ftol2_sse`). Inline and variable strings (types 2/5/0xb) parse with `atol`. String references (8, 0xe) and
+  float references (7, 0xd) throw, in 4.38D too.
 - **Generic writes.** `vm_operand_write` stores int32 into integer cells and integer references, and `(float)value`
   into float cells. String destinations throw.
 - **Strings.** Numbers read as strings become full-width CP932 (`ascii_to_fullwidth_cp932_inplace`). Integers
@@ -7770,6 +7780,44 @@ native's within 1 per channel (2026-11-16).
   operations are `set-string`, `concat` and string (in)equality (`0x192`–`0x195`).
 - **SYS5-style vector types.** The types `0x8003`/`0x8009`/`0x8005`/`0x800b` are handled by the accessors but
   never occur in either corpus.
+
+**Float cells as arrays, and float references (AGE 4.38D, 2026-11-19).** 創刻のアテリアル keeps float arrays and
+points into them: 584 operands are local float references (type `0xd`), bound by `lookup-array` (232),
+`lookup-array-2d` (44) and `take-address` (16) and then read and written by the float opcodes, op `0x1fd` and op
+`0x320`. 4.24J and 4.33G cannot do this. Their `vm_operand_resolve_address` throws on a float cell (types 4 and
+`0xa`), and their bind accessors have no float reference. 4.38D's accessors gained the cases:
+
+| Accessor | A float cell (4, `0xa`) | A global float reference (7) | A local float reference (`0xd`) |
+|---|---|---|---|
+| `vm_operand_resolve_address@0x4280e0`, and its copy `@0x4291a0` | the cell's address | the address it holds | the address it holds |
+| `vm_pointer_operand_bind_element@0x417f40`, `vm_pointer_operand_write@0x417e10` | not a destination | stores the address | stores the address |
+| `vm_operand_fetch_float@0x41b2c0` | the float | the float at the address | the float at the address |
+| `vm_operand_write_float@0x428c40` | stores the bits | stores the bits at the address | stores the bits at the address |
+| `vm_operand_fetch@0x41af60` (integers) | truncates | throws | throws |
+| `vm_operand_write@0x4286f0` (integers) | `(float)value` | `(float)value` at the address | throws |
+| `vm_operand_format_as_string@0x41a9c0` | `%lf` | `%lf` of the float at the address | the same |
+| `vm_operand_read_string_buffer`, `vm_operand_read_std_string` | `%lf` | throws | throws |
+
+A reference holds a raw address: `base + element * 4`. One never bound is null, and reading through it crashes.
+One bound to an integer array reads integer cells as floats, and those are stored encoded.
+
+The global float references are the fifth global bank: `ctx+0x5d3b8` in 4.38D, between the integer pointers
+(`+0x5d3b0`) and the string pointers (`+0x5d3c0`), and a frame's local ones are at frame `+0x5d45c`. The bank is
+older than its use. 4.24J already allocates it (`ctx+0x53cb4`), zeroes it in op `0x9`'s reset and in a load with
+the fifth of the six bank sizes, and never binds a cell of it; 4.33G's float write has a case for type 7 and no way
+to bind one. The sixth size is the string pointers', the bank type 8 binds (`ctx+0x53cbc`). Until 2026-11-19 these
+notes called the fifth bank the string pointers' and the sixth a local pointer scratch. A script's header counts its
+local float references in its fifth field (`sys4-format-notes.md`).
+
+The port has the local float reference (`Frame.FP`, `VmAddressSpace.GlobalFloat`): the float accessors read and
+write through it, the integer accessors refuse it as native's do, and a float cell is an array base for any
+reference. It differs in four ways, none of which a retail script reaches:
+
+- it accepts a float array base and a float reference for every build, where 4.24J and 4.33G throw;
+- a reference never bound, or bound to a cell that is not a float, halts the run (`float-reference-unbound`,
+  `float-reference-names`) instead of crashing or reading encoded integers as floats;
+- its one string read formats what a float reference names, where two of native's three string accessors throw;
+- it has no global float reference (type 7), which no script of the three games uses.
 
 **Operators.**
 
