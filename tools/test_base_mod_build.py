@@ -466,6 +466,19 @@ def test_scopes():
         _, errors = generate(mods, source)
         check(any("scope 'stage': enemy names 'ghost', which is no table of the registry" in error for error in errors),
               f"a scope's lint error blocks the build ({errors})")
+        # Plan §12.6: a table built by a scoped table's label that no scope reaches would be checked and never written,
+        # whichever label it is.
+        for label in ("stage", "boot"):
+            registry = SCOPED.replace('built_by = "stage"', f'built_by = "{label}"')
+            if label == "stage":
+                registry = registry.replace('name = "hero"\nrecords = 4\nbuilt_by = "boot"\n',
+                                            'name = "hero"\nrecords = 4\nbuilt_by = "stage"\n')
+            source.write_text(registry, encoding="utf-8")
+            _, errors = generate(mods, source)
+            check(errors == [f"vm-map/{source.name}: table hero is built by {label}, as the scoped table foe is, but no "
+                             f"scope reaches it: ome-records writes a {label} table only through its scope, so name it "
+                             f"in a [scope.tables] map, or give it its own built_by"],
+                  f"a {label} table no scope reaches is refused ({errors})")
 
 
 def shape_of(files: dict) -> tuple[str, dict]:

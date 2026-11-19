@@ -257,6 +257,26 @@ def record_tables(tables: list[dict], values: list[dict], prefixes: dict[str, in
     return out, errors
 
 
+def scope_label_errors(tables: list[dict], scopes: list[dict], source: str) -> list[str]:
+    """Errors: a table that no scope reaches whose `built_by` is a label that builds a scoped table. ome-records'
+    applier writes a label's tables either from the document's top level (no scope given) or through the scopes the
+    apply names, so a base mod applies a scoped label with its scope and the other table would be checked and never
+    written (data patches plan §12.6)."""
+    scoped = {table for scope in scopes for table in (scope.get("tables") or {}).values()}
+    scoped_labels: dict[str, str] = {}
+    for table in sorted(tables, key=lambda table: table["name"]):
+        if table["name"] in scoped:
+            scoped_labels.setdefault(table["built_by"], table["name"])
+    errors: list[str] = []
+    for table in sorted(tables, key=lambda table: table["name"]):
+        label = table["built_by"]
+        if table["name"] not in scoped and label in scoped_labels:
+            errors.append(f"{source}: table {table['name']} is built by {label}, as the scoped table "
+                          f"{scoped_labels[label]} is, but no scope reaches it: ome-records writes a {label} table only "
+                          f"through its scope, so name it in a [scope.tables] map, or give it its own built_by")
+    return errors
+
+
 def _lua_key(name: str) -> str:
     return name if LUA_NAME.fullmatch(name) and name not in LUA_KEYWORDS else f"[{json.dumps(name)}]"
 
@@ -574,6 +594,8 @@ def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
     scopes = globals_build.load_scopes(registry)
     table_errors = globals_build.lint_tables(tables, curated) + globals_build.lint_scopes(scopes, tables, curated)
     errors += [f"{source}: {message}" for message in table_errors]
+    if not table_errors:
+        errors += scope_label_errors(tables, scopes, source)
     prefixes, prefix_error = saved_prefixes(manifest) if tables else (None, None)
     if prefix_error:
         errors.append(f"{base_mod_id(profile_id)}: {prefix_error}")
