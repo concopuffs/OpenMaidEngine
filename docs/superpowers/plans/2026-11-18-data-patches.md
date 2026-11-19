@@ -4,8 +4,9 @@
 **Spec:** `docs/superpowers/specs/2026-11-17-data-patches-design.md` (cited as "spec §n"); the Lua scripting design
 (`docs/superpowers/specs/2026-11-10-lua-scripting-design.md`) is cited as "Lua §n". The spec stays the design's home.
 This plan keeps what each milestone checks and builds, and what that settles for the later ones.
-**Status:** written before milestone 0 was built. M0 is planned in detail (§3), M1 far enough that M0 builds nothing
-M1 must undo (§4), M2 and M3 in outline (§5, §6). §8 keeps what M0 found while it was built.
+**Status:** written before milestone 0 was built; §4 was expanded before milestone 1. M0 and M1 are planned in detail
+(§3, §4), M2 and M3 in outline (§5, §6). §8 keeps what M0 found, §9 what changed since the spec was accepted, and §10
+what M1 found.
 **Branch:** `feature/data-patches`, off `develop` at `8970fbe6`.
 
 Paths are relative to `age-reimpl/`.
@@ -256,33 +257,164 @@ In commit order; each commit builds and passes.
 
 ## 4. Milestone 1: delivery
 
-Not built by this stretch. What M0 leaves for it, and what M0 must not get in the way of:
+Planned on 2026-11-18, after M0 was accepted. §4.1 checks what M1 relies on, §4.2 settles what the spec leaves open,
+§4.3 names gate 10's ceiling and the bounds before anything is measured, and §4.4 lists the tasks in commit order.
+§10 keeps what M1 found while it was built.
 
-- **Manifest and layout.** `omp = 4`; `[[data]]` (`kind`, `file`, `priority`) and `[[accepts]]` (`kind`,
-  `description`, `shape`, `[[accepts.at]] event, handler`) in `ManifestReader`; `data/` in `ModLayout`; a package
-  with `data/` changes content (`ModLayout.ChangesNoContent`). The base mods' manifests go to `omp = 4` and gain
-  `[[accepts]] kind = "<game>.tables"` with one `at`: `<game>.data.layered` → `tables.lua:apply_boot`.
-- **The document.** A reader over Tomlyn's `TomlTable` in `Ome.Mods`, by hand (NativeAOT, spec §2), into a plain
-  value type in `Ome.Engine/Modding` with no TOML type in it; the bounds of spec §5.3, set from a file that fills
-  Kamidori's `item` table; the documents in the link cache through `ModsJsonContext`.
-- **The link steps** of spec §5.4 in `ModLuaLinker`, with the note for a kind's event that is not raised and the
-  contributors' failure when none is. A planned handler carries the contribution; the report lists the kinds, the
-  documents in delivery order, and the shared paths.
-- **The delivery.** `Ome.Scripting.Lua` builds each document's read-only view once per session, from the plain values,
-  and passes `{ mod, file, data, unraised }` as the handler's second argument. The library already walks a userdata
-  with `pairs` (§2.2), and M0's tests run it on one.
-- **Attribution and failures.** A delivery runs as the owner and for the contributor in the trace, the watch records
-  and the log. Failures are counted by file. The applier raises once per session per bad file and is silent after,
-  so a bad file costs one failure per session, never three in a row; the per-file switch-off covers an applier that
-  fails each time.
-- **`unraised`.** The base mod maps its labels to its events. In M1 `apply_boot` passes nothing for it, since the
-  boot tables have one event. M2's `apply_stage` turns an unraised `<game>.stage.loaded` into a refusal of the whole
-  document when it has a stage part (spec §6.2).
-- **The budget's allowance.** Measured here (gate 10). §8 keeps M0's numbers for the applier's cost per value as a
-  starting point.
-- **Names as API.** Table and field names join `layout/exports.txt`, and the rename rule covers them; the registry's
-  tables gain aliases (spec §6.3). See the question in §7.
-- **The generic guide page** for data files under `docs/modding/`, and the gates 1 to 7, 9, 10 and 13.
+### 4.1 What the code says for M1
+
+"Ran" and "read" are as in §1.
+
+- **The manifest reader** (read: `Manifest/ManifestReader.cs`, `ModManifest.cs`). It reads `omp` 1 to 3
+  (`CurrentOmpVersion = 3`) and refuses a key it does not know (`TableReader.RejectUnknown`). Each format version's
+  tables are gated with "needs omp = N" (`[[language]]` 2; `[lua]`, `[[hooks]]` and `target = "extended"` 3). A
+  hook's handler is `FILE.lua:FUNCTION` (`HandlerPattern`); `ModLayout.Classify` checks that the file is under
+  `lua/`, and the link checks that the function is top-level. A package without `[game]` is a library: it has no
+  hooks and no events, and a mod with Lua must target `extended`. `[[data]]` and `[[accepts]]` follow the same
+  pattern.
+- **The layout** (read: `Packages/ModLayout.cs`, `PackageContainer.cs`). Top folders are matched case-insensitively,
+  and a folder the layout does not know is a note ("outside the package layout and is ignored"). So a `data/` folder
+  in a package of format 1 to 3 is already the note spec §5.1 asks for. `ChangesNoContent` lists the content kinds.
+  A Lua file is at most 1 MiB, and a package holds at most 512 of them. The package reader admits an entry of up to
+  1 GiB and a package of up to 8 GiB (`PackageLimits`), so the data bounds below are the binding ones.
+- **The resolver** (read: `StackResolver.Resolve`). A missing requirement, or one outside its range, fails the link,
+  so a data mod whose owner is missing fails on the requirement before any data check (spec §5.8).
+  `ShippedPackages.Required` mounts a base mod that a data mod requires.
+- **The Lua link** (read: `Linking/ModLuaLinker.cs`).
+  - `Link` returns `LinkedLua.None` when no package ships Lua (`ShipsLua`: Lua files, a `[lua]` table or a hook).
+    A data mod with no Lua does not ship Lua, so the data steps must run before that return, or a stack whose
+    contributors have no owner would link without a word.
+  - `Events` reads the declarations first. An event a point of which does not bind goes into `unavailable` with its
+    reason, as a note, and a broken declaration into `broken`. A hook on an unavailable event is an error that
+    gives the reason. Spec §5.4's "not raised" is exactly `unavailable`.
+  - A handler gets one `HandlerId` for each (mod, file, function). `Pending` carries the hook, the handler, the load
+    order and the event at a point.
+  - `Merged` sorts by priority, then load order. LINQ's sort is stable, so one mod's hooks keep manifest order.
+  - A point event's subscribers are planned at each of its places, as `PlannedHandler(GameEvent: name)`; a Lua
+    event's go into `luaEvents`.
+  - The report's Lua section is `Summary`: mods, hooks, watches, and events with their subscribers.
+  - A source is checked, never run (`IModRuntime.Check`).
+- **`PlannedHandler`** (read: `Modding/HookPlan.cs`) is `(Handler, Priority, LoadOrder, Skip, EngineEvent, GameEvent,
+  Site)`. `Scripting.RunBefore` gives one with `GameEvent` the event's context, and `Scripting.Emit` runs a Lua
+  event's list. A delivery is a planned handler with one more field, and these are the two places it runs.
+- **The link cache** (read: `Linking/ModLinkCache.cs`, `ModsJson.cs`). `link.json` keeps the Lua part as
+  `LinkedLuaEntry`: the mods with their file lists, the handlers, the sites, the scripts, the engine and Lua events
+  and the watches, all through `ModsJsonContext`. The Lua sources themselves are files under `lua/<mod>/<path>`,
+  which `ToStack` reads back. `TryOpen` refuses an entry when a listed file is missing. The key hashes each mod's
+  id, version and package hash, so a changed data file gives a new key.
+- **The read-only views** (read: `Ome.Scripting.Lua/LuaViews.cs`). `ReadOnlyViews.Wrap` gives a Lua table a userdata
+  view with `__index`, `__newindex` (refused: "a table another mod exports is read-only"), `__len`, `__pairs`,
+  `__ipairs` and a locked metatable. A view is made once for each table and kept. Each mod's environment has its
+  own set.
+- **The trace** (read: `Natives/Scripting.Trace.cs`). One JSON line per handler call: `mod`, `handler`, `hook`,
+  `kind`, `at`, `ms`, `result`, `error`, `within`, `fields`, `writes` (the first 1,000, then `writes_not_listed`) and
+  `calls`. `mod` is the handler's mod. A write's `through` is the mod whose access made it when that is not the
+  call's mod, so a base mod's helper writes "through" the base mod for its caller. The line does not say how many
+  instructions the call ran.
+- **The watch records** (read: `Natives/Scripting.Watches.cs`). `Recorded` names the handler's mod as the writer
+  while a handler runs (`_running`).
+- **The log and the notices** (read: `Scripting.Failed`, `Scripting.Console.cs`). A failure is logged under the
+  handler's mod as "FILE:FUNCTION failed at WHERE: message" with the traceback, and given a notice. Under
+  `--lua-errors halt` the run ends with "lua-error: MOD FILE:FUNCTION at WHERE: first line".
+- **Failures** (read: `Scripting.cs`). `Scene.FailuresInARow` counts by handler and is reset by a success. At three
+  (`FailuresBeforeSwitchOff`) the handler joins `SwitchedOff` for the session. `IsOn` checks that set and
+  `IModSession.IsActive`.
+- **The budget** (read: `ModLimits`, `LuaModSession.Invoke` and `Guarded`). A handler call may run
+  `HandlerInstructions` (1,000,000). A count hook adds 1,000 every 1,000 instructions (`HookInterval`), so the count
+  goes in steps of 1,000. A call made inside another one has its own budget.
+- **The build** (read: `LuaModSession.BuildMod`). It runs `init.lua` and loads each file that a handler of the mod
+  names, then finds each handler's function. A mod that fails is off, and so is every mod that requires it. So an
+  owner's handler file is loaded only in a stack with a document of its kind, as spec §5.2 asks, if the link adds
+  the handler only when it plans a delivery.
+- **`IModSession`** (read) has one implementation, `LuaModSession`, so its two changed methods change one class.
+- **`omp build` and `omp check`** (read: `Tools/OmpCommands.cs`, `Launch/ModInspection.cs`). Both link: `build`
+  links the package with the shipped packages it requires and refuses it on a failed link, and `check` links the
+  stack. Both get the data checks through the link.
+- **Tomlyn 2.10.1** (read: its API documentation). `TomlException` has `Line` and `Column`, a date or time is a
+  `TomlDateTime`, and an integer is 64-bit. So an integer past 2^63 is already a syntax error, and one between 2^53
+  and 2^63 is ours to refuse.
+- **The project boundary** (read: `ProjectBoundaryTests`). It checks that only `Ome.Scripting.Lua` names a Lua
+  library. Nothing checks TOML. Only `Ome.Mods` references Tomlyn.
+- **The largest table** (ran: a one-off count over both record maps): Kamidori's `item`, with 2,000 records and 48
+  authored fields, which hold 150 cells a record. A file that sets every authored cell has 300,000 values. Next come
+  Kamidori's `unit` (178,000), Himegari's `unit` (144,000) and Himegari's `item` (105,000).
+
+### 4.2 What the plan settles for M1
+
+| Question | Settled |
+|---|---|
+| A `[[data]]` file's path (spec §5.1) | Relative to `data/`, with forward slashes, no empty, `.` or `..` part, and ending in `.toml`. A package names a file once |
+| `[[accepts]] shape` before M3 | **Refused**, with "shape checks come with data patches milestone 3". Taking it and checking nothing would skip a check without notice (spec §7) |
+| A kind's name | A dotted name, as an event's (`ManifestReader.DottedNamePattern`) |
+| The plain value type (spec §8) | `DataValue` in `Ome.Engine/Modding`: a table (string keys in the file's order), an array, a string, a boolean, an integer (a `long` from -2^53 to 2^53) or a finite float. It has no TOML type in it |
+| The documents in the link cache (spec §5.4) | **The files as they were read**, under `data/<mod>/<path>` in the cache entry, listed in `link.json`'s `lua.contributions`. The mount reads them again with the same reader. That is how the cache keeps the Lua sources, and it needs no second encoding of the values to keep in step. (§4 of this plan had said "through `ModsJsonContext`"; the list is, the documents are not) |
+| The contribution (spec §5.2) | A read-only view of `{ mod, file, data, unraised }`: `file` is the package path (`data/slimes.toml`), `unraised` an array of the kind's events that the install does not raise, in the order of its `at` entries. It is built at its first delivery in a session and kept for the session |
+| `unraised` in M1 | `apply_boot` ignores it: the boot tables have one event. M2's `apply_stage` refuses a document with a stage part when `<game>.stage.loaded` is in it (spec §6.2) |
+| Delivery order within one mod (spec §5.5) | A pending entry gets a phase, 0 for a delivery and 1 for a hook, sorted after priority and load order. So a mod's files come before its hooks at one priority, its files in manifest order |
+| What the trace line of a delivery says (spec §5.7) | `mod` is the contributor; it gains `file` and `owner`, and `handler` is the owner's. Every line gains `instructions` (in steps of 1,000) and `budget`, which gate 10 reads |
+| The log and the halt reason of a delivery (spec §5.6) | `example.a data/a.toml (kamidori-base tables.lua:apply_boot) failed at kamidori.data.layered at INIT2@0x20d: …`, logged under the contributor. A switched-off file's notice is "Lua: example.a data/a.toml failed 3 times in a row and is not applied again this session" |
+| The notice of an owner or contributor that is off | Its "is off for this session" notice ends with "; not applied: example.a data/a.toml, …" |
+| The report's kinds (spec §5.7) | `kind K (OWNER), at E1 and E2`, then one line for each document in delivery order, `MOD FILE: N values`, then the shared paths, at most 20, then "and N more shared paths". A document is named by its mod, and by its mod and file where the mod has more than one document of the kind |
+| A path's text (spec §5.7) | Its keys joined by dots, a key that is not a bare TOML key written as a quoted one |
+| Old names in the registry (§9) | A `[[table]]` takes `aliases = ["old"]`; its fields take `[table.field_aliases] old = "current"` |
+| Old names in `exports.txt` (§9) | `table NAME`, `table OLD = NAME`, `field TABLE.FIELD` and `field TABLE.OLD = TABLE.FIELD`, after the globals |
+| Old names in the record map (§9) | `old_tables = { old = "current" }` beside `tables`, and `old_fields = { old = "current" }` in a table, each only when there is one. The map has not been released, so its format stays 1 |
+| The applier's old-name line (§9) | Through `config.log`, which `tables.lua` sets to `maid.log.warn`: `example.a data/a.toml: units is an old name of the table unit; write unit`, once for each file and old name in a session |
+
+### 4.3 Gate 10's ceiling and the bounds, named before measuring
+
+Named on 2026-11-18, before any data file had been parsed or delivered.
+
+- **The ceiling.** The full Kamidori item file of §4.1 (300,000 values) adds at most **10 seconds** to a boot and at
+  most 10 seconds to a load, in the engine's test build on this machine. The time counts the parse at the mount, the
+  view, the check and the writes. It is a pathological file: a balance mod sets hundreds or thousands of values,
+  and §10 records what such a file costs too.
+- **The bounds.** One document holds at most **400,000 values** (a third above the full item file), is at most
+  **16 MiB**, nests tables and arrays at most **16 deep** (a `<game>.tables` file needs 6), and has keys of at most
+  **128 characters** with no control character. A package names at most **64 data files**. Task 8 checks that the
+  full item file fits under them and changes a number only if it does not, with the reason.
+- **The allowance.** Until task 8 measures it, 1,000 instructions for each value. Task 8 measures the instructions
+  for each value from the trace, on three files: the full item file, a valid file at the value bound, and a file at
+  the value bound of which every value is refused. The allowance becomes the largest of the three, doubled and
+  rounded up to a round number.
+
+### 4.4 Tasks
+
+In commit order; each commit builds and passes.
+
+1. **The plan** (this section and §9).
+2. **Format 4 and `data/`.** `ModManifest`: `CurrentOmpVersion = 4`, `DataOmpVersion = 4`, `Data` (index, kind, file,
+   priority) and `Accepts` (index, kind, description, its `at` entries of event and handler). `ManifestReader`:
+   both need `omp = 4` and `[game]` with `target = "extended"`; `[[accepts]]` needs `[lua]`; a library has neither;
+   the path rule and the 64-file bound; `shape` refused; one kind per manifest once. `ModLayout`: `data/` from
+   format 4, each file named by one entry, each entry's file present, a file over 16 MiB refused, an `at`'s handler
+   file under `lua/`; `ChangesNoContent` false with data. Tests in `ModPackageTests`. `docs/modding/packages.md`.
+3. **The document.** `DataValue` (`Ome.Engine/Modding`), and `DataDocumentReader` (`Ome.Mods/Data`) over
+   `TomlDocument.Parse`, by hand: the bounds of §4.3, a syntax error with its line, a date, an integer past 2^53, a
+   float that is not finite and a key with a control character each refused with its path. Tests in a new
+   `DataDocumentTests`. `ProjectBoundaryTests` gains the TOML check (gate 13).
+4. **The link.** In `ModLuaLinker`: the kinds (step 1), the data files (step 2) and the deliveries (step 3), with
+   the note for an unraised event and the contributors' failure when none is raised. `ModContribution` and
+   `ContributionId`, `ModRuntimeStack.Contributions`, `PlannedHandler.Contribution`, the phase of §4.2. The report's
+   kinds. The cache: `lua.contributions`, the files under `data/`, `TryOpen`. Tests in a new `DataLinkTests` (gate
+   2, the report, the cache). The generic guide page `docs/modding/data-files.md`, first part.
+5. **The delivery.** `IModSession.IsActive` and `Invoke` take the contribution; `ModLimits.DataInstructionsPerValue`;
+   the Lua session's contribution view and second argument, and the budget with the allowance. In the scripting
+   native: `Call` with the contribution, failures counted by file, the contributor in the trace, the watch records
+   and the log, the trace's `instructions` and `budget`, the notices of §4.2. Tests in a new `DataDeliveryTests`
+   (gates 1, 3 in part, 4 and 9, and the halt). `docs/modding/data-files.md`, `lua.md`, `troubleshooting.md`.
+6. **Old names** (§9). `globals_build.py`: the lint, the JSON and the reference. `base_mod_build.py`: table and
+   field names in `exports.txt`, the rename rule over them, the record map's old names. The applier: old names, the
+   log line, and a cell named twice refused. Tests: `tools/test_base_mod_build.py` and `DataPatchTests`, on a
+   synthetic registry and map. Regenerate both base mods. `docs/modding/data-files.md`, the backlog's gap item,
+   `docs/tools-reference.md`.
+7. **The base mods accept `<game>.tables`.** Both manifests at `omp = 4` with `[[accepts]]`; both
+   `events/boot.toml` descriptions with spec §6.6's sentence; `base_mod_build.py --build` and
+   `modding_games_build.py --build`; the game pages' kinds, tables and fields. Tests: `BaseModTests`, and
+   Workspace tests for gates 3, 5, 6 and 7 on the installed games.
+8. **The budget and the bounds, measured** (gate 10, §4.3). The numbers go into §10 and the constants.
+9. **Closeout.** The backlog's data-patches line, §10, `docs/tools-reference.md` and `docs/PROJECT-STRUCTURE.md`,
+   the NativeAOT publish, and the full checks.
 
 ## 5. Milestone 2: stages, and both games driven (outline)
 
@@ -301,17 +433,13 @@ Not built by this stretch. What M0 leaves for it, and what M0 must not get in th
 - The JSON Schema subset of spec §7, its checker in `Ome.Mods`, the line from a second parse.
 - `base_mod_build.py` writes `shapes/tables.schema.json` from the record map, with state fields marked as not
   offered; `omp check` and `omp build` refuse a file that fails. Gate 12.
+- **The generated shape takes the old names too** (§9): a table's and a field's old names are allowed where the
+  current ones are, so that a file which the applier takes also passes its shape.
 
 ## 7. Questions and risks
 
-- **One spelling against aliases.** Spec §6.1 gives each cell one spelling, so that two files that set a cell share a
-  path in the report. Spec §6.3 has a renamed table or field keep its old name as an alias until the major version
-  changes. With an alias, a cell has two spellings again until then, and the report would not show their overlap.
-  The user's decision is needed before M1 adds names to `exports.txt`. Two ways out: the applier takes an alias and
-  the engine's report gets no help (an overlap under an old name goes unreported for one major version), or the
-  record map carries the aliases and the link maps an old name to the new one before it compares paths (the engine
-  would then read a base mod's file, which spec §3 decision 1 rules out). M0 builds no aliases, so either way stays
-  open.
+- **One spelling against aliases.** Decided by the user on 2026-11-18 (§9): an old name keeps working, and the
+  report's blind spot for it is stated.
 - **The budget.** A console chunk has the handler budget. If the applier's cost per value is high, §2.5's tests stay
   small and §8 says what a whole table would cost.
 - **Running INIT2 headless** in the tests: Himegari's runs in `HimegarisBaseModRaisesItsBootAndStageEventsAtTheInstalledScripts`
@@ -385,4 +513,38 @@ M0 landed on `feature/data-patches` on 2026-11-18, tasks 2 to 9 of §3. "Ran" an
   - Both boot events' descriptions gain the sentence of spec §6.6 about data files (a handler at `data.ready` runs
     after every data file; one that should take its place among them by load order moves to `data.layered`) when the
     format is bound. M0 left it out, since no data file reaches the event yet.
-  - The question of §7, one spelling against aliases, is still open.
+  - The question of §7, one spelling against aliases, was open when M0 ended. §9 has the user's answer.
+
+## 9. What changed since the spec was accepted
+
+The spec stays as it was accepted. This section keeps the decisions taken after it.
+
+### 9.1 An old name keeps working (2026-11-18)
+
+**The question** (§7): spec §6.1 gives each cell of `<game>.tables` one spelling, so that two files that set one cell
+always share a path in the report. Spec §6.3 has a renamed table or field keep its old name until the base mod's
+next major version. Both cannot hold at once.
+
+**The decision.** The user, on 2026-11-18, to the parent session's recommendations: "Go ahead with your
+recommendations". A renamed table or field keeps its old name until the base mod's next major version, as spec §6.3
+has it, and M1 builds it:
+
+- **The registry.** A `[[table]]` and each of its fields can carry old names, as a global carries `aliases`.
+  `globals_build.py` lints them: an old name must not be a current name or another old name of the same table.
+- **`exports.txt` and `--check`.** Table and field names join the list. A name that left the registry is allowed
+  when it is kept as an old name; otherwise the base mod's major version must be raised, the rule the globals follow.
+- **The record map** carries the old names, so that the applier can resolve them.
+- **The applier** takes a table or field by an old name. It writes the cell, and logs one line for each file and
+  old name that names the contributor, the file and the current spelling. A document that names one cell under an
+  old and a current name is a problem of the document, and nothing of it is applied (TOML cannot catch that).
+- **The gap, stated.** The link report still compares paths as text: spec §3, decision 1 stands, and the engine does
+  not read the record map. So the report misses an overlap between a file that uses an old name and a file that uses
+  the current one, until the next major version drops the old name. The modder guide says so where it describes the
+  report, and the backlog carries it.
+- **Milestone 3.** The generated shape must take the old names too (§6).
+
+**What it amends.** The third answer under "Answers the review led to" in spec §14: `<game>.tables` has one
+spelling for each cell, except an old name kept after a rename.
+
+**Where it is built:** §4.2 (the formats) and §4.4, task 6. No registry renames a table or a field today, so the
+tests use a synthetic registry and a synthetic record map.
