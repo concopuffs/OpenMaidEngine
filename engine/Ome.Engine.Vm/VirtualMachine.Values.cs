@@ -143,6 +143,47 @@ public sealed partial class VirtualMachine
         Write(a[0], I32(Read(a[1])) >= I32(Read(a[2])) ? 1 : 0); return StepResult.Next;
     }
 
+    // 0x2d0-0x2d3, 0x2d5, 0x2d7: float arithmetic (AGE 4.33 and later; 創刻のアテリアル's scripts are the first to use
+    // it). Native fetches each operand through the float accessor, which leaves an integer exact, and rounds to a
+    // float once, at the store: computing in double and storing a float gives the same value.
+    private StepResult OpAddFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        WriteFloat(a[0], (float)(ReadFloatExact(a[1]) + ReadFloatExact(a[2]))); return StepResult.Next;
+    }
+
+    private StepResult OpSubFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        WriteFloat(a[0], (float)(ReadFloatExact(a[1]) - ReadFloatExact(a[2]))); return StepResult.Next;
+    }
+
+    private StepResult OpMulFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        WriteFloat(a[0], (float)(ReadFloatExact(a[1]) * ReadFloatExact(a[2]))); return StepResult.Next;
+    }
+
+    // Native does not test the divisor: a zero gives the IEEE infinity or NaN.
+    private StepResult OpDivFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        WriteFloat(a[0], (float)(ReadFloatExact(a[1]) / ReadFloatExact(a[2]))); return StepResult.Next;
+    }
+
+    private StepResult OpMovFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        WriteFloat(a[0], (float)ReadFloatExact(a[1])); return StepResult.Next;
+    }
+
+    // __ftol2_sse on the fetched float, then the integer accessor's store.
+    private StepResult OpFloatToInt(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], NativeTruncate(ReadFloatExact(a[1]))); return StepResult.Next;
+    }
+
     private StepResult OpMov(Instruction ins, int pc)
     {
         var a = ins.Args;

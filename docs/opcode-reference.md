@@ -1062,6 +1062,78 @@ This is character count rather than .NET UTF-16 length or raw CP932 byte length.
 
 The release call uses nonnegative in-range indices and count 1. Port status (2026-07-29): implemented over encoded byte spans, preserving every valid lead/trail pair and reproducing native end clamping (`end = length` when start+count < 1 or > length) before selecting the half-open character interval [start,end).
 
+### 0x2d0 `add-float` (u0042B940, argc 3)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (destination)(a)(b) — destination = a + b, in floats.
+- **operand access:** `1` write-float · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2d0`; scope=SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read. op_0x2d0_add_float@0x42dcc0 stores the instruction length (7 dwords), fetches operand 3, then operand 2, and writes their sum to operand 1. 創刻のアテリアル has 1,943 sites.
+
+Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run.
+
+### 0x2d1 `sub-float` (u0042B950, argc 3)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (destination)(a)(b) — destination = a - b, in floats.
+- **operand access:** `1` write-float · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2d1`; scope=SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read. op_0x2d1_sub_float@0x42dd20 stores the instruction length (7 dwords), fetches operand 2, then operand 3, and writes operand 2 minus operand 3 to operand 1. 創刻のアテリアル has 100 sites.
+
+Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run.
+
+### 0x2d2 `mul-float` (u0042B960, argc 3)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (destination)(a)(b) — destination = a * b, in floats.
+- **operand access:** `1` write-float · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2d2`; scope=SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read. op_0x2d2_mul_float@0x42dd80 stores the instruction length (7 dwords), fetches operand 3, then operand 2, and writes their product to operand 1. 創刻のアテリアル has 50 sites.
+
+Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run.
+
+### 0x2d3 `div-float` (u0042B970, argc 3)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (destination)(a)(b) — destination = a / b, in floats. A zero divisor is not tested: the quotient is the IEEE infinity or NaN.
+- **operand access:** `1` write-float · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2d3`; scope=SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read. op_0x2d3_div_float@0x42dde0 stores the instruction length (7 dwords), fetches operand 2, then operand 3, and writes operand 2 divided by operand 3 to operand 1, with no test of the divisor. 創刻のアテリアル has 22 sites.
+
+Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run.
+
+### 0x2d5 `mov-float` (u0042B990, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (destination)(source) — destination = source, as a float.
+- **operand access:** `1` write-float · `2` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2d5`; scope=SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read. op_0x2d5_mov_float@0x42dea0 stores the instruction length (5 dwords), fetches operand 2 as a float and writes it to operand 1. 創刻のアテリアル has 31,045 sites.
+
+Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run.
+
+### 0x2d7 `float-to-int` (u0042B9B0, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (destination)(source) — destination = source truncated toward zero, as an integer.
+- **operand access:** `1` write · `2` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2d7`; scope=SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read. op_0x2d7_float_to_int@0x42df20 stores the instruction length (5 dwords), fetches operand 2 as a float, converts it with the runtime's __ftol2_sse (0x585180, byte for byte Kamidori's crt_ftol2_sse_truncate but for one global's address: toward zero, 0x80000000 for NaN or a value outside int32) and writes the integer to operand 1 through vm_operand_write. 創刻のアテリアル has 4 sites.
+
+Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run.
+
 ### 0x2d8 `fill-int-array` (set-array-to, argc 3)
 - **observed by:** arterial (SYS4438), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`, `SYS4438`
@@ -4459,60 +4531,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2ce`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2d0 `u0042B940` (u0042B940, argc 3)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write-float · `2` read-float · `3` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d0`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2d1 `u0042B950` (u0042B950, argc 3)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write-float · `2` read-float · `3` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d1`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2d2 `u0042B960` (u0042B960, argc 3)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write-float · `2` read-float · `3` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d2`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2d3 `u0042B970` (u0042B970, argc 3)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write-float · `2` read-float · `3` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d3`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2d5 `u0042B990` (u0042B990, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write-float · `2` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d5`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2d7 `u0042B9B0` (u0042B9B0, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write · `2` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d7`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2d9 `u0042BA30` (u0042BA30, argc 2)
 - **observed by:** none in recorded corpora

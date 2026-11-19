@@ -554,16 +554,25 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
     strings, where both supported games have 2 floats. The saved prefix is 260,993 integers, 1 float and 231
     strings.
-  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 45 have no handler,
-    at 56,206 sites: `0x2d5` (31,045 sites in 355 scripts), `0x323` (9,793), `0x322` (8,633), `0x320` (3,856),
-    `0x2d0` (1,943, of which 1,868 in ATTACK), `0x2e9` (579), `0x2d1` (100), `0x2d2` (50), `0x321` (42), `0x2d3`
-    (22), `0x2e5` (16), `0x26` (15), `0x2c7` (14), `0x102` (11), `0x2e7` (10), and 30 more with fewer than ten
-    sites each: `0x36`, `0xc1`, `0x103`, `0x104`, `0x10e`, `0x1c4`, `0x1cd`, `0x1fc`, `0x225`, `0x252`, `0x253`,
-    `0x256`, `0x2d7`, `0x2e1`, `0x2e3`, `0x2e6`, `0x2e8`, `0x2ea`, `0x2eb`, `0x2ec`, `0x324`–`0x329` and
-    `0x32b`–`0x32e`. Of these, `0x252`–`0x256`, `0x2e1`–`0x2ec` and the `0x320` family exist only in 4.38D's
-    engine; the rest are in 4.33G's too, and Kamidori's scripts never use them. The scene scripts carry the four
-    heaviest: `0x2d5` alone is in 355 scripts. `build/games/arterial/catalog-opcode-coverage.json` lists every
-    site. Op `0x320` is read in part (its plate in the Ghidra image).
+  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 39 have no handler,
+    at 23,042 sites (45 at 56,206 before the float family below): `0x323` (9,793 sites), `0x322` (8,633), `0x320`
+    (3,856), `0x2e9` (579), `0x321` (42), `0x2e5` (16), `0x26` (15), `0x2c7` (14), `0x102` (11), `0x2e7` (10), and 29
+    more with fewer than ten sites each: `0x36`, `0xc1`, `0x103`, `0x104`, `0x10e`, `0x1c4`, `0x1cd`, `0x1fc`,
+    `0x225`, `0x252`, `0x253`, `0x256`, `0x2e1`, `0x2e3`, `0x2e6`, `0x2e8`, `0x2ea`, `0x2eb`, `0x2ec`,
+    `0x324`–`0x329` and `0x32b`–`0x32e`. Of these, `0x252`–`0x256`, `0x2e1`–`0x2ec` and the `0x320` family exist
+    only in 4.38D's engine; the rest are in 4.33G's too, and Kamidori's scripts never use them.
+    `build/games/arterial/catalog-opcode-coverage.json` lists every site. Op `0x320` is read in part (its plate in
+    the Ghidra image).
+  - **Float arithmetic is implemented (2026-11-19):** `0x2d0`–`0x2d3` (add, subtract, multiply, divide), `0x2d5`
+    (move) and `0x2d7` (float to integer), 33,164 sites, read in the 4.38D image (`vm-map/opcodes.toml`;
+    `FloatArithmeticOpsTests`). Two things are open:
+    - **Float pointers.** 584 operands in the catalog are local float pointers (type `0xd`), 89 of them in this
+      family, the rest in ops `0x61`, `0x63`, `0x12c`, `0x1fd` and `0x320`. The port's float accessors have no such
+      cell, so the run stops there. Done when the accessors read and write through a float pointer as native's do,
+      with how a pointer gets bound read in the image.
+    - **x87 precision.** The port computes in double and stores a float. Whether native runs scripts with the
+      x87's precision lowered (Direct3D can lower it) is not checked; it could change a result by one unit in the
+      last place only when an operand is an integer too large for a float.
   - **Not proven:** its save layout. The build's save stamp (`438D`) follows the version and its record size is
     4.33G's; the revision diff shows other constants in the numbered save and load opcodes. The image holds the
     same `S4SD` and `S3SD` magics as 4.33G's.
@@ -599,6 +608,12 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   of the profile that had not finished), or another process on the machine had the new file open. Done when the
   cause is found and fixed: the launcher closes what it reads before the window closes, or the test waits for the
   work it started. A retry until it passes is not a fix.
+
+  A second case, the same day on `feature/arterial`, in a core validation run that changed nothing in `launcher/`:
+  `FrameTests.AProfileTheLauncherMadeIsNeverPlayedUntilTheEngineStartsIt` failed at its `RunLock.TryAcquire` of the
+  profile root, right after the test's first `MainViewModel` was disposed. The class then passed three times run
+  alone, and the whole suite had passed twice earlier that day with the same launcher code. It fits the first
+  reading: work the view model started still held something of the profile when the test went on.
 - **A project site with each game's data as a knowledge base** (the user's idea, 2026-11-19; not designed and not
   scheduled: "something that would be neat later on as we get more games").
   - **The idea:** a static website that becomes OME's home, in three sections. Info: the engine, the supported

@@ -588,6 +588,16 @@ public sealed partial class VirtualMachine
         _ => unchecked((int)Read(op)),
     };
 
+    /// <summary>An operand as the float accessor leaves it on the x87 stack, before any rounding to a float: a float
+    /// form widened, and an integer exact (<c>fild</c>), where <see cref="ReadFloat"/> has already rounded it. The
+    /// float arithmetic opcodes compute with it.</summary>
+    private double ReadFloatExact(Operand op) => op.Type switch
+    {
+        // Each arm is a double: a float arm beside an int one would make the switch a float and round the integer.
+        T_FLOAT or T_GFLOAT or T_LFLOAT or T_STR or T_GSTR or T_LSTR => (double)ReadFloat(op),
+        _ => (double)unchecked((int)Read(op)),
+    };
+
     /// <summary>Stores a float as SYS4433's float accessor (vm_operand_write_float) does: its bits into a float cell,
     /// and truncated toward zero into an integer cell or what an integer reference names.</summary>
     private void WriteFloat(Operand op, float value)
