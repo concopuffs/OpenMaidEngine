@@ -1,4 +1,5 @@
 using System.Text;
+using Ome.Mods;
 using Ome.Mods.Launch;
 using Ome.Mods.Localization;
 using Ome.Mods.Manifest;
@@ -77,7 +78,7 @@ public static class ProfileDocuments
     /// key and a cover outside the profile root are warnings, and the key keeps its default.</summary>
     public static ProfileLauncherTable ReadLauncherTable(string text, string profileRoot, List<string> warnings)
     {
-        TomlTable table = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
+        TomlTable table = TomlDocument.Parse(text) ?? new TomlTable();
         if (!table.TryGetValue("launcher", out object? value)) return ProfileLauncherTable.Defaults;
         if (value is not TomlTable launcherTable)
         {

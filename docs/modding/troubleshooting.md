@@ -108,6 +108,11 @@ profile this engine made.
 **"… : unknown key".** The file holds a key this engine does not know. `profile.toml` is strict, as `manifest.toml`
 is: a mistyped key would otherwise be dropped silently.
 
+**"not valid TOML: (L,C) : error : The key `K` is already defined at … and cannot be redefined".** The file gives
+one key, or one `[table]`, twice; the position is the second. TOML forbids it, and every TOML file the engine and the
+launcher read refuses it as it refuses a syntax error: `manifest.toml`, an `events/` file, a text catalog,
+`profile.toml`, the launcher's `launcher.toml` and the engine's own state files. Keep one of the two.
+
 **Links inside a profile root are allowed.** A package folder in the root's `mods/` (or in a folder its `[mods]`
 table names) may itself be a link to your working copy, and `SAVE/` may be a link too. Only a link *inside* a
 package folder is refused ("'…' is a link or junction"), so a package cannot reach outside its folder. Removing a

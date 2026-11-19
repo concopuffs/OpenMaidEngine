@@ -80,7 +80,7 @@ public static class DataDocumentReader
         TomlTable model;
         try
         {
-            model = TomlDocument.Parse(text) ?? new TomlTable();
+            model = TomlDocument.Model(text) ?? new TomlTable();
         }
         catch (TomlException error)
         {

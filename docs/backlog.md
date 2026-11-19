@@ -360,15 +360,6 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   The scan does not follow branches, local calls or block copies, so the list may be short. Done for a game when
   its guide page (`modding/games/<game>.md`) says, for each field a data file can set, which saved values the game
   derives from it and when, each claim checked on the game's scripts, with a driven run for at least one copy.
-- **The other TOML readers take a key given twice.** Tomlyn 2.10.1's `TomlDocument.Parse` (and
-  `TomlSerializer.Deserialize<TomlTable>`) keeps the last of a repeated key and of a repeated `[table]` without a
-  word; only `SyntaxParser.Parse(…, validate: true)` refuses them (a probe run on 2026-11-18, data patches plan
-  §10). The data files' reader validates first (`Ome.Mods/Data/DataDocumentReader.cs`), but the manifest reader
-  (`Manifest/ManifestReader.cs`), the event declarations (`ModEvents`), the text catalogs
-  (`Localization/TextCatalogFileReader.cs`), the save stamp, the selector store, the machine state, the player
-  profile (`Launch/ProfileFile.cs`) and the launcher's `ProfileDocument` and `LauncherSettings` parse alone: a
-  probe of `ManifestReader.Parse` read a manifest that gives `version` twice as its second, `2.0.0`. Done when
-  each reader refuses a repeated key or table with its line, as TOML has it, with a test for each.
 - **The link report misses an overlap through an old name.** A record table or a field the registry renames keeps its
   old name (a `[[table]]`'s `aliases`, its `[table.field_aliases]`), and a `<game>.tables` file may still write it:
   the applier writes the cell the current name does and logs the old name (`superpowers/plans/2026-11-18-data-patches.md`

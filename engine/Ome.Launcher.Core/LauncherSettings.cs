@@ -3,6 +3,7 @@ using System.Text;
 using Ome.Engine.Frontend;
 using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Localization;
+using Ome.Mods;
 using Ome.Mods.Localization;
 using Ome.Mods.Manifest;
 using Tomlyn;
@@ -106,7 +107,7 @@ public static class LauncherSettingsStore
         TomlTable table;
         try
         {
-            table = TomlSerializer.Deserialize<TomlTable>(text) ?? new TomlTable();
+            table = TomlDocument.Parse(text) ?? new TomlTable();
         }
         catch (TomlException error)
         {
