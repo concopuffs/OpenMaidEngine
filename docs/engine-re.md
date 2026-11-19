@@ -303,8 +303,9 @@ with the build's own addresses and context offsets masked. Addresses are written
 | Display scaling | helper `0x47dac0`=`0x48c6d0` (`gfx_draw_surface_through_sprite`) | not modelled, with two points unread ("Unread" below) |
 | The same code, compiled differently | ops `0x2`, `0xae` (names only), `0x15`, `0x216` (one index expression), `0x70` (`adv_text_layout_define` is the same line for line), `0x85` (the erase loop became a library call), `0x258` (its body moved into `0x417540` unchanged); helpers `0x40ab90`=`0x40aa90`, `0x483cd0`=`0x492940` (one string paired differently), `0x40e6b0`=`0x40ea70`, `0x40b680`=`0x40b900` (the save folder helper: 4.38D's image does not resolve its imports, so the decompiler ends the function early) | noise |
 
-**Text.** 4.38D's text code is 4.33G's with these changes. The first two are visible on 創刻のアテリアル's first
-page; the port has neither yet (`backlog.md`, the game's item).
+**Text.** 4.38D's text code is 4.33G's with these changes. The port has the first as the build's
+`TextRules.LineEnd`; the second, which 創刻のアテリアル's first page shows, it does not have yet (`backlog.md`, the
+game's item).
 
 - **The characters that may pass the right edge come from the catalog.** 4.33G's
   `adv_text_append_horizontal_glyph_records@0x45b710` keeps `、`, `。` and `」` on the line they overflow by
@@ -332,10 +333,35 @@ page; the port has neither yet (`backlog.md`, the game's item).
   the primary one while the aspect mode (`+0x313d0`) is on, and creates a display-scaled copy of the second ruby
   font (`+0x35604`). 4.33G creates the ruby font from its `LOGFONT` as it stands.
 - `scene_context_init_reset@0x40c660` (op `0x9`) zeroes two more fields: `ctx+0x77518`, op `0x2e9`'s count, and
-  `ctx+0x773a4`, which no function read so far writes.
+  `ctx+0x773a4`, the layout slot op `0x72` last waited on (4.33G keeps that at `ctx+0x71f2c` and does not zero
+  it).
 
-**Auto pitch.** `op_0x72_wait_for_input@0x41de50` adds a per-character delay to Auto's wait from three new
-settings (`backlog.md`, "Auto's per-character delay is not applied", has the formula).
+**Auto pitch.** 4.38D gives Auto a delay per character of the page, from three new settings: the pitches
+`message:AutoMessagePitch0` (after a voice) and `message:AutoMessagePitch1` (an unvoiced page), and
+`message:AutoMessageOption`. Ops `0x2e6` and `0x2e7` read and write a pitch by selector, `0x2e8` and `0x2ea` write
+and read the option, and `0x2e9` sets a count of characters to leave out (`ctx+0x77518`). Three functions arm or
+poll the timer, and each differs from 4.33G's in the same way:
+
+- `op_0x72_wait_for_input@0x41de50`, with Auto on: when no voice is pending it arms the sleep timer with
+  `AutoMessageTime1 + AutoMessagePitch1 × (characters - the count)`, where the characters are the waited layout's
+  glyph records less its pending one (`adv_layout_character_count@0x407b10`); when a voice is pending it arms
+  `AutoMessageTime0 + AutoMessagePitch0 × (characters - the count)`, and only if the option has bit 0. A result of
+  0 becomes 100 ms. 4.33G's handler arms `AutoMessageTime1`, with 0 as 100 ms, when no voice is pending, and
+  nothing otherwise.
+- `adv_toggle_auto_mode@0x408850` (the menu's toggle; 4.33G `0x406bd0`) arms the same timer when it turns Auto
+  on.
+- `adv_input_service_poll@0x4117c0`: with a voice pending and the option's bit 0 clear, it returns while the voice
+  plays and arms `AutoMessageTime0` when it ends, as 4.33G does. With the bit set it clears the pending flag at the
+  voice's end and polls the timer either way, so the page ends when the timer op `0x72` armed is due, whether or
+  not the voice still plays. Both builds also pause the timer while the input service's text redraw direction is
+  not 0 (`ctx+0x774f0`; 4.33G `ctx+0x72078`) and resume it from the start when it returns to 0
+  (`interval_timer_pause@0x44ffb0`, `interval_timer_resume@0x44ffc0`), 4.38D with the unvoiced delay above.
+
+The arithmetic is 32-bit. The option's other bits are not read. The port keeps the three settings in the skip and
+Auto native, computes both delays in `SkipAndAuto.AutoWaitStateFor` from the text native's glyph count for the
+waited layout, and runs the voiced timer in `AdvAutoAdvanceTimer`. With the pitches and the option 0, which is all
+4.24J and 4.33G can hold, the result is their delay, so one implementation serves every build. The port never
+pauses the timer: its redraw direction is always neutral (op `0x83`).
 
 **Settings.** 4.38D registers nine settings 4.33G does not:
 

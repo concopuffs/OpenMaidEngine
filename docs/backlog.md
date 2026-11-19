@@ -567,15 +567,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The revision diff against 4.33G is triaged (2026-11-19):** every one of its 36 opcode rows and 11 helper
     rows has a disposition (`engine-re.md`, "Kamidori against Arterial, triaged"). What it found real and the port
     lacks, each done when the port does what that section says native does and a test or a scenario holds it:
-    - **`JUSTIFYCHAR`.** 4.38D keeps on its line the characters the catalog lists (`、`, `。`, `」`, `）` here),
-      where 4.33G keeps a fixed three. The port keeps the fixed three on every build
-      (`AdvRetainedTextContract.PreventsHorizontalWrapBefore`), so a `）` at a line's end wraps.
     - **`SAVEWINPOS`.** With it set (1 here) native opens its window where it was left, and keeps the position in
       the registry. The port opens its window where the platform puts it. The port must not write the registry;
       where it keeps the position is to decide (`OME.INI` holds the port's own options).
-    - **Four more `SYS4REG.INI` keys:** `display` `MultiSample`, and `message` `AutoMessagePitch0`,
-      `AutoMessagePitch1`, `AutoMessageOption`. The build's `SettingsRules` binds 4.33G's keys, so the port's file
-      lacks them and drops them from a file native wrote.
     - **A load clears the polygons**, and a save holds none. The port's load does not clear them (its saves are
       off for this game).
     - **Op `0x2c7` on 4.33G** is a plain byte substring; the port runs 4.38D's `SBSubstr` on every build. No script
@@ -583,18 +577,27 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - **Three points left unread:** whether 4.33G draws a surface through a sprite with the alpha test on (4.38D
       turns it off), what draws into surface `0x27` (4.38D treats that target as the back buffer), and the two
       glyph string drawers past the `AGE Extend` range (see "Glyph edges differ" below).
+
+    In since the triage (2026-11-19): the `JUSTIFYCHAR` list as the build's `TextRules.LineEnd`, the four
+    `SYS4REG.INI` keys 4.38D adds in its `SettingsRules`, and Auto's per-character delay with its three settings
+    and four opcodes (`engine-re.md`, the same section; `LineEndCharactersTests`, `AutoMessagePitchTests`). None of
+    the three is compared with native yet: no page of the game was driven with a `）` at a line's end or with a
+    pitch set (its CONFIG2 sets the pitch).
+    - **Auto's timer is never paused.** 4.33G and 4.38D pause it while the input service's text redraw direction
+      is not 0 and restart it when the direction returns to 0. The port's direction is always neutral (op `0x83`;
+      `engine-re.md`, "The ordinary ADV redraw pair"), so the case does not arise until the port walks the text
+      back by key or wheel. Found while reading 4.38D's poll; Kamidori has it too.
   - **File types no other game has:** two `.X` files (`LEAF0.X`, `LEAF1.X`) and the `.TTF`, among 21,349 entries
     in six archives and four appends.
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
     strings, where both supported games have 2 floats. The saved prefix is 260,993 integers, 1 float and 231
     strings.
-  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 20 have no handler,
-    at 97 sites (45 at 56,206 when the profile was added): `0x2e5` (16 sites), `0x26` (15), `0x102` (11), `0x2e7`
-    (10), `0x36` (8), `0x2e6` (6), `0x1fc` (5), `0x2e3` (5), `0x225` (4), `0x2e8` (4), `0x10e` (3), `0x256` (2),
-    and one site each of `0xc1`, `0x103`, `0x104`, `0x1c4`, `0x1cd`, `0x253`, `0x2e1` and `0x2ea`. Of these,
-    `0x253`, `0x256` and `0x2e1`–`0x2ea` exist only in 4.38D's engine; the rest are in 4.33G's too, and Kamidori's
-    scripts never use them. Read already: `0x26` and `0x36` are legacy screen transitions (a pattern wipe, and a
-    two-surface mode 9), and `0x2e6`, `0x2e7`, `0x2e8` and `0x2ea` read and write the Auto pitch settings below.
+  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 16 have no handler,
+    at 76 sites (45 at 56,206 when the profile was added): `0x2e5` (16 sites), `0x26` (15), `0x102` (11), `0x36`
+    (8), `0x1fc` (5), `0x2e3` (5), `0x225` (4), `0x10e` (3), `0x256` (2), and one site each of `0xc1`, `0x103`,
+    `0x104`, `0x1c4`, `0x1cd`, `0x253` and `0x2e1`. Of these, `0x253`, `0x256` and `0x2e1`–`0x2e5` exist only in
+    4.38D's engine; the rest are in 4.33G's too, and Kamidori's scripts never use them. Read already: `0x26` and
+    `0x36` are legacy screen transitions (a pattern wipe, and a two-surface mode 9).
     `build/games/arterial/intake.json` lists each one's scripts (`Ome.Cli intake`).
   - **Float arithmetic is implemented (2026-11-19):** `0x2d0`–`0x2d3` (add, subtract, multiply, divide), `0x2d5`
     (move) and `0x2d7` (float to integer), 33,164 sites, read in the 4.38D image (`vm-map/opcodes.toml`;
@@ -645,15 +648,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       of the line differ by more than 8 of 255: the port's glyphs are a little lighter. Not looked into;
       `text_geometry_compare.py` is the tool.
     - **The title's leaves** (its own item, "The title's 3D leaves are not drawn"): 5,336 pixels of the title.
-  - **Auto's per-character delay is not applied.** 4.38D adds three settings, `message:AutoMessagePitch0`,
-    `message:AutoMessagePitch1` and `message:AutoMessageOption`, all registered as 0, and its Auto delay is
-    `AutoMessageTime1 + AutoMessagePitch1 × (the page's characters - 1 - the count of op 0x2e9)` on a page with no
-    voice, and on a voiced page, when the option's bit 0 is set, the same with `AutoMessageTime0` and
-    `AutoMessagePitch0`; a delay of 0 becomes 100 ms. The port keeps op `0x2e9`'s count
-    (`SkipAndAuto.AutoMessageCountOffset`) and has neither the settings nor their opcodes (`0x2e6`, `0x2e7`,
-    `0x2e8`, `0x2ea`; the game's CONFIG2 writes the pitch), so Auto waits `AutoMessageTime` alone, which is
-    native's delay while the pitch is 0. Done when the settings are registered and saved, the four opcodes have
-    handlers, the delay follows the formula, and whether 4.33G's delay has the 100 ms floor is read.
   - **The polygon objects are in (2026-11-19):** ops `0x320` to `0x323`, 22,324 sites, with the reference
     renderer; the logo's frames and fade timing were compared with native
     (`superpowers/specs/2026-11-19-polygon-objects-design.md` §7). Open:

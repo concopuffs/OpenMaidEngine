@@ -17,5 +17,7 @@ namespace Ome.Engine.Text;
 /// past the last record, finding nothing. 4.33G's text_history_find_typed_value@0x4501b0 and
 /// text_history_find_pair@0x450270 do; 4.24J's @0x450840 and @0x4509f0 test only the upper end, and the negative index
 /// fails a checked subscript, which ends the process (docs/engine-re.md, "Indices outside their tables").</param>
+/// <param name="LineEnd">Which characters a horizontal ADV layout keeps on the line they overflow: a fixed three
+/// (4.24J, 4.33G) or the catalog's <c>JUSTIFYCHAR</c> list (4.38D); <see cref="LineEndRule"/>.</param>
 public sealed record TextRules(GlyphCoverageAlpha GlyphCoverage, RubyRule Ruby, bool FuriganaArmsGlyphTimer,
-                               bool HistoryLookupTestsSign);
+                               bool HistoryLookupTestsSign, LineEndRule LineEnd);

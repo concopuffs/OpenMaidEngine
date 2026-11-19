@@ -32,7 +32,8 @@ public static class EngineBuilds
                 GlyphCoverage: GlyphCoverageAlpha.Sixteenths,
                 Ruby: RubyRule.FixedOffsets,
                 FuriganaArmsGlyphTimer: false,
-                HistoryLookupTestsSign: false),
+                HistoryLookupTestsSign: false,
+                LineEnd: LineEndRule.FixedThree),
             Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
             Settings: SettingsRules.LoaderKeys,
             Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize)));
@@ -68,16 +69,28 @@ public static class EngineBuilds
         },
     };
 
-    /// <summary>AGE 4.38D, 創刻のアテリアル's (its version resource; docs/engine-re.md, "Comparing engine builds"). It is
-    /// declared as 4.33G with nothing changed but its names: the game is at P1 (docs/adding-a-game.md), where nothing
-    /// of it runs, and each difference the revision diff lists joins this definition as it is read (the game's item
-    /// in docs/backlog.md).</summary>
+    /// <summary>AGE 4.38D, 創刻のアテリアル's (its version resource; docs/engine-re.md, "Comparing engine builds"). Its
+    /// changes are the real rows of the revision diff's triage (docs/engine-re.md, "Kamidori against Arterial,
+    /// triaged"); the ones the port does not have yet are in the game's item in docs/backlog.md.</summary>
     public static EngineBuild Age438D { get; } = Age433G with
     {
         Id = "4.38D",
         AbiId = "SYS4438",
         Rules = Age433G.Rules with
         {
+            Text = Age433G.Rules.Text with
+            {
+                // adv_text_append_horizontal_glyph_records@0x466000 asks text_is_justify_character@0x457950, whose
+                // list is the catalog trailer's JUSTIFYCHAR values.
+                LineEnd = LineEndRule.CatalogList,
+            },
+            // engine_settings_save@0x47d1d0 writes four more keys; a SYS4REG.INI native 4.38D wrote has them in
+            // these places.
+            Settings = Age433G.Rules.Settings
+                .BindingAfter("VirtualFullScreenType", new Sys4RegIniKey("display", "MultiSample", "0"))
+                .BindingAfter("AutoMessageTime1", new Sys4RegIniKey("message", "AutoMessagePitch0", "0"))
+                .BindingAfter("AutoMessagePitch0", new Sys4RegIniKey("message", "AutoMessagePitch1", "0"))
+                .BindingAfter("AutoMessagePitch1", new Sys4RegIniKey("message", "AutoMessageOption", "0")),
             // The stamp follows the version, as 4.24J's and 4.33G's do; no 4.38D save has been read. The record size
             // is 4.33G's, unproven: the profile's writes stay off until a native save is read.
             Saves = new SaveRules(versionStamp: "438D", numberedGfxRecordSize: NativeGfxSaveLayout.RotationCacheRecordSize),

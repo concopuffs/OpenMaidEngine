@@ -49,6 +49,12 @@ public sealed partial class SkipAndAuto
     // them, and SYS4REG.INI keeps them (ReadSettings, and the save native's shutdown write).
     private long _autoMessageTime0Ms = Sys4RegIniStore.DefaultAutoMessageTime0;
     private long _autoMessageTime1Ms = Sys4RegIniStore.DefaultAutoMessageTime1;
+    // AGE 4.38D's message:AutoMessagePitch0/1 and message:AutoMessageOption (registered defaults 0): ops 0x2e6 to
+    // 0x2e8 and 0x2ea read and write them, and SYS4REG.INI keeps them where the build binds them. A build without
+    // them never changes them from 0, which is its own delay.
+    private int _autoMessagePitch0Ms;
+    private int _autoMessagePitch1Ms;
+    private int _autoMessageOption;
 
     /// <param name="settings">The SYS4INI settings and the pace this native reads.</param>
     /// <param name="paceClock">The time device fast-forward pacing reads and sleeps on.</param>
@@ -270,23 +276,58 @@ public sealed partial class SkipAndAuto
         else if (selector == 1) _autoMessageTime1Ms = milliseconds;
     }
 
-    /// <summary>Read AutoMessageTime0/1 from SYS4REG.INI's [message], native defaults when absent; composition runs it
-    /// before the interpreter does. <see cref="WriteSettings"/> writes them back at shutdown.</summary>
+    /// <summary>message:AutoMessagePitch0 (selector 0, after a voice) or AutoMessagePitch1 (selector 1, unvoiced):
+    /// Auto's delay per character of the page, in milliseconds (AGE 4.38D; op 0x2e6). Null for another selector.</summary>
+    public int? AutoMessagePitch(int selector)
+        => selector == 0 ? _autoMessagePitch0Ms : selector == 1 ? _autoMessagePitch1Ms : null;
+
+    /// <summary>Op 0x2e7's write. False for a selector that is neither 0 nor 1, which writes nothing.</summary>
+    public bool SetAutoMessagePitch(int selector, int milliseconds)
+    {
+        if (selector == 0) _autoMessagePitch0Ms = milliseconds;
+        else if (selector == 1) _autoMessagePitch1Ms = milliseconds;
+        else return false;
+        return true;
+    }
+
+    /// <summary>message:AutoMessageOption (AGE 4.38D; ops 0x2e8 and 0x2ea). With bit 0 a voiced page's Auto wait
+    /// runs on a timer of AutoMessageTime0 plus its per-character part from the wait's start, and does not wait for
+    /// the voice (<see cref="AutoWaitStateFor"/>).</summary>
+    public int AutoMessageOption
+    {
+        get => _autoMessageOption;
+        set => _autoMessageOption = value;
+    }
+
+    /// <summary>Read AutoMessageTime0/1 from SYS4REG.INI's [message], native defaults when absent, and the pitches
+    /// and the option where the build binds them; composition runs it before the interpreter does.
+    /// <see cref="WriteSettings"/> writes them back at shutdown.</summary>
     public void ReadSettings(Sys4RegIniStore store)
     {
         SetAutoMessageTime(0, store.LoadMessageInt(
             Sys4RegIniStore.AutoMessageTime0Key, Sys4RegIniStore.DefaultAutoMessageTime0));
         SetAutoMessageTime(1, store.LoadMessageInt(
             Sys4RegIniStore.AutoMessageTime1Key, Sys4RegIniStore.DefaultAutoMessageTime1));
+        if (!BindsPitch(store)) return;
+        _autoMessagePitch0Ms = store.LoadMessageInt(Sys4RegIniStore.AutoMessagePitch0Key, 0);
+        _autoMessagePitch1Ms = store.LoadMessageInt(Sys4RegIniStore.AutoMessagePitch1Key, 0);
+        _autoMessageOption = store.LoadMessageInt(Sys4RegIniStore.AutoMessageOptionKey, 0);
     }
 
-    /// <summary>The shutdown write of AutoMessageTime0/1 into SYS4REG.INI. The registry keeps a 32-bit value: op
-    /// 0x1b9's operand wraps as AGE's int does.</summary>
+    /// <summary>The shutdown write of AutoMessageTime0/1 into SYS4REG.INI, and of the pitches and the option where
+    /// the build binds them. The registry keeps a 32-bit value: op 0x1b9's operand wraps as AGE's int does.</summary>
     public void WriteSettings(Sys4RegIniStore store)
     {
         store.SaveMessageInt(Sys4RegIniStore.AutoMessageTime0Key, unchecked((int)AutoMessageTime0Ms));
         store.SaveMessageInt(Sys4RegIniStore.AutoMessageTime1Key, unchecked((int)AutoMessageTime1Ms));
+        if (!BindsPitch(store)) return;
+        store.SaveMessageInt(Sys4RegIniStore.AutoMessagePitch0Key, _autoMessagePitch0Ms);
+        store.SaveMessageInt(Sys4RegIniStore.AutoMessagePitch1Key, _autoMessagePitch1Ms);
+        store.SaveMessageInt(Sys4RegIniStore.AutoMessageOptionKey, _autoMessageOption);
     }
+
+    private static bool BindsPitch(Sys4RegIniStore store)
+        => store.Binds(Sys4RegIniStore.MessageSection, Sys4RegIniStore.AutoMessagePitch0Key);
 
     /// <summary>A voice started (ops 0xc4 and 0x1bd): Auto waits for it and then AutoMessageTime0.</summary>
     public void NoteVoiceStarted() => _scene.AutoVoicePending = true;
@@ -294,14 +335,27 @@ public sealed partial class SkipAndAuto
     /// <summary>Op 0x1bc's part: no voice is pending any more.</summary>
     public void ClearPendingVoice() => _scene.AutoVoicePending = false;
 
-    /// <summary>What a text wait's Auto timer reads.</summary>
-    public AdvAutoWaitState AutoWaitState
-        => new(_scene.AutoMessageEnabled, _scene.AutoVoicePending, AutoMessageTime0Ms, AutoMessageTime1Ms);
-
-    /// <summary>Op 0x2e9 (AGE 4.38D): how many of a page's characters Auto's per-character delay leaves out. Native's
-    /// Auto delay there is AutoMessageTime + AutoMessagePitch × (characters - 1 - this), with the pitch a setting
-    /// that defaults to 0. The port keeps the value and does not apply a pitch yet (docs/backlog.md, 創刻のアテリアル).
+    /// <summary>
+    /// What a text wait's Auto timer reads, for a page whose layout holds <paramref name="characters"/> glyphs
+    /// (native's record count less its pending record, adv_layout_character_count@0x407b10). The unvoiced delay is
+    /// AutoMessageTime1 + AutoMessagePitch1 × (characters - op 0x2e9's count), in AGE's 32-bit arithmetic
+    /// (op_0x72_wait_for_input@0x41de50, 4.38D); with AutoMessageOption bit 0 a voiced page runs on a timer of
+    /// AutoMessageTime0 + AutoMessagePitch0 × the same count instead of waiting for its voice. With the pitches and
+    /// the option 0, which is all 4.24J and 4.33G have, this is their delay.
     /// </summary>
+    public AdvAutoWaitState AutoWaitStateFor(int characters)
+    {
+        int counted = unchecked(characters - _scene.AutoMessageCountOffset);
+        long unvoiced = unchecked((int)AutoMessageTime1Ms + _autoMessagePitch1Ms * counted);
+        long? voicedTimer = (_autoMessageOption & 1) != 0
+            ? unchecked((int)AutoMessageTime0Ms + _autoMessagePitch0Ms * counted)
+            : null;
+        return new AdvAutoWaitState(_scene.AutoMessageEnabled, _scene.AutoVoicePending, AutoMessageTime0Ms,
+                                    _autoMessagePitch1Ms == 0 ? AutoMessageTime1Ms : unvoiced, voicedTimer);
+    }
+
+    /// <summary>Op 0x2e9 (AGE 4.38D): how many of a page's characters Auto's per-character delay leaves out
+    /// (<see cref="AutoWaitStateFor"/>).</summary>
     public int AutoMessageCountOffset => _scene.AutoMessageCountOffset;
 
     public void SetAutoMessageCountOffset(int count) => _scene.AutoMessageCountOffset = count;

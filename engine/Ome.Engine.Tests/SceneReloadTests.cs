@@ -141,6 +141,7 @@ public class SceneReloadTests
             // The pace and the action-6 history are kept, as are the Auto delays (settings).
             "_fastForwardPacing", "_fastForwardStartMs", "_fastForwardOwedMs", "_fastForwardPagePassed",
             "_physicalSkipActionHeld", "_revealPhysicalSkipSuppressed", "_autoMessageTime0Ms", "_autoMessageTime1Ms",
+            "_autoMessagePitch0Ms", "_autoMessagePitch1Ms", "_autoMessageOption",
         ],
         [typeof(Scripting)] =
         [

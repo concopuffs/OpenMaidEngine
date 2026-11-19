@@ -108,13 +108,6 @@ public static class AdvRetainedTextContract
         return result;
     }
 
-    /// <summary>
-    /// CP932 closing punctuation which AGE keeps on the preceding horizontal line even when the
-    /// current glyph crosses the right bound.
-    /// </summary>
-    public static bool PreventsHorizontalWrapBefore(ushort cp932)
-        => cp932 is 0x8141 or 0x8142 or 0x8176; // 、 。 」
-
     public static bool TimedPublicationHandleExists(int revealIndex, long objectCapacity)
         => revealIndex >= 0 && revealIndex < objectCapacity;
 }

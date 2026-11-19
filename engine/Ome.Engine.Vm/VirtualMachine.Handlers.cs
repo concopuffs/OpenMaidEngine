@@ -345,6 +345,10 @@ public sealed partial class VirtualMachine
             ["byte-substring"] = static (vm, ins, pc) => vm.OpByteSubstring(ins, pc),
             ["get-game-version"] = static (vm, ins, pc) => vm.OpGetGameVersion(ins, pc),
             ["set-auto-message-count-offset"] = static (vm, ins, pc) => vm.OpSetAutoMessageCountOffset(ins, pc),
+            ["get-auto-message-pitch"] = static (vm, ins, pc) => vm.OpGetAutoMessagePitch(ins, pc),
+            ["set-auto-message-pitch"] = static (vm, ins, pc) => vm.OpSetAutoMessagePitch(ins, pc),
+            ["set-auto-message-option"] = static (vm, ins, pc) => vm.OpSetAutoMessageOption(ins, pc),
+            ["get-auto-message-option"] = static (vm, ins, pc) => vm.OpGetAutoMessageOption(ins, pc),
             ["string-to-int"] = static (vm, ins, pc) => vm.OpStringToInt(ins, pc),
     }.ToFrozenDictionary(StringComparer.Ordinal);
 

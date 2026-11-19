@@ -67,7 +67,8 @@ public sealed partial class TextManager : ISurfaceListener
     /// <summary>One rasterizer with its glyph cache, the two renderers over it, and aspect mode's font calibration
     /// measured with that rasterizer: each pipeline draws the widths it measured.</summary>
     private sealed class TextPipeline(GlyphRasterizerBackendInfo info, CachedGlyphMaskRasterizer cache,
-                                      GlyphCoverageAlpha coverageAlpha, Func<AspectFontRealization?> realization)
+                                      GlyphCoverageAlpha coverageAlpha, LineEndCharacters lineEnd,
+                                      Func<AspectFontRealization?> realization)
     {
         private Lazy<AspectFontRealization?> _realization = new(realization);
 
@@ -75,7 +76,7 @@ public sealed partial class TextManager : ISurfaceListener
         public GlyphRasterPolicy Policy => Info.Policy;
         public CachedGlyphMaskRasterizer Cache { get; } = cache;
         public ImmediateSurfaceTextRenderer Pixels { get; } = new(cache, info.Policy, coverageAlpha);
-        public RetainedGlyphLayoutEngine Layout { get; } = new(cache, coverageAlpha);
+        public RetainedGlyphLayoutEngine Layout { get; } = new(cache, coverageAlpha, lineEnd);
 
         /// <summary>The aspect-mode font list (<see cref="AspectFontRealization"/>), or null when the rasterizer does
         /// not measure (<see cref="IFontMetricsProbe"/>): its glyphs then draw at <c>-height / 2</c>.</summary>
@@ -166,10 +167,14 @@ public sealed partial class TextManager : ISurfaceListener
     /// <param name="locator">The page map, which records each run's text and geometry.</param>
     /// <param name="history">The layouts and backlog, when they outlive this native (a <c>GameSession</c> shares one
     /// across its scenes); a new one otherwise.</param>
+    /// <param name="lineEnd">The characters a wrapping run keeps on the line they overflow, from the engine build's
+    /// <c>TextRules.LineEnd</c> for this install's settings; 、 。 and 」 when not given.</param>
     public TextManager(Graphics graphics, SkipAndAuto skip, FrameClock clock, TextDevices? devices,
                        RubyLayoutRules ruby, bool blankExtentMode = false, Sys4RegIniStore? settings = null,
-                       PageLocatorState? locator = null, TimelineLog? timeline = null, AdvTextHistory? history = null)
+                       PageLocatorState? locator = null, TimelineLog? timeline = null, AdvTextHistory? history = null,
+                       LineEndCharacters? lineEnd = null)
     {
+        lineEnd ??= LineEndCharacters.FixedThree;
         History = history ?? new AdvTextHistory();
         _graphics = graphics ?? throw new ArgumentNullException(nameof(graphics));
         _skip = skip ?? throw new ArgumentNullException(nameof(skip));
@@ -191,7 +196,8 @@ public sealed partial class TextManager : ISurfaceListener
             _surfaceTextRasterizer = devices.Gameplay;
             _surfaceTextMaskCache = new CachedGlyphMaskRasterizer(devices.Gameplay, capacity: devices.GameplayCacheCapacity);
             IFontMetricsProbe? metrics = devices.FontMetrics;
-            TextPipeline source = new(backend, _surfaceTextMaskCache, devices.CoverageAlpha, () => Realization(metrics));
+            TextPipeline source = new(backend, _surfaceTextMaskCache, devices.CoverageAlpha, lineEnd,
+                                      () => Realization(metrics));
             _sourceText = source;
             _presentedText = new Lazy<TextPipeline>(() =>
             {
@@ -206,7 +212,7 @@ public sealed partial class TextManager : ISurfaceListener
                 (rasterizer as ILanguageFontRasterizer)?.UseLanguageFonts(_presentedFonts);
                 // A presented rasterizer that measures calibrates its own aspect-mode fonts (localization spec §7.4).
                 return new TextPipeline(info, new CachedGlyphMaskRasterizer(rasterizer, devices.PresentedCacheCapacity),
-                                        devices.CoverageAlpha, () => Realization(rasterizer as IFontMetricsProbe));
+                                        devices.CoverageAlpha, lineEnd, () => Realization(rasterizer as IFontMetricsProbe));
             }, LazyThreadSafetyMode.ExecutionAndPublication);
         }
         Func<IReadOnlyList<EnumeratedFontFamily>>? familySource = devices?.FontFamilies;

@@ -419,6 +419,25 @@ public class GlyphMaskCompositorTests
         Assert.Equal(new AdvRetainedGlyphRecord(0, 6, 1, 10, 6), result.Records[1]);
     }
 
+    // 4.38D keeps the catalog's JUSTIFYCHAR characters on the line and no others (text_is_justify_character@0x457950).
+    [Theory]
+    [InlineData(0x8141, false, 0)]  // 、 with the fixed three: stays
+    [InlineData(0x816a, false, 1)]  // ） with the fixed three: wraps
+    [InlineData(0x816a, true, 0)]   // ） in a catalog list that names it: stays
+    [InlineData(0x8176, true, 1)]   // 」 in a catalog list that does not name it: wraps
+    public void TheBuildsLineEndCharactersDecideWhatStaysOnAnOverflowingLine(int cp932, bool catalogList, int wraps)
+    {
+        LineEndCharacters lineEnd = catalogList ? LineEndCharacters.Of(["、", "）"]) : LineEndCharacters.FixedThree;
+        var engine = new RetainedGlyphLayoutEngine(new CountingRasterizer(_ => CellMask()), lineEnd: lineEnd);
+
+        GlyphTextLayoutResult result = engine.Render(
+            Image(16, 16),
+            new GlyphTextLayoutOptions(2, 1, 2, 8, 16, true, Style()),
+            [NativeRequest(0x82a0, 0x3042), NativeRequest((ushort)cp932, 0x3001)]);
+
+        Assert.Equal(wraps, result.WrappedLines);
+    }
+
     [Fact]
     public void VerticalOnlyOverflowStopsBeforeCompositingGlyph()
     {

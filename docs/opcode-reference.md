@@ -497,6 +497,42 @@ The handler reads the same 0x20-byte string vector counted by opcode 0x2dc and s
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433 (4.33F), addresses given for /kamidori/4.33G`; site=`vm-map/opcodes.toml opcode 0x2de`; scope=SYS4433 handler, operand conversion, font-family cache lookup, and natural startup. op_0x2de_find_font_family_index@0x42ba30 reads operand 2 as a string, calls text_find_font_family_index@0x423a80, and writes its zero-based index or -1 result to operand 1. The lookup ignores one leading '@'. Natural boot reaches CHECKCONFIG.BIN@0x0; SYS4422 has no handler in this slot.
 
+### 0x2e6 `get-auto-message-pitch` (u0042CE60, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (selector)(out) — read Auto's per-character delay in milliseconds: selector 0 is message:AutoMessagePitch0 (after a voice), 1 is message:AutoMessagePitch1 (an unvoiced page).
+- **operand access:** `1` read · `2` write
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e6`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2e6_get_auto_message_pitch@0x42e380 fetches operand 1; for 0 it writes message:AutoMessagePitch0 to operand 2, for 1 message:AutoMessagePitch1, and otherwise it formats the message at 0x5a5f6c ('GetAutoMesPiの引数が不正です．') and calls vm_trace_script_error.
+
+Another selector writes nothing and traces a script error, which the port reports as a warning. 創刻のアテリアル has 6 sites.
+
+### 0x2e7 `set-auto-message-pitch` (u0042CE70, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (selector)(milliseconds) — set Auto's per-character delay: selector 0 is message:AutoMessagePitch0 (after a voice), 1 is message:AutoMessagePitch1 (an unvoiced page).
+- **operand access:** `1` read · `2` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e7`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2e7_set_auto_message_pitch@0x424fa0 fetches operand 1; for 0 it stores operand 2 in message:AutoMessagePitch0, for 1 in message:AutoMessagePitch1, and otherwise it traces the same script error as op 0x2e6. engine_settings_save@0x47d1d0 writes both to SYS4REG.INI's [message].
+
+Another selector writes nothing and traces a script error, which the port reports as a warning. The setting is kept in SYS4REG.INI. 創刻のアテリアル has 10 sites.
+
+### 0x2e8 `set-auto-message-option` (u0042CE80, argc 1)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (value) — set message:AutoMessageOption. With bit 0 a voiced page's Auto wait runs on a timer of AutoMessageTime0 plus its per-character part from the wait's start, and does not wait for the voice.
+- **operand access:** `1` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e8`; scope=SYS4438 handler and the option's three readers; the opcode exists only in AGE 4.38D among the builds read. op_0x2e8_set_auto_message_option@0x425040 stores operand 1 in message:AutoMessageOption. Its readers test bit 0 only: op_0x72_wait_for_input@0x41de50 and the Auto toggle 0x408850 arm the sleep timer on a voiced page with AutoMessageTime0 + AutoMessagePitch0 * (characters - op 0x2e9's count) when it is set and arm nothing when it is clear; adv_input_service_poll@0x4117c0, when it is clear, waits for the voice to end and then arms AutoMessageTime0, and when it is set goes on to poll the timer whether or not the voice plays.
+
+The port applies bit 0 (AdvAutoAdvanceTimer); no other bit is read natively. The setting is kept in SYS4REG.INI. 創刻のアテリアル has 4 sites.
+
 ### 0x2e9 `set-auto-message-count-offset` (u0042CE90, argc 1)
 - **observed by:** arterial (SYS4438)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
@@ -507,7 +543,19 @@ The handler reads the same 0x20-byte string vector counted by opcode 0x2dc and s
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e9`; scope=SYS4438 handler and the Auto delay's four readers; the opcode exists only in AGE 4.38D among the builds read. op_0x2e9_set_auto_message_count_offset@0x425080 stores operand 1 at ctx+0x77518, which scene_context_init_reset zeroes. The Auto delay reads it at four places (op_0x72_wait_for_input, adv_input_service_poll and 0x408850): on a page with no voice the delay is message:AutoMessageTime1 + message:AutoMessagePitch1 * (the page's glyph records - 1 - this value), and on a voiced page, when message:AutoMessageOption has bit 0, AutoMessageTime0 + AutoMessagePitch0 * (the same); a delay of 0 becomes 100 ms. sys4_register_setting_defaults registers both pitches and the option as 0, and ops 0x2e6, 0x2e7, 0x2e8 and 0x2ea read and write them.
 
-The port keeps the value (SkipAndAuto.AutoMessageCountOffset) and applies no per-character delay yet: 4.38D's pitch settings and their opcodes are not implemented (docs/backlog.md, 創刻のアテリアル, 'Auto's per-character delay'). With native's default pitch of 0 the delay is the same. 創刻のアテリアル has 579 sites.
+The port keeps the value (SkipAndAuto.AutoMessageCountOffset) and subtracts it from the page's glyph count in both delays (SkipAndAuto.AutoWaitStateFor). 創刻のアテリアル has 579 sites.
+
+### 0x2ea `get-auto-message-option` (u0042CEA0, argc 1)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out) — read message:AutoMessageOption.
+- **operand access:** `1` write
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2ea`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2ea_get_auto_message_option@0x42e420 writes message:AutoMessageOption to operand 1.
+
+創刻のアテリアル has 1 site.
 
 ## audio
 
@@ -4830,42 +4878,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **operand access:** `1` write
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e5`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e6 `u0042CE60` (u0042CE60, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` write
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e6`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e7 `u0042CE70` (u0042CE70, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e7`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e8 `u0042CE80` (u0042CE80, argc 1)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e8`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2ea `u0042CEA0` (u0042CEA0, argc 1)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2ea`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2ee `u0042CEC2` (u0042CEC2, argc 1)
 - **observed by:** none in recorded corpora

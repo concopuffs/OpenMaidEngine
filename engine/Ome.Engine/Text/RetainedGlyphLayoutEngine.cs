@@ -58,12 +58,17 @@ public sealed class RetainedGlyphLayoutEngine
 {
     private readonly IGlyphMaskRasterizer _rasterizer;
     private readonly GlyphCoverageAlpha _coverageAlpha;
+    private readonly LineEndCharacters _lineEnd;
 
+    /// <param name="lineEnd">The characters a wrapping run keeps on the line they overflow (the build's
+    /// <c>TextRules.LineEnd</c>); 、 。 and 」 when not given.</param>
     public RetainedGlyphLayoutEngine(
-        IGlyphMaskRasterizer rasterizer, GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
+        IGlyphMaskRasterizer rasterizer, GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths,
+        LineEndCharacters? lineEnd = null)
     {
         _rasterizer = rasterizer ?? throw new ArgumentNullException(nameof(rasterizer));
         _coverageAlpha = coverageAlpha;
+        _lineEnd = lineEnd ?? LineEndCharacters.FixedThree;
     }
 
     /// <summary>
@@ -174,9 +179,7 @@ public sealed class RetainedGlyphLayoutEngine
 
             if (overflow.HasFlag(AdvTextOverflowFlags.Horizontal)
                 && options.WrapHorizontally
-                && (request.Cp932Code == null
-                    || !AdvRetainedTextContract.PreventsHorizontalWrapBefore(
-                        request.Cp932Code.Value)))
+                && (request.Cp932Code == null || !_lineEnd.Contains(request.Cp932Code.Value)))
             {
                 cursorX = checked(options.LineOriginX + Shift(++row));
                 cursorY = checked(cursorY + LineAdvance(request.PixelHeight));

@@ -144,6 +144,20 @@ public sealed partial class TextManager
         _scene.RevealsFinishedUntilWait = false;
     }
 
+    /// <summary>The glyphs the layout the page wait is on holds, or the current layout before any page wait: native's
+    /// adv_layout_character_count@0x407b10 for the slot op 0x72 stored (AGE 4.38D), its record count less the pending
+    /// record. Auto's per-character delay multiplies it (<see cref="SkipAndAuto.AutoWaitStateFor"/>).</summary>
+    public int WaitLayoutCharacterCount
+    {
+        get
+        {
+            int slot = _scene.ActiveWaitLayout != 0 ? _scene.ActiveWaitLayout : History.CurrentLayoutSlot;
+            return _scene.RetainedTextLayouts.TryGetValue(slot, out RetainedAdvTextLayoutPresentation? presentation)
+                ? presentation.Glyphs.Count
+                : 0;
+        }
+    }
+
     /// <summary>Whether the wait indicator is enabled (op 0x1b5's switch and the page wait's).</summary>
     public bool WaitIndicatorEnabled
     {

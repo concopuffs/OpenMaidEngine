@@ -124,6 +124,18 @@ public sealed class Sys4StartupSettings
     /// (<see cref="Text.RubyLayoutRules"/>). Kamidori sets 1. Missing or non-numeric means 0.</summary>
     public int RubyShiftMode => ReadInt("RUBYSHIFTMODE", 0);
 
+    /// <summary>JUSTIFYCHAR (AGE 4.38D), one character per pair; the key repeats, and each pair adds to the list in
+    /// file order. A horizontal ADV layout keeps a listed character on the line it overflows
+    /// (<see cref="Text.LineEndRule.CatalogList"/>). 創刻のアテリアル lists 、 。 」 and ）.</summary>
+    public IReadOnlyList<string> JustifyCharacters
+        => _pairs.Where(pair => string.Equals(pair.Key, "JUSTIFYCHAR", StringComparison.OrdinalIgnoreCase))
+                 .Select(pair => pair.Value).ToArray();
+
+    /// <summary>SAVEWINPOS (set:SaveWinPos, registered default 0; AGE 4.38D). Nonzero makes native open its window
+    /// where it was left (docs/engine-re.md, "Kamidori against Arterial, triaged"). 創刻のアテリアル sets 1. Missing
+    /// or non-numeric means 0.</summary>
+    public bool SaveWindowPosition => ReadInt("SAVEWINPOS", 0) != 0;
+
     private int ReadInt(string key, int fallback)
         => int.TryParse(GetValueOrDefault(key)?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
                out int value) ? value : fallback;

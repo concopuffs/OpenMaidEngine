@@ -43,7 +43,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
         _skip.PagePassed();   // pacing charges the page if fast-forward passed it
     }
 
-    private AdvAutoWaitState CurrentAutoWaitState() => _skip.AutoWaitState;
+    private AdvAutoWaitState CurrentAutoWaitState() => _skip.AutoWaitStateFor(_text.WaitLayoutCharacterCount);
 
     // 0x72: wait for input, publishing the wait indicator on the layout
     private StepResult OpWaitForInput(Instruction ins, int pc)

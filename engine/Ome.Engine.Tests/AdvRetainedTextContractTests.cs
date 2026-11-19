@@ -30,20 +30,6 @@ public class AdvRetainedTextContractTests
             AdvRetainedTextContract.CheckOverflow(100, 50, 101, 51));
     }
 
-    [Theory]
-    [InlineData(0x8141)] // 、
-    [InlineData(0x8142)] // 。
-    [InlineData(0x8176)] // 」
-    public void NativeClosingPunctuationPreventsHorizontalWrapBefore(int cp932)
-        => Assert.True(AdvRetainedTextContract.PreventsHorizontalWrapBefore((ushort)cp932));
-
-    [Fact]
-    public void OtherCp932GlyphsMayWrapNormally()
-    {
-        Assert.False(AdvRetainedTextContract.PreventsHorizontalWrapBefore(0x8140)); // full-width space
-        Assert.False(AdvRetainedTextContract.PreventsHorizontalWrapBefore(0x82a0)); // あ
-    }
-
     [Fact]
     public void TimedPublicationStopsAtConfiguredObjectCapacity()
     {

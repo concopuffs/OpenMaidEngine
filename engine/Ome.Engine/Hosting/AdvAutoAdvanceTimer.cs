@@ -5,6 +5,10 @@ namespace Ome.Engine.Hosting;
 /// <summary>
 /// Native ADV Auto timing policy. Unvoiced waits use AutoMessageTime1; voiced waits park until voice
 /// completion and then use AutoMessageTime0. The host supplies a monotonic clock and live voice state.
+/// AGE 4.38D adds a per-character part to both delays, which arrives already added in the state, and an option under
+/// which a voiced wait runs on a timer from its start instead (<see cref="AdvAutoWaitState.VoicedTimerMs"/>;
+/// op_0x72_wait_for_input@0x41de50 arms it, and adv_input_service_poll@0x4117c0 then polls it without waiting for
+/// the voice).
 /// </summary>
 public sealed class AdvAutoAdvanceTimer
 {
@@ -35,8 +39,10 @@ public sealed class AdvAutoAdvanceTimer
         if (!_armed)
         {
             _armed = true;
-            _waitingForVoice = state.VoicePending && voiceActive;
-            if (!_waitingForVoice)
+            _waitingForVoice = state.VoicePending && voiceActive && state.VoicedTimerMs == null;
+            if (state.VoicePending && state.VoicedTimerMs is { } voicedTimer)
+                _deadlineMs = nowMs + EffectiveDelay(voicedTimer);
+            else if (!_waitingForVoice)
                 _deadlineMs = !state.VoicePending && _unvoicedDeadlineDue
                     ? nowMs
                     : nowMs + EffectiveDelay(state.VoicePending ? state.PostVoiceDelayMs : state.UnvoicedDelayMs);
@@ -52,7 +58,8 @@ public sealed class AdvAutoAdvanceTimer
         return nowMs >= _deadlineMs;
     }
 
-    // Native callers substitute 100 ms when either configuration getter returns zero.
+    // Native callers substitute 100 ms for a delay of zero: 4.24J and 4.33G when the setting is zero, 4.38D when
+    // the setting plus its per-character part is.
     private static long EffectiveDelay(long configuredMs)
         => configuredMs == 0 ? 100 : System.Math.Max(1, configuredMs);
 }

@@ -16,7 +16,7 @@ public sealed class Sys4RegIniStore
 {
     public const string FileName = "SYS4REG.INI";
     private const string SoundSection = "sound";
-    private const string MessageSection = "message";
+    public const string MessageSection = "message";
     public const string MessageSpeedKey = "MessageSpeed";   // op 0x1b5 per-glyph delay, milliseconds
     public const string MesWinAlphaKey = "MesWinAlpha";     // ops 0x131/0x141 message-window transparency
     // engine_settings_register_defaults@0x46be30 registers message:MessageSpeed=5 and message:MesWinAlpha=8;
@@ -27,6 +27,10 @@ public sealed class Sys4RegIniStore
     public const string AutoMessageTime1Key = "AutoMessageTime1"; // selector 1: unvoiced delay
     public const int DefaultAutoMessageTime0 = 500;
     public const int DefaultAutoMessageTime1 = 2000;
+    // AGE 4.38D: Auto's per-character delay after a voice (0) and on an unvoiced page (1), and its option bits.
+    public const string AutoMessagePitch0Key = "AutoMessagePitch0";
+    public const string AutoMessagePitch1Key = "AutoMessagePitch1";
+    public const string AutoMessageOptionKey = "AutoMessageOption";
     // message:AdvanceMesOnWheel (registered default 0): 1 makes a wheel-down advance an ADV text wait and finish a text
     // reveal (adv_input_service_poll@0x411230, the reveal service at 0x406fa0). Neither game's scripts change it.
     public const string AdvanceMesOnWheelKey = "AdvanceMesOnWheel";
@@ -154,6 +158,12 @@ public sealed class Sys4RegIniStore
             WriteLocked();
         }
     }
+
+    /// <summary>Whether the engine build's settings loader binds this key (<see cref="SettingsRules"/>): a key it
+    /// does not bind is no setting of that build.</summary>
+    public bool Binds(string section, string key)
+        => _bindings.Any(bound => string.Equals(bound.Section, section, StringComparison.OrdinalIgnoreCase)
+                                  && string.Equals(bound.Key, key, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>A [message] integer, or the native registered default when the key is absent.</summary>
     public int LoadMessageInt(string key, int defaultValue) => LoadInt(MessageSection, key, defaultValue);

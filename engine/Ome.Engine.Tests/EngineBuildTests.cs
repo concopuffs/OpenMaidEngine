@@ -38,6 +38,28 @@ public sealed class EngineBuildTests
     }
 
     [Fact]
+    public void FourThirtyEightDIsFourThirtyThreeGPlusItsChanges()
+    {
+        EngineRules parent = EngineBuilds.Age433G.Rules, child = EngineBuilds.Age438D.Rules;
+        Assert.Same(LineEndRule.FixedThree, EngineBuilds.Age424J.Rules.Text.LineEnd);
+        Assert.Same(LineEndRule.FixedThree, parent.Text.LineEnd);
+        Assert.Same(LineEndRule.CatalogList, child.Text.LineEnd);
+        Assert.Equal(parent.Text with { LineEnd = LineEndRule.CatalogList }, child.Text);
+        Assert.Equal(parent.Gfx, child.Gfx);
+
+        // The settings writer writes the parent's keys in order, with four more: the file native 4.38D writes.
+        IReadOnlyList<Sys4RegIniKey> keys = child.Settings.BoundKeys;
+        string[] added = ["MultiSample", "AutoMessagePitch0", "AutoMessagePitch1", "AutoMessageOption"];
+        Assert.Equal(parent.Settings.BoundKeys, keys.Where(key => !added.Contains(key.Key)));
+        List<string> names = keys.Select(key => $"{key.Section}:{key.Key}={key.Default}").ToList();
+        Assert.Equal("display:MultiSample=0", names[names.IndexOf("display:VirtualFullScreenType=0") + 1]);
+        Assert.Equal(
+            ["message:AutoMessagePitch0=0", "message:AutoMessagePitch1=0", "message:AutoMessageOption=0",
+             "message:ReadTextSkip=0"],
+            names.Skip(names.IndexOf("message:AutoMessageTime1=2000") + 1).Take(4));
+    }
+
+    [Fact]
     public void FourThirtyThreeGIsFourTwentyFourJPlusItsChanges()
     {
         EngineRules parent = EngineBuilds.Age424J.Rules, child = EngineBuilds.Age433G.Rules;

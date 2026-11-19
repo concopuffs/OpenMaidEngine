@@ -260,6 +260,41 @@ public sealed partial class VirtualMachine
         _skip.SetAutoMessageCountOffset(unchecked((int)Read(ins.Args[0]))); return StepResult.Next;
     }
 
+    // 0x2e6 (AGE 4.38D): (selector 0=after a voice, 1=unvoiced, out) Auto's per-character delay
+    private StepResult OpGetAutoMessagePitch(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        if (_skip.AutoMessagePitch(unchecked((int)Read(a[0]))) is { } pitch) Write(a[1], pitch);
+        else ReportAutoPitchSelector(ins);
+        return StepResult.Next;
+    }
+
+    // 0x2e7 (AGE 4.38D): (selector, milliseconds)
+    private StepResult OpSetAutoMessagePitch(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        if (!_skip.SetAutoMessagePitch(unchecked((int)Read(a[0])), unchecked((int)Read(a[1]))))
+            ReportAutoPitchSelector(ins);
+        return StepResult.Next;
+    }
+
+    // Both handlers trace the same message for a selector that is neither 0 nor 1, and do nothing else.
+    private void ReportAutoPitchSelector(Instruction ins)
+        => _waits.ReportWarning($"{At(ins)}: the Auto pitch selector is neither 0 nor 1; nothing is read or written, "
+                                + "as AGE does with the trace 「GetAutoMesPiの引数が不正です．」");
+
+    // 0x2e8 (AGE 4.38D): (value) message:AutoMessageOption
+    private StepResult OpSetAutoMessageOption(Instruction ins, int pc)
+    {
+        _skip.AutoMessageOption = unchecked((int)Read(ins.Args[0])); return StepResult.Next;
+    }
+
+    // 0x2ea (AGE 4.38D): (out) message:AutoMessageOption
+    private StepResult OpGetAutoMessageOption(Instruction ins, int pc)
+    {
+        Write(ins.Args[0], _skip.AutoMessageOption); return StepResult.Next;
+    }
+
     // 0x2ec (AGE 4.38D): a string as an integer, by atol
     private StepResult OpStringToInt(Instruction ins, int pc)
     {
