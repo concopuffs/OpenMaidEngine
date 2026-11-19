@@ -1500,7 +1500,9 @@ on the title and back to `ja` on GAMESTART with `language`, and the VM stays whe
 package defining a language, English changes only the shell's text; add `--mod` with a language package to switch the
 game text and its images too. `himegari-reference-diff.steps` and `kamidori-reference-diff.steps` compare the GPU
 renderer with the reference on the title, GAMESTART, ADV pages, SC0000's effect band, the history and Kamidori's
-first field and its map (`reference-diff`; engine layering spec §6.3, "As built"). The data patches scenarios
+first field and its map (`reference-diff`; engine layering spec §6.3, "As built"). `arterial-reference-diff.steps`
+compares them on the polygon items of 創刻のアテリアル's logo, and must start with the port, since the logo runs on
+the clock. The data patches scenarios
 (`himegari-stage-enemies*.steps`, `kamidori-stage-enemies*.steps`, `himegari-unit-stats*.steps` and
 `kamidori-unit-stats.steps`) drive the data-file examples of `oms/examples/mods/`, whose README says what each shows;
 on Kamidori they include the stage list's preview (`-list`) and two saves on 蒼月の南湖畔 (`-lake`). Each header gives

@@ -197,7 +197,7 @@ its integer ones.
 1. Float references in the VM (done 2026-11-19, ahead of this design's acceptance: it stands alone).
 2. The polygon map, the four handlers and the fade, with their tests; the frame item and the reference renderer.
    The port reaches the logo's end on the reference renderer. (Done 2026-11-19.)
-3. The GPU renderer draws polygon items.
+3. The GPU renderer draws polygon items. (Done 2026-11-19, §7.)
 4. The remaining reads of §2 (erase, reset, ranges, saves, flag `0x10000`), each with its handling or its
    backlog entry. (Erase, reset, clone and the flag are read and handled; the rest is §2's list.)
 
@@ -234,3 +234,13 @@ polygons: one fades out over 500 ms, the other fades in after 4,500 ms.
 
 A frame at the same instant of a fade on both was not captured, so the mix's truncation is checked only by
 `PolygonObjectsTests`, against the arithmetic read in the image.
+
+**Milestone 3, the GPU renderer.** `GpuRetainedRenderer` draws a polygon item as a mesh of its triangles with a
+colour at each vertex (a `MeshInstance2D`), in the item's place among the sprites: a pool slot that draws a
+polygon shows its mesh node, which sits right after the slot's sprite, in place of the sprite. The mesh is built
+again only when the item's geometry is another object. The alpha, additive and subtractive blends are canvas
+blend modes, the replace blend and a second texture are shaders.
+`tools/drive/scenarios/port/arterial-reference-diff.steps` compares it with the reference renderer on the logo:
+no pixel differs with both polygons clear, and at most one step of a channel in two frames of the fade (the GPU
+rounds where the reference truncates). A textured polygon, the three other blends and a second texture are not
+compared: the port reaches no screen that uses them yet (`backlog.md`).

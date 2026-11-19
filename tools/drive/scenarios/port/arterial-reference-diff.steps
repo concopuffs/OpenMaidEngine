@@ -1,0 +1,18 @@
+# Port only (scenarios/port/): the GPU renderer against the reference renderer on frames that hold polygon items
+# (docs/superpowers/specs/2026-11-19-polygon-objects-design.md, acceptance 4), in 創刻のアテリアル's logo: a notice
+# under two full-screen black polygons, one of which fades out over the first 0.5 s and the other in from 4.5 s.
+# `reference-diff on` makes the reference draw every frame as well; each `reference-diff NAME` compares the screen
+# with the reference's drawing of the same frame description. Run on a fresh start, since the logo runs on the clock:
+#   py -3.11 -X utf8 tools/drive.py --game arterial port start
+#   py -3.11 -X utf8 tools/drive.py --game arterial port run tools/drive/scenarios/port/arterial-reference-diff.steps
+# The frames compared are untextured polygons under the alpha blend. A textured polygon, the three other blends and
+# a second texture are not compared here: the port reaches no screen that uses them yet (docs/backlog.md).
+
+reference-diff on
+wait 2
+reference-diff arterial-logo-notice          # both polygons clear over the notice
+wait 2.45
+reference-diff arterial-logo-fade-a          # the second polygon fading in, three frames on the clock
+reference-diff arterial-logo-fade-b
+reference-diff arterial-logo-fade-c
+expect script=LOGO

@@ -602,9 +602,11 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The polygon objects are in (2026-11-19):** ops `0x320` to `0x323`, 22,324 sites, with the reference
     renderer; the logo's frames and fade timing were compared with native
     (`superpowers/specs/2026-11-19-polygon-objects-design.md` §7). Open:
-    - **The GPU renderer does not draw a polygon item.** It declines a frame that holds one, and the reference
-      renderer draws it (the design's milestone 3). Done when it draws the item and `reference-diff` passes on a
-      frame with polygons.
+    - **Most of the GPU renderer's polygon paths are not compared with the reference.** It draws polygon items
+      since 2026-11-19, and `arterial-reference-diff.steps` compares the logo's untextured polygons under the alpha
+      blend. A textured polygon, the additive, replace and subtractive blends and a second texture have run on no
+      frame: the port reaches no screen that uses them. Done when a scenario compares each on a screen of the game,
+      which needs the boot past the title.
     - **A polygon in a blur's source range is drawn unblurred.** `Graphics.LowerObjects` draws it in its place and
       `LowerBlurRange` skips it; native's pre-pass draws a range's polygons into the blur's surface. No use of one
       is known.

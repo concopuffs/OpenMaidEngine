@@ -6,7 +6,8 @@ using Ome.Engine.Diagnostics;
 using Ome.Engine.Model;
 
 /// <summary>
-/// The GPU renderer (engine layering spec §6.3, part 3): draws frame descriptions with pooled Sprite2D canvas items.
+/// The GPU renderer (engine layering spec §6.3, part 3): draws frame descriptions with pooled Sprite2D canvas items,
+/// and a polygon item (AGE 4.38D's polygon objects) with a pooled MeshInstance2D in the same order.
 /// Static decoded/color-key variants are uploaded once; the canvas items keep their GPU resources between
 /// presentation boundaries. The reference renderer (Ome.Engine.Hosting.ReferenceRenderer) defines each item, and
 /// this must match it within the stated tolerance. Objects sample as native's D3D9 sprite does (docs/engine-re.md,
@@ -40,12 +41,29 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
 
     private readonly Node2D _stage;
     private readonly List<Sprite2D> _items = new(1024);
+    // A polygon item takes its slot's mesh node in place of the slot's sprite: the node is made when a slot first
+    // draws a polygon, and sits right after the sprite among the stage's children, so the order stays the items'.
+    private readonly List<PolygonNode?> _polygons = new(1024);
+
+    private sealed class PolygonNode
+    {
+        public required MeshInstance2D Node;
+        public required ArrayMesh Mesh;
+        // The geometry the mesh was built from: a frame's geometry object is replaced when the polygon changes.
+        public FramePolygonGeometry? Geometry;
+        public ShaderMaterial? TwoTextureMaterial;
+        public FramePolygonBlend TwoTextureBlend;
+    }
     private readonly ByteBudgetCache<(int AssetId, long ColorKey, long DynamicKey), CachedTexture> _textures =
         new(TextureBudgetBytes, (_, cached) => cached.Texture.Dispose());
     private readonly ByteBudgetCache<(long Tint, int Strength, BlendKind Blend), ShaderMaterial> _lerpMaterials =
         new(MaterialBudget, (_, material) => material.Dispose());
     private readonly CanvasItemMaterial _alphaMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Mix };
     private readonly CanvasItemMaterial _additiveMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Add };
+    private readonly CanvasItemMaterial _subtractiveMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Sub };
+    private readonly ShaderMaterial _replaceMaterial;
+    private readonly Shader _replaceShader;
+    private readonly Dictionary<FramePolygonBlend, Shader> _twoTextureShaders = new();
     private readonly ImageTexture _whiteTexture;
     private readonly Shader _lerpShader;
     private readonly Shader _additiveLerpShader;
@@ -71,10 +89,6 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
     {
         if (frame.ScreenTransition != null) return false;
         List<FrameItem> items = frame.Items;
-        // A polygon item (AGE 4.38D's polygon objects) is not drawn here yet, so the reference renderer draws a
-        // frame that holds one (docs/superpowers/specs/2026-11-19-polygon-objects-design.md, milestone 3).
-        for (int index = 0; index < items.Count; index++)
-            if (items[index].Kind == FrameItemKind.Polygon) return false;
         if (!frame.AppendLayers)
         {
             // An appended frame adds to the one before it, whose sprites still show that frame's textures.
@@ -101,6 +115,12 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
                     Perf?.RecordGpuLayer(item.Width, item.Height, item.Matrix, frame.Width, frame.Height,
                                          dynamic: false, BlendKind.Alpha);
             }
+            else if (item.Kind == FrameItemKind.Polygon)
+            {
+                if (DrawPolygon(item))
+                    Perf?.RecordGpuLayer(frame.Width, frame.Height, item.Matrix, frame.Width, frame.Height,
+                                         item.Dynamic, BlendKind.Alpha);
+            }
             else if (DrawTexture(item.Pixels!, item.AssetId, item.ColorKey,
                          item.SourceX, item.SourceY, item.Width, item.Height, item.Matrix, item.Tint,
                          item.TintStrength, item.Opacity, item.MultiplyTint, item.Dynamic, item.DynamicKey,
@@ -126,7 +146,31 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
 
         _lerpShader = new Shader { Code = LerpShaderCode("blend_mix") };
         _additiveLerpShader = new Shader { Code = LerpShaderCode("blend_add") };
+        _replaceShader = new Shader { Code = PolygonShaderCode("blend_disabled", twoTextures: false) };
+        _replaceMaterial = new ShaderMaterial { Shader = _replaceShader };
     }
+
+    // A polygon's source colour, as the reference renderer has it (SoftwareAffineRasterizer.Polygons.cs): its texture
+    // times the interpolated vertex colour, alpha included; with two textures the second goes over the first by its
+    // own alpha, colour and alpha alike, before that. COLOR arrives as the vertex colour times the item's opacity.
+    private static string PolygonShaderCode(string blendMode, bool twoTextures) => $$"""
+        shader_type canvas_item;
+        render_mode {{blendMode}}, unshaded;
+        {{(twoTextures ? "uniform sampler2D ome_second : filter_linear, repeat_disable;" : "")}}
+        void fragment() {
+            vec4 source = texture(TEXTURE, UV);
+            {{(twoTextures ? "vec4 second = texture(ome_second, UV); source = mix(source, second, second.a);" : "")}}
+            COLOR = source * COLOR;
+        }
+        """;
+
+    private static string RenderMode(FramePolygonBlend blend) => blend switch
+    {
+        FramePolygonBlend.Additive => "blend_add",
+        FramePolygonBlend.Replace => "blend_disabled",
+        FramePolygonBlend.Subtractive => "blend_sub",
+        _ => "blend_mix",
+    };
 
     // A LERP tint moves texel RGB toward the tint by the strength, then the item's opacity scales alpha and the item
     // blends source-over or, additive, SRCALPHA/ONE: the reference renderer's order (SoftwareAffineRasterizer).
@@ -204,10 +248,121 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         return true;
     }
 
+    /// <summary>A polygon item: its triangles as a mesh in canvas pixels, with a colour at each vertex. The mesh is
+    /// built again only when the item's geometry is another object.</summary>
+    public bool DrawPolygon(in FrameItem item)
+    {
+        FramePolygonGeometry geometry = item.Polygon!;
+        if (geometry.Vertices.Length < 3) return false;
+        if (item.Opacity <= 0 && geometry.Blend != FramePolygonBlend.Replace) return false;
+        long started = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        long allocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+        Texture2D? first = item.Pixels is { } pixels
+            ? ResolveTexture(pixels, item.AssetId, item.ColorKey, item.Dynamic, item.DynamicKey)
+            : null;
+        Texture2D? second = item.SecondTexture is { } texture
+            ? ResolveTexture(texture.Pixels, texture.AssetId, texture.ColorKey, texture.Dynamic, texture.DynamicKey)
+            : null;
+        _perf?.RecordGpuTextureLookup(PerformanceFrameLog.Timestamp() - started,
+            PerformanceFrameLog.AllocatedBytes() - allocated);
+        started = _perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        allocated = _perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
+
+        PolygonNode polygon = NextPolygon();
+        if (!ReferenceEquals(polygon.Geometry, geometry))
+        {
+            BuildMesh(polygon.Mesh, geometry.Vertices);
+            polygon.Geometry = geometry;
+        }
+        MeshInstance2D node = polygon.Node;
+        // With no texture the canvas samples white, so the vertex colour alone is drawn.
+        node.Texture = first;
+        node.Modulate = new Color(1, 1, 1, Math.Clamp(item.Opacity, 0, 1));
+        node.Material = second != null ? TwoTextureMaterial(polygon, geometry.Blend, second) : geometry.Blend switch
+        {
+            FramePolygonBlend.Additive => _additiveMaterial,
+            FramePolygonBlend.Replace => _replaceMaterial,
+            FramePolygonBlend.Subtractive => _subtractiveMaterial,
+            _ => _alphaMaterial,
+        };
+        node.Visible = true;
+        _perf?.RecordGpuSpriteUpdate(PerformanceFrameLog.Timestamp() - started,
+            PerformanceFrameLog.AllocatedBytes() - allocated);
+        return true;
+    }
+
+    private static void BuildMesh(ArrayMesh mesh, FramePolygonVertex[] vertices)
+    {
+        int count = vertices.Length - vertices.Length % 3;
+        var points = new Vector2[count];
+        var colors = new Color[count];
+        var uvs = new Vector2[count];
+        for (int index = 0; index < count; index++)
+        {
+            FramePolygonVertex vertex = vertices[index];
+            points[index] = new Vector2(vertex.X, vertex.Y);
+            colors[index] = new Color(((vertex.Argb >> 16) & 0xff) / 255f, ((vertex.Argb >> 8) & 0xff) / 255f,
+                                      (vertex.Argb & 0xff) / 255f, (vertex.Argb >> 24) / 255f);
+            uvs[index] = new Vector2(vertex.U, vertex.V);
+        }
+        using var arrays = new Godot.Collections.Array();
+        arrays.Resize((int)Mesh.ArrayType.Max);
+        arrays[(int)Mesh.ArrayType.Vertex] = points;
+        arrays[(int)Mesh.ArrayType.Color] = colors;
+        arrays[(int)Mesh.ArrayType.TexUV] = uvs;
+        mesh.ClearSurfaces();
+        mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
+    }
+
+    // Two textures need the second as a shader parameter, so such a polygon has a material of its own.
+    private ShaderMaterial TwoTextureMaterial(PolygonNode polygon, FramePolygonBlend blend, Texture2D second)
+    {
+        if (polygon.TwoTextureMaterial == null || polygon.TwoTextureBlend != blend)
+        {
+            if (!_twoTextureShaders.TryGetValue(blend, out Shader? shader))
+            {
+                shader = new Shader { Code = PolygonShaderCode(RenderMode(blend), twoTextures: true) };
+                _twoTextureShaders[blend] = shader;
+            }
+            polygon.TwoTextureMaterial?.Dispose();
+            polygon.TwoTextureMaterial = new ShaderMaterial { Shader = shader };
+            polygon.TwoTextureBlend = blend;
+        }
+        polygon.TwoTextureMaterial.SetShaderParameter("ome_second", second);
+        return polygon.TwoTextureMaterial;
+    }
+
     public FrameStats EndFrame()
     {
-        for (int i = _used; i < _items.Count; i++) _items[i].Visible = false;
+        for (int i = _used; i < _items.Count; i++)
+        {
+            _items[i].Visible = false;
+            if (_polygons[i] is { } polygon) polygon.Node.Visible = false;
+        }
         return new FrameStats(_used, _textureUploads, _textureUploadTicks);
+    }
+
+    // The next slot as a polygon: its sprite hidden, its mesh node shown in the sprite's place.
+    private PolygonNode NextPolygon()
+    {
+        Sprite2D sprite = NextItem();
+        sprite.Visible = false;
+        int slot = _used - 1;
+        if (_polygons[slot] is { } existing) return existing;
+        var mesh = new ArrayMesh();
+        var node = new MeshInstance2D
+        {
+            Mesh = mesh,
+            // D3D9's CLAMP addressing with bilinear filtering, as native draws a polygon's texture.
+            TextureFilter = CanvasItem.TextureFilterEnum.Linear,
+            TextureRepeat = CanvasItem.TextureRepeatEnum.Disabled,
+            Visible = false,
+        };
+        _stage.AddChild(node);
+        _stage.MoveChild(node, sprite.GetIndex() + 1);
+        var created = new PolygonNode { Node = node, Mesh = mesh };
+        _polygons[slot] = created;
+        return created;
     }
 
     private Sprite2D NextItem()
@@ -224,8 +379,11 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
             };
             _stage.AddChild(item);
             _items.Add(item);
+            _polygons.Add(null);
         }
         var result = _items[_used];
+        // The slot draws a sprite this frame: its polygon of an earlier frame, if any, is not shown.
+        if (_polygons[_used] is { } polygon) polygon.Node.Visible = false;
         // Children are created in retained handle order, which is enough to preserve AGE z-order. Keep
         // their absolute Godot Z at the stage level so Main's later dialogue/wait controls remain above
         // the complete AGE canvas instead of being covered by a high-numbered full-screen sprite.
@@ -349,9 +507,23 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
             item.Texture = null;
             item.Material = null;
         }
+        foreach (PolygonNode? polygon in _polygons)
+        {
+            if (polygon == null) continue;
+            polygon.Node.Texture = null;
+            polygon.Node.Material = null;
+            polygon.TwoTextureMaterial?.Dispose();
+            polygon.Mesh.Dispose();
+        }
+        _polygons.Clear();
         _whiteTexture.Dispose();
         _alphaMaterial.Dispose();
         _additiveMaterial.Dispose();
+        _subtractiveMaterial.Dispose();
+        _replaceMaterial.Dispose();
+        _replaceShader.Dispose();
+        foreach (Shader shader in _twoTextureShaders.Values) shader.Dispose();
+        _twoTextureShaders.Clear();
         _lerpMaterials.Clear();
         _textures.Clear();
         _lerpShader.Dispose();
