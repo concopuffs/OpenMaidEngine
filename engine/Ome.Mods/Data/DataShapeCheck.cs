@@ -38,7 +38,7 @@ public static class DataShapeCheck
     public static DataShapeResult Check(DataShape shape, DataReadResult read)
     {
         if (read.Document is not { } document) throw new ArgumentException("the read has no document", nameof(read));
-        long limit = StepsBase + (long)StepsPerValue * document.Values;
+        long limit = StepsBase + (long)StepsPerValue * document.Size.Total;
         var walk = new Walk(limit);
         walk.Value(shape.Root, document.Root);
         if (walk.Over) return new DataShapeResult([], 0, limit);

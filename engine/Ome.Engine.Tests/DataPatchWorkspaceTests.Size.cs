@@ -460,7 +460,7 @@ public sealed partial class DataPatchWorkspaceTests
         {
             Assert.InRange(size, 1, ValueBound);
             ModLinkResult linked = LinkedInOrder(game.Base, DataMod("kamidori", "test.sparse-" + name, name + ".toml", text));
-            Assert.Equal(size, linked.Lua.Stack.ContributionList.Single().Values);
+            Assert.Equal(size, linked.Lua.Stack.ContributionList.Single().Size.Total);
             Scripting booted = Measuring(linked);
             game.Boot(booted);
             long[] costs = Instructions(booted, name);
@@ -553,7 +553,7 @@ public sealed partial class DataPatchWorkspaceTests
             foreach (RecordField row in rows) text.Append("[item.").Append(id).Append('.').Append(row.Name).Append("]\n");
         }
         ModLinkResult linked = LinkedInOrder(linkBase, DataMod("kamidori", "test.partial", "partial.toml", text.ToString()));
-        Assert.Equal(16_001, linked.Lua.Stack.ContributionList.Single().Values);
+        Assert.Equal(new DataSize(2_000, 14_001, 0), linked.Lua.Stack.ContributionList.Single().Size);
         // The review's budget: the handler's 1,000,000 and 250 for each of the file's 2,000 values, tables not counted.
         var native = new Scripting(new ScriptMemory(), new ScriptingSetup
         {

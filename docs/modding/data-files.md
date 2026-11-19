@@ -76,8 +76,8 @@ priority = 0                   # optional; where the file comes among the event'
 - **Keys are strings.** `[rows.12]` has the key `"12"`. What a key means is the kind's.
 - **Bounds.** A document holds at most 400,000 values, where each string, boolean and number counts one (each
   element of an array too) and so does each table and array, an empty one included: `[rows.12]` with one key under it
-  is three, the tables `rows` and `12` and the value. This count is the document's size in the report, the budget
-  and the shape's check below. A document nests tables and arrays at most 16 deep, and its keys are at most 128
+  is three, the tables `rows` and `12` and the value. This count is the document's size, which the budget and the
+  shape's check below use; the report gives its values and its tables and arrays apart. A document nests tables and arrays at most 16 deep, and its keys are at most 128
   characters, with none that does not print: no control or format character (Unicode Cc and Cf, such as U+200B or
   U+202E), no U+2028 or U+2029, and no half of a surrogate pair. A string value may hold them.
 
@@ -315,15 +315,19 @@ files fail to link.
 ## The report
 
 The link report's Lua section lists each kind with its owner and its events, then its files in delivery order with the
-values each holds (each table and array counting one, as in "The file"), then each path that two files give a value
-at:
+values each holds and the tables and arrays they are in, then each path that two files give a value at:
 
 ```text
 kind <game>.tables (<game>-base), at <game>.data.layered and <game>.stage.loaded
-  example.tougher-slimes data/slimes.toml: 3 values
-  example.hard-mode data/hard.toml: 212 values
+  example.tougher-slimes data/slimes.toml: 2 values in 3 tables
+  example.hard-mode data/hard.toml: 212 values in 160 tables
   unit.12.experience_reward: example.tougher-slimes, then example.hard-mode (shared path, in delivery order)
 ```
+
+- **A file's line** gives its parts: the first file is the example at the top of "The record tables", whose two values
+  are in the tables `unit`, `12` and `stats`. Their sum is the document's size ("The file"), 5 here, which sets the
+  bound, the delivery's budget and the shape's check. A file of values at its top level reads `2 values`, and one of
+  empty tables `no value in 8 tables`.
 
 - **A path** is the keys from the top of the file down to a value that is not a table, joined by dots; an array is one
   path. A key that is not a bare TOML key is printed quoted.

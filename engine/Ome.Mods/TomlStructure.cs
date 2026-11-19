@@ -12,9 +12,15 @@ namespace Ome.Mods;
 internal sealed record TomlStructureProblem(TomlTextPosition At, string Message);
 
 /// <summary>What <see cref="TomlStructure.Walk"/> found. <see cref="Nodes"/> counts every value, table and array of
-/// the document but its own table, up to where the walk stopped.</summary>
+/// the document but its own table, up to where the walk stopped; <see cref="Tables"/> and <see cref="Arrays"/> are two
+/// of its parts (an array of tables is an array, and each of its tables a table), the values the rest. Past a token
+/// the walk does not follow, the parts are not kept.</summary>
 internal sealed record TomlStructureResult(IReadOnlyList<TomlStructureProblem> Problems, int Nodes, bool PastBound,
-                                           TomlTextPosition? Unread);
+                                           TomlTextPosition? Unread)
+{
+    public int Tables { get; init; }
+    public int Arrays { get; init; }
+}
 
 /// <summary>What a walk reports beside its result.</summary>
 internal sealed class TomlStructureOptions
@@ -83,7 +89,7 @@ internal sealed class TomlStructure
     /// <summary>The arrays of tables the last header's table is in, outermost first: those a header may reach.</summary>
     private readonly List<Node> _openArrays = [];
     private TomlToken _token;
-    private int _nodes;
+    private int _nodes, _tables, _arrays;
     private bool _pastBound;
     private TomlTextPosition? _unread;
 
@@ -100,7 +106,11 @@ internal sealed class TomlStructure
         var walk = new TomlStructure(text, options ?? new TomlStructureOptions());
         walk.Document();
         if (walk._unread != null && !walk._pastBound) walk.CountTheRest();
-        return new TomlStructureResult(walk._problems, walk._nodes, walk._pastBound, walk._unread);
+        return new TomlStructureResult(walk._problems, walk._nodes, walk._pastBound, walk._unread)
+        {
+            Tables = walk._tables,
+            Arrays = walk._arrays,
+        };
     }
 
     private void Document()
@@ -152,9 +162,14 @@ internal sealed class TomlStructure
 
     private void Unexpected() => _unread ??= _token.Start;
 
-    /// <summary>Counts one node; past the bound, stops the walk.</summary>
-    private void Count()
+    /// <summary>Counts one node of <paramref name="kind"/>; past the bound, stops the walk.</summary>
+    private void Count(Kind kind)
     {
+        switch (kind)
+        {
+            case Kind.Table: _tables++; break;
+            case Kind.TableArray or Kind.Array: _arrays++; break;
+        }
         if (++_nodes > _options.MaxNodes) _pastBound = true;
     }
 
@@ -216,7 +231,7 @@ internal sealed class TomlStructure
             {
                 child = new Node(Kind.Table, Origin.Dotted, at);
                 target.Children!.Add(keys[k], child);
-                Count();
+                Count(Kind.Table);
             }
             else if (child.Kind != Kind.Table || child.Origin is not (Origin.Dotted or Origin.Super))
             {
@@ -251,7 +266,7 @@ internal sealed class TomlStructure
         {
             case TokenKind.Integer or TokenKind.IntegerHexa or TokenKind.IntegerOctal or TokenKind.IntegerBinary:
                 if (_options.Integer is { } integer) integer(_lexer.GetText(token) ?? "", token.Start.Line + 1);
-                Count();
+                Count(Kind.Value);
                 return new Node(Kind.Value, Origin.Root, token.Start);
             case TokenKind.Float or TokenKind.Infinite or TokenKind.PositiveInfinite or TokenKind.NegativeInfinite
                 or TokenKind.Nan or TokenKind.PositiveNan or TokenKind.NegativeNan
@@ -259,7 +274,7 @@ internal sealed class TomlStructure
                 or TokenKind.String or TokenKind.StringMulti or TokenKind.StringLiteral or TokenKind.StringLiteralMulti
                 or TokenKind.OffsetDateTimeByZ or TokenKind.OffsetDateTimeByNumber or TokenKind.LocalDateTime
                 or TokenKind.LocalDate or TokenKind.LocalTime:
-                Count();
+                Count(Kind.Value);
                 return new Node(Kind.Value, Origin.Root, token.Start);
             case TokenKind.OpenBracket:
                 return Array(nesting + 1);
@@ -281,7 +296,7 @@ internal sealed class TomlStructure
             return null;
         }
         var array = new Node(Kind.Array, Origin.Inline, _token.Start);
-        Count();
+        Count(Kind.Array);
         int index = 0;
         Advance(TomlLexerMode.Value, newLines: true);
         while (!Stopped)
@@ -309,7 +324,7 @@ internal sealed class TomlStructure
             return null;
         }
         var table = new Node(Kind.Table, Origin.Inline, _token.Start);
-        Count();
+        Count(Kind.Table);
         Advance(TomlLexerMode.Key, newLines: true);
         while (!Stopped)
         {
@@ -352,7 +367,7 @@ internal sealed class TomlStructure
             {
                 child = new Node(Kind.Table, Origin.Super, at);
                 table.Children!.Add(keys[k], child);
-                Count();
+                Count(Kind.Table);
             }
             else if (child.Kind == Kind.TableArray)
             {
@@ -383,7 +398,7 @@ internal sealed class TomlStructure
                 {
                     named = new Node(Kind.Table, Origin.Header, at);
                     table.Children!.Add(keys[^1], named);
-                    Count();
+                    Count(Kind.Table);
                 }
                 else if (existing.Kind == Kind.Table && existing.Origin == Origin.Super)
                 {
@@ -398,13 +413,13 @@ internal sealed class TomlStructure
                 {
                     existing = new Node(Kind.TableArray, Origin.Header, at);
                     table.Children!.Add(keys[^1], existing);
-                    Count();
+                    Count(Kind.TableArray);
                 }
                 if (existing.Kind == Kind.TableArray && (existing.Elements!.Count == 0 || Open(existing, at)))
                 {
                     named = new Node(Kind.Table, Origin.Header, at);
                     existing.Elements!.Add(named);
-                    Count();
+                    Count(Kind.Table);
                     arrays.Add(existing);
                     _path.Add(IndexMark + existing.Elements.Count.ToString(CultureInfo.InvariantCulture));
                 }
@@ -475,7 +490,7 @@ internal sealed class TomlStructure
                     or TokenKind.String or TokenKind.StringMulti or TokenKind.StringLiteral or TokenKind.StringLiteralMulti
                     or TokenKind.OffsetDateTimeByZ or TokenKind.OffsetDateTimeByNumber or TokenKind.LocalDateTime
                     or TokenKind.LocalDate or TokenKind.LocalTime or TokenKind.OpenBracket or TokenKind.OpenBrace:
-                    Count();
+                    Count(Kind.Value);   // the parts do not matter: the text is refused
                     break;
             }
         }

@@ -59,7 +59,7 @@ public sealed record ModLimits
 
     /// <summary>The instructions a call may run: a delivery's grows with its document.</summary>
     public long BudgetFor(ModContribution? contribution)
-        => HandlerInstructions + (contribution == null ? 0 : DataInstructionsPerValue * contribution.Values);
+        => HandlerInstructions + (contribution == null ? 0 : DataInstructionsPerValue * contribution.Size.Total);
     public long StartupInstructions { get; init; } = 10_000_000;
     public int NestingCap { get; init; } = 32;
     /// <summary>The script instructions one <c>maid.vm.call</c> may run, its called frames' included (spec §10).</summary>

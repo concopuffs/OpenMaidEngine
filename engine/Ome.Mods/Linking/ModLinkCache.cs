@@ -141,7 +141,7 @@ public sealed record LinkedLuaContributionEntry(
     [property: JsonPropertyName("owner")] string Owner,
     [property: JsonPropertyName("mod")] string Mod,
     [property: JsonPropertyName("file")] string File,
-    [property: JsonPropertyName("values")] int Values,
+    [property: JsonPropertyName("size")] int Size,
     [property: JsonPropertyName("unraised")] IReadOnlyList<string> Unraised,
     [property: JsonPropertyName("requires")] IReadOnlyList<string> Requires)
 {
@@ -267,7 +267,7 @@ public sealed record LinkedLuaEntry
             watch.Global, watch.Dimensions, watch.RowWidth)).ToList(),
         Contributions = lua.Stack.ContributionList.Count == 0 ? null
             : lua.Stack.ContributionList.Select(contribution => new LinkedLuaContributionEntry(contribution.Kind,
-                contribution.Owner, contribution.Mod, contribution.File, contribution.Values, contribution.Unraised,
+                contribution.Owner, contribution.Mod, contribution.File, contribution.Size.Total, contribution.Unraised,
                 contribution.Requires)).ToList(),
     };
 
@@ -299,10 +299,10 @@ public sealed record LinkedLuaEntry
             if (read.Document is not { } document)
                 throw new InvalidDataException($"its copy of {entry.Mod} {entry.File} no longer reads: "
                                                + string.Join("; ", read.Problems.Select(problem => problem.Describe(entry.File))));
-            if (document.Values != entry.Values)
-                throw new InvalidDataException($"its copy of {entry.Mod} {entry.File} reads as {document.Values} values, "
-                                               + $"where the link read {entry.Values}");
-            return new ModContribution(entry.Kind, entry.Owner, entry.Mod, entry.File, document.Root, document.Values,
+            if (document.Size.Total != entry.Size)
+                throw new InvalidDataException($"its copy of {entry.Mod} {entry.File} reads to a size of {document.Size.Total}, "
+                                               + $"where the link read {entry.Size}");
+            return new ModContribution(entry.Kind, entry.Owner, entry.Mod, entry.File, document.Root, document.Size,
                                        entry.Unraised, entry.Requires);
         }).ToList();
         return new ModRuntimeStack(mods,

@@ -55,9 +55,11 @@ public sealed class DataDocumentTests
         Assert.Equal(["761", "12"], unit.Entries.Select(entry => entry.Key));
         Assert.Equal(999, Assert.IsType<DataInteger>(Assert.IsType<DataTable>(unit["761"])["experience_reward"]).Value);
         Assert.Null(unit["13"]);
-        // Each string, boolean and number counts one, and so does each table and array (plan §12.6): twelve of the
-        // first kind; unit, 761, stats, drop_chance, 12, names, its inner array, stage and stage's two tables.
-        Assert.Equal(22, document.Values);
+        // Each string, boolean and number counts one, and so does each table and array (plan §12.6): twelve values;
+        // the tables unit, 761, stats, drop_chance, 12 and stage's two; the arrays names, its inner array and stage.
+        Assert.Equal(new DataSize(12, 7, 3), document.Size);
+        Assert.Equal(22, document.Size.Total);
+        Assert.Equal("12 values in 7 tables and 3 arrays", document.Size.Describe());
     }
 
     [Fact]
@@ -65,7 +67,8 @@ public sealed class DataDocumentTests
     {
         DataDocument document = Read("# nothing yet\n");
         Assert.Empty(document.Root.Entries);
-        Assert.Equal(0, document.Values);
+        Assert.Equal(new DataSize(0, 0, 0), document.Size);
+        Assert.Equal("no value", document.Size.Describe());
     }
 
     [Theory]
@@ -178,7 +181,7 @@ public sealed class DataDocumentTests
     {
         // The document's table is the first level, so 16 dotted keys make 15 tables in it, the last holding a value.
         string deepest = string.Join(".", Enumerable.Range(1, DataBounds.MaxDepth).Select(k => $"k{k}")) + " = 1";
-        Assert.Equal(DataBounds.MaxDepth, Read(deepest).Values);
+        Assert.Equal(DataBounds.MaxDepth, Read(deepest).Size.Total);
         string past = string.Join(".", Enumerable.Range(1, DataBounds.MaxDepth + 1).Select(k => $"k{k}")) + " = 1";
         string path = string.Join(".", Enumerable.Range(1, DataBounds.MaxDepth).Select(k => $"k{k}"));
         Assert.Equal([$"data/a.toml: {path}: tables and arrays nest deeper than {DataBounds.MaxDepth}"], Refused(past));
@@ -199,20 +202,26 @@ public sealed class DataDocumentTests
                           + "and array as one; a data file holds at most that many";
         Assert.Equal(tooLarge, "data/a.toml: " + DataDocumentReader.TooLarge);
         static string Zeros(int count) => "a = [" + string.Join(",", Enumerable.Repeat("0", count)) + "]";
-        Assert.Equal(DataBounds.MaxValues, Read(Zeros(DataBounds.MaxValues - 1)).Values);
+        Assert.Equal(DataBounds.MaxValues, Read(Zeros(DataBounds.MaxValues - 1)).Size.Total);
         Assert.Equal([tooLarge], Refused(Zeros(DataBounds.MaxValues)));
         static string Tables(int count) => string.Concat(Enumerable.Range(0, count).Select(k => $"[t{k}]\n"));
-        Assert.Equal(DataBounds.MaxValues, Read(Tables(DataBounds.MaxValues)).Values);
+        Assert.Equal(DataBounds.MaxValues, Read(Tables(DataBounds.MaxValues)).Size.Total);
         Assert.Equal([tooLarge], Refused(Tables(DataBounds.MaxValues + 1)));
         static string Arrays(int count) => "a = [" + string.Concat(Enumerable.Repeat("[],", count)) + "]";
-        Assert.Equal(DataBounds.MaxValues, Read(Arrays(DataBounds.MaxValues - 1)).Values);
+        Assert.Equal(DataBounds.MaxValues, Read(Arrays(DataBounds.MaxValues - 1)).Size.Total);
         // The review's files: 5.3 million empty arrays and 1.6 million empty tables, read before at 4.1 and 2.6 GB.
         Assert.Equal([tooLarge], Refused(Arrays(5_300_000)));
         Assert.Equal([tooLarge], Refused(Tables(1_600_000)));
         // A header's super-tables count once, and an array of tables counts with each of its tables.
-        Assert.Equal(3, Read("[a.b.c]\n[a.b]\n").Values);
-        Assert.Equal(3, Read("[[a]]\n[[a]]\n").Values);
-        Assert.Equal(1, Read("a = {}").Values);
+        Assert.Equal(new DataSize(0, 3, 0), Read("[a.b.c]\n[a.b]\n").Size);
+        Assert.Equal(new DataSize(0, 2, 1), Read("[[a]]\n[[a]]\n").Size);
+        Assert.Equal(new DataSize(0, 1, 0), Read("a = {}").Size);
+        // The report's line (plan §12.6): the values, then the tables and arrays they are in.
+        Assert.Equal("1 value in 3 tables", Read("[unit.761]\nstats.max_hp = 150\n").Size.Describe());
+        Assert.Equal("2 values in 1 array", Read("a = [1, 2]").Size.Describe());
+        Assert.Equal("1 value", Read("a = 1").Size.Describe());
+        Assert.Equal("no value in 1 table", Read("[a]").Size.Describe());
+        Assert.Equal("1,000 values in 1 array", Read(Zeros(1000)).Size.Describe());
     }
 
     /// <summary>Tomlyn's validating parser took two different keys for one where their hashes met (plan §12.6); the
@@ -251,7 +260,7 @@ public sealed class DataDocumentTests
                       + "an array's tables, with their sub-tables, one after another"],
                      Refused("[[rows]]\nn = 1\n[other]\n[[rows]]\nn = 2\n"));
         // A table inside the array's last table does not interrupt it: rows, its two tables, their n, and inner.
-        Assert.Equal(6, Read("[[rows]]\nn = 1\n[rows.inner]\n[[rows]]\nn = 2\n").Values);
+        Assert.Equal(new DataSize(2, 3, 1), Read("[[rows]]\nn = 1\n[rows.inner]\n[[rows]]\nn = 2\n").Size);
     }
 
     [Fact]

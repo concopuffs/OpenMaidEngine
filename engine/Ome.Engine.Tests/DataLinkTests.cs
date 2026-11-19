@@ -147,8 +147,10 @@ public sealed class DataLinkTests : IDisposable
         Assert.Equal([new ModRuntimeHandler("test.a", "a.lua", "on_award"), new ModRuntimeHandler("test.owner", "lists.lua", "apply")],
                      stack.Handlers);
         // Each value counts, and each table and array as one (plan §12.6): names, its two elements, t and k; t, k and j.
-        Assert.Equal([("test.lists", "test.owner", "test.a", "data/a.toml", 5), ("test.lists", "test.owner", "test.b", "data/b.toml", 3)],
-                     stack.ContributionList.Select(found => (found.Kind, found.Owner, found.Mod, found.File, found.Values)));
+        Assert.Equal([("test.lists", "test.owner", "test.a", "data/a.toml", new DataSize(3, 1, 1)),
+                      ("test.lists", "test.owner", "test.b", "data/b.toml", new DataSize(2, 1, 0))],
+                     stack.ContributionList.Select(found => (found.Kind, found.Owner, found.Mod, found.File, found.Size)));
+        Assert.Equal([5, 3], stack.ContributionList.Select(found => found.Size.Total));
         Assert.Equal("""{names = ["x", "y"], t = {k = 1}}""", stack.ContributionList[0].Document.ToText());
         Assert.All(stack.ContributionList, found => Assert.Empty(found.Unraised));
         // b requires the owner, which ships Lua; b ships none and has no runtime mod of its own.
@@ -174,8 +176,8 @@ public sealed class DataLinkTests : IDisposable
         Assert.Equal("test.owner.computed: subscribers run in this order: test.b data/b.toml (test.owner lists.lua:apply) "
                      + "(priority -5), test.a data/a.toml (test.owner lists.lua:apply) (priority 0)", orders[1].Message);
         Assert.Equal(["kind test.lists (test.owner), at test.owner.award and test.owner.computed",
-                      "  test.b data/b.toml: 3 values",
-                      "  test.a data/a.toml: 5 values",
+                      "  test.b data/b.toml: 2 values in 1 table",
+                      "  test.a data/a.toml: 3 values in 1 table and 1 array",
                       "  t.k: test.b, then test.a (shared path, in delivery order)"],
                      result.Report.Lua.SkipWhile(line => !line.StartsWith("kind ", StringComparison.Ordinal)));
         Assert.Contains(result.Report.Lua, line => line.StartsWith("event test.owner.computed (test.owner, raised from Lua)", StringComparison.Ordinal)
@@ -493,7 +495,7 @@ public sealed class DataLinkTests : IDisposable
             """;
         ModLinkResult result = Link(ShapedOwner(costly), Contributor("test.a", "a.b.c.d.e.f.g.h.i.j.k.l.m.n.o = 1\n"));
         ModReportLine line = Stop(result, "the shape takes more than 100,960 steps on test.a data/a.toml (64 for each of its 15 "
-                                          + "values and 100,000)");
+                                          + "values, tables and arrays, and 100,000)");
         Assert.Equal(["test.owner"], line.Mods);
         Assert.Empty(result.Lua.Stack.ContributionList);
     }
@@ -528,8 +530,8 @@ public sealed class DataLinkTests : IDisposable
         MountedModLayer layer = ModLinkCache.TryOpen(cache, "k")!;
         ModContribution read = Assert.Single(layer.LuaStack.ContributionList);
         ModContribution linked = Assert.Single(result.Lua.Stack.ContributionList);
-        Assert.Equal((linked.Kind, linked.Owner, linked.Mod, linked.File, linked.Values, linked.Document.ToText()),
-                     (read.Kind, read.Owner, read.Mod, read.File, read.Values, read.Document.ToText()));
+        Assert.Equal((linked.Kind, linked.Owner, linked.Mod, linked.File, linked.Size, linked.Document.ToText()),
+                     (read.Kind, read.Owner, read.Mod, read.File, read.Size, read.Document.ToText()));
         Assert.Equal(linked.Requires, read.Requires);
         Assert.Equal(result.Lua.Plan.Sites["ADDEXP"].Single().Handlers, layer.HookPlan.Sites["ADDEXP"].Single().Handlers);
         Assert.Equal(result.Lua.Plan.SubscribersOf("test.owner.computed"), layer.HookPlan.SubscribersOf("test.owner.computed"));
@@ -598,13 +600,13 @@ public sealed class DataLinkTests : IDisposable
         Assert.Contains(again.Report.Lines, line => line.Class == ModReportClass.Note
                                                     && line.Message == $"{ModLinkCache.UnreadNote} cannot be used, so the "
                                                     + $"stack was linked again: {unread}");
-        Assert.Equal(3, Assert.Single(again.Layer!.LuaStack.ContributionList).Values);
+        Assert.Equal(new DataSize(2, 0, 1), Assert.Single(again.Layer!.LuaStack.ContributionList).Size);
         Assert.True(ModStack.Prepare(linkBase, [owner, a], ["test.owner", "test.a"], mods).FromCache);
 
         // A copy that reads to another size than the link counted is a miss too.
         File.WriteAllText(kept, "names = [\"x\", \"y\", \"z\"]\n");
         Assert.Null(ModLinkCache.TryOpen(cache, again.Layer.Key, linkBase.ReadScript, out unread));
-        Assert.Equal("its copy of test.a data/lists/a.toml reads as 4 values, where the link read 3", unread);
+        Assert.Equal("its copy of test.a data/lists/a.toml reads to a size of 4, where the link read 3", unread);
     }
 
     [Fact]

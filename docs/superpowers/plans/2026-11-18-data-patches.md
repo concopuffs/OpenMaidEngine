@@ -1431,3 +1431,14 @@ the stage list's own event and the decision on Tomlyn's faults.
     `AnErrorInTheBaseModsAccessorAfterADeliverysFirstWritesLeavesItemRankAsTheGameSetIt`: a mod's own kind at
     `kamidori.data.layered` sets 500 ranks through `kamidori-base`'s `table`, and the accessor refuses the 501st (a
     string); the 500 are put back, and the boot is the plain one's.
+- **The report's size line gives the parts (item 2).** A file with one key under `[unit.761]` read `4 values` (the
+  tables `unit`, `761` and `stats` and the value), which said values where three were tables. The walk counts the
+  values, the tables and the arrays apart (`TomlStructureResult.Tables`, `Arrays`; an array of tables is an array and
+  each of its tables a table), the document carries them (`DataSize`, in `Ome.Engine.Modding` beside
+  `ModContribution`, which holds it), and the report prints `1 value in 3 tables`, `3 values in 1 table and 1 array`,
+  `2 values` for a file of top-level values and `no value in 8 tables` for one of empty tables. The total stays the one
+  size for the bound, the budget and the step limit, whose error now counts "values, tables and arrays". The link
+  cache keeps the total (`link.json`'s `size`, before `values`) and checks the read copy against it; an entry written
+  before is a miss, since the key holds the build of `Ome.Mods` (`ModLinkBase.ToolchainStamp`). Gate 3 expects
+  `1 value in 2 tables` for each of its files; `data-files.md` ("The report") has its sample lines from its own
+  example.

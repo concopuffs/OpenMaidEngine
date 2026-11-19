@@ -595,7 +595,8 @@ public static class ModLuaLinker
                         report.Add(ModReportClass.Error, kind.Owner, null,
                                    $"{kind.Kind.Describe()}: {kind.Kind.ShapePath}: the shape takes more than {limit:N0} steps "
                                    + $"on {mod.Id} {where} ({DataShapeCheck.StepsPerValue} for each of its "
-                                   + $"{document.Values:N0} values and {DataShapeCheck.StepsBase:N0}), so it cannot be checked");
+                                   + $"{document.Size.Total:N0} values, tables and arrays, and {DataShapeCheck.StepsBase:N0}), "
+                                   + "so it cannot be checked");
                         continue;
                     }
                     foreach (DataProblem problem in shaped.Problems) Error(problem.Describe(where));
@@ -604,7 +605,7 @@ public static class ModLuaLinker
                     if (!shaped.Ok) continue;
                 }
                 var requires = mod.Manifest.Requires.Select(requirement => requirement.Id).Where(luaIds.Contains).ToList();
-                found.Add((new ModContribution(entry.Kind, kind.Owner, mod.Id, where, document.Root, document.Values,
+                found.Add((new ModContribution(entry.Kind, kind.Owner, mod.Id, where, document.Root, document.Size,
                                                kind.Unraised.Select(pair => pair.At.Event).ToList(), requires),
                            entry, loadOrders.GetValueOrDefault(mod.Id), kind, text));
             }
@@ -612,7 +613,8 @@ public static class ModLuaLinker
     }
 
     /// <summary>The report's kinds (data patches spec §5.7, plan §4.2): each kind with its owner and events, its documents
-    /// in delivery order with their values, and the paths two of them give a value at, at most
+    /// in delivery order with their values and the tables and arrays they are in (plan §12.6), and the paths two of them
+    /// give a value at, at most
     /// <see cref="SharedPathsShown"/> of them.</summary>
     private static IEnumerable<string> KindLines(IReadOnlyDictionary<string, AcceptedKind> kinds,
                                                  IReadOnlyList<ModContribution> contributions,
@@ -634,7 +636,7 @@ public static class ModLuaLinker
                 .ToHashSet(StringComparer.Ordinal);
             string Name(ModContribution document) => several.Contains(document.Mod) ? $"{document.Mod} {document.File}" : document.Mod;
             foreach (ModContribution document in documents)
-                yield return $"  {document.Mod} {document.File}: {document.Values} {(document.Values == 1 ? "value" : "values")}";
+                yield return $"  {document.Mod} {document.File}: {document.Size.Describe()}";
             if (documents.Count < 2) continue;
             var givers = new Dictionary<string, List<ModContribution>>(StringComparer.Ordinal);
             var paths = new List<string>();

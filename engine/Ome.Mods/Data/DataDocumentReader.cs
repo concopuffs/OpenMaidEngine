@@ -12,9 +12,10 @@ public sealed record DataProblem(int? Line, string Text)
 }
 
 /// <summary>A data file's document and its size: the values it holds, each table and array counting one as each
-/// string, boolean and number does (data patches plan §12.6; spec §5.3 counted the last three only). The size bounds
-/// the document (<see cref="DataBounds.MaxValues"/>), and gives a delivery its budget and a shape's check its steps.</summary>
-public sealed record DataDocument(DataTable Root, int Values);
+/// string, boolean and number does (data patches plan §12.6; spec §5.3 counted the last three only). The size's total
+/// bounds the document (<see cref="DataBounds.MaxValues"/>), and gives a delivery its budget and a shape's check its
+/// steps; the report shows its parts.</summary>
+public sealed record DataDocument(DataTable Root, DataSize Size);
 
 /// <summary>What <see cref="DataDocumentReader.Read"/> gives: the document when the file has no problem, else the
 /// first <see cref="DataDocumentReader.ProblemsKept"/> problems and how many there were.</summary>
@@ -95,7 +96,8 @@ public static class DataDocumentReader
         var walk = new Walk(problems);
         DataTable? root = walk.Table(model, depth: 1);
         if (root == null || problems.Count > 0) return problems.Result(null);
-        return problems.Result(new DataDocument(root, structure.Nodes)) with { Text = text };
+        var size = new DataSize(structure.Nodes - structure.Tables - structure.Arrays, structure.Tables, structure.Arrays);
+        return problems.Result(new DataDocument(root, size)) with { Text = text };
     }
 
     /// <summary>Whether an integer as TOML writes it (sign, prefix and underscores) is at most 2^53 in size. The
