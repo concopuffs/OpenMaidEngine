@@ -511,13 +511,57 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     that a profile root holds no link (launcher plan §9.7); that rule's own placeholder question went with it.
   - Done when the package walk refuses only links, or a measurement on a real OneDrive folder (dehydrated files
     included) shows the attribute is not seen.
-- **Keep the game installs in one folder.** The workspace root holds each install under its own name:
-  `Himegari_Game/`, `Kamidori/`, `Kamidori_Translated/` and `Arterial/創刻のアテリアル/` (added 2026-11-09 for
-  native-engine comparison only). Every tool that finds them has its own table of those names:
-  `tools/paths.py` (`_CONVENTIONAL_GAME_ROOTS`, `REFERENCE_INSTALLS`), `engine/Ome.Engine/Sys4/Paths.cs`,
-  `engine/Ome.Cli/Program.cs`, `run-godot.ps1`, and about 25 engine tests. Done when the installs sit under one
-  games folder, every table resolves a game's install from that folder, and the docs naming the old locations
-  (`PROJECT-STRUCTURE.md`, `AGENTS.md`'s three-way separation, the modding game pages) follow.
+- **Game onboarding: what a third game still trips over.** Found on 2026-11-19 while writing `adding-a-game.md`
+  and taking a first read-only look at Arterial. Each is a place where the second game's support was written for
+  two games, not for many. Two were fixed the same day: the first-look command (`Ome.Cli intake`) and the install
+  tables (every install is `games/<name>/` now). The user's word is to take the rest as Arterial meets them:
+  - **`tools/validate.py` names games.** The workspace test filter is `Profile=kamidori` or `Profile!=kamidori`,
+    and the `full` level's terminal gate is a branch per profile.
+  - **A reference install and a profile keep their outputs apart.** `build/engines/<id>/` holds a reference's
+    dump, scratch copy and `operand-access.json`, and `build/games/<id>/` a profile's; `native_scratch.py`,
+    `dump_engine.py` and `operand_access.py` take `--reference` or `--engine` for the one and `--game` for the
+    other. Giving a reference install a profile moves all of it by hand.
+  - **No support level in the profile manifest.** The launcher and the generated games page read the manifests and
+    cannot tell a game that only decodes from one that plays (`adding-a-game.md` §1).
+  - **The drive MCP server serves one game** (`drive_mcp.py --game ID`, registered for Himegari). Its tools take
+    no game.
+  - **Native driving facts are found by hand for each build** (`tools/drive/<id>.toml`, `[native.*]`). The
+    revision diff's JSON keeps the function, field and address correspondence that would translate the nearest
+    game's, and no command reads it.
+  - **No kept tool ports Ghidra names between images.** `/kamidori/4.33G` got its names from 4.33F through a
+    function alignment (`engine-re.md`, "The 4.33G image"); `tools/` holds no script for it.
+
+  Done when each is fixed or dropped with a reason, and `adding-a-game.md` describes no workaround.
+- **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at P0
+  (`adding-a-game.md` §1): dumped, pinned in `operand_access.py` `ENGINES` and compared (`engine-re.md`,
+  "Comparing engine builds"; Kamidori against it: 36 differing opcodes, 11 differing helpers, 36 opcodes only it
+  has). What `Ome.Cli intake` reports for it (2026-11-19; `adding-a-game.md`, step 1):
+  - **Its catalog does not load in the engine.** `Sys4AssetCatalog.Load` stops with "settings block has 19
+    trailing bytes"; only the intake reads past them. After the
+    49 settings pairs come `0f 00 00 00 25 00 00 00` and the string `AGE Extend`: a length of 15, the number 37
+    and a name. The catalog also holds one `.TTF`, and 4.38D's font code gained the strings `AGE Extend` and
+    `@AGE Extend`, so this is probably a font the game ships. Not reversed.
+  - **Its Ghidra image has no names.** `/arterial/4.38D/range_00400000.bin` is analysed (6,309 functions) and
+    holds no `op_0x…` or ported name.
+  - **Settings keys no supported game has:** `JUSTIFYCHAR` (four values: `、`, `。`, `」`, `）`) and `SAVEWINPOS`.
+    `SAVEVERSION` is 320, as Kamidori's; the canvas is 1024 by 576.
+  - **File types no supported game has:** two `.X` files and the `.TTF`, among 21,349 entries in six archives.
+    Its four appends mount (888, 57, 996 and 1,767 entries).
+  - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
+    strings, where both supported games have 2 floats. The saved prefix is 260,993 integers, 1 float and 231
+    strings.
+  - **Opcodes:** all 693 scripts (480 base, 213 append; 3,229,915 instructions, every one `SYS4438`) decode with
+    the whole catalog: no opcode outside it and no unknown operand type, so the game is of the SYS generation the
+    engine runs. They use 303 opcodes. 45 have no handler, at 56,206 sites: `0x2d5` (31,045 sites in 355 scripts),
+    `0x323` (9,793), `0x322` (8,633), `0x320` (3,856), `0x2d0` (1,943, of which 1,868 in ATTACK), `0x2e9` (579),
+    `0x2d1` (100), `0x2d2` (50), `0x321` (42), `0x2d3` (22), `0x2e5` (16), `0x26` (15), `0x2c7` (14), `0x102` (11),
+    `0x2e7` (10), and 30 more with fewer than ten sites each: `0x36`, `0xc1`, `0x103`, `0x104`, `0x10e`, `0x1c4`,
+    `0x1cd`, `0x1fc`, `0x225`, `0x252`, `0x253`, `0x256`, `0x2d7`, `0x2e1`, `0x2e3`, `0x2e6`, `0x2e8`, `0x2ea`,
+    `0x2eb`, `0x2ec`, `0x324`–`0x329` and `0x32b`–`0x32e`. Of these, `0x252`–`0x256`, `0x2e1`–`0x2ec` and the
+    `0x320` family exist only in 4.38D's engine; the rest are in 4.33G's too, and Kamidori's scripts never use
+    them. The scene scripts carry the four heaviest: `0x2d5` alone is in 355 scripts.
+
+  Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`
   (2026-11-19, at `6c5972c4`), `WindowTests.TheFirstRunCardAndTheArtQuestionDraw` passed its checks and then failed
   in `TestHome.Dispose` (`launcher/Ome.Launcher.Tests/TestHome.cs`): `Directory.Delete` could not remove the test

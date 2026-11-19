@@ -198,6 +198,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                         generic only: game facts live in modding/games/
     │   │   └── games/                          README.md GENERATED (supported games + identity blocks); <game>.md per game
     │   ├── backlog.md                          open work items (fidelity gaps, deferred follow-ups, accepted ideas)
+    │   ├── adding-a-game.md                    support levels and the steps for a new game
     │   ├── asset-resolution-re.md              resId→file RE (graphics/audio); asset-index steering
     │   ├── global-memory-re.md                 runtime global observation RE (SHELVED; future starting point)
     │   ├── remake-architecture-and-roadmap.md  THE direction doc (phases A–E)
