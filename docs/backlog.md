@@ -124,6 +124,22 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
+- **The title's 3D leaves are not drawn (創刻のアテリアル).** Owed by the user's word on 2026-11-19: "state only is
+  fine as long as we keep in mind we need to finish that functionality at some point". Native's title shows white
+  leaves drifting over it (native screenshots a few seconds apart show them moved); the port's shows everything
+  else. They are AGE 4.38D's 3D scene, ops `0x324` to `0x32f` (`superpowers/specs/2026-11-19-polygon-objects-design.md`
+  §4): the script loads two `.X` meshes (`LEAF0.X`, `LEAF1.X`), sets a look-at camera, an ambient colour and
+  Direct3D lights, and builds one effect object, native's `Set3DEffectLeaf`, which the engine then moves and draws
+  in the frame walk where op `0x325`'s second handle falls. The port keeps all of that state
+  (`Graphics.Scene3D.cs`) and draws none of it. Only TITLE.BIN and DEBUG.BIN use the group (23 sites); DEBUG.BIN
+  also builds a snow effect (`Set3DEffectSnow`, op `0x326`) and a third effect (op `0x327`).
+  Not read yet: what the leaf effect does each frame (its constructor `effect_leaf_construct@0x472020` is, its
+  update and draw are not), what the two other effects draw, and the manager's `+0xb62c`, which gates the snow
+  effect. Done when the title's leaves are drawn from the kept state and look as native's do: a reader for the
+  two meshes, the effect's motion from the native object, and the meshes transformed and lit on the engine thread
+  and emitted as polygon items, so that neither renderer needs a 3D pass. Its frames cannot be compared with
+  native's pixel for pixel, since the motion runs on the clock. The two effects only DEBUG.BIN builds can stay
+  state only.
 - **Strip reveals and mask wipes are drawn as crossfades.** The port keeps each transition's mode, thickness,
   timing and blocking, but both render paths blend the whole target in at one alpha.
   - The legacy strip reveals `0x27`/`0x28` (Kamidori: one `0x27` call and 192 `0x28` calls across 47 scripts;
@@ -536,9 +552,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     after that edit; `--check` does not exist for it.
 
   Done when each is fixed or dropped with a reason, and `adding-a-game.md` describes no workaround.
-- **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P1**
+- **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P2**
   since 2026-11-19 (`adding-a-game.md` §1; its manifest's `support`), on the branch `feature/arterial`: the engine
-  names its install, loads its catalog and decodes all of it, and nothing of it runs or saves.
+  names its install, decodes all of it, and boots it by its own route through the logo and the title to SC0000's
+  first pages, with no opcode skipped. Nothing of it saves, and the launcher does not list it.
   - **Done for P0 and P1.** Its dump, its Ghidra image with 658 ported or registry names, its build in
     `operand_access.py` `ENGINES` with a fifteenth accessor, the revision diffs (`engine-re.md`, "Comparing engine
     builds"), its profile and engine build (4.33G with its own names and nothing else changed), its observation and
@@ -554,14 +571,14 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
     strings, where both supported games have 2 floats. The saved prefix is 260,993 integers, 1 float and 231
     strings.
-  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 38 have no handler,
-    at 23,041 sites (45 at 56,206 before the float family and op `0x252` below): `0x323` (9,793 sites), `0x322`
-    (8,633), `0x320` (3,856), `0x2e9` (579), `0x321` (42), `0x2e5` (16), `0x26` (15), `0x2c7` (14), `0x102` (11),
-    `0x2e7` (10), and 28 more with fewer than ten sites each: `0x36`, `0xc1`, `0x103`, `0x104`, `0x10e`, `0x1c4`,
-    `0x1cd`, `0x1fc`, `0x225`, `0x253`, `0x256`, `0x2e1`, `0x2e3`, `0x2e6`, `0x2e8`, `0x2ea`, `0x2eb`, `0x2ec`,
-    `0x324`–`0x329` and `0x32b`–`0x32e`. Of these, `0x253`–`0x256`, `0x2e1`–`0x2ec` and the `0x320` family exist
-    only in 4.38D's engine; the rest are in 4.33G's too, and Kamidori's scripts never use them.
-    `build/games/arterial/catalog-opcode-coverage.json` lists every site as it stood before the float family.
+  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 20 have no handler,
+    at 97 sites (45 at 56,206 when the profile was added): `0x2e5` (16 sites), `0x26` (15), `0x102` (11), `0x2e7`
+    (10), `0x36` (8), `0x2e6` (6), `0x1fc` (5), `0x2e3` (5), `0x225` (4), `0x2e8` (4), `0x10e` (3), `0x256` (2),
+    and one site each of `0xc1`, `0x103`, `0x104`, `0x1c4`, `0x1cd`, `0x253`, `0x2e1` and `0x2ea`. Of these,
+    `0x253`, `0x256` and `0x2e1`–`0x2ea` exist only in 4.38D's engine; the rest are in 4.33G's too, and Kamidori's
+    scripts never use them. Read already: `0x26` and `0x36` are legacy screen transitions (a pattern wipe, and a
+    two-surface mode 9), and `0x2e6`, `0x2e7`, `0x2e8` and `0x2ea` read and write the Auto pitch settings below.
+    `build/games/arterial/intake.json` lists each one's scripts (`Ome.Cli intake`).
   - **Float arithmetic is implemented (2026-11-19):** `0x2d0`–`0x2d3` (add, subtract, multiply, divide), `0x2d5`
     (move) and `0x2d7` (float to integer), 33,164 sites, read in the 4.38D image (`vm-map/opcodes.toml`;
     `FloatArithmeticOpsTests`). So are the local float references its scripts pass at 584 operands (type `0xd`)
@@ -595,10 +612,30 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Native AGE is driven (step 5, 2026-11-19).** `tools/drive/arterial.toml` and
     `tools/drive/scenarios/arterial-opening.steps`: the logo, the title, Game Start and SC0000's first pages, in a
     save sandbox, with the install unchanged afterwards (`engine-re.md`, "Driving native AGE").
-  - **Where the port's boot stops.** The port shows the logo, its two polygon fades and its movie, and halts at
-    `TITLE@0x647`, op `0x325`: the title's 3D scene. The route to the first ADV page still needs:
-    - TITLE: `0x2c7`, `0x2eb`, `0x2ec`, `0x324`, `0x325`, `0x328`, `0x329`, `0x32b`–`0x32e`;
-    - SC0000: also `0x26`, `0x36`, `0x2e9`.
+  - **The boot is at P2 (2026-11-19).** `NaturalBootIntegrationTests` has its case, which is its terminal gate in
+    `validate.py --level full --game arterial`, and `tools/drive/scenarios/arterial-opening.steps` passes on native
+    AGE and on the port at the same VM positions: SC0000's first page waits at `SC0000@0xfff` 18.1 s after Game
+    Start on native and 18.2 s on the port, and three clicks later both are at `SC0000@0x12cf`. Stepped second by
+    second through SC0000's opening, the two show the same VM position each second, and their frames are equal in
+    every pixel wherever nothing is in motion (the white screen, "Eushully Presents...", the black screen). What
+    differs at the pages:
+    - **「――」 is drawn as other glyphs.** SC0000's first page reads 「――重苦しい風が吹く。」 on native and
+      「✓冂重苦しい風が吹く。」 on the port. The catalog's font, `AGE-EXTEND.TTF` (face `AGE Extend`), is not
+      loaded, and 4.38D's text code names that face. Done when the port draws the characters native draws with it,
+      from a reading of where 4.38D selects the face.
+    - **Glyph edges differ.** On page 4 the same text sits in the same place with the same ruby, and 3,061 pixels
+      of the line differ by more than 8 of 255: the port's glyphs are a little lighter. Not looked into;
+      `text_geometry_compare.py` is the tool.
+    - **The title's leaves** (its own item, "The title's 3D leaves are not drawn"): 5,336 pixels of the title.
+  - **Auto's per-character delay is not applied.** 4.38D adds three settings, `message:AutoMessagePitch0`,
+    `message:AutoMessagePitch1` and `message:AutoMessageOption`, all registered as 0, and its Auto delay is
+    `AutoMessageTime1 + AutoMessagePitch1 × (the page's characters - 1 - the count of op 0x2e9)` on a page with no
+    voice, and on a voiced page, when the option's bit 0 is set, the same with `AutoMessageTime0` and
+    `AutoMessagePitch0`; a delay of 0 becomes 100 ms. The port keeps op `0x2e9`'s count
+    (`SkipAndAuto.AutoMessageCountOffset`) and has neither the settings nor their opcodes (`0x2e6`, `0x2e7`,
+    `0x2e8`, `0x2ea`; the game's CONFIG2 writes the pitch), so Auto waits `AutoMessageTime` alone, which is
+    native's delay while the pitch is 0. Done when the settings are registered and saved, the four opcodes have
+    handlers, the delay follows the formula, and whether 4.33G's delay has the 100 ms floor is read.
   - **The polygon objects are in (2026-11-19):** ops `0x320` to `0x323`, 22,324 sites, with the reference
     renderer; the logo's frames and fade timing were compared with native
     (`superpowers/specs/2026-11-19-polygon-objects-design.md` §7). Open:
@@ -613,16 +650,12 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - **Five points of native's are not read** (the design's §2): saves, the depth test, culling by winding, a
       texture larger than its image, and the position rewrite for two render targets.
 
-  - **The title's 3D scene:** ops `0x324` to `0x32f`, a module of its own: mesh slots loaded from the two `.X`
-    files, a camera, an ambient colour, Direct3D lights, and three effect objects drawn during the frame walk. One
-    is the leaf effect (native's `Set3DEffectLeaf`, op `0x328`), the white leaves that drift across the title;
-    another is a snow effect (`Set3DEffectSnow`, op `0x326`) that only DEBUG.BIN builds. Only TITLE.BIN and
-    DEBUG.BIN use the group (23 sites). Its workers are read but for the leaves' motion, the two other effects and
-    the `.X` encoding (the polygon design's §4). Whether P2 keeps its state and draws nothing, or draws the
-    leaves, is the user's to decide.
+  - **The title's 3D scene keeps its state and draws nothing (the user's decision, 2026-11-19).** Ops `0x324` to
+    `0x32f`: the handlers keep what the scripts set (`Graphics.Scene3D.cs`). What that leaves undrawn is its own
+    item, "The title's 3D leaves are not drawn", under Engine fidelity.
   - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
-    the two settings keys, the two file types and the font), then step 6, the boot: the title's opcodes and
-    SC0000's, and the polygon item on the GPU renderer.
+    the two settings keys and the font, which page 1 already shows), then step 7: the 20 opcodes, the build's
+    rules and the saves.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

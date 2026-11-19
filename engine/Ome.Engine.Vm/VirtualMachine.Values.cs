@@ -228,6 +228,45 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
+    // 0x2c7, native's SBSubstr (AGE 4.38D): a byte interval of the string, kept from splitting a double-byte
+    // character; native traces a warning when it moves an end.
+    private StepResult OpByteSubstring(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        string result = Cp932Text.ByteSubstring(
+            ReadStr(a[1]), unchecked((int)Read(a[2])), unchecked((int)Read(a[3])), _memory.Encoding,
+            out bool startMoved, out bool endMoved);
+        if (startMoved)
+            _waits.ReportWarning($"{At(ins)}: the substring starts inside a double-byte character; its first byte is "
+                                 + "dropped, as AGE drops it with the trace 「関数：SBSubstr 警告：文字列が全角文字の途中から"
+                                 + "切り出されるため、先頭バイトを切り捨てました。」");
+        if (endMoved)
+            _waits.ReportWarning($"{At(ins)}: the substring ends inside a double-byte character; its last byte is "
+                                 + "dropped, as AGE drops it with the trace 「関数：SBSubstr 警告：切り出した文字列が全角文字の"
+                                 + "途中で終了するため、最終バイトを切り捨てました。」");
+        WriteStr(a[0], result);
+        return StepResult.Next;
+    }
+
+    // 0x2eb (AGE 4.38D): the game's version text, set:GameVersion
+    private StepResult OpGetGameVersion(Instruction ins, int pc)
+    {
+        WriteStr(ins.Args[0], _o.GameVersion); return StepResult.Next;
+    }
+
+    // 0x2e9 (AGE 4.38D): the characters Auto's per-character delay leaves out of the page's count
+    private StepResult OpSetAutoMessageCountOffset(Instruction ins, int pc)
+    {
+        _skip.SetAutoMessageCountOffset(unchecked((int)Read(ins.Args[0]))); return StepResult.Next;
+    }
+
+    // 0x2ec (AGE 4.38D): a string as an integer, by atol
+    private StepResult OpStringToInt(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], NativeAtol(ReadStr(a[1]))); return StepResult.Next;
+    }
+
     // 0x2c8: multibyte-character interval [start,start+count)
     private StepResult OpCp932Substring(Instruction ins, int pc)
     {

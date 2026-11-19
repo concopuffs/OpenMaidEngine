@@ -218,7 +218,9 @@ when that fails, for `SYS3INI.BIN`; the polygon objects, ops `0x320` to `0x323` 
 (`superpowers/specs/2026-11-19-polygon-objects-design.md`, §2), with the erase, clear and clone workers that carry a
 handle's polygon with its object; the title's 3D scene, ops `0x324` to `0x32f` (the same design, §4); the
 accessors' float cases ("Float cells as arrays, and float references"); and op `0x252` with the two present
-workers, `gfx_render_frame@0x49ab00` and `gfx_present_object_range@0x49adf0`.
+workers, `gfx_render_frame@0x49ab00` and `gfx_present_object_range@0x49adf0`; and the small opcodes of the boot
+route, `0x2c7` (native's `SBSubstr`), `0x2eb`, `0x2ec` and `0x2e9` with the Auto pitch settings it belongs to
+(`vm-map/opcodes.toml`; `backlog.md`, "Auto's per-character delay is not applied").
 
 **Op `0x252` (`set-present-clear`).** The graphics manager sits at `ctx+0x4e904` in this build. The handler stores
 its operand at the manager's `+0xb55c`, which the manager's constructor zeroes and nothing else writes.

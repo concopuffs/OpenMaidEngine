@@ -34,6 +34,9 @@ public sealed partial class SkipAndAuto
         public bool AutoVoicePending;              // a voice started since the last op 0x1bc
         public int ClickCancelState;      // native ctx+0x6da80
         public int ClickCancelTriggers;   // latched action-4 click triggers since the last tick
+        // AGE 4.38D, op 0x2e9 (ctx+0x77518): the characters Auto's per-character delay leaves out of a page's
+        // count. scene_context_init_reset zeroes it.
+        public int AutoMessageCountOffset;
     }
 
     private Scene _scene = new();
@@ -294,6 +297,14 @@ public sealed partial class SkipAndAuto
     /// <summary>What a text wait's Auto timer reads.</summary>
     public AdvAutoWaitState AutoWaitState
         => new(_scene.AutoMessageEnabled, _scene.AutoVoicePending, AutoMessageTime0Ms, AutoMessageTime1Ms);
+
+    /// <summary>Op 0x2e9 (AGE 4.38D): how many of a page's characters Auto's per-character delay leaves out. Native's
+    /// Auto delay there is AutoMessageTime + AutoMessagePitch × (characters - 1 - this), with the pitch a setting
+    /// that defaults to 0. The port keeps the value and does not apply a pitch yet (docs/backlog.md, 創刻のアテリアル).
+    /// </summary>
+    public int AutoMessageCountOffset => _scene.AutoMessageCountOffset;
+
+    public void SetAutoMessageCountOffset(int count) => _scene.AutoMessageCountOffset = count;
 
     /// <summary>scene_context_init_reset's part: Skip, Auto, read skip and the click machine start over, the skip
     /// service is enabled, and run-state 0x08000000 is zeroed (a held action 6 starts nothing). The delays and the

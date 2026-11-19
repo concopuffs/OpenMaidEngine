@@ -23,6 +23,9 @@ namespace Ome.Engine.Vm;
 /// <param name="WheelKeyUpAction">Native set:WheelKeyUp (SYS4INI WHEELKEYUP, registered default 3): the logical action
 /// a wheel-up raises while an ADV text wait polls (<see cref="VirtualMachine.ApplyMouseWheel"/>).</param>
 /// <param name="WheelKeyDownAction">Native set:WheelKeyDown (SYS4INI WHEELKEYDOWN, registered default 1).</param>
+/// <param name="GameVersion">Native set:GameVersion, the game's version text: SYS4INI GAMEVERSION, or with VERREGPOS
+/// the installer's version from the registry (<c>Ome.Engine.Frontend.Shell.GameVersionRule</c>, which the front end
+/// applies). AGE 4.38D's op 0x2eb reads it; 創刻のアテリアル's title shows it.</param>
 /// <remarks>CancelMesSkipOnClick, CoexistMesSkip and the fast-forward pace are the skip and auto native's
 /// (<c>Ome.Engine.Natives.SkipAndAutoSettings</c>), and NoSaveDat is the save and settings native's
 /// (<c>Ome.Engine.Natives.SavesAndSettings</c>).</remarks>
@@ -30,7 +33,8 @@ public sealed record VmOptions(int EmitCap = 2, long MaxSteps = 2_000_000, int C
                                bool HaltAtWaitForInput = false, bool IgnoreExitRequests = false,
                                int NativeStringCodePage = 932, int CreateObject = 2,
                                int AutoFreeTex = 0,
-                               int WheelKeyUpAction = 3, int WheelKeyDownAction = 1)
+                               int WheelKeyUpAction = 3, int WheelKeyDownAction = 1,
+                               string GameVersion = "")
 {
     /// <summary>The selected profile's id, which labels an unsupported-opcode diagnostic
     /// (<see cref="UnsupportedOpcodeDiagnostic.ProfileId"/>). No behaviour reads it.</summary>

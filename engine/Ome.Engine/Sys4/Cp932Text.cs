@@ -76,6 +76,47 @@ public static class Cp932Text
         return encoding.GetString(selected.ToArray());
     }
 
+    /// <summary>
+    /// AGE 4.38D's SBSubstr (op 0x2c7): <paramref name="count"/> bytes of the string from byte
+    /// <paramref name="start"/>, kept from splitting a double-byte character. A start in the middle of one moves past
+    /// its second byte (<paramref name="startMoved"/>), and an end in the middle of one drops its first byte
+    /// (<paramref name="endMoved"/>); native traces a warning for each. A start at or past the string's end, compared
+    /// unsigned, or a count below 1 gives the empty string. Its lead bytes are 0x81 to 0x9f and 0xe0 up.
+    /// </summary>
+    public static string ByteSubstring(string value, int start, int count, Encoding encoding,
+                                       out bool startMoved, out bool endMoved)
+    {
+        startMoved = endMoved = false;
+        byte[] bytes = EncodeCString(value, encoding);
+        if (unchecked((uint)start) >= (uint)bytes.Length || count < 1) return "";
+        if (start > 0 && LeadByteEndsAt(bytes, start) is { } first && first < bytes.Length)
+        {
+            startMoved = true;
+            start++;
+            count--;
+        }
+        int end = unchecked(start + count);
+        if (end > 0 && LeadByteEndsAt(bytes, end) is { } last && last < bytes.Length)
+        {
+            endMoved = true;
+            count--;
+        }
+        int available = bytes.Length - start;
+        if (available <= 0 || count <= 0) return "";
+        return encoding.GetString(bytes, start, System.Math.Min(count, available));
+
+        // Native walks the bytes before the limit; the count it stopped at, when the last byte walked is the first of
+        // a double-byte character, and null otherwise.
+        static int? LeadByteEndsAt(byte[] bytes, int limit)
+        {
+            bool lead = false;
+            int index = 0;
+            for (; index < limit && index < bytes.Length; index++)
+                lead = !lead && (bytes[index] is >= 0x81 and <= 0x9f || bytes[index] >= 0xe0);
+            return lead ? index : null;
+        }
+    }
+
     public static FullwidthTextValidationError ValidateFullwidthName(
         string value, Encoding encoding, int byteLimit = NativeNameByteLimit)
     {

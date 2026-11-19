@@ -64,10 +64,11 @@ public sealed class GameProfileSelectionTests
         Assert.True(kamidori.Matches(KamidoriIdentity));
     }
 
-    /// <summary>創刻のアテリアル is at P1 (docs/adding-a-game.md): the engine names its install and reads all of it,
-    /// nothing of it saves, and its build is declared from 4.33G.</summary>
+    /// <summary>創刻のアテリアル is at P2 (docs/adding-a-game.md): the engine names its install, reads all of it and
+    /// boots it to its first page; nothing of it saves, it is not yet playable, and its build is declared from 4.33G.
+    /// </summary>
     [Fact]
-    public void ArterialIsRecognizedAndReadOnly()
+    public void ArterialBootsAndIsReadOnly()
     {
         GameProfileManifest arterial = Assert.IsType<GameProfileManifest>(GameProfileRegistry.BuiltIn.Find("arterial"));
 
@@ -75,9 +76,9 @@ public sealed class GameProfileSelectionTests
                      (arterial.SysFrontendId, arterial.EngineBuildId, arterial.EngineAbiId, arterial.NaturalBootScript));
         Assert.Equal(["SYS4438"], arterial.ScriptRevisions);
         Assert.True(arterial.Matches(new GameCatalogIdentity("S4IC438", "創刻のアテリアル")));
-        Assert.Equal(new GameSupport(PlayLevel.Recognized, ModdingLevel.None), arterial.Support);
+        Assert.Equal(new GameSupport(PlayLevel.Boots, ModdingLevel.None), arterial.Support);
         Assert.False(arterial.Support.IsPlayable);
-        Assert.Equal(("P1", "none"), (arterial.Support.PlayId, arterial.Support.ModdingId));
+        Assert.Equal(("P2", "none"), (arterial.Support.PlayId, arterial.Support.ModdingId));
         Assert.Equal(GameSupport.Supported, GameProfileRegistry.BuiltIn.Find("himegari")!.Support);
         Assert.Equal(GameSupport.Supported, GameProfileRegistry.BuiltIn.Find("kamidori")!.Support);
         Assert.Throws<InvalidOperationException>(() => GameSupport.Parse("P0", "none"));

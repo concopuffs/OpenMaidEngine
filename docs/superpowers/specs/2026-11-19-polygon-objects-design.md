@@ -1,8 +1,8 @@
 # Polygon objects — design
 
-**Status: accepted 2026-11-19** (the user: "Design is fine"). How the title's 3D scene is handled for P2 (§4) is
-still the user's to decide. Written while bringing 創刻のアテリアル to P2 (`docs/adding-a-game.md`, step 6), from a
-reading of its AGE 4.38D image.
+**Status: accepted 2026-11-19** (the user: "Design is fine"). The title's 3D scene (§4) keeps its state and draws
+nothing for now, by the user's decision the same day; drawing it is owed (`backlog.md`). Written while bringing
+創刻のアテリアル to P2 (`docs/adding-a-game.md`, step 6), from a reading of its AGE 4.38D image.
 
 ## 1. Purpose
 
@@ -172,8 +172,10 @@ Two ways to handle it:
   engine thread and emits triangles, so neither renderer needs a 3D pass. It is a design of its own, and its
   frames cannot be compared with native's pixel for pixel, since the motion runs on the clock.
 
-The proposal for P2 is state only, with the drawn version after P2. The title, its menu and Game Start do not
-depend on the feathers.
+**Decided 2026-11-19: state only**, by the user: "state only is fine as long as we keep in mind we need to finish
+that functionality at some point". The handlers keep the state (`Graphics.Scene3D.cs`), and the drawn version is
+a backlog item of its own (`backlog.md`, "The title's 3D leaves are not drawn"). The title, its menu and Game
+Start do not depend on the leaves.
 
 **Float references.** The scripts pass local float references (operand type `0xd`) at 584 places, among them op
 `0x320`'s arrays. It is VM work, not graphics work, and it is done (2026-11-19; `engine-re.md`, "Float cells as

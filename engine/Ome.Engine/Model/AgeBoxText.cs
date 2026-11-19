@@ -51,6 +51,8 @@ public static class AgeBoxText
     public const string EmptyScriptSlot = "error.script-slot-empty";
     /// <summary>Op 0xb4 could not decode a sound effect: <c>{0}</c> is its file.</summary>
     public const string WaveLoadFailed = "error.wave-load";
+    /// <summary>Op 0x329 (AGE 4.38D) could not load a mesh: <c>{0}</c> is its file.</summary>
+    public const string MeshLoadFailed = "error.mesh-load";
     /// <summary>Op 0x3 past native's interpreter frames: <c>{0}</c> is their number (40).</summary>
     public const string ScriptDepthLimit = "error.depth-limit";
     /// <summary>A resource id past the file table (asset_open_indexed_entry): <c>{0}</c> is the id.</summary>
@@ -93,6 +95,7 @@ public static class AgeBoxText
         [RandomBoundZero] = "RANDOMの最大値が0になっています．",
         [EmptyScriptSlot] = "この階層にはファイルが読み込まれていません．Depth={0}",
         [WaveLoadFailed] = "WAVファイル {0} の読み込みに失敗しました",
+        [MeshLoadFailed] = "メッシュファイル {0} の読み込みに失敗しました",
         [ScriptDepthLimit] = "ファイルの階層が深すぎます．最大は{0}です．",
         [FileNumberInvalid] = "ファイル番号 {0} は不正な値です．",
         [FileOpenFailed] = "{0} を開くことが出来ません．\nERROR CODE = {1}",

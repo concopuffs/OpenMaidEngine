@@ -87,6 +87,9 @@ public class SceneReloadTests
             // Op 0x252's flags: native's graphics manager zeroes the field when it is built, and only the opcode
             // writes it afterwards (AGE 4.38D; vm-map/opcodes.toml, set-present-clear).
             "_presentClear",
+            // AGE 4.38D's 3D scene (mesh slots, camera, lights, the display's effects): native's scene reset touches
+            // none of it, and the scripts release what they built (Graphics.Scene3D.cs).
+            "_scene3D",
             // Parts set after construction, and tracing.
             "_movies", "_listeners", "TraceOps", "OpTrace",
         ],

@@ -495,6 +495,18 @@ The handler reads the same 0x20-byte string vector counted by opcode 0x2dc and s
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433 (4.33F), addresses given for /kamidori/4.33G`; site=`vm-map/opcodes.toml opcode 0x2de`; scope=SYS4433 handler, operand conversion, font-family cache lookup, and natural startup. op_0x2de_find_font_family_index@0x42ba30 reads operand 2 as a string, calls text_find_font_family_index@0x423a80, and writes its zero-based index or -1 result to operand 1. The lookup ignores one leading '@'. Natural boot reaches CHECKCONFIG.BIN@0x0; SYS4422 has no handler in this slot.
 
+### 0x2e9 `set-auto-message-count-offset` (u0042CE90, argc 1)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (count) — how many of a page's characters the Auto delay's per-character part leaves out, until the scene reset.
+- **operand access:** `1` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e9`; scope=SYS4438 handler and the Auto delay's four readers; the opcode exists only in AGE 4.38D among the builds read. op_0x2e9_set_auto_message_count_offset@0x425080 stores operand 1 at ctx+0x77518, which scene_context_init_reset zeroes. The Auto delay reads it at four places (op_0x72_wait_for_input, adv_input_service_poll and 0x408850): on a page with no voice the delay is message:AutoMessageTime1 + message:AutoMessagePitch1 * (the page's glyph records - 1 - this value), and on a voiced page, when message:AutoMessageOption has bit 0, AutoMessageTime0 + AutoMessagePitch0 * (the same); a delay of 0 becomes 100 ms. sys4_register_setting_defaults registers both pitches and the option as 0, and ops 0x2e6, 0x2e7, 0x2e8 and 0x2ea read and write them.
+
+The port keeps the value (SkipAndAuto.AutoMessageCountOffset) and applies no per-character delay yet: 4.38D's pitch settings and their opcodes are not implemented (docs/backlog.md, 創刻のアテリアル, 'Auto's per-character delay'). With native's default pitch of 0 the delay is the same. 創刻のアテリアル has 579 sites.
+
 ## audio
 
 ### 0xb4 `sfx-load` (play-sound-effect, argc 2)
@@ -1050,6 +1062,18 @@ This is raw strlen(bytes), not a .NET UTF-16 character count. BUNKI compares all
 
 This is character count rather than .NET UTF-16 length or raw CP932 byte length. Port status (2026-07-29): implemented by encoding the C-string prefix through VmOptions.NativeStringCodePage and counting valid CP932 lead/trail pairs as one character; focused tests cover mixed single-byte and double-byte characters.
 
+### 0x2c7 `byte-substring` (u0042B5F0, argc 4)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out)(string)(start)(count) — native's SBSubstr: copy count bytes of the string from byte start, kept from splitting a double-byte character. A start at or past the end, or a count below 1, gives the empty string.
+- **operand access:** `1` write-string · `2` read-string · `3` read · `4` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2c7`; scope=SYS4438 handler; Kamidori's 4.33G has an opcode at this number that the name port paired at 0.36 similarity and that was not read. op_0x2c7_byte_substring@0x42fe10 reads the string (operand 2), the start (3) and the count (4). When the start, compared unsigned, is below the byte length and the count is above 0, it walks the bytes before the start: if the last one is the first byte of a double-byte character (0x81 to 0x9f, or 0xe0 up, and not itself a second byte), it traces 「関数：SBSubstr 警告：文字列が全角文字の途中から切り出されるため、先頭バイトを切り捨てました。」, moves the start one byte on and takes one from the count. It walks to start + count the same way: if that last byte is the first of a double-byte character, it traces 「…切り出した文字列が全角文字の途中で終了するため、最終バイトを切り捨てました。」 and takes one from the count. Then it writes substr(start, count) to operand 1; otherwise it writes the empty string.
+
+The port matches (Cp932Text.ByteSubstring) and reports each of native's two traces as a warning. 創刻のアテリアル has 14 sites.
+
 ### 0x2c8 `cp932-substring` (cp932-substring, argc 4)
 - **observed by:** himegari (SYS4422)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`
@@ -1145,6 +1169,30 @@ Both operands come through the float accessor (vm_operand_fetch_float), which le
 - **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433 (4.33F), addresses given for /kamidori/4.33G`; site=`vm-map/opcodes.toml opcode 0x2d8`; scope=SYS4433 array-fill handler and complete official/translated Kamidori catalogs. Dispatcher slot 0x2d8 installs handler 0x42b930. It resolves operand 1 through the integer address resolver, converts operand 2 to the encrypted cell form, and writes it count times while operand 3 is positive. Both catalog scans contain 23 calls in the same five scripts; CALCDMG has 15 pointer-addressed sites.
 
 The destination follows the ordinary SYS4 address resolver, so direct global/local integer spans and integer-pointer operands retain their address domain. The complete Kamidori corpus has 23 calls in CALCDMG, SETEN, SETSTUDIOCH, SELORN, and TOWN; CALCDMG owns 15 and uses the opcode to initialize pointer-addressed calculation arrays. This contract is proven only for SYS4433; Himegari's observed SYS4422 snapshot does not contain opcode 0x2d8.
+
+### 0x2eb `get-game-version` (u0042CEB0, argc 1)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out_string) — write the game's version text, set:GameVersion.
+- **operand access:** `1` write-string
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2eb`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2eb_get_game_version@0x4306d0 asks the settings object (ctx+0xaa014, method +8) for the string of 'set:GameVersion' and writes it to operand 1 through vm_operand_write_string.
+
+The port writes VmOptions.GameVersion, which the front end fills by GameVersionRule (SYS4INI GAMEVERSION, or with VERREGPOS the installer's DisplayVersion from the registry; docs/engine-re.md, set:GameVersion). A headless run has the empty string. 創刻のアテリアル's only site is TITLE@0x74a, which shows it under the logo as 'Ver 2.00.0022' on the reference machine.
+
+### 0x2ec `string-to-int` (u0042CEC0, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out)(string) — out = atol(string): the integer a string begins with, 0 when it begins with none.
+- **operand access:** `1` write · `2` read-string
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2ec`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2ec_string_to_int@0x42e460 reads operand 2 through vm_operand_read_string_buffer, calls the CRT's atol (0x585710, the routine vm_operand_fetch parses a string operand with) and writes the result to operand 1 through vm_operand_write.
+
+The port matches (NativeAtol over the string as the read-string accessor gives it). 創刻のアテリアル has 3 sites; TITLE@0x74d takes the version text's first number.
 
 ## control
 
@@ -2707,6 +2755,146 @@ The port stores the colour and the mode (GfxState.SetPolygonColor). 創刻のア
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x323`; scope=SYS4438 polygon object handlers and workers; the opcodes exist only in AGE 4.38D among the builds read. op_0x323_fade_polygon_color@0x4251d0 calls gfx_polygon_fade_color@0x496910, which sets flag 2, clears the start time and stores the delay (+0x2c), the duration (+0x30) and the target (+0x38). gfx_render_polygon@0x496d10 runs the fade at each draw: the start is the frame time of the first draw; a duration below 1 only clears the flag; between the delay and the end the colour drawn is the two mixed by (now - start - delay) / duration, each channel truncated; at the end, or when manager +0xb590 is set, the colour becomes the target. LOGO@0xbe fades its first quad to alpha 0 over 500 ms, and LOGO@0xe0 its second to alpha 0xff after 4,500 ms, before op 0x21c waits.
 
 The port keeps the fade in the graphics state (GfxState.FadePolygonColor) and samples it when a frame is lowered; a running fade keeps an effect wait waiting and a forced completion ends it, as the one-shot channels. 創刻のアテリアル has 9,793 sites.
+
+### 0x324 `release-3d-effects` (u0043AA60, argc 0)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** () — release the display's three 3D effect objects: the first effect, the snow and the leaves.
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x324`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x324_release_scene_effects@0x419640 calls display_release_scene_effects@0x44f300, which deletes the objects at the display's +0x408, +0x40c and +0x410 and clears the drawn flags at +0x4e0. The two handles of op 0x325 stay. Besides the opcode only the display's destructor calls it: a scene reset does not.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x325 `set-3d-effect-handles` (u0043AA70, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (first)(second) — the two handles at which the frame walk draws the 3D effects.
+- **operand access:** `1` read · `2` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x325`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x325_set_scene_effect_handles@0x4252a0 stores operand 1 at the display's +0x4d8 and operand 2 at +0x4dc. display_scene_effects_at_handle@0x44f7a0, which the frame walk calls with each handle it reaches and with -1 at its end, starts the first effect once the walk reaches the first handle and draws the three effects once it reaches the second. TITLE@0x647 gives 2 and 2.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x326 `set-3d-effect-snow` (u0043AA80, argc 4)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (id)(surface_slot)(value)(option) — native's Set3DEffectSnow: build the display's snow effect from a surface slot's texture.
+- **operand access:** `1` read · `2` read (surface 0..999, untested) · `3` read-float · `4` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x326`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x326_set_3d_effect_snow@0x4252f0 reads operands 2 and 4 as integers and 3 as a float and calls gfx_set_3d_effect_snow@0x417640, which acts only when the manager's +0xb62c is above 0, traces 「関数：Set3DEffectSnow エラー：テクスチャが作成されていません． TEXTURE=%d」 for a slot with no texture, and otherwise builds the effect object at the display's +0x40c (0xe4 bytes) in place of the one there. What the effect draws, the two other operands and +0xb62c were not read. Only DEBUG.BIN uses it.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x327 `set-3d-effect-slot0` (u0043AA90, argc 1)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (count) — build the display's first 3D effect object, with count elements. What it draws is not read.
+- **operand access:** `1` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x327`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x327_create_scene_effect_a@0x425350 calls 0x44f430, which deletes the object at the display's +0x408 and builds a new one (0x29c bytes, constructor 0x47abc0) that allocates operand 1 elements of 0x70 bytes. Only DEBUG.BIN uses it.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x328 `set-3d-effect-leaf` (u0043AAA0, argc 3)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (id)(mesh_slots)(count) — native's Set3DEffectLeaf: build the display's leaf effect and give it the meshes of count mesh slots, read from integer cells. The engine then moves and draws the leaves.
+- **operand access:** `1` read · `2` address · `3` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x328`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x328_set_3d_effect_leaf@0x42e650 resolves operand 2's address, decodes operand 3 integer cells from it and calls gfx_set_3d_effect_leaf@0x4176f0, which builds the effect object at the display's +0x410 (effect_leaf_construct@0x472020) in place of the one there and adds the mesh of each slot (manager +0xc5f4 + slot * 4, indexed unchecked); a slot with no mesh is traced as 「関数：Set3DEffectLeaf エラー：メッシュが作成されていません． MESH=%d」. The effect's update and draw were not read. TITLE@0x692 gives it the two meshes LEAF0.X and LEAF1.X: the white leaves that drift over the title.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x329 `load-mesh` (u0043AAB0, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (file_id)(mesh_slot) — load a catalog file as a Direct3D .X mesh into one of 1,000 mesh slots.
+- **operand access:** `1` read · `2` read (mesh slot 0..999, untested)
+- **control (port handler):** waits never; leaves falls, jumps
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x329`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x329_load_mesh@0x425390 opens the catalog entry of operand 1 and calls gfx_mesh_slot_load@0x48b5d0, which releases the slot's mesh, loads the file with D3DX (mesh_load_from_x_memory@0x472630: the materials are kept, each one's ambient set to its diffuse, and no texture is loaded) and stores the mesh at manager +0xc5f4 + slot * 4, unchecked. When the load fails the handler throws 「メッシュファイル %s の読み込みに失敗しました」 with flags 0x10007. TITLE@0x683 and @0x688 load the two leaf meshes.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x32a `release-mesh` (32A, argc 1)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **summary:** (mesh_slot) — release a mesh slot.
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32a`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32a_release_mesh@0x425460 calls gfx_mesh_slot_release@0x48b6c0, which releases the mesh at manager +0xc5f4 + slot * 4, unchecked, and clears the slot. No script of the game uses it.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x32b `release-all-meshes` (u0043AAD0, argc 0)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** () — release all 1,000 mesh slots.
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32b`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32b_release_all_meshes@0x419670 calls gfx_mesh_slot_release for slots 0 to 999. A scene reset does not release them: only this, op 0x32a, a load into the slot and a lost device do.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x32c `set-camera-look-at` (u0043AAE0, argc 6)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (eye_x)(eye_y)(eye_z)(target_x)(target_y)(target_z) — the 3D scene's camera: a left-handed look-at view with the y axis up.
+- **operand access:** `1` read-float · `2` read-float · `3` read-float · `4` read-float · `5` read-float · `6` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32c`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32c_set_camera_look_at@0x4254a0 reads six floats and calls gfx_set_view_look_at@0x486440, which builds the view matrix from the eye (operands 1 to 3) and the target (4 to 6) with the up vector (0, 1, 0), keeps it at manager +0xa3a8 and sets it as the device's view transform.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x32d `set-ambient-light` (u0043AAF0, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (alpha)(rgb) — the 3D scene's ambient light colour. An alpha above 0xff is 0xff.
+- **operand access:** `1` read · `2` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32d`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32d_set_ambient_light@0x425520 clamps the alpha and calls gfx_set_ambient_light@0x486510, which keeps the packed colour at manager +0xd9cc and sets the device's ambient render state.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x32e `set-light` (u0043AB10, argc 11)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (index)(type)(x)(y)(z)(direction_x)(direction_y)(direction_z)(alpha)(rgb)(range) — set one of ten Direct3D lights and enable it.
+- **operand access:** `1` read (light 0..9, untested) · `2` read · `3` read-float · `4` read-float · `5` read-float · `6` read-float · `7` read-float · `8` read-float · `9` read · `10` read · `11` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32e`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32e_set_light@0x4255f0 reads the position and the direction (operands 3 to 8) and the range (11) as floats and the colour as an alpha, clamped to 0xff, and an RGB, and calls gfx_set_light@0x4867a0, which fills a D3DLIGHT9 (the direction normalized, the colour as its diffuse), keeps it at manager +0xd5bc + index * 0x68 with an enabled flag at +0xd594 + index * 4, both unchecked, and calls the device's SetLight and LightEnable.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+
+### 0x32f `disable-light` (u0043AB11, argc 1)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **summary:** (index) — disable a light.
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32f`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32f_disable_light@0x425790 calls gfx_disable_light@0x486870, which clears the enabled flag at manager +0xd594 + index * 4, unchecked, and calls the device's LightEnable with 0. No script of the game uses it.
+
+The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
 
 ## input
 
@@ -4542,15 +4730,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2c4`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
-### 0x2c7 `u0042B5F0` (u0042B5F0, argc 4)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write-string · `2` read-string · `3` read · `4` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2c7`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0x2c9 `2C9` (2C9, argc 3)
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
@@ -4677,15 +4856,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e8`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
-### 0x2e9 `u0042CE90` (u0042CE90, argc 1)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e9`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0x2ea `u0042CEA0` (u0042CEA0, argc 1)
 - **observed by:** arterial (SYS4438)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
@@ -4694,24 +4864,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **operand access:** `1` write
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2ea`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2eb `u0042CEB0` (u0042CEB0, argc 1)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write-string
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2eb`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2ec `u0042CEC0` (u0042CEC0, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write · `2` read-string
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2ec`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2ee `u0042CEC2` (u0042CEC2, argc 1)
 - **observed by:** none in recorded corpora
@@ -4944,110 +5096,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=med
 - **evidence:** method=upstream-catalog; confidence=med; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x30c`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x324 `u0043AA60` (u0043AA60, argc 0)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x324`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x325 `u0043AA70` (u0043AA70, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x325`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x326 `u0043AA80` (u0043AA80, argc 4)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read · `3` read-float · `4` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x326`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x327 `u0043AA90` (u0043AA90, argc 1)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x327`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x328 `u0043AAA0` (u0043AAA0, argc 3)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` address · `3` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x328`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x329 `u0043AAB0` (u0043AAB0, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x329`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x32a `32A` (32A, argc 1)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=med
-- **evidence:** method=upstream-catalog; confidence=med; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x32a`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x32b `u0043AAD0` (u0043AAD0, argc 0)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x32b`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x32c `u0043AAE0` (u0043AAE0, argc 6)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read-float · `2` read-float · `3` read-float · `4` read-float · `5` read-float · `6` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x32c`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x32d `u0043AAF0` (u0043AAF0, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x32d`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x32e `u0043AB10` (u0043AB10, argc 11)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read · `3` read-float · `4` read-float · `5` read-float · `6` read-float · `7` read-float · `8` read-float · `9` read · `10` read · `11` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x32e`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x32f `u0043AB11` (u0043AB11, argc 1)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x32f`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x330 `u0043AB12` (u0043AB12, argc 2)
 - **observed by:** none in recorded corpora

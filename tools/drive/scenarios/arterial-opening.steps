@@ -1,6 +1,8 @@
 # 創刻のアテリアル's opening: the logo, the title, Game Start and the first pages of SC0000. It is the scenario of
-# the game's P2 gate (docs/adding-a-game.md, step 6): native AGE passes it since 2026-11-19, and the port must reach
-# the same pages. Game Start goes straight to SC0000: the game has no new-game page.
+# the game's P2 gate (docs/adding-a-game.md, step 6): native AGE and the port both pass it since 2026-11-19, at the
+# same VM positions. Game Start goes straight to SC0000: the game has no new-game page. SC0000 opens with a white
+# screen, "Eushully Presents..." and the message window, about 18 s in all, before its first page waits at
+# SC0000@0xfff.
 #   py -3.11 -X utf8 tools/drive.py --game arterial native start
 #   py -3.11 -X utf8 tools/drive.py --game arterial native run tools/drive/scenarios/arterial-opening.steps
 #   py -3.11 -X utf8 tools/drive.py --game arterial native stop
@@ -14,8 +16,9 @@ wait-state script=TITLE timeout=90
 wait 6
 shot arterial-opening-title
 click title.start
-wait-state script=SC0000 timeout=60
+wait-state top=SC0000@0xfff timeout=90
 settle timeout=20
 shot arterial-opening-page1
 advance 3
+expect top=SC0000@0x12cf
 shot arterial-opening-page4

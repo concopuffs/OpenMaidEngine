@@ -462,6 +462,23 @@ def build_gate_plan(
                     low_memory_profile_environment,
                 )
             )
+        elif context.profile_id == "arterial":
+            # P2 (docs/adding-a-game.md): its own boot reaches SC0000's first page with no opcode skipped.
+            gates.append(
+                Gate(
+                    "natural-boot-acceptance",
+                    f"C# natural boot/ADV acceptance ({context.profile_id})",
+                    (
+                        "dotnet", "test", "engine/Ome.Engine.Tests/Ome.Engine.Tests.csproj",
+                        "--no-restore", "--nologo", "--verbosity", "minimal",
+                        "--filter",
+                        "FullyQualifiedName=NaturalBootIntegrationTests."
+                        "ArterialSystem4Root_NewGameSelectionNaturallyReachesTheFirstAdvPage",
+                    ),
+                    600,
+                    low_memory_profile_environment,
+                )
+            )
         else:
             raise ValueError(
                 f"Profile {context.profile_id!r} has no full-validation terminal gate"

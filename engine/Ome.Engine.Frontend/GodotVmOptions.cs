@@ -1,3 +1,4 @@
+using Ome.Engine.Frontend.Shell;
 using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
@@ -12,8 +13,11 @@ public static class GodotVmOptions
     public static bool NoSaveDat(bool selftest) => selftest;
 
     /// <summary>The interactive session's options; <paramref name="startupSettings"/> (the selected profile's
-    /// SYS4INI settings trailer) supplies the native settings the VM applies.</summary>
-    public static VmOptions Create(bool selftest, bool ignoreExitRequests, Sys4StartupSettings? startupSettings = null)
+    /// SYS4INI settings trailer) supplies the native settings the VM applies. <paramref name="registry"/> reads the
+    /// installer's version for the game version text (<see cref="GameVersionRule"/>); the machine's own when null.
+    /// </summary>
+    public static VmOptions Create(bool selftest, bool ignoreExitRequests, Sys4StartupSettings? startupSettings = null,
+                                   MachineRegistryReader? registry = null)
     {
         Sys4StartupSettings settings = startupSettings ?? Sys4StartupSettings.Empty;
         return new(
@@ -25,7 +29,8 @@ public static class GodotVmOptions
             CreateObject: settings.CreateObject,
             AutoFreeTex: settings.AutoFreeTex,
             WheelKeyUpAction: settings.WheelKeyUpAction,
-            WheelKeyDownAction: settings.WheelKeyDownAction);
+            WheelKeyDownAction: settings.WheelKeyDownAction,
+            GameVersion: startupSettings != null ? GameVersionRule.Of(settings, registry) : "");
     }
 
     /// <summary>The interactive session's skip and auto settings: the profile's CancelMesSkipOnClick and CoexistMesSkip,

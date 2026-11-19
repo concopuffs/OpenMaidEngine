@@ -293,20 +293,41 @@ public class NaturalBootIntegrationTests
         }
     }
 
+    /// <summary>創刻のアテリアル's P2 gate (docs/adding-a-game.md, step 6): its own boot goes through the logo, whose
+    /// fades are AGE 4.38D's polygon objects, and the title, which builds the 3D scene, to SC0000's first page, with
+    /// no opcode skipped. Game Start goes straight to SC0000: GAMESTART.BIN shows no page of its own.</summary>
+    [Fact]
+    [Trait("Profile", "arterial")]
+    public void ArterialSystem4Root_NewGameSelectionNaturallyReachesTheFirstAdvPage()
+    {
+        string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT") ?? Paths.GameInstall("arterial");
+        // The title's Game Start entry (tools/drive/arterial.toml, title.start).
+        var (reachedAdv, entered) = RunNewGameToFirstAdvPage("arterial", gameRoot, [gameRoot], 510, 284);
+        Assert.Contains("LOGO.BIN", entered);
+        Assert.Contains("TITLE.BIN", entered);
+        Assert.Equal("SC0000.BIN", reachedAdv.ScriptName);
+        Assert.EndsWith("重苦しい風が吹く。", reachedAdv.Text);
+        Assert.True(reachedAdv.VisibleObjectCount > 0);
+    }
+
     private static (ReachedKamidoriAdvPageException Reached, List<string> Entered) RunKamidoriNewGameToFirstAdvPage(
         string gameRoot, string[] looseRoots)
+        // Kamidori's 1024x576 title menu begins at x=606; its first row spans y=286..340.
+        => RunNewGameToFirstAdvPage("kamidori", gameRoot, looseRoots, 700, 300);
+
+    private static (ReachedKamidoriAdvPageException Reached, List<string> Entered) RunNewGameToFirstAdvPage(
+        string profileId, string gameRoot, string[] looseRoots, int titlePointerX, int titlePointerY)
     {
         string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
-        Assert.True(File.Exists(sys4Ini), $"Kamidori install not found at {gameRoot}");
+        Assert.True(File.Exists(sys4Ini), $"{profileId} install not found at {gameRoot}");
 
-        GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("kamidori")!;
+        GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find(profileId)!;
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, profile.EngineAbiId);
         Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
         var scripts = new Sys4ScriptProvider(
             table, catalog, new Sys4AssetStore(catalog, gameRoot, looseRoots));
-        // Kamidori's 1024x576 title menu begins at x=606; its first row spans y=286..340.
         var rig = new AudioRig();
-        var host = new NewGameInputHost(700, 300) { AudioDevice = rig.Device, Clock = rig.Clock };
+        var host = new NewGameInputHost(titlePointerX, titlePointerY) { AudioDevice = rig.Device, Clock = rig.Clock };
         var sink = new KamidoriNaturalBootSink();
         var vm = new VirtualMachine(
             scripts.RequireByName(profile.NaturalBootScript), table, host,

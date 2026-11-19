@@ -89,6 +89,7 @@
   "error.random-zero": "The RANDOM bound is 0.",
   "error.script-slot-empty": "No file is loaded at this depth. Depth={0}",
   "error.wave-load": "Could not read the WAV file {0}",
+  "error.mesh-load": "Could not read the mesh file {0}",
   "error.depth-limit": "Files are nested too deep. The most is {0}.",
   "error.file-number": "File number {0} is not valid.",
   "error.file-open": "Cannot open {0}.\nERROR CODE = {1}",

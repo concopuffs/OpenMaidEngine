@@ -65,6 +65,13 @@ public sealed class IndexBoundsTests
         cases.Add(0x321, 2, 2, Past.Halts, "texture stage 2 is outside 0..1");
         cases.Add(0x321, 3, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
         cases.Add(0x321, 3, -1, Past.Continues, "");
+        // The 3D scene (AGE 4.38D): 1,000 mesh slots and ten lights, indexed with no test, and the snow effect's
+        // surface slot.
+        cases.Add(0x326, 2, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
+        cases.Add(0x329, 2, 1000, Past.Halts, "mesh slot 1000 is outside 0..999");
+        cases.Add(0x32a, 1, 1000, Past.Halts, "mesh slot 1000 is outside 0..999");
+        cases.Add(0x32e, 1, 10, Past.Halts, "light 10 is outside 0..9");
+        cases.Add(0x32f, 1, 10, Past.Halts, "light 10 is outside 0..9");
         // Numeric glyph styles, 0 to 9: native's test admits 0 to 10 and traces the rest.
         foreach ((int op, int argument) in new[] { (0x13a, 1), (0x2da, 1), (0x23b, 2) })
         {

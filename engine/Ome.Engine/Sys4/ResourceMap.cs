@@ -42,6 +42,24 @@ public sealed class ResourceMap
     public AssetEntry? ResolveMovie(long resourceId)
         => ResolveTypedPacked(resourceId, "movie", "an AGF/MPG record", IsMovie);
 
+    /// <summary>Resolve a universal packed SYS4INI/AAI id to a Direct3D .X mesh record (AGE 4.38D, op 0x329).
+    /// </summary>
+    public AssetEntry? ResolveMesh(long resourceId)
+        => ResolveTypedPacked(resourceId, "mesh", "an X record",
+            entry => entry.Name.EndsWith(".X", StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Whether the record's bytes are a Direct3D .X file: they begin with its <c>xof </c> signature.</summary>
+    public bool IsMesh(AssetEntry entry)
+    {
+        byte[] bytes = _store.ReadAll(entry);
+        return bytes.Length >= 4 && bytes[0] == (byte)'x' && bytes[1] == (byte)'o' && bytes[2] == (byte)'f'
+               && bytes[3] == (byte)' ';
+    }
+
+    /// <summary>The name of the record a packed id selects, for an error that names the file; null when it selects
+    /// none.</summary>
+    public string? RecordName(long resourceId) => _catalog.ResolvePacked(resourceId)?.Name;
+
     /// <summary>Decode an AGF directly from loose-first VFS bytes, or the PNG a language package supplied for it
     /// (localization spec §12).</summary>
     public RgbaImage DecodeTexture(AssetEntry entry)
