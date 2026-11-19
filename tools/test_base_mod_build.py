@@ -1,4 +1,5 @@
-"""Plain tests for base_mod_build.py and the registry's aliases: synthesized registries, no game content."""
+"""Plain tests for base_mod_build.py and the registry's aliases: synthesized registries and profile manifests, no
+game content."""
 import json
 import sys
 import tempfile
@@ -57,17 +58,25 @@ confidence = "low"
 '''
 
 
-def workspace(directory: Path, registry: str = REGISTRY, version: str = "1.0.0") -> tuple[Path, Path]:
+# The saved prefix of each bank: G cells below 0x50, GS below 0x10 and GF below 1 are kept by a save.
+PROFILE = {"persistence": {"bankDimensions": {"integerGlobals": 0x50, "floatGlobals": 1, "stringGlobals": 0x10,
+                                              "pointerGlobals": 1, "pointerStrings": 1, "localPointerScratch": 1}}}
+
+
+def workspace(directory: Path, registry: str = REGISTRY, version: str = "1.0.0",
+              profile: dict | None = None) -> tuple[Path, Path]:
     mods = directory / "mods"
     (mods / "test-base").mkdir(parents=True, exist_ok=True)
     (mods / "test-base" / "manifest.toml").write_text(f'version = "{version}"\n', encoding="utf-8")
     source = directory / "globals-test.toml"
     source.write_text(registry, encoding="utf-8")
+    (directory / "test.json").write_text(json.dumps(PROFILE if profile is None else profile), encoding="utf-8")
     return mods, source
 
 
 def generate(mods: Path, source: Path):
-    return build.generate("test", mods=mods, registry=source, points_registry=source.parent / "none.toml")
+    return build.generate("test", mods=mods, registry=source, points_registry=source.parent / "none.toml",
+                          manifest=source.parent / "test.json")
 
 
 def write(files: dict):
@@ -168,6 +177,102 @@ def test_rename_rule():
         check(any("lower than the released 2" in error for error in errors), "the major version cannot go down")
 
 
+def entry(address: str, name: str, type_: str, extra: str = "") -> str:
+    return (f'\n[[global]]\naddress = "{address}"\nname = "{name}"\ncategory = "data-table"\ntype = "{type_}"\n'
+            f'{extra}source = "investigation"\nconfidence = "high"\n')
+
+
+# hero: a field that ends at the G prefix (state), one that begins at it (not state), a row with named columns, a
+# string field at the GS prefix, a float field, and a field named like a Lua keyword.
+HEROES = REGISTRY + (entry("0x4c", "hero_seen_flags", "int[4]") + entry("0x50", "hero_levels", "int[4]")
+                     + entry("0x60", "hero_stats", "int[4][3]", 'columns = { "2" = "end", "0" = "hp" }\n')
+                     + entry("0x10", "hero_names", "string[4]") + entry("0x1", "hero_speeds", "float[4]")) + '''
+[[table]]
+name = "hero"
+records = 4
+built_by = "boot"
+
+[table.fields]
+seen_flag = "hero_seen_flags"
+level = "hero_levels"
+stats = "hero_stats"
+name = "hero_names"
+speed = "hero_speeds"
+end = "hero_levels"
+'''
+
+
+def record_map(files: dict) -> str:
+    return next(text for path, text in files.items() if path.as_posix().endswith("lua/generated/tables.lua"))
+
+
+def test_record_map():
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), HEROES)
+        files, errors = generate(mods, source)
+        check(not errors, f"a registry with a record table generates ({errors})")
+        text = record_map(files)
+        lines = text.splitlines()
+        check(lines[0].startswith("-- DO NOT EDIT -- generated from vm-map/globals-test.toml and ")
+              and "base_mod_build.py --build" in lines[0], "the record map says it is generated, and from what")
+        check("    format = 1," in lines and "        hero = {" in lines and "            records = 4," in lines
+              and '            built_by = "boot",' in lines, "a table has its record count and what builds it")
+        fields = [line.strip() for line in lines if line.startswith("                ")]
+        check(fields == [
+            '["end"] = { global = "hero_levels", kind = "integer" },',
+            'level = { global = "hero_levels", kind = "integer" },',
+            'name = { global = "hero_names", kind = "string" },',
+            'seen_flag = { global = "hero_seen_flags", kind = "integer", state = true },',
+            'speed = { global = "hero_speeds", kind = "float" },',
+            'stats = { global = "hero_stats", kind = "integer", width = 3, columns = { hp = 0, ["end"] = 2 } },',
+        ], f"fields are sorted, with their kind, a row's width and columns by index, and state at the prefix ({fields})")
+        check(text.endswith("    },\n}\n") and "\r" not in text, "the module ends with its table and a newline")
+        again, _ = generate(mods, source)
+        check(record_map(again) == text, "the record map is the same each time it is generated")
+
+
+def test_record_map_without_tables():
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), profile={})
+        files, errors = generate(mods, source)
+        check(not errors, f"a registry without tables needs no saved prefix ({errors})")
+        check("    tables = {\n    },\n}\n" in record_map(files), "its record map has no table")
+
+
+def test_record_map_errors():
+    table = '''
+[[table]]
+name = "hero"
+records = 4
+built_by = "boot"
+
+[table.fields]
+'''
+    cases = [
+        (entry("0x4e", "hero_split", "int[4]"), "split = \"hero_split\"\n", PROFILE,
+         "hero_split (G 0x4e to 0x52) straddles the saved prefix 0x50", "an array across the saved prefix"),
+        (entry("0x80", "hero_flags", "int[4]", 'columns = { "1" = "second" }\n'), "flags = \"hero_flags\"\n", PROFILE,
+         "hero_flags has one cell for each record, so its column names would name records",
+         "a 1-D field with column names"),
+        (entry("0x80", "hero_flags", "int[4]"), "flags = \"hero_flags\"\n", {"persistence": {}},
+         "has no persistence.bankDimensions", "a profile without its banks' saved prefixes"),
+        (entry("0x80", "hero_flags", "int[4]"), "flags = \"hero_flags\"\n",
+         {"persistence": {"bankDimensions": {"integerGlobals": 0x50, "floatGlobals": 1}}},
+         "persistence.bankDimensions.stringGlobals is None", "a profile without a bank's prefix"),
+    ]
+    for globals_, fields, profile, needle, what in cases:
+        with tempfile.TemporaryDirectory() as directory:
+            mods, source = workspace(Path(directory), REGISTRY + globals_ + table + fields, profile=profile)
+            _, errors = generate(mods, source)
+            check(any(needle in error for error in errors), f"the record map refuses {what} ({errors})")
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), REGISTRY + entry("0x80", "hero_flags", "int[4]")
+                                 + table.replace('built_by = "boot"\n', "") + "flags = \"hero_flags\"\n")
+        _, errors = generate(mods, source)
+        check(any("table 'hero': built_by must be a lowercase identifier" in error for error in errors),
+              f"a table without built_by blocks the build ({errors})")
+
+
 def test_alias_lint():
     registry = REGISTRY.replace('name = "unit_names"', 'name = "unit_names"\naliases = ["current_unit_id", "Bad"]')
     with tempfile.TemporaryDirectory() as directory:
@@ -192,6 +297,9 @@ def main():
     test_layout()
     test_shape_errors()
     test_rename_rule()
+    test_record_map()
+    test_record_map_without_tables()
+    test_record_map_errors()
     test_alias_lint()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0

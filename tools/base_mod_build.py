@@ -4,15 +4,21 @@
 A base mod is the per-game package that names the game's cells for Lua mods. Its layout comes from the repository
 alone, so no game content is read:
 
-  vm-map/globals[-<game>].toml      every named global: its bank, address, shape, columns and aliases
+  vm-map/globals[-<game>].toml      every named global: its bank, address, shape, columns and aliases; and the
+                                    record tables ([[table]]), with what builds each
   vm-map/patch-points-<game>.toml   the named patch points, copied so an exported build carries them
   mods/<game>-base/manifest.toml    the base mod's version; its major version is the version of its API
+  engine/Ome.Engine/Profiles/<game>.json   each bank's saved prefix (persistence.bankDimensions), which says which
+                                    fields of a record table a save holds
 
 For each profile with a base mod (a hand-written mods/<game>-base/manifest.toml) it writes:
 
   layout/globals.json   the layout the engine builds a mod's accessors from (game.g, game.table)
   layout/points.json    the patch points, in the form of build/games/<game>/patch-points.json
   layout/exports.txt    the names the base mod exports: its API, checked in, so a review sees a name change
+  lua/generated/tables.lua   the record map (data patches spec §6.3): each record table's record count and what
+                        builds it, and for each field its global, kind, row width, named columns and whether a save
+                        holds it, for the base mod's tables.lua
 
 The rename rule (spec §9.1): a name the checked-in exports.txt lists stays exported, as a global's name or as one of
 its `aliases`, until the base mod's major version is raised. A rename that does neither is refused.
@@ -41,6 +47,12 @@ IDENTIFIER = re.compile(r"[a-z_][a-z0-9_]*")
 COLUMN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")   # a column is reached as a Lua name; registries use capitals there
 SHAPE = re.compile(r"(int|string|float)((?:\[[^\]]*\])*)")
 BANKS = {"int": "G", "float": "GF", "string": "GS"}
+KINDS = {"G": "integer", "GF": "float", "GS": "string"}
+PREFIX_KEYS = {"G": "integerGlobals", "GF": "floatGlobals", "GS": "stringGlobals"}
+RECORD_MAP_FORMAT = 1
+LUA_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+LUA_KEYWORDS = {"and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if", "in",
+                "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"}
 VERSION = re.compile(r"(\d+)\.(\d+)\.(\d+)")
 
 
@@ -58,6 +70,10 @@ def globals_source(profile_id: str) -> Path:
 
 def points_source(profile_id: str) -> Path:
     return paths.VM_MAP / f"patch-points-{profile_id}.toml"
+
+
+def profile_manifest(profile_id: str) -> Path:
+    return paths.PROFILE_MANIFEST_DIR / f"{profile_id}.json"
 
 
 def dimensions(type_: str) -> tuple[str, list[int | None]] | None:
@@ -157,6 +173,108 @@ def render_points(profile_id: str, registry: Path) -> tuple[str, list[str]]:
     return json.dumps(document, ensure_ascii=False, indent=2) + "\n", errors
 
 
+def saved_prefixes(manifest: Path) -> tuple[dict[str, int] | None, str | None]:
+    """Each bank's saved prefix from a profile manifest's persistence.bankDimensions: a cell below it is kept by a
+    save, a cell at or above it is rebuilt at boot (docs/sys4-format-notes.md, "Saved prefix"). Or an error."""
+    try:
+        data = json.loads(manifest.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        return None, f"{manifest.name}: {error}"
+    dims = (data.get("persistence") or {}).get("bankDimensions")
+    if not isinstance(dims, dict):
+        return None, (f"{manifest.name} has no persistence.bankDimensions, so which fields of a record table a save "
+                      f"holds is not known")
+    prefixes: dict[str, int] = {}
+    for bank, key in PREFIX_KEYS.items():
+        value = dims.get(key)
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            return None, f"{manifest.name}: persistence.bankDimensions.{key} is {value!r}, not a count of cells"
+        prefixes[bank] = value
+    return prefixes, None
+
+
+def record_tables(tables: list[dict], values: list[dict], prefixes: dict[str, int] | None,
+                  source: str) -> tuple[list[dict], list[str]]:
+    """The record map's tables (data patches spec §6.3), and the errors: a field whose global the layout does not map,
+    a 1-D field with column names (they would name records), and a field whose array straddles its bank's saved
+    prefix. A field is state when its array ends at or below the prefix, so that a load brings its value back."""
+    by_name = {value["name"]: value for value in values}
+    out: list[dict] = []
+    errors: list[str] = []
+    for table in tables:
+        fields: dict[str, dict] = {}
+        for field, global_name in table["fields"].items():
+            where = f"{source}: table {table['name']}: field {field}"
+            value = by_name.get(global_name)
+            if value is None:
+                errors.append(f"{where} names {global_name}, which the layout does not map")
+                continue
+            dims = value["dims"]
+            if dims[0] != table["records"] or len(dims) not in (1, 2):
+                errors.append(f"{where}: {global_name} is not {table['records']} records of one cell or one row")
+                continue
+            entry: dict = {"global": global_name, "kind": KINDS[value["bank"]]}
+            if len(dims) == 2:
+                entry["width"] = dims[1]
+                if value.get("columns"):
+                    entry["columns"] = value["columns"]
+            elif value.get("columns"):
+                errors.append(f"{where}: {global_name} has one cell for each record, so its column names would name "
+                              f"records")
+                continue
+            start = int(value["address"], 16)
+            end = start + table["records"] * (dims[1] if len(dims) == 2 else 1)
+            prefix = prefixes[value["bank"]] if prefixes else None
+            if prefix is not None and end <= prefix:
+                entry["state"] = True
+            elif prefix is not None and start < prefix:
+                errors.append(f"{where}: {global_name} ({value['bank']} {value['address']} to 0x{end:x}) straddles "
+                              f"the saved prefix 0x{prefix:x}, so a save would keep part of it")
+                continue
+            fields[field] = entry
+        out.append({"name": table["name"], "records": table["records"], "built_by": table["built_by"],
+                    "fields": fields})
+    out.sort(key=lambda table: table["name"])
+    return out, errors
+
+
+def _lua_key(name: str) -> str:
+    return name if LUA_NAME.fullmatch(name) and name not in LUA_KEYWORDS else f"[{json.dumps(name)}]"
+
+
+def render_record_map(profile_id: str, tables: list[dict], source: str, manifest: str) -> str:
+    """The record map as a Lua module, one field to a line, so a registry change is a one-line diff."""
+    def field_line(name: str, entry: dict) -> str:
+        parts = [f"global = {json.dumps(entry['global'])}", f"kind = {json.dumps(entry['kind'])}"]
+        if "width" in entry:
+            parts.append(f"width = {entry['width']}")
+        if entry.get("columns"):
+            columns = sorted(entry["columns"].items(), key=lambda item: item[1])
+            parts.append("columns = { " + ", ".join(f"{_lua_key(column)} = {index}" for column, index in columns)
+                         + " }")
+        if entry.get("state"):
+            parts.append("state = true")
+        return f"                {_lua_key(name)} = {{ " + ", ".join(parts) + " },"
+    lines = [f"-- DO NOT EDIT -- generated from {source} and {manifest} by tools/base_mod_build.py --build",
+             f"-- The record tables of {base_mod_id(profile_id)} (data patches spec §6.3), for its tables.lua: each "
+             f"table's",
+             "-- record count and the part of the game that builds it (the registry's built_by), and for each field its",
+             "-- global, its kind, a row's width and named columns (from 0), and state = true where the field's array",
+             "-- lies in its bank's saved prefix, so that a load brings the saved value back.",
+             "return {",
+             f"    format = {RECORD_MAP_FORMAT},",
+             "    tables = {"]
+    for table in tables:
+        lines += [f"        {_lua_key(table['name'])} = {{",
+                  f"            records = {table['records']},",
+                  f"            built_by = {json.dumps(table['built_by'])},",
+                  "            fields = {"]
+        lines += [field_line(name, table["fields"][name]) for name in sorted(table["fields"])]
+        lines += ["            },", "        },"]
+    lines += ["    },", "}"]
+    return "\n".join(lines) + "\n"
+
+
 def exported_names(values: list[dict]) -> dict[str, str | None]:
     """Each exported name: None for a global's own name, the global's name for an alias."""
     names: dict[str, str | None] = {}
@@ -221,11 +339,12 @@ def rename_errors(profile_id: str, released: tuple[int | None, set[str]] | None,
 
 
 def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
-             points_registry: Path | None = None) -> tuple[dict[Path, str], list[str]]:
-    """The files a base mod's layout should hold, and the errors that block them."""
+             points_registry: Path | None = None, manifest: Path | None = None) -> tuple[dict[Path, str], list[str]]:
+    """The files a base mod's layout and record map should hold, and the errors that block them."""
     root = base_mod_dir(profile_id, mods)
     registry = registry or globals_source(profile_id)
     points_registry = points_registry or points_source(profile_id)
+    manifest = manifest or profile_manifest(profile_id)
     source = f"vm-map/{registry.name}"
     errors: list[str] = []
     major, error = manifest_major(root / "manifest.toml")
@@ -237,6 +356,16 @@ def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
     errors += [f"{source}: {message}" for message in lint_errors]
     values, shape_errors = layout_globals(list(curated.values()), source)
     errors += shape_errors
+    tables = globals_build.load_tables(registry)
+    table_errors = globals_build.lint_tables(tables, curated)
+    errors += [f"{source}: {message}" for message in table_errors]
+    prefixes, prefix_error = saved_prefixes(manifest) if tables else (None, None)
+    if prefix_error:
+        errors.append(f"{base_mod_id(profile_id)}: {prefix_error}")
+    record_map: list[dict] = []
+    if not table_errors and not prefix_error:
+        record_map, map_errors = record_tables(tables, values, prefixes, source)
+        errors += map_errors
     points, point_errors = render_points(profile_id, points_registry)
     errors += point_errors
     names = exported_names(values)
@@ -245,7 +374,9 @@ def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
     errors += rename_errors(profile_id, released, major, names)
     files = {root / "layout" / "globals.json": render_globals(profile_id, values, source),
              root / "layout" / "points.json": points,
-             exports: render_exports(profile_id, major, names, source)}
+             exports: render_exports(profile_id, major, names, source),
+             root / "lua" / "generated" / "tables.lua": render_record_map(profile_id, record_map, source,
+                                                                          _shown(manifest))}
     return files, errors
 
 
@@ -261,7 +392,7 @@ def _shown(path: Path) -> str:
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     mode = parser.add_mutually_exclusive_group(required=True)
-    mode.add_argument("--build", action="store_true", help="write every base mod's layout")
+    mode.add_argument("--build", action="store_true", help="write every base mod's layout and record map")
     mode.add_argument("--check", action="store_true", help="fail if a layout is stale or a rename breaks the rule")
     args = parser.parse_args(argv)
     failed = False
