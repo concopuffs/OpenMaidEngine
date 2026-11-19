@@ -40,7 +40,7 @@ public sealed record ModKind(int Index, string Kind, string? Description, IReadO
     /// <summary>The kind's shape (spec §7): a path under <c>shapes/</c>, or null for a kind its owner checks alone.</summary>
     public string? Shape { get; init; }
 
-    /// <summary>The shape's path in the package, as reports print it: <c>shapes/tables.schema.json</c>.</summary>
+    /// <summary>The shape's path in the package, as reports print it: <c>shapes/lists.schema.json</c>.</summary>
     public string? ShapePath => Shape == null ? null : $"{ShapesFolder}/{Shape}";
 
     /// <summary>How reports name the entry: <c>accepts[0] example.lists</c>.</summary>

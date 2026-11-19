@@ -22,7 +22,7 @@ public sealed class DataShapeSchema
 {
     internal DataShapeSchema(string pointer) => Pointer = pointer;
 
-    /// <summary>Where the schema is in its file, as a JSON pointer: <c>#/definitions/record.unit</c>.</summary>
+    /// <summary>Where the schema is in its file, as a JSON pointer: <c>#/definitions/by_id</c>.</summary>
     public string Pointer { get; }
     /// <summary>A boolean schema's value: <c>true</c> takes every value and <c>false</c> none. Null for an object.</summary>
     public bool? Constant { get; internal set; }

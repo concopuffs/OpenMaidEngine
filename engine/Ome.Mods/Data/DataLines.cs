@@ -6,8 +6,8 @@ namespace Ome.Mods.Data;
 /// <summary>
 /// The line a data file writes a path at (data patches plan §6.2), from the syntax tree of the reader's validating
 /// parse: the model keeps no positions. A path's line is that of the first key-value or table header that writes it,
-/// itself or something inside it (<c>stats.max_hp = 5</c> writes <c>stats</c>); for a path the file does not write,
-/// that of the deepest one on the path (<c>[unit.761]</c> for <c>unit.761.statz</c>). Paths are lists of keys, an
+/// itself or something inside it (<c>by_id.16.name = "x"</c> writes <c>by_id</c>); for a path the file does not write,
+/// that of the deepest one on the path (<c>[by_id.16]</c> for <c>by_id.16.namez</c>). Paths are lists of keys, an
 /// array's element marked with <see cref="DataShapeCheck.IndexMark"/> and its index from 1, as the reader counts them.
 /// </summary>
 internal static class DataLines
