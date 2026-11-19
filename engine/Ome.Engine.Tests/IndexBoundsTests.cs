@@ -34,6 +34,7 @@ public sealed class IndexBoundsTests
     private const int Marker = 0x200;
     private static readonly Lazy<OpcodeTable> Himegari = new(() => OpcodeTableJson.Load(Paths.OpcodesJson));
     private static readonly Lazy<OpcodeTable> Kamidori = new(() => OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4433"));
+    private static readonly Lazy<OpcodeTable> Arterial = new(() => OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4438"));
 
     private static Operand I(long value) => new(0, value);
     private static Operand G(int address) => new(3, address);
@@ -59,6 +60,11 @@ public sealed class IndexBoundsTests
                                                    (0x258, 1), (0x32, 1), (0x32, 2) })
             cases.Add(op, argument, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
         cases.Add(0x216, 2, 2000, Past.Halts, "surface record 2000 is outside 0..1999");
+        // A polygon's texture (AGE 4.38D, op 0x321): native writes the record at any stage, and its draw reads the
+        // surface table at any slot that is not negative.
+        cases.Add(0x321, 2, 2, Past.Halts, "texture stage 2 is outside 0..1");
+        cases.Add(0x321, 3, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
+        cases.Add(0x321, 3, -1, Past.Continues, "");
         // Numeric glyph styles, 0 to 9: native's test admits 0 to 10 and traces the rest.
         foreach ((int op, int argument) in new[] { (0x13a, 1), (0x2da, 1), (0x23b, 2) })
         {
@@ -214,12 +220,14 @@ public sealed class IndexBoundsTests
     }
 
     /// <summary>One instruction with <paramref name="value"/> at <paramref name="argument"/> and a cell elsewhere,
-    /// then a marker and the exit. An op Himegari's table does not have runs on 4.33G's.</summary>
+    /// then a marker and the exit. An op Himegari's table does not have runs on 4.33G's, and one that has not either
+    /// on 4.38D's.</summary>
     private static (VirtualMachine, RecordingWaits) Run(int op, int argument, long value,
                                                        ScriptErrorChoice? answer = null)
     {
         bool himegari = Himegari.Value.Argc(op) >= 0;
-        OpcodeTable table = himegari ? Himegari.Value : Kamidori.Value;
+        bool kamidori = !himegari && Kamidori.Value.Argc(op) >= 0;
+        OpcodeTable table = himegari ? Himegari.Value : kamidori ? Kamidori.Value : Arterial.Value;
         int argc = table.Argc(op);
         Assert.InRange(argument, 1, argc);
         Operand[] operands = Enumerable.Range(0, argc).Select(i => i == argument - 1 ? I(value) : G(0x300 + i))
@@ -234,7 +242,7 @@ public sealed class IndexBoundsTests
         if (answer is { } choice) host.ScriptErrorAnswers.Enqueue(choice);
         var vm = himegari
             ? new VirtualMachine(script, table, host)
-            : new VirtualMachine(script, table, host, build: EngineBuilds.Age433G);
+            : new VirtualMachine(script, table, host, build: kamidori ? EngineBuilds.Age433G : EngineBuilds.Age438D);
         vm.Run();
         return (vm, host);
     }

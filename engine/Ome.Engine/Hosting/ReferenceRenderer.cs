@@ -96,6 +96,19 @@ public sealed class ReferenceRenderer
                     item.Width, item.Height, item.Matrix, item.Tint, item.Opacity);
                 continue;
             }
+            if (item.Kind == FrameItemKind.Polygon)
+            {
+                RgbaImage? first = item.Pixels is { } pixels ? RgbaSurfaceOps.WithColorKey(pixels, item.ColorKey) : null;
+                RgbaImage? second = item.SecondTexture is { } texture
+                    ? RgbaSurfaceOps.WithColorKey(texture.Pixels, texture.ColorKey)
+                    : null;
+                SoftwareAffineRasterizer.DrawPolygonRgba(
+                    destination.Pixels, destination.Width, destination.Height,
+                    item.Polygon!.Vertices, item.Polygon.Blend, item.Opacity,
+                    first?.Pixels, first?.Width ?? 0, first?.Height ?? 0,
+                    second?.Pixels, second?.Width ?? 0, second?.Height ?? 0);
+                continue;
+            }
             if (item.Width <= 0 || item.Height <= 0) continue;
             RgbaImage source = RgbaSurfaceOps.WithColorKey(item.Pixels!, item.ColorKey);
             int width = System.Math.Min(item.Width, source.Width - item.SourceX);
@@ -130,9 +143,29 @@ public sealed class ReferenceRenderer
             FrameItem item = items[index];
             if (item.Kind == FrameItemKind.Fill)
                 FillAffineQuad(item.Width, item.Height, item.Matrix, item.Tint, item.Opacity);
+            else if (item.Kind == FrameItemKind.Polygon)
+                DrawPolygon(item);
             else
                 BlitLayer(item);
         }
+    }
+
+    // A polygon item's triangles, in canvas pixels, with its textures prepared as a texture item's pixels are.
+    private void DrawPolygon(in FrameItem item)
+    {
+        long rasterStarted = Perf != null ? PerformanceFrameLog.Timestamp() : 0;
+        byte[]? first = null, second = null;
+        int firstWidth = 0, firstHeight = 0, secondWidth = 0, secondHeight = 0;
+        if (item.Pixels is { } pixels)
+            first = PreparedPixels(pixels, item.AssetId, item.Dynamic, item.ColorKey, out firstWidth, out firstHeight);
+        if (item.SecondTexture is { } texture)
+            second = PreparedPixels(texture.Pixels, texture.AssetId, texture.Dynamic, texture.ColorKey,
+                                    out secondWidth, out secondHeight);
+        SoftwareAffineRasterizer.DrawPolygonRgba(
+            _pixels, _width, _height, item.Polygon!.Vertices, item.Polygon.Blend, item.Opacity,
+            first, firstWidth, firstHeight, second, secondWidth, secondHeight);
+        Perf?.RecordRaster(_width, _height, new Affine2D(1, 0, 0, 1, 0, 0), _width, _height, item.Dynamic,
+                           BlendKind.Alpha, PerformanceFrameLog.Timestamp() - rasterStarted);
     }
 
     // Blit one texture item's rectangle. Static source pixels with a colour key are cached per (assetId, colorKey): on
@@ -147,37 +180,8 @@ public sealed class ReferenceRenderer
         if (item.Width <= 0 || item.Height <= 0) return;
         long sourcePrepStarted = Perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long sourcePrepAllocated = Perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
-        RgbaImage decoded = item.Pixels!;
-        int sourceWidth, sourceHeight;
-        byte[] sourcePixels;
-        if (item.Dynamic || !BlendMath.HasColorKey(item.ColorKey))
-        {
-            // Pixels without a key are drawn as decoded, so nothing is kept for them. Decoder samples replace the
-            // pixels of one retained surface: never enter them in the static cache, and clone only when applying a
-            // key so the decoder-owned newest-frame buffer remains untouched.
-            sourceWidth = decoded.Width;
-            sourceHeight = decoded.Height;
-            sourcePixels = decoded.Pixels;
-            if (BlendMath.HasColorKey(item.ColorKey))
-            {
-                sourcePixels = (byte[])sourcePixels.Clone();
-                BakeColorKey(sourcePixels, item.ColorKey);
-            }
-        }
-        else
-        {
-            var cacheKey = (item.AssetId, item.ColorKey);
-            if (!_pixelCache.TryGet(cacheKey, out var cached) || !cached.IsFrom(decoded.Pixels))
-            {
-                byte[] pixels = (byte[])decoded.Pixels.Clone();
-                BakeColorKey(pixels, item.ColorKey);
-                cached = new CachedPixels(decoded.Width, decoded.Height, pixels, new WeakReference<byte[]>(decoded.Pixels));
-                _pixelCache.Set(cacheKey, cached, pixels.LongLength);
-            }
-            sourceWidth = cached.Width;
-            sourceHeight = cached.Height;
-            sourcePixels = cached.Rgba;
-        }
+        byte[] sourcePixels = PreparedPixels(item.Pixels!, item.AssetId, item.Dynamic, item.ColorKey,
+                                             out int sourceWidth, out int sourceHeight);
 
         int width = System.Math.Min(item.Width, sourceWidth - item.SourceX);
         int height = System.Math.Min(item.Height, sourceHeight - item.SourceY);
@@ -191,6 +195,39 @@ public sealed class ReferenceRenderer
             item.Opacity, item.MultiplyTint, item.Blend);
         Perf?.RecordRaster(width, height, item.Matrix, _width, _height, item.Dynamic, item.Blend,
                            PerformanceFrameLog.Timestamp() - rasterStarted);
+    }
+
+    // A texture's pixels with its colour key applied: the decoded pixels themselves when it has no key, a cached
+    // copy for a static asset, a fresh copy for a dynamic surface.
+    private byte[] PreparedPixels(RgbaImage decoded, int assetId, bool dynamic, long colorKey,
+                                  out int width, out int height)
+    {
+        if (dynamic || !BlendMath.HasColorKey(colorKey))
+        {
+            // Pixels without a key are drawn as decoded, so nothing is kept for them. Decoder samples replace the
+            // pixels of one retained surface: never enter them in the static cache, and clone only when applying a
+            // key so the decoder-owned newest-frame buffer remains untouched.
+            width = decoded.Width;
+            height = decoded.Height;
+            byte[] source = decoded.Pixels;
+            if (BlendMath.HasColorKey(colorKey))
+            {
+                source = (byte[])source.Clone();
+                BakeColorKey(source, colorKey);
+            }
+            return source;
+        }
+        var cacheKey = (assetId, colorKey);
+        if (!_pixelCache.TryGet(cacheKey, out var cached) || !cached.IsFrom(decoded.Pixels))
+        {
+            byte[] pixels = (byte[])decoded.Pixels.Clone();
+            BakeColorKey(pixels, colorKey);
+            cached = new CachedPixels(decoded.Width, decoded.Height, pixels, new WeakReference<byte[]>(decoded.Pixels));
+            _pixelCache.Set(cacheKey, cached, pixels.LongLength);
+        }
+        width = cached.Width;
+        height = cached.Height;
+        return cached.Rgba;
     }
 
     private void FillAffineQuad(int width, int height, Affine2D localToDest, long tint, float alpha)

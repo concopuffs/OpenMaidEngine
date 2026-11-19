@@ -170,6 +170,8 @@ public sealed partial class GfxState
             if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
             CommitOneShotChannels(o);
         }
+        // gfx_render_polygon reads the same force flag (manager +0xb590) as the one-shot evaluator.
+        ForceCompletePolygonFades();
     }
 
     private static void CommitOneShotChannels(GfxObject o)

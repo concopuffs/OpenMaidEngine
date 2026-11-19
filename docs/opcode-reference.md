@@ -2666,21 +2666,23 @@ Operand 1 selects one of the ten style records (the handler admits 0..10; see op
 - **semantic status:** investigated
 - **summary:** (handle)(xs)(ys)(zs)(alphas)(colors)(us)(vs)(count)(flags) — make the handle's polygon object: a retained object of vertices with a colour each, drawn in handle order with the other retained objects.
 - **operand access:** `1` read · `2` address · `3` address · `4` address · `5` address · `6` address · `7` address · `8` address · `9` read · `10` read
+- **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x320`; scope=SYS4438 polygon object handlers and workers; the opcodes exist only in AGE 4.38D among the builds read. op_0x320_create_polygon@0x42e4a0 reads the count (operand 9; below 1 it traces a script error and returns), resolves the integer cells of operands 5 and 6 and the float cells of operands 7, 8, 4, 3 and 2 (vm_operand_resolve_float_address@0x4291a0), packs alpha << 24 | RGB for each vertex, makes an array of 1.0 for rhw and calls gfx_polygon_create@0x4965c0, which builds a vertex buffer of FVF 0x244 (x - 0.5, y - 0.5, z, rhw, diffuse, and u, v for two stages) and keeps the x, y and diffuse arrays. Operand 10's bit 0 draws a triangle fan, else a triangle strip (gfx_render_polygon@0x496d10). LOGO@0x4e makes a full-screen quad of four vertices.
 
-The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-design.md is the design. 創刻のアテリアル has 3,856 sites.
+The port keeps the polygon in the graphics state (GfxState.CreatePolygon) and draws it as a polygon item of the frame description, with the reference renderer; the GPU renderer declines a frame that holds one (docs/superpowers/specs/2026-11-19-polygon-objects-design.md). It halts on a count above 1,048,576 and on an array operand that names no float cell. 創刻のアテリアル has 3,856 sites.
 
 ### 0x321 `set-polygon-texture` (u0043AA30, argc 3)
 - **observed by:** arterial (SYS4438)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
 - **semantic status:** investigated
 - **summary:** (handle)(stage)(surface_slot) — set the surface of a polygon's texture stage 0 or 1; -1 is none.
-- **operand access:** `1` read · `2` read · `3` read
+- **operand access:** `1` read · `2` read (polygon texture stage 0..1, untested) · `3` read (surface 0..999, untested)
+- **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x321`; scope=SYS4438 polygon object handlers and workers; the opcodes exist only in AGE 4.38D among the builds read. op_0x321_set_polygon_texture@0x4250b0 calls gfx_polygon_set_texture@0x496860, which stores operand 3 at record +0x1c + stage * 4 and sets the dirty flag. gfx_draw_polygon_primitive@0x4895b0 binds each slot that names a surface, clamped and filtered linearly: one texture is multiplied by the diffuse, and with two, stage 1 is blended over stage 0 by its alpha first.
 
-The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-design.md is the design. 創刻のアテリアル has 42 sites.
+The port stores the slot (GfxState.SetPolygonTexture). A stage outside 0 and 1, or a slot of 1,000 or more, halts the run: native writes and reads outside its tables there. 創刻のアテリアル has 42 sites.
 
 ### 0x322 `set-polygon-color` (u0043AA40, argc 4)
 - **observed by:** arterial (SYS4438)
@@ -2688,10 +2690,11 @@ The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-d
 - **semantic status:** investigated
 - **summary:** (handle)(blend_mode)(alpha)(rgb) — set a polygon's colour, which multiplies each vertex's own, and its blend mode. Alpha 0x100 or more is 0xff; a negative alpha or RGB keeps the current one.
 - **operand access:** `1` read · `2` read · `3` read · `4` read
+- **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x322`; scope=SYS4438 polygon object handlers and workers; the opcodes exist only in AGE 4.38D among the builds read. op_0x322_set_polygon_color@0x425100 builds the ARGB (gfx_polygon_get_color@0x4969a0 for a kept part) and calls gfx_polygon_set_color@0x4968a0, which stores the mode (+0x24) and the colour (+0x34) and recomputes the vertex colours: kept * colour / 255 per channel, or the kept ones when the colour is 0xffffffff (gfx_polygon_calc_diffuse@0x48b9d0). The mode is the draw's blend: 0 source alpha / inverse source alpha, 1 additive, 2 one / zero, 3 reverse subtract. LOGO@0xae sets mode 0, alpha 0xff, black.
 
-The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-design.md is the design. 創刻のアテリアル has 8,633 sites.
+The port stores the colour and the mode (GfxState.SetPolygonColor). 創刻のアテリアル has 8,633 sites.
 
 ### 0x323 `fade-polygon-color` (u0043AA50, argc 5)
 - **observed by:** arterial (SYS4438)
@@ -2699,10 +2702,11 @@ The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-d
 - **semantic status:** investigated
 - **summary:** (handle)(delay_ms)(duration_ms)(alpha)(rgb) — fade a polygon's colour to a target after a delay, over a duration. The target is built as set-polygon-color builds its colour. A duration below 1 does nothing.
 - **operand access:** `1` read · `2` read · `3` read · `4` read · `5` read
+- **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x323`; scope=SYS4438 polygon object handlers and workers; the opcodes exist only in AGE 4.38D among the builds read. op_0x323_fade_polygon_color@0x4251d0 calls gfx_polygon_fade_color@0x496910, which sets flag 2, clears the start time and stores the delay (+0x2c), the duration (+0x30) and the target (+0x38). gfx_render_polygon@0x496d10 runs the fade at each draw: the start is the frame time of the first draw; a duration below 1 only clears the flag; between the delay and the end the colour drawn is the two mixed by (now - start - delay) / duration, each channel truncated; at the end, or when manager +0xb590 is set, the colour becomes the target. LOGO@0xbe fades its first quad to alpha 0 over 500 ms, and LOGO@0xe0 its second to alpha 0xff after 4,500 ms, before op 0x21c waits.
 
-The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-design.md is the design. 創刻のアテリアル has 9,793 sites.
+The port keeps the fade in the graphics state (GfxState.FadePolygonColor) and samples it when a frame is lowered; a running fade keeps an effect wait waiting and a forced completion ends it, as the one-shot channels. 創刻のアテリアル has 9,793 sites.
 
 ## input
 

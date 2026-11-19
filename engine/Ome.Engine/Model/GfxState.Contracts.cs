@@ -106,6 +106,18 @@ public sealed record GfxPersistenceSnapshot(
     long RangeCount,
     GfxState.GfxObject RangeTransform);
 
+/// <summary>A polygon's texture stage in a snapshot: the surface slot, with its resource id and colour key resolved as
+/// an object's source slot is. A negative slot is no texture.</summary>
+public readonly record struct PolygonTextureState(int Slot, long ResourceId, long ColorKey)
+{
+    public static PolygonTextureState None => new(-1, 0, -1);
+}
+
+/// <summary>A polygon object in a snapshot (AGE 4.38D): its triangles, with the polygon's colour already in each
+/// vertex, and its two texture stages.</summary>
+public readonly record struct PolygonRenderState(
+    Ome.Engine.Devices.FramePolygonGeometry Geometry, PolygonTextureState Texture0, PolygonTextureState Texture1);
+
 /// <summary>A renderable view of one visible gfx object — the host composites these in ascending-handle order
 /// (= the engine's z-order) each frame. Built by <see cref="GfxState.SnapshotVisibleObjects"/>; the surface
 /// resId/colorkey are resolved from the object's live source slot at snapshot time (see docs/engine-re.md,
@@ -114,6 +126,9 @@ public sealed record GfxPersistenceSnapshot(
 /// multiplicatively modulates by <paramref name="Tint"/>; surfaceless mode 0 uses <paramref name="TintStrength"/>.
 /// A mode-0 color which has passed through op 0x202, and mode 1, use <paramref name="Alpha"/> as opacity.
 /// <paramref name="MultiplyTint"/> selects the latter compositor path.</summary>
+/// <remarks>An entry with <paramref name="Polygon"/> set is a polygon object in its place of the walk, not a quad: only
+/// its handle, its time-varying flag and the polygon mean anything, and the rest reads as an object that draws
+/// nothing.</remarks>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, double DstX, double DstY,
                                            TransformState Transform, RotationCycleState Rotation,
@@ -127,7 +142,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            RadialBlurRangeTransitionState? RadialBlurTransition = null,
                                            DirectionalBlurRangeTransitionState? DirectionalBlurTransition = null,
                                            TranslationCycleState TranslationCycle = default,
-                                           PatternedSurfaceTransitionState? PatternedSurfaceTransition = null);
+                                           PatternedSurfaceTransitionState? PatternedSurfaceTransition = null,
+                                           PolygonRenderState? Polygon = null);
 
 /// <summary>The retained handle interval selected by an op-0x222 backbuffer publication.</summary>
 public readonly record struct GfxHandleRange(long First, long Count)

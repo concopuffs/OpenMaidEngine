@@ -595,27 +595,32 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Native AGE is driven (step 5, 2026-11-19).** `tools/drive/arterial.toml` and
     `tools/drive/scenarios/arterial-opening.steps`: the logo, the title, Game Start and SC0000's first pages, in a
     save sandbox, with the install unchanged afterwards (`engine-re.md`, "Driving native AGE").
-  - **Where the port's boot stops.** `Ome.Cli play --game arterial SYSTEM4.BIN` runs SYSTEM4 and INIT2, 832,361
-    steps, and halts at `LOGO@0x4e`, op `0x320`: the first polygon. The route to the first ADV page still needs:
-    - LOGO: `0x320`, `0x322`, `0x323`;
-    - TITLE: also `0x2c7`, `0x2eb`, `0x2ec`, `0x324`, `0x325`, `0x328`, `0x329`, `0x32b`–`0x32e`;
+  - **Where the port's boot stops.** The port shows the logo, its two polygon fades and its movie, and halts at
+    `TITLE@0x647`, op `0x325`: the title's 3D scene. The route to the first ADV page still needs:
+    - TITLE: `0x2c7`, `0x2eb`, `0x2ec`, `0x324`, `0x325`, `0x328`, `0x329`, `0x32b`–`0x32e`;
     - SC0000: also `0x26`, `0x36`, `0x2e9`.
+  - **The polygon objects are in (2026-11-19):** ops `0x320` to `0x323`, 22,324 sites, with the reference
+    renderer; the logo's frames and fade timing were compared with native
+    (`superpowers/specs/2026-11-19-polygon-objects-design.md` §7). Open:
+    - **The GPU renderer does not draw a polygon item.** It declines a frame that holds one, and the reference
+      renderer draws it (the design's milestone 3). Done when it draws the item and `reference-diff` passes on a
+      frame with polygons.
+    - **A polygon in a blur's source range is drawn unblurred.** `Graphics.LowerObjects` draws it in its place and
+      `LowerBlurRange` skips it; native's pre-pass draws a range's polygons into the blur's surface. No use of one
+      is known.
+    - **Five points of native's are not read** (the design's §2): saves, the depth test, culling by winding, a
+      texture larger than its image, and the position rewrite for two render targets.
 
-    Ops `0x320` to `0x323` are AGE 4.38D's polygon objects: retained objects of vertices with a colour each, a
-    colour that multiplies them, a timed fade of that colour, up to two textures and four blends, drawn in handle
-    order with the other retained objects. They are read in full but for five points, and
-    `superpowers/specs/2026-11-19-polygon-objects-design.md` (accepted 2026-11-19) is the design for them in the
-    graphics native and the two renderers.
-
-    Ops `0x324` to `0x32f` are a separate module, the title's 3D scene: mesh slots loaded from the two `.X` files,
-    a camera, an ambient colour, Direct3D lights, and three effect objects drawn during the frame walk, one of them
-    the mesh particles that are the title's drifting white feathers. Only TITLE.BIN and DEBUG.BIN use it (23
-    sites). Its workers are read but for the particles' motion, the two effects only DEBUG.BIN builds and the
-    `.X` encoding (the design's §4). Whether P2 keeps its state and draws nothing, or draws the feathers, is the
-    user's to decide.
+  - **The title's 3D scene:** ops `0x324` to `0x32f`, a module of its own: mesh slots loaded from the two `.X`
+    files, a camera, an ambient colour, Direct3D lights, and three effect objects drawn during the frame walk. One
+    is the leaf effect (native's `Set3DEffectLeaf`, op `0x328`), the white leaves that drift across the title;
+    another is a snow effect (`Set3DEffectSnow`, op `0x326`) that only DEBUG.BIN builds. Only TITLE.BIN and
+    DEBUG.BIN use the group (23 sites). Its workers are read but for the leaves' motion, the two other effects and
+    the `.X` encoding (the polygon design's §4). Whether P2 keeps its state and draws nothing, or draws the
+    leaves, is the user's to decide.
   - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
-    the two settings keys, the two file types and the font), then step 6, the boot: the polygon objects once their
-    design is accepted, then the title's opcodes.
+    the two settings keys, the two file types and the font), then step 6, the boot: the title's opcodes and
+    SC0000's, and the polygon item on the GPU renderer.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

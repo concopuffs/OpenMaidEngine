@@ -8,7 +8,7 @@ namespace Ome.Engine.Model;
 /// coordinates clamped to the source image's edge (D3DTADDRESS_CLAMP), not to the rectangle. An integer
 /// translation puts every pixel centre on a texel centre, so it copies texels exactly.
 /// </summary>
-public static class SoftwareAffineRasterizer
+public static partial class SoftwareAffineRasterizer
 {
     /// <summary>The bilinear weights' resolution: 8 bits of subtexel position, as D3D9 hardware filters.</summary>
     private const int WeightOne = 256;

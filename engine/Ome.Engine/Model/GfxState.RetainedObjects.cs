@@ -197,15 +197,27 @@ public sealed partial class GfxState
     }
 
     /// <summary>Op 0x21d: clone the native 0x2d4-byte retained-object record from source to destination.</summary>
+    /// <remarks>AGE 4.38D's worker (0x494880) clones the source handle's polygon record too, whether or not the handle
+    /// has an object.</remarks>
     public bool CloneObject(long sourceHandle, long destinationHandle)
     {
-        if (!_scene.Objects.TryGetValue(sourceHandle, out var s)) return false;
-        bool destinationIsNew = !_scene.Objects.ContainsKey(destinationHandle);
-        _scene.Objects[destinationHandle] = CloneState(s);
-        if (destinationIsNew) InsertOrderedHandle(destinationHandle);
-        CurrentObject = destinationHandle;
-        MarkRetainedMutation();
-        return true;
+        bool cloned = false;
+        if (_scene.Objects.TryGetValue(sourceHandle, out var s))
+        {
+            bool destinationIsNew = !_scene.Objects.ContainsKey(destinationHandle);
+            _scene.Objects[destinationHandle] = CloneState(s);
+            if (destinationIsNew) InsertOrderedHandle(destinationHandle);
+            CurrentObject = destinationHandle;
+            cloned = true;
+        }
+        if (_scene.Polygons.TryGetValue(sourceHandle, out GfxPolygon? polygon))
+        {
+            GetOrCreatePolygon(destinationHandle);
+            _scene.Polygons[destinationHandle] = polygon.Clone();
+            cloned = true;
+        }
+        if (cloned) MarkRetainedMutation();
+        return cloned;
     }
 
     /// <summary>Op 0x214: exchange the complete retained-object records at two handles. If exactly
@@ -292,13 +304,15 @@ public sealed partial class GfxState
         bool removedTransition = _scene.RadialBlurTransitions.Remove(handle)
                                  | _scene.DirectionalBlurTransitions.Remove(handle)
                                  | _scene.PatternedSurfaceTransitions.Remove(handle);
+        // AGE 4.38D's erase workers (0x4942a0, 0x494440) take the handle out of the polygon map too.
+        bool removedPolygon = RemovePolygon(handle);
         if (_scene.Objects.Remove(handle))
         {
             int index = _scene.OrderedObjectHandles.BinarySearch(handle);
             if (index >= 0) _scene.OrderedObjectHandles.RemoveAt(index);
             MarkRetainedMutation();
         }
-        else if (removedTransition) MarkRetainedMutation();
+        else if (removedTransition || removedPolygon) MarkRetainedMutation();
     }
 
     /// <summary>Op 0x1f7 semantics (native gfx_object_erase_range @0x47d8b0): erase handles in
@@ -317,6 +331,8 @@ public sealed partial class GfxState
     {
         _scene.Objects.Clear();
         _scene.OrderedObjectHandles.Clear();
+        _scene.Polygons.Clear();            // AGE 4.38D's worker (0x494100) releases and clears the polygon map too
+        _scene.OrderedPolygonHandles.Clear();
         _scene.RadialBlurTransitions.Clear();
         _scene.DirectionalBlurTransitions.Clear();
         _scene.PatternedSurfaceTransitions.Clear();

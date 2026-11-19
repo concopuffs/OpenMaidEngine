@@ -33,6 +33,10 @@ public sealed partial class GfxState
         // Native composition is handle-ascending z order. Mutations maintain this small index so snapshots do
         // not rebuild/sort a dictionary-sized LINQ buffer, while hot handle lookup remains O(1).
         public readonly List<long> OrderedObjectHandles = new();
+        // AGE 4.38D's polygon objects: a second map keyed by the same handles (native owner +0x42c), with its own
+        // ascending index. The frame walk merges the two (GfxState.Polygons.cs).
+        public readonly Dictionary<long, GfxPolygon> Polygons = new();
+        public readonly List<long> OrderedPolygonHandles = new();
         // Ops 0x229-0x22e address one embedded gfx-object record outside the ordinary object map. Its sampled
         // matrix is post-multiplied onto only the selected handle range during native composition. FIELD uses
         // this as its map camera while the surrounding dungeon UI remains screen-fixed.

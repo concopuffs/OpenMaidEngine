@@ -2,8 +2,9 @@ using Ome.Engine.Model;
 
 namespace Ome.Engine.Devices;
 
-/// <summary>What a frame item draws: a textured quad from a source rectangle, or a solid fill.</summary>
-public enum FrameItemKind { Texture, Fill }
+/// <summary>What a frame item draws: a textured quad from a source rectangle, a solid fill, or a polygon of coloured,
+/// optionally textured triangles.</summary>
+public enum FrameItemKind { Texture, Fill, Polygon }
 
 /// <summary>
 /// One draw of a frame description (docs/superpowers/specs/2026-11-12-engine-layering-design.md §6.3): a quad mapped
@@ -18,6 +19,10 @@ public enum FrameItemKind { Texture, Fill }
 /// tint). <see cref="Opacity"/> scales its alpha, and <see cref="Blend"/> says how it lands on the frame.</para>
 /// <para>A <see cref="FrameItemKind.Fill"/> item covers <see cref="Width"/> × <see cref="Height"/> with
 /// <see cref="Tint"/> at <see cref="Opacity"/>, source-over.</para>
+/// <para>A <see cref="FrameItemKind.Polygon"/> item draws <see cref="Polygon"/>'s triangles, already in canvas pixels,
+/// with <see cref="Opacity"/> scaling their alpha (<see cref="FramePolygonGeometry"/>). Its first texture, when
+/// <see cref="Pixels"/> is set, is identified by this item's texture fields and its second is
+/// <see cref="SecondTexture"/>. It uses no matrix, source rectangle or tint.</para>
 /// <para>A texture's identity says what a renderer may cache: a static image is one <see cref="AssetId"/>; a dynamic
 /// surface (<see cref="Dynamic"/>, a script-drawn surface or a movie) is <see cref="DynamicKey"/>, and its pixels change
 /// by replacement, so a new <see cref="RgbaImage.Pixels"/> array means new contents.</para>
@@ -39,8 +44,22 @@ public readonly record struct FrameItem(
     long Tint,
     int TintStrength,
     bool MultiplyTint,
-    BlendKind Blend)
+    BlendKind Blend,
+    FramePolygonGeometry? Polygon = null,
+    FramePolygonTexture? SecondTexture = null)
 {
+    /// <summary>A polygon with no texture: <paramref name="polygon"/>'s triangles in their own colours.</summary>
+    public static FrameItem PolygonItem(FramePolygonGeometry polygon, float opacity)
+        => new(FrameItemKind.Polygon, null, 0, false, 0, -1, 0, 0, 0, 0, new Affine2D(1, 0, 0, 1, 0, 0), opacity,
+               0xffffff, 0, true, BlendKind.Alpha, polygon);
+
+    /// <summary>A polygon with one texture, identified as a texture item's is, or two.</summary>
+    public static FrameItem PolygonItem(FramePolygonGeometry polygon, float opacity, RgbaImage pixels, int assetId,
+                                        bool dynamic, long dynamicKey, long colorKey,
+                                        FramePolygonTexture? second = null)
+        => new(FrameItemKind.Polygon, pixels, assetId, dynamic, dynamicKey, colorKey, 0, 0, 0, 0,
+               new Affine2D(1, 0, 0, 1, 0, 0), opacity, 0xffffff, 0, true, BlendKind.Alpha, polygon, second);
+
     /// <summary>A solid fill of <paramref name="width"/> × <paramref name="height"/>.</summary>
     public static FrameItem Fill(int width, int height, Affine2D matrix, long tint, float opacity)
         => new(FrameItemKind.Fill, null, 0, false, 0, -1, 0, 0, width, height, matrix, opacity, tint, 0, true,

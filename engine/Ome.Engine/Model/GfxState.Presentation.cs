@@ -223,6 +223,13 @@ public sealed partial class GfxState
             o.OneShotStartMs = nowMs;
             seeded++;
         }
+        foreach (GfxPolygon polygon in _scene.Polygons.Values)
+        {
+            // A polygon's fade starts at the frame time of its first draw too (gfx_render_polygon).
+            if (!polygon.Made || !polygon.FadeEnabled || polygon.FadeStartMs >= 0) continue;
+            polygon.FadeStartMs = nowMs;
+            seeded++;
+        }
         return seeded;
     }
 
@@ -251,7 +258,9 @@ public sealed partial class GfxState
                HasRunningChannels(_scene.RangeTransform, nowMs) ||
                _scene.Objects.Values.Any(o => o.Visible &&
                                         (o.OneShotAnimationControlFlags & 1) == 0 &&
-                                        HasRunningChannels(o, nowMs));
+                                        HasRunningChannels(o, nowMs)) ||
+               // A running polygon fade sets the flag the service polls (manager +0xb594), as a channel does.
+               _scene.Polygons.Values.Any(polygon => PolygonFadeRunning(polygon, nowMs));
     }
 
     /// <summary>Whether a finite one-shot channel is still running at <paramref name="nowMs"/>: enabled and either
@@ -340,7 +349,8 @@ public sealed partial class GfxState
                     (o.ColorAnim && o.ColorPeriod > 0) ||
                     (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
                     (o.RotationEnabled && o.RotationPeriodMs > 0) ||
-                    (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0)));
+                    (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0))) ||
+               _scene.Polygons.Values.Any(polygon => polygon.Made && polygon.FadeEnabled);
     }
 
     /// <summary>Consume the native run-state-0x400 EffectSkipOnClick action and, when permitted, force its
@@ -403,6 +413,7 @@ public sealed partial class GfxState
             if ((o.OneShotAnimationControlFlags & 1) != 0) continue;
             completed += CountOneShotChannels(o);
         }
+        completed += _scene.Polygons.Values.Count(polygon => polygon.Made && polygon.FadeEnabled);
         ForceCompleteOneShotChannels();
 
         if (AnimClockDurationTicks != 0) completed++;
@@ -559,7 +570,8 @@ public sealed partial class GfxState
                  (o.ColorAnim && o.ColorPeriod > 0) ||
                  (o.ScaleCycleEnabled && o.ScaleCyclePeriodMs > 0) ||
                  (o.RotationEnabled && o.RotationPeriodMs > 0) ||
-                 (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0))))
+                 (o.TranslationCycleEnabled && o.TranslationCyclePeriodMs > 0))) ||
+            _scene.Polygons.Values.Any(polygon => polygon.Made && polygon.FadeEnabled))
             reasons |= GfxPresentationReason.ContinuousChannel;
 
         foreach (var o in _scene.Objects.Values)
@@ -630,8 +642,14 @@ public sealed partial class GfxState
                 r.V18.X, r.V18.Y, r.V18.Z,
                 rangeRotation.X, rangeRotation.Y, rangeRotation.Z, rangeRotation.Angle));
         }
+        // gfx_render_frame walks the objects' map and the polygons' together: the object comes first while its handle
+        // is below the polygon's, so a polygon whose handle an object shares is drawn before that object.
+        List<long> polygons = _scene.OrderedPolygonHandles;
+        int nextPolygon = 0;
         foreach (long handle in _scene.OrderedObjectHandles)
         {
+            while (nextPolygon < polygons.Count && polygons[nextPolygon] <= handle)
+                SnapshotPolygon(polygons[nextPolygon++], nowMs, list);
             var o = _scene.Objects[handle];
             if (!o.Visible) continue;
             bool hadOneShot = o.OneShotColorEnabled || o.ScaleEnabled ||
@@ -819,5 +837,6 @@ public sealed partial class GfxState
                                           cycleTranslationX, cycleTranslationY,
                                           cycleTranslationZ), patternedTransition));
         }
+        while (nextPolygon < polygons.Count) SnapshotPolygon(polygons[nextPolygon++], nowMs, list);
     }
 }

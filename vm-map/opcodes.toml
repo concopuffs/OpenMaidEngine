@@ -13554,8 +13554,10 @@ abi_source = "kelebek"
 name = "create-polygon"
 category = "draw"
 summary = "(handle)(xs)(ys)(zs)(alphas)(colors)(us)(vs)(count)(flags) — make the handle's polygon object: a retained object of vertices with a colour each, drawn in handle order with the other retained objects."
-details = "The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-design.md is the design. 創刻のアテリアル has 3,856 sites."
+details = "The port keeps the polygon in the graphics state (GfxState.CreatePolygon) and draws it as a polygon item of the frame description, with the reference renderer; the GPU renderer declines a frame that holds one (docs/superpowers/specs/2026-11-19-polygon-objects-design.md). It halts on a count above 1,048,576 and on an array operand that names no float cell. 創刻のアテリアル has 3,856 sites."
 noop_headless = false
+waits = "never"
+leaves = ["falls"]
 source = "investigation"
 confidence = "high"
 depends_on = []
@@ -13633,8 +13635,10 @@ abi_source = "kelebek"
 name = "set-polygon-texture"
 category = "draw"
 summary = "(handle)(stage)(surface_slot) — set the surface of a polygon's texture stage 0 or 1; -1 is none."
-details = "The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-design.md is the design. 創刻のアテリアル has 42 sites."
+details = "The port stores the slot (GfxState.SetPolygonTexture). A stage outside 0 and 1, or a slot of 1,000 or more, halts the run: native writes and reads outside its tables there. 創刻のアテリアル has 42 sites."
 noop_headless = false
+waits = "never"
+leaves = ["falls"]
 source = "investigation"
 confidence = "high"
 depends_on = []
@@ -13653,12 +13657,14 @@ i = 2
 role = "texture stage, 0 or 1"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "polygon texture stage", count = 2 }
 
 [[opcode.semantics.args]]
 i = 3
 role = "surface slot"
 observed_types = ["imm", "l-int"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode]]
 op = 0x322
@@ -13670,8 +13676,10 @@ abi_source = "kelebek"
 name = "set-polygon-color"
 category = "draw"
 summary = "(handle)(blend_mode)(alpha)(rgb) — set a polygon's colour, which multiplies each vertex's own, and its blend mode. Alpha 0x100 or more is 0xff; a negative alpha or RGB keeps the current one."
-details = "The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-design.md is the design. 創刻のアテリアル has 8,633 sites."
+details = "The port stores the colour and the mode (GfxState.SetPolygonColor). 創刻のアテリアル has 8,633 sites."
 noop_headless = false
+waits = "never"
+leaves = ["falls"]
 source = "investigation"
 confidence = "high"
 depends_on = []
@@ -13713,8 +13721,10 @@ abi_source = "kelebek"
 name = "fade-polygon-color"
 category = "draw"
 summary = "(handle)(delay_ms)(duration_ms)(alpha)(rgb) — fade a polygon's colour to a target after a delay, over a duration. The target is built as set-polygon-color builds its colour. A duration below 1 does nothing."
-details = "The port has no handler yet: docs/superpowers/specs/2026-11-19-polygon-objects-design.md is the design. 創刻のアテリアル has 9,793 sites."
+details = "The port keeps the fade in the graphics state (GfxState.FadePolygonColor) and samples it when a frame is lowered; a running fade keeps an effect wait waiting and a forced completion ends it, as the one-shot channels. 創刻のアテリアル has 9,793 sites."
 noop_headless = false
+waits = "never"
+leaves = ["falls"]
 source = "investigation"
 confidence = "high"
 depends_on = []

@@ -71,6 +71,10 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
     {
         if (frame.ScreenTransition != null) return false;
         List<FrameItem> items = frame.Items;
+        // A polygon item (AGE 4.38D's polygon objects) is not drawn here yet, so the reference renderer draws a
+        // frame that holds one (docs/superpowers/specs/2026-11-19-polygon-objects-design.md, milestone 3).
+        for (int index = 0; index < items.Count; index++)
+            if (items[index].Kind == FrameItemKind.Polygon) return false;
         if (!frame.AppendLayers)
         {
             // An appended frame adds to the one before it, whose sprites still show that frame's textures.

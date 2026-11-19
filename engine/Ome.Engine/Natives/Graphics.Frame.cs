@@ -96,6 +96,18 @@ public sealed partial class Graphics
         {
             RenderObject v = visible[index];
             perf?.RecordObject(v.TimeVarying);
+            if (v.Polygon is { } polygon)
+            {
+                // A polygon in a blur's source range is drawn here, unblurred (docs/backlog.md).
+                bool drew = LowerPolygon(polygon, 1f, items);
+                if (!drew) perf?.RecordSkippedLayer();
+                if (decisions != null)
+                    decisions[v.Handle] = $"z{z} POLYGON triangles={polygon.Geometry.Vertices.Length / 3} " +
+                                          $"blend={polygon.Geometry.Blend} textures=({polygon.Texture0.Slot}," +
+                                          $"{polygon.Texture1.Slot}){(drew ? "" : " SKIP(no triangles)")}";
+                z++;
+                continue;
+            }
             started = perf != null ? PerformanceFrameLog.Timestamp() : 0;
             allocated = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
             bool blurSource = v.RadialBlurTransition == null && v.DirectionalBlurTransition == null &&
@@ -247,6 +259,12 @@ public sealed partial class Graphics
                 source.SurfaceTransition != null || source.PatternedSurfaceTransition != null)
                 continue;
             perf?.RecordObject(source.TimeVarying);
+            if (source.Polygon is { } polygon)
+            {
+                // Native's pre-pass draws a range's polygons into the transition's surface with its objects.
+                if (LowerPolygon(polygon, (float)transition.Progress, items)) lowered++;
+                continue;
+            }
             Affine2D matrix = ObjectMatrix(source);
             float opacity = source.Alpha / 255f * (float)transition.Progress;
             int? rawSlot = State.TryGetSourceSlot(source.Handle, out int slot) ? slot : null;
@@ -312,7 +330,8 @@ public sealed partial class Graphics
         {
             RenderObject source = visible[index];
             bool contains = directional?.Contains(source.Handle) ?? radial!.Value.Contains(source.Handle);
-            if (!contains || source.DirectionalBlurTransition != null || source.RadialBlurTransition != null)
+            if (!contains || source.DirectionalBlurTransition != null || source.RadialBlurTransition != null
+                || source.Polygon != null)
                 continue;
             perf?.RecordObject(source.TimeVarying);
             Affine2D baseMatrix = ObjectMatrix(source);
@@ -389,6 +408,11 @@ public sealed partial class Graphics
         {
             RenderObject item = visible[index];
             if (item.Handle < firstHandle || item.Handle - firstHandle >= count) continue;
+            if (item.Polygon is { } polygon)
+            {
+                if (LowerPolygon(polygon, 1f, items)) lowered++;
+                continue;
+            }
             Affine2D matrix = ObjectMatrix(item);
             int? rawSlot = State.TryGetSourceSlot(item.Handle, out int slot) ? slot : null;
             SurfaceTexture? texture = rawSlot != null
@@ -431,6 +455,35 @@ public sealed partial class Graphics
     }
 
     // ---- shared ----
+
+    // A polygon object as one item: its triangles, with the textures of the stages that name a surface. Native binds
+    // what it finds in order, so a second stage's texture alone is the first. Returns false when it has no triangle.
+    private bool LowerPolygon(PolygonRenderState polygon, float opacity, List<FrameItem> items)
+    {
+        if (polygon.Geometry.Vertices.Length == 0) return false;
+        SurfaceTexture? first = PolygonTexture(polygon.Texture0), second = PolygonTexture(polygon.Texture1);
+        PolygonTextureState firstState = polygon.Texture0, secondState = polygon.Texture1;
+        if (first == null)
+        {
+            (first, firstState) = (second, secondState);
+            second = null;
+        }
+        if (first is not { } texture)
+        {
+            items.Add(FrameItem.PolygonItem(polygon.Geometry, opacity));
+            return true;
+        }
+        FramePolygonTexture? secondTexture = second is { } other
+            ? new FramePolygonTexture(other.Image, other.AssetId, other.IsDynamic, secondState.Slot,
+                                      secondState.ColorKey)
+            : null;
+        items.Add(FrameItem.PolygonItem(polygon.Geometry, opacity, texture.Image, texture.AssetId, texture.IsDynamic,
+                                        firstState.Slot, firstState.ColorKey, secondTexture));
+        return true;
+
+        SurfaceTexture? PolygonTexture(PolygonTextureState state)
+            => state.Slot < 0 ? null : ResolveSurfaceTexture(state.Slot, state.ResourceId);
+    }
 
     private static Affine2D ObjectMatrix(in RenderObject item)
     {

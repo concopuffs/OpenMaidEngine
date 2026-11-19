@@ -25,7 +25,7 @@ reading in its plate comment.
 
 | Offset | Field | Default |
 |---|---|---|
-| `+0x00` | flags: 1 = made, 2 = a fade runs, `0x10000` = not read | 0 |
+| `+0x00` | flags: 1 = made, 2 = a fade runs, `0x10000` = skip this walk (the pre-pass has drawn it) | 0 |
 | `+0x04` | vertex buffer | none |
 | `+0x08`, `+0x0c`, `+0x10` | kept copies of each vertex's x, y and diffuse | none |
 | `+0x14` | vertex count | 0 |
@@ -58,10 +58,11 @@ integers. The colour `0xffffffff` leaves the vertices as they are (`gfx_polygon_
 
 While a fade runs, each draw sets two manager flags: `+0xb58c`, the dirty flag every polygon worker sets, and
 `+0xb594`. `gfx_render_frame@0x49ab00` clears both before its walk; after it, a walk that left `+0xb594` clear
-calls `0x492d10`, and the frame render clears `+0xb590`. The logo script starts its two fades and then runs op
-`0x21c`, the effect wait, so `+0xb594` reads as what keeps that wait waiting and `+0xb590` as the force-complete
-request a click or fast-forward makes. `0x492d10` and the flags' other readers were not read; acceptance 3 checks
-the wait against native.
+calls `0x492d10`, and the frame render clears `+0xb590`. They are the one-shot channels' own flags.
+`gfx_object_evaluate_one_shot` and the colour and transition workers set `+0xb594` too, and
+`gfx_animation_service_poll`, the effect wait's service, reads it. `gfx_request_force_complete_and_reset_anim_clock`
+and op `0x243` set `+0xb590`, and `gfx_object_evaluate_one_shot` reads it as the polygon's draw does. So a running
+polygon fade keeps op `0x21c` waiting, and a click or fast-forward ends it, exactly as a channel's.
 
 **The draw** (`gfx_draw_polygon_primitive@0x4895b0`): alpha blending is on, and the blend mode chooses how the
 polygon lands:
@@ -83,10 +84,29 @@ map (manager `+0x40c`) and the polygons' (`+0x42c`) together. The frame render t
 is below the polygon's, and the polygon otherwise, so a polygon is drawn where its handle falls among the
 objects. The range present walks the same way within its range; its comparison was not read line by line.
 
-**Not read yet:** what sets flag `0x10000` (each walk clears it after the polygon's turn); how
-`gfx-elem-erase` and the scene reset remove a polygon; whether a numbered save keeps polygons; how the z of a
-vertex is used (the vertices are pre-transformed, so it can only matter with a depth buffer); and the rewrite of
-positions for some render targets (manager `+0xb558` of `0x26` and `0x27`).
+**The polygon's life.** Read while building (2026-11-19). A handle's polygon goes where its object goes:
+
+- `gfx_object_erase@0x4942a0` and `gfx_object_erase_range@0x494440` (op `0x1f7`, and the text code) take the
+  handles out of both maps;
+- `retained_gfx_objects_clear@0x494100` (op `0x1f6` and the scene reset) clears both;
+- `gfx_object_clone@0x494880` (op `0x21d`) copies the polygon record whole, fade and colours included, whether or
+  not the source handle has an object;
+- op `0x214`'s swap does not touch polygons.
+
+The walks' pre-pass (`0x497620`) draws the polygons of a transition's ranges into its surfaces with their objects
+(it calls `gfx_render_polygon` at seven places) and the main walk then skips what it drew: that is flag
+`0x10000`, which objects have too.
+
+**Not read yet:**
+
+- whether a numbered save keeps polygons (no function that reads the polygon map is a save's);
+- the depth test: the frame walk runs with it on (the 3D effects turn it off and back on), each present clears
+  depth with colour once op `0x252` says so, and a vertex z of 0, which the logo gives, passes; what another z
+  does was not looked for;
+- whether native culls a polygon by its winding (Direct3D's default culls counter-clockwise triangles);
+- whether a surface's texture is larger than its image, so that u = 1 is the texture's edge and not the image's;
+- the rewrite of positions for some render targets (manager `+0xb558` of `0x26` and `0x27`), which undoes the
+  window's scaling: the port draws in canvas units everywhere, so it has no counterpart.
 
 ## 3. The design
 
@@ -119,7 +139,8 @@ interpolated across it, samples its textures with clamped bilinear filtering, an
 The GPU renderer then draws the same item as a vertex-coloured mesh, and declines a frame that holds a polygon
 until it does, as it declines what it cannot draw today. `reference-diff` holds the two together.
 
-**The blends** map to `BlendKind`: mode 0 `Alpha`, 1 `Additive`, 2 `Opaque`, 3 the new `Subtractive`.
+**The blends** map to `BlendKind`: mode 0 `Alpha`, 1 `Additive`, 2 `Opaque`, 3 the new `Subtractive`. (Built
+otherwise: §7.)
 
 ## 4. What this leaves out
 
@@ -135,8 +156,9 @@ mesh instances). Each function carries its reading in the Ghidra image.
   `0x325` names: the mesh particles, which op `0x328` builds from a list of mesh slots, and two others that ops
   `0x326` and `0x327` build. Op `0x324` releases all three.
 
-The title's drifting white feathers are the mesh particles, built from `LEAF0.X` and `LEAF1.X`. The engine moves
-them; the script only builds the object. Native screenshots taken seconds apart show them in different places. In
+The title's drifting white leaves are the mesh particles, built from `LEAF0.X` and `LEAF1.X`: native's error
+texts name op `0x328` `Set3DEffectLeaf` and op `0x326` `Set3DEffectSnow`. The engine moves the leaves; the script
+only builds the object. Native screenshots taken seconds apart show them in different places. In
 the game only TITLE.BIN and DEBUG.BIN use the group, at 23 sites; GAMESTART and CALLBACK_LOAD call the two
 releases, and only DEBUG.BIN builds the two other effects. What the mesh particles do each frame, what the two
 other effects draw and how the `.X` files are encoded were not read.
@@ -165,7 +187,8 @@ its integer ones.
 2. Reference renderer tests of a polygon item: a flat triangle, a colour gradient, a textured quad, and each
    blend.
 3. `tools/drive/scenarios/arterial-opening.steps` reaches the title on the port, and the logo's fade frames match
-   native AGE's at the same times, checked at a low `speed`.
+   native AGE's at the same times, checked at a low `speed`. (Measured for the logo on 2026-11-19, §7; the
+   scenario waits for the title.)
 4. `reference-diff` passes on a frame with polygons once the GPU renderer draws them.
 5. Himegari's and Kamidori's gates are unchanged: neither game's scripts use these opcodes.
 
@@ -173,7 +196,41 @@ its integer ones.
 
 1. Float references in the VM (done 2026-11-19, ahead of this design's acceptance: it stands alone).
 2. The polygon map, the four handlers and the fade, with their tests; the frame item and the reference renderer.
-   The port reaches the logo's end on the reference renderer.
+   The port reaches the logo's end on the reference renderer. (Done 2026-11-19.)
 3. The GPU renderer draws polygon items.
 4. The remaining reads of §2 (erase, reset, ranges, saves, flag `0x10000`), each with its handling or its
-   backlog entry.
+   backlog entry. (Erase, reset, clone and the flag are read and handled; the rest is §2's list.)
+
+## 7. As built (2026-11-19)
+
+Milestone 2 is built: `GfxState.Polygons.cs`, `VirtualMachine.Polygons.cs`, the frame description's `Polygon` item
+(`FramePolygon.cs`), `SoftwareAffineRasterizer.Polygons.cs` and the reference renderer; `PolygonObjectsTests`.
+
+**Departures from §3.**
+
+- **The blend is the polygon's own**, `FramePolygonBlend` (`Alpha`, `Additive`, `Replace`, `Subtractive`), not
+  `BlendKind`. The rasterizer draws `BlendKind.Opaque` as source-over, which is what a mode-0 object needs, so it
+  could not also mean a polygon's copy.
+- **A polygon rides the snapshot as a `RenderObject`** with its `Polygon` set, in its place by handle. The range
+  filters, a transition's range and a render target's publication then treat it as they treat an object, with no
+  second list to keep in step.
+- **Its triangles are kept**, and replaced when the vertices, the colour shown or the blend mode change, so a
+  frame costs no allocation for a polygon that did not change and a renderer may keep what it built from them.
+- **A polygon in a blur's source range is drawn unblurred** (`backlog.md`).
+- **The record keeps the colour last written to the vertices** (`GfxPolygon.ShownColor`). Native writes it into
+  the vertex buffer and the buffer keeps it between draws, so a fade that another replaces leaves its last drawn
+  colour showing through the new one's delay.
+
+**Measured against native AGE.** Both were driven through the logo with a screenshot about every 0.1 s
+(`tools/drive.py`, the port with the reference renderer and again with the default backend, which hands a frame
+that holds a polygon to the reference renderer). The logo script shows a notice under two full-screen black
+polygons: one fades out over 500 ms, the other fades in after 4,500 ms.
+
+- With both polygons clear, the port's frame equals native's in every pixel.
+- The fade-in and the fade-out each take about 0.5 s on both, with 4.0 s between them, and a pixel's value falls
+  in step with the polygon's alpha on both.
+- The effect wait that follows ends with the second fade on both; the logo movie then starts 2.6 s later on
+  native and 2.4 s on the port, within what a screenshot every 0.1 s and a decoder's start can tell apart.
+
+A frame at the same instant of a fade on both was not captured, so the mix's truncation is checked only by
+`PolygonObjectsTests`, against the arithmetic read in the image.
