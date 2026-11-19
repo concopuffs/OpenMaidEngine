@@ -1499,5 +1499,18 @@ the stage list's own event and the decision on Tomlyn's faults.
   keys (defect C) and the interrupted array of tables, above, stay written up here and are not filed with Tomlyn's
   project. The engine's own check (`Ome.Mods.TomlStructure`) stands in for a fix.
 - **Commits:** `8ae4904b` (item 1, the journal), `5d7e5437` (item 2, the size line), `c53dd00f` (item 3, the
-  catalog's lines from the walk), `8845accf` (item 4, the backlog line), `cffa65ba` (item 5, `stage.previewed`) and
-  the commit of this bullet (item 6).
+  catalog's lines from the walk), `8845accf` (item 4, the backlog line), `cffa65ba` (item 5, `stage.previewed`),
+  `fc694f9c` (item 6), `6c5972c4` (the journal's two fields in `SceneReloadTests`' kept lists, which the core level
+  found after item 1) and the commit of the closing checks below.
+- **The closing checks** (ran, at `6c5972c4`): `tools/validate.py --level core`, 55 gates passed and one failed: the
+  engine's 2,886 core tests passed, and of the launcher's 86 tests 85 passed and
+  `WindowTests.TheFirstRunCardAndTheArtQuestionDraw` failed in its teardown, `TestHome.Dispose` unable to delete the
+  test home's `SYS4INI.BIN`, "being used by another process" (the run before, at `fc694f9c`, passed all 86; not run
+  again, and the follow-up changed nothing the launcher's window reads). The data and base mod test classes
+  (`RepeatedTomlKeyTests`, `DataDocumentTests`, `DataLinkTests`, `DataShapeTests`, `DataPatchTests`,
+  `DataDeliveryTests`, `DataPackageTests`, `BaseModTests`), 299 passed; `DataPatchWorkspaceTests`, 49 passed;
+  `ModLuaLinkTests` and `LuaStubsTests`, 85 passed; `omp check` over all 18 examples, each with its game
+  (`example.kamidori-prologue-line` on the translated install with `--overlay-root patch`), each linked; and the
+  NativeAOT publish (`publish_engine.py --runtime win-x64`), with no trim or AOT warning but GodotSharp's own (IL2104,
+  IL3053). Driven: the list scenario (item 5). Not run: the workspace, runtime and full levels of `validate.py`, and
+  the other driven scenarios.
