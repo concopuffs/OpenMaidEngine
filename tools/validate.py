@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import json
 import os
 import shlex
 import shutil
@@ -45,8 +46,8 @@ CORE_TESTS = (
     "test_diff_optrace.py",
     "test_engine_ctx.py",
     "test_ghidra_handler_map.py",
-    "test_init_image.py",
     "test_ghidra_port_names.py",
+    "test_init_image.py",
     "test_init_kamidori.py",
     "test_init_table_profile.py",
     "test_locate_page.py",
@@ -179,6 +180,23 @@ def registry_gates() -> list[Gate]:
     return gates
 
 
+def has_script_modding(profile_id: str) -> bool:
+    """Whether the game is at M1 or above (docs/adding-a-game.md, section 1), from its manifest's support entry: the
+    level whose gate is the Open Maid Script rebuild. A game below it is still being added, and its scenes do not
+    run yet."""
+    manifest = json.loads((paths.PROFILE_MANIFEST_DIR / f"{profile_id}.json").read_text(encoding="utf-8"))
+    return manifest["support"]["modding"] != "none"
+
+
+def workspace_test_filter(profile_id: str) -> str:
+    """The .NET test filter of one game's installed-data tests. Another game's tests carry ``Profile=<id>``.
+    Himegari's are those that carry no other game's: the first game's tests predate the trait, and most have none."""
+    if profile_id != "himegari":
+        return f"Category=Workspace&Profile={profile_id}"
+    others = [other for other in paths.available_profiles() if other != "himegari"]
+    return "Category=Workspace" + "".join(f"&Profile!={other}" for other in others)
+
+
 def build_gate_plan(
     level: str,
     godot: Path | None = None,
@@ -301,11 +319,7 @@ def build_gate_plan(
     )
 
     if "workspace" in phases:
-        workspace_filter = (
-            "Category=Workspace&Profile=kamidori"
-            if context.profile_id == "kamidori"
-            else "Category=Workspace&Profile!=kamidori"
-        )
+        workspace_filter = workspace_test_filter(context.profile_id)
         gates.append(Gate(
             "engine-workspace-tests",
             f".NET installed-data tests ({context.profile_id})",
@@ -318,31 +332,33 @@ def build_gate_plan(
             300,
             low_memory_profile_environment,
         ))
-        gates.append(Gate(
-            "oms-canonical-rebuild",
-            f"Open Maid Script canonical rebuild, VM-trace-equivalent scenes ({context.profile_id})",
-            (
-                "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
-                "--no-build", "--", "oms-rebuild", "--game", context.profile_id,
-                "--game-root", str(game_root or context.game_root),
-            ),
-            900,
-            profile_environment,
-        ))
-        # A profile with source modules (oms/<profile>/*.oms) also rebuilds from idiomatic source, whose
-        # sidecar-free linking moves library subs: positions compare by relocation key.
-        if any((REPO / "oms" / context.profile_id).glob("*.oms")):
+        # The script rebuild is M1's gate: a game below it has no scene that runs yet.
+        if has_script_modding(context.profile_id):
             gates.append(Gate(
-                "oms-idiomatic-rebuild",
-                f"Open Maid Script idiomatic rebuild, VM-trace-equivalent scenes ({context.profile_id})",
+                "oms-canonical-rebuild",
+                f"Open Maid Script canonical rebuild, VM-trace-equivalent scenes ({context.profile_id})",
                 (
                     "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
-                    "--no-build", "--", "oms-rebuild", "--game", context.profile_id, "--level", "idiomatic",
+                    "--no-build", "--", "oms-rebuild", "--game", context.profile_id,
                     "--game-root", str(game_root or context.game_root),
                 ),
                 900,
                 profile_environment,
             ))
+            # A profile with source modules (oms/<profile>/*.oms) also rebuilds from idiomatic source, whose
+            # sidecar-free linking moves library subs: positions compare by relocation key.
+            if any((REPO / "oms" / context.profile_id).glob("*.oms")):
+                gates.append(Gate(
+                    "oms-idiomatic-rebuild",
+                    f"Open Maid Script idiomatic rebuild, VM-trace-equivalent scenes ({context.profile_id})",
+                    (
+                        "dotnet", "run", "--project", "engine/Ome.Cli/Ome.Cli.csproj",
+                        "--no-build", "--", "oms-rebuild", "--game", context.profile_id, "--level", "idiomatic",
+                        "--game-root", str(game_root or context.game_root),
+                    ),
+                    900,
+                    profile_environment,
+                ))
         gates.append(Gate(
             "catalog-corpus-scan",
             f"Catalog/store corpus decode ({context.profile_id})",
@@ -356,12 +372,13 @@ def build_gate_plan(
             profile_environment,
         ))
         # The check runs before the build so a stale tracked reference is reported, not silently rewritten.
-        gates.append(Gate(
-            "globals-check",
-            f"Generated global reference ({context.profile_id})",
-            _python_tool("globals_build.py", "--check"),
-            environment=profile_environment,
-        ))
+        if context.globals_toml.is_file():
+            gates.append(Gate(
+                "globals-check",
+                f"Generated global reference ({context.profile_id})",
+                _python_tool("globals_build.py", "--check"),
+                environment=profile_environment,
+            ))
         if context.profile_id == "himegari":
             gates.append(Gate(
                 "globals-build", "Global registry build",
@@ -466,7 +483,8 @@ def validate_prerequisites(
     if "workspace" in phases:
         if not context.sys4ini.is_file():
             errors.append(f"selected game install is unavailable: {context.game_root}")
-        required_inputs = [context.game_build / WORKSPACE_AUTO_MAP]
+        # The auto shape map feeds the global reference check, which a game without a registry does not have.
+        required_inputs = [context.game_build / WORKSPACE_AUTO_MAP] if context.globals_toml.is_file() else []
         if context.profile_id == "himegari":
             if not context.data1.is_dir():
                 errors.append(f"extracted DATA1 corpus not found: {context.data1}")

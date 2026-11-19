@@ -36,9 +36,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
 │   │                                         English `$n$*.bin`). No profile of its own: used only by the
 │   │                                         port's translation tests and translated runs
 │   │                                         (docs/asset-resolution-re.md).
-│   └── arterial/                             創刻のアテリアル (AGE 4.38D). No port profile yet: a reference
-│                                             install for comparing engine builds (paths.REFERENCE_INSTALLS,
-│                                             docs/engine-re.md "Comparing engine builds").
+│   └── arterial/                             創刻のアテリアル (AGE 4.38D), the `arterial` profile's install
+│                                             (a reference install until 2026-11-19; docs/adding-a-game.md).
 │
 ├── extracted/                               ← DERIVED (game-side) — extracted ALF contents,
 │   │                                          ~3.9 GB, regenerable with a local archive extractor.
@@ -451,9 +450,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       ffmpeg-source.json + build-ffmpeg-sdk.sh build the minimal LGPL FFmpeg SDK;
     │                                       write_ffmpeg_source_notice.py emits each bundle's FFmpeg-SOURCE.txt
     │                                       (outputs stay under disposable build/)
+    ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     ├── tools/ghidra/                        Ghidra scripts of the name port between engine images
     │                                       (ExportFunctionNames, ApplyFunctionNames; tools/ghidra_port_names.py)
-    ├── tools/frida/                         runtime-capture + engine-dump scripts (see tools/frida/README.md)
     └── godot/                               DELIVERABLE — the Godot/C# ADV front-end (references Ome.Engine
                                             plus the optional exact Windows text adapter). It reads the
                                             build/opcodes.json that Ome.Engine embeds (OmeRuntimeMetadata), so

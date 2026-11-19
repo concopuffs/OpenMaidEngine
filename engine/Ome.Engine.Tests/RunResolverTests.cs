@@ -222,7 +222,8 @@ public sealed class RunResolverTests : IDisposable
 
         var error = Assert.Throws<RunResolutionException>(() => Resolve("--data-root", profile));
 
-        Assert.Contains("game: unknown game 'nope'; available games: himegari, kamidori", error.Message);
+        Assert.Contains("game: unknown game 'nope'; available games: ", error.Message);
+        Assert.Contains("himegari, kamidori", error.Message);
     }
 
     [Fact]

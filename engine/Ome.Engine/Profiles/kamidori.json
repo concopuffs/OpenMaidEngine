@@ -12,6 +12,7 @@
   "engineBuild": "4.33G",
   "engineAbiId": "SYS4433",
   "naturalBootScript": "SYSTEM4.BIN",
+  "support": { "play": "P3", "modding": "M3" },
   "metadataReferences": {},
   "persistence": {
     "storageNamespace": "kamidori",

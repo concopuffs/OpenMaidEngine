@@ -267,6 +267,8 @@ public partial class Main : Godot.Control
                  $" bmp-as-agf={(assetOptions.AllowBmpAsAgf ? "enabled" : "disabled")}");
         if (selectedProfile.MismatchDiagnostic is { } mismatch)
             GD.PushWarning($"[profile] {mismatch}");
+        if (selectedProfile.SupportDiagnostic is { } notPlayable)
+            GD.PushWarning($"[profile] {notPlayable}");
         if (!profilePersistence.WritesEnabled)
             GD.PushWarning($"[profile] persistence is read-only: {profilePersistence.ReadOnlyReason}");
         GD.Print($"[profile] data-root={profilePersistence.ProfileRoot} " +

@@ -149,7 +149,8 @@ public sealed class GamesViewModel : ViewModel
         List<ProfileEntry> profiles = main.Rows.Select(row => row.Entry).Where(entry => entry.Usable && !entry.NeedsReview)
             .ToList();
         IReadOnlyList<KnownInstall> known = Installs.Known(profiles);
-        Games = registry.Profiles.Select(game => new GameEntryViewModel(main, game, known
+        // The games a player can play: one below P3 is still being added (docs/adding-a-game.md, section 1).
+        Games = registry.Profiles.Where(game => game.Support.IsPlayable).Select(game => new GameEntryViewModel(main, game, known
                 .Where(install => install.Game == game.Id)
                 .Select(install => S.Format("games.install", install.Root, string.Join(", ", install.Profiles.Select(
                     id => main.Rows.FirstOrDefault(row => row.Id == id)?.Name ?? id))))

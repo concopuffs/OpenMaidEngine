@@ -309,8 +309,9 @@ public sealed class WindowTests : IDisposable
             return Task.CompletedTask;
         }
         Draw("games", task: "6.11", before: model => Open(model, model.Games),
-             check: model => Assert.Equal(Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Profiles.Length,
-                                          ((GamesViewModel)model.Dialog!).Games.Count));
+             check: model => Assert.Equal(
+                 Ome.Engine.Profiles.GameProfileRegistry.BuiltIn.Profiles.Count(game => game.Support.IsPlayable),
+                 ((GamesViewModel)model.Dialog!).Games.Count));
         Draw("games-ja", "ja", task: "6.11", themes: ThemeVariant.Light, before: model => Open(model, model.Games));
         Draw("launcher-settings", task: "6.11", before: model => Open(model, model.LauncherSettings),
              check: model => Assert.IsType<LauncherSettingsViewModel>(model.Dialog));

@@ -84,6 +84,11 @@ public static class Installs
         if (game == null)
             return new InstallRecognition(root, InstallKind.Unsupported,
                                           $"{identity.Display} is an AGE game this engine does not support", identity);
+        // A game below P3 has a profile so that the engine's tools can read it; a player cannot play it yet.
+        if (!game.Support.IsPlayable)
+            return new InstallRecognition(root, InstallKind.Unsupported,
+                                          $"{identity.Display} is still being added to this engine (play level "
+                                          + $"{game.Support.PlayId}): it does not support it yet", identity);
 
         string? fingerprint = null;
         try

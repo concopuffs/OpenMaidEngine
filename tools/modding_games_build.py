@@ -77,6 +77,17 @@ def source_modules(profile_id: str) -> list[tuple[str, str, int | None]]:
     return modules
 
 
+PLAY_LEVELS = {"P1": "recognized", "P2": "boots", "P3": "complete", "P4": "verified"}
+MODDING_LEVELS = {"none": "none", "M1": "scripts", "M2": "data", "M3": "base mod"}
+
+
+def support(data: dict) -> tuple[str, str]:
+    """The manifest's play and modding levels (docs/adding-a-game.md, section 1), each with its name."""
+    levels = data["support"]
+    play, modding = levels["play"], levels["modding"]
+    return f"{play} ({PLAY_LEVELS[play]})", modding if modding == "none" else f"{modding} ({MODDING_LEVELS[modding]})"
+
+
 def identity(profile_id: str) -> list[str]:
     data = manifest(profile_id)
     catalog = data["catalogIdentities"][0]
@@ -101,6 +112,7 @@ def identity(profile_id: str) -> list[str]:
     rows = [
         ("Game id", f"`{profile_id}` (`--game {profile_id}`)"),
         ("Title", f"{data['displayTitle']} ({catalog['title']})"),
+        ("Support", "play {}; modding {}".format(*support(data))),
         ("Engine build", f"AGE `{data['engineBuild']}`"),
         ("Engine ABI", f"`{data['engineAbiId']}`"),
         ("Catalog revision", f"`{catalog['catalogRevision']}`"),
@@ -130,13 +142,22 @@ def render() -> str:
         "block below, and the game's own guide, which covers its install options, worked-example values and quirks.",
         "Use the game id wherever a guide writes `<game>`.",
         "",
-        "| Game | Id | Engine ABI | Guide |",
-        "|---|---|---|---|",
+        "A game has two support levels, which its profile manifest states (`support`). Play says how well the engine",
+        "runs it: P1 recognized (the engine reads all of it, and nothing runs), P2 boots, P3 complete (every opcode",
+        "its scripts use is handled, and it saves), P4 verified against the original to its ending. Modding says",
+        "what a modder gets: M1 scripts, M2 documented data, M3 a base mod. A game is supported at P3 and M3; one",
+        "below P3 is still being added and is not playable. The levels' gates are in",
+        "[adding-a-game.md](../../adding-a-game.md).",
+        "",
+        "| Game | Id | Engine ABI | Play | Modding | Guide |",
+        "|---|---|---|---|---|---|",
     ]
     for profile_id in profiles:
         data = manifest(profile_id)
         guide = f"[{profile_id}.md]({profile_id}.md)" if (GAMES_DIR / f"{profile_id}.md").exists() else "none yet"
-        lines.append(f"| {data['displayTitle']} | `{profile_id}` | `{data['engineAbiId']}` | {guide} |")
+        play, modding = support(data)
+        lines.append(f"| {data['displayTitle']} | `{profile_id}` | `{data['engineAbiId']}` | {play} | {modding} | "
+                     f"{guide} |")
     lines.append("")
     for profile_id in profiles:
         lines += identity(profile_id)

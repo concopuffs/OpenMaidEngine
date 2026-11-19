@@ -11,8 +11,8 @@ Output is profile-scoped and provenance-bearing:
 
 Usage:
   py -3.11 -u -X utf8 tools/frida/dump_engine.py --game kamidori --game-root PATH PID
-  py -3.11 -u -X utf8 tools/frida/dump_engine.py --reference arterial PID
-  py -3.11 -u -X utf8 tools/frida/dump_engine.py --reference arterial --spawn
+  py -3.11 -u -X utf8 tools/frida/dump_engine.py --reference ID PID
+  py -3.11 -u -X utf8 tools/frida/dump_engine.py --reference ID --spawn
 
 ``--spawn`` starts the native_scratch.py copy itself instead of attaching: SHGetFolderPathA (save root, SYS4REG.INI,
 screenshots) points into a disposable ``dump-sandbox/`` beside the copy, so the real save folders are never touched.

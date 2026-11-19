@@ -79,7 +79,8 @@ public sealed record GameProfileManifest
         GamePersistencePolicy persistence,
         DirectSceneDiagnosticPolicy? directSceneDiagnostics = null,
         DebugSceneLaunchPolicy? debugSceneLaunch = null,
-        GameLauncherArt? launcher = null)
+        GameLauncherArt? launcher = null,
+        GameSupport? support = null)
     {
         RequireStableId(id, nameof(id));
         ArgumentException.ThrowIfNullOrWhiteSpace(displayTitle);
@@ -115,6 +116,7 @@ public sealed record GameProfileManifest
         DirectSceneDiagnostics = directSceneDiagnostics;
         DebugSceneLaunch = debugSceneLaunch;
         Launcher = launcher;
+        Support = support ?? GameSupport.Supported;
     }
 
     public string Id { get; }
@@ -134,6 +136,9 @@ public sealed record GameProfileManifest
     public DebugSceneLaunchPolicy? DebugSceneLaunch { get; }
     /// <summary>The <c>launcher</c> entry, which only the launcher reads (launcher spec §8.7).</summary>
     public GameLauncherArt? Launcher { get; }
+    /// <summary>How far the game has come (docs/adding-a-game.md §1). A manifest file must state it; a manifest
+    /// built in code without one is a supported game's.</summary>
+    public GameSupport Support { get; }
     public string PersistenceNamespace => Persistence.StorageNamespace;
     public bool PersistenceWritesEnabled => Persistence.WritesEnabled;
 

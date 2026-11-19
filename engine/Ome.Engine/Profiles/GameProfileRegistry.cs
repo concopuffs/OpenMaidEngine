@@ -100,6 +100,7 @@ public sealed partial class GameProfileRegistry
         public DirectSceneDiagnosticDocument? DirectSceneDiagnostics { get; init; }
         public DebugSceneLaunchDocument? DebugSceneLaunch { get; init; }
         public LauncherDocument? Launcher { get; init; }
+        public SupportDocument? Support { get; init; }
 
         public GameProfileManifest ToManifest()
         {
@@ -117,8 +118,19 @@ public sealed partial class GameProfileRegistry
                     .ToPolicy(),
                 DirectSceneDiagnostics?.ToPolicy(),
                 DebugSceneLaunch?.ToPolicy(),
-                Launcher?.ToArt());
+                Launcher?.ToArt(),
+                (Support ?? throw new InvalidOperationException("support is required")).ToSupport());
         }
+    }
+
+    /// <summary>The <c>support</c> entry: the game's play and modding levels (docs/adding-a-game.md §1).</summary>
+    [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
+    private sealed class SupportDocument
+    {
+        public string? Play { get; init; }
+        public string? Modding { get; init; }
+
+        public GameSupport ToSupport() => GameSupport.Parse(Play, Modding);
     }
 
     /// <summary>The <c>launcher</c> entry, read strictly (launcher plan §5.13): an unknown key is an error, and

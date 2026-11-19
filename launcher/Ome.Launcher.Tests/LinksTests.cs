@@ -84,7 +84,10 @@ public sealed class LinksTests : IDisposable
 
         model.Games.Execute(null);
         GamesViewModel games = Assert.IsType<GamesViewModel>(model.Dialog);
-        Assert.Equal(GameProfileRegistry.BuiltIn.Profiles.Select(game => game.Id), games.Games.Select(game => game.Id));
+        // The page lists the games a player can play: one still being added (below P3) is left out.
+        Assert.Equal(GameProfileRegistry.BuiltIn.Profiles.Where(game => game.Support.IsPlayable).Select(game => game.Id),
+                     games.Games.Select(game => game.Id));
+        Assert.Contains(GameProfileRegistry.BuiltIn.Profiles, game => !game.Support.IsPlayable);
         GameEntryViewModel kamidori = games.Games.Single(game => game.Id == "kamidori");
         GameEntryViewModel himegari = games.Games.Single(game => game.Id == "himegari");
 

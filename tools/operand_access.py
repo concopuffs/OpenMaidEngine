@@ -146,6 +146,10 @@ _ARTERIAL_ACCESSORS = {
     0x417D60: Accessor("string-cell", 1, "vm_operand_global_string_cell"),
     0x417C30: Accessor("ref-slot", 1, "vm_pointer_operand_slot"),
     0x417CB0: Accessor("cell", 1, "vm_operand_lvalue"),
+    # New in 4.38D, read in Ghidra (2026-11-19), not aligned from another build: it resolves an operand to its cell
+    # as vm_operand_resolve_address does, over the same operand types, and only op 0x320's handler (0x42e4a0) calls
+    # it, for the operands its scripts pass as float cells (2 to 4, 7 and 8).
+    0x4291A0: Accessor("address", 1, "vm_operand_resolve_float_address"),
 }
 
 REFERENCE_PROFILE = "himegari"
@@ -160,7 +164,7 @@ ENGINES: dict[str, EngineFacts] = {
     "kamidori": EngineFacts(0x413E70, 0x9F704, _KAMIDORI_ACCESSORS, runtime_start=0x556878, version="4.33G"),
     "kamidori-433f": EngineFacts(0x413E50, 0x9F700, _KAMIDORI_433F_ACCESSORS, runtime_start=0x556878,
                                  version="4.33F", dump="games/kamidori/engine-dump-translated"),
-    # 創刻のアテリアル (paths.REFERENCE_INSTALLS, no port profile), AGE 4.38D, dumped 2026-11-09. The ctx constructor
+    # 創刻のアテリアル, AGE 4.38D, dumped 2026-11-09 (a profile since 2026-11-19). The ctx constructor
     # at 0x414e10 fills the opcode table at ctx+0xa4b9c. The C runtime starts at the operator new[] thunk 0x583dd8
     # (much of this build's engine code is not 16-aligned, so alignment does not mark the runtime).
     "arterial": EngineFacts(0x414E10, 0xA4B9C, _ARTERIAL_ACCESSORS, runtime_start=0x583DD8, version="4.38D"),
@@ -394,11 +398,19 @@ def load_opcode_argc() -> dict[int, int]:
 
 
 def corpus_census(profile_id: str) -> dict[int, list[dict[int, int]]]:
+    """Per opcode, one operand-type histogram per operand position, from ``Ome.Cli catalog-scan``'s report. A game
+    being added has no opcode table to scan with until its access contracts are applied, so its census comes from
+    ``Ome.Cli intake``'s report, kept beside it as ``intake.json`` (docs/adding-a-game.md, step 3)."""
     path = paths.SHARED_BUILD / "games" / profile_id / "catalog-opcode-coverage.json"
+    if not path.is_file():
+        path = path.with_name("intake.json")
+        if not path.is_file():
+            raise SystemExit(f"{path.parent}: no catalog-opcode-coverage.json (Ome.Cli catalog-scan) and no "
+                             f"intake.json (Ome.Cli intake --output)")
     report = json.loads(path.read_text(encoding="utf-8"))
     census = report.get("operand_type_occurrences")
     if census is None:
-        raise SystemExit(f"{path}: no operand_type_occurrences; rerun Ome.Cli catalog-scan")
+        raise SystemExit(f"{path}: no operand_type_occurrences; rerun Ome.Cli catalog-scan or intake")
     return {int(op, 16): [{int(t, 16): n for t, n in position.items()} for position in positions]
             for op, positions in census.items()}
 

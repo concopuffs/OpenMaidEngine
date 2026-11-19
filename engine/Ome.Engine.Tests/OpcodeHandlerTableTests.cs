@@ -12,10 +12,13 @@ public class OpcodeHandlerTableTests
 {
     private static readonly OpcodeTable Catalog = OpcodeTableJson.Load(Paths.OpcodesJson);
 
+    /// <summary>The tables of the games at P3 or above (docs/adding-a-game.md §1): "complete" promises a handler for
+    /// every opcode. A game still being added is below it, and its missing handlers are its work list.</summary>
     public static TheoryData<string> GameAbis()
     {
         var abis = new TheoryData<string>();
-        foreach (string abi in GameProfileRegistry.BuiltIn.Profiles.Select(profile => profile.EngineAbiId).Distinct())
+        foreach (string abi in GameProfileRegistry.BuiltIn.Profiles.Where(profile => profile.Support.IsPlayable)
+                     .Select(profile => profile.EngineAbiId).Distinct())
             abis.Add(abi);
         return abis;
     }

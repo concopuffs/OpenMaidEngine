@@ -512,54 +512,69 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - Done when the package walk refuses only links, or a measurement on a real OneDrive folder (dehydrated files
     included) shows the attribute is not seen.
 - **Game onboarding: what a third game still trips over.** Found on 2026-11-19 while writing `adding-a-game.md`
-  and taking a first read-only look at Arterial. Each is a place where the second game's support was written for
-  two games, not for many. Two were fixed the same day: the first-look command (`Ome.Cli intake`) and the install
-  tables (every install is `games/<name>/` now). The user's word is to take the rest as Arterial meets them:
-  - **`tools/validate.py` names games.** The workspace test filter is `Profile=kamidori` or `Profile!=kamidori`,
-    and the `full` level's terminal gate is a branch per profile.
+  and bringing Arterial to P1. Each is a place where the second game's support was written for two games, not for
+  many. Fixed the same day: the first-look command (`Ome.Cli intake`), the install tables (every install is
+  `games/<name>/`), the support level in the manifest (`support`), the workspace test filter of `validate.py`, and
+  the Ghidra name port (`tools/ghidra_port_names.py`). The user's word is to take the rest as Arterial meets them:
+  - **`validate.py --level full` has a branch per game** for its terminal gate. A game at P2 adds its own.
   - **A reference install and a profile keep their outputs apart.** `build/engines/<id>/` holds a reference's
     dump, scratch copy and `operand-access.json`, and `build/games/<id>/` a profile's; `native_scratch.py`,
     `dump_engine.py` and `operand_access.py` take `--reference` or `--engine` for the one and `--game` for the
-    other. Giving a reference install a profile moves all of it by hand.
-  - **No support level in the profile manifest.** The launcher and the generated games page read the manifests and
-    cannot tell a game that only decodes from one that plays (`adding-a-game.md` §1).
+    other. Arterial's were moved by hand when it got its profile.
+  - **The launcher only hides a game below P3.** `Installs.Recognize` reports its install as one the engine does
+    not support yet, with the level, and the Games list leaves it out. Nothing shows a game as "being added".
   - **The drive MCP server serves one game** (`drive_mcp.py --game ID`, registered for Himegari). Its tools take
     no game.
-  - **Native driving facts are found by hand for each build** (`tools/drive/<id>.toml`, `[native.*]`). The
-    revision diff's JSON keeps the function, field and address correspondence that would translate the nearest
-    game's, and no command reads it.
-  - **No kept tool ports Ghidra names between images.** `/kamidori/4.33G` got its names from 4.33F through a
-    function alignment (`engine-re.md`, "The 4.33G image"); `tools/` holds no script for it.
+  - **Native driving facts are found by hand for each build** (`tools/drive/<id>.toml`, `[native.*]`).
+    `revision_diff.py` learns which functions, context fields and globals correspond, and writes only how many;
+    `ghidra_port_names.py` writes the function pairs it used into its plan, which covers the functions. Nothing
+    writes the field and address maps a driver table needs.
+  - **The name port reaches only what an opcode or a unique string reaches.** 397 of 4.33G's 1,015 named or
+    commented functions found no partner in 4.38D: start-up code, the frame loop, the renderer. More starting
+    pairs (the window procedure, the main tick, import call sites) would reach them.
+  - **`operand_access.py --apply` reorders lines it does not own.** It moved 67 `access` lines below the
+    `unchecked_index` lines added on 2026-11-18. The change is harmless, and shows that `--apply` was not rerun
+    after that edit; `--check` does not exist for it.
 
   Done when each is fixed or dropped with a reason, and `adding-a-game.md` describes no workaround.
-- **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at P0
-  (`adding-a-game.md` §1): dumped, pinned in `operand_access.py` `ENGINES` and compared (`engine-re.md`,
-  "Comparing engine builds"; Kamidori against it: 36 differing opcodes, 11 differing helpers, 36 opcodes only it
-  has). What `Ome.Cli intake` reports for it (2026-11-19; `adding-a-game.md`, step 1):
-  - **Its catalog does not load in the engine.** `Sys4AssetCatalog.Load` stops with "settings block has 19
-    trailing bytes"; only the intake reads past them. After the
-    49 settings pairs come `0f 00 00 00 25 00 00 00` and the string `AGE Extend`: a length of 15, the number 37
-    and a name. The catalog also holds one `.TTF`, and 4.38D's font code gained the strings `AGE Extend` and
-    `@AGE Extend`, so this is probably a font the game ships. Not reversed.
-  - **Its Ghidra image has no names.** `/arterial/4.38D/range_00400000.bin` is analysed (6,309 functions) and
-    holds no `op_0x…` or ported name.
-  - **Settings keys no supported game has:** `JUSTIFYCHAR` (four values: `、`, `。`, `」`, `）`) and `SAVEWINPOS`.
-    `SAVEVERSION` is 320, as Kamidori's; the canvas is 1024 by 576.
-  - **File types no supported game has:** two `.X` files and the `.TTF`, among 21,349 entries in six archives.
-    Its four appends mount (888, 57, 996 and 1,767 entries).
+- **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P1**
+  since 2026-11-19 (`adding-a-game.md` §1; its manifest's `support`), on the branch `feature/arterial`: the engine
+  names its install, loads its catalog and decodes all of it, and nothing of it runs or saves.
+  - **Done for P0 and P1.** Its dump, its Ghidra image with 658 ported or registry names, its build in
+    `operand_access.py` `ENGINES` with a fifteenth accessor, the revision diffs (`engine-re.md`, "Comparing engine
+    builds"), its profile and engine build (4.33G with its own names and nothing else changed), its observation and
+    `SYS4438` snapshot in the opcode registry, operand access for every opcode its scripts use, and its workspace
+    tests (`validate.py --level workspace --game arterial`).
+  - **The catalog's font list** was the block the reader refused: file 37, `AGE-EXTEND.TTF`, as the face
+    `AGE Extend` (`sys4-format-notes.md`, "The font list"). The port reads the list and does not load the font.
+    4.38D's text code names `AGE Extend` and `@AGE Extend` (the revision diff's helper `0x4522c0=0x456800`).
+  - **Settings keys no other game has:** `JUSTIFYCHAR` (four values: `、`, `。`, `」`, `）`) and `SAVEWINPOS`.
+    Neither has a consumer in the port, and neither is read natively yet.
+  - **File types no other game has:** two `.X` files (`LEAF0.X`, `LEAF1.X`) and the `.TTF`, among 21,349 entries
+    in six archives and four appends.
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
     strings, where both supported games have 2 floats. The saved prefix is 260,993 integers, 1 float and 231
     strings.
-  - **Opcodes:** all 693 scripts (480 base, 213 append; 3,229,915 instructions, every one `SYS4438`) decode with
-    the whole catalog: no opcode outside it and no unknown operand type, so the game is of the SYS generation the
-    engine runs. They use 303 opcodes. 45 have no handler, at 56,206 sites: `0x2d5` (31,045 sites in 355 scripts),
-    `0x323` (9,793), `0x322` (8,633), `0x320` (3,856), `0x2d0` (1,943, of which 1,868 in ATTACK), `0x2e9` (579),
-    `0x2d1` (100), `0x2d2` (50), `0x321` (42), `0x2d3` (22), `0x2e5` (16), `0x26` (15), `0x2c7` (14), `0x102` (11),
-    `0x2e7` (10), and 30 more with fewer than ten sites each: `0x36`, `0xc1`, `0x103`, `0x104`, `0x10e`, `0x1c4`,
-    `0x1cd`, `0x1fc`, `0x225`, `0x252`, `0x253`, `0x256`, `0x2d7`, `0x2e1`, `0x2e3`, `0x2e6`, `0x2e8`, `0x2ea`,
-    `0x2eb`, `0x2ec`, `0x324`–`0x329` and `0x32b`–`0x32e`. Of these, `0x252`–`0x256`, `0x2e1`–`0x2ec` and the
-    `0x320` family exist only in 4.38D's engine; the rest are in 4.33G's too, and Kamidori's scripts never use
-    them. The scene scripts carry the four heaviest: `0x2d5` alone is in 355 scripts.
+  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 45 have no handler,
+    at 56,206 sites: `0x2d5` (31,045 sites in 355 scripts), `0x323` (9,793), `0x322` (8,633), `0x320` (3,856),
+    `0x2d0` (1,943, of which 1,868 in ATTACK), `0x2e9` (579), `0x2d1` (100), `0x2d2` (50), `0x321` (42), `0x2d3`
+    (22), `0x2e5` (16), `0x26` (15), `0x2c7` (14), `0x102` (11), `0x2e7` (10), and 30 more with fewer than ten
+    sites each: `0x36`, `0xc1`, `0x103`, `0x104`, `0x10e`, `0x1c4`, `0x1cd`, `0x1fc`, `0x225`, `0x252`, `0x253`,
+    `0x256`, `0x2d7`, `0x2e1`, `0x2e3`, `0x2e6`, `0x2e8`, `0x2ea`, `0x2eb`, `0x2ec`, `0x324`–`0x329` and
+    `0x32b`–`0x32e`. Of these, `0x252`–`0x256`, `0x2e1`–`0x2ec` and the `0x320` family exist only in 4.38D's
+    engine; the rest are in 4.33G's too, and Kamidori's scripts never use them. The scene scripts carry the four
+    heaviest: `0x2d5` alone is in 355 scripts. `build/games/arterial/catalog-opcode-coverage.json` lists every
+    site. Op `0x320` is read in part (its plate in the Ghidra image).
+  - **Not proven:** its save layout. The build's save stamp (`438D`) follows the version and its record size is
+    4.33G's; the revision diff shows other constants in the numbered save and load opcodes. The image holds the
+    same `S4SD` and `S3SD` magics as 4.33G's.
+  - **Left out of steps 2 and 3:** whether the Ghidra image's packer API sites are restored and its imports typed
+    was not checked (`engine-re.md`, "Runbook"). The Python corpus tools have nothing to read yet: there is no
+    `extracted-arterial/`, so `extract_phase2.py` and `compiler_census.py` have not run, and the census is what
+    Open Maid Script needs before M1.
+  - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
+    the two settings keys, the two file types and the font); step 5, `tools/drive/arterial.toml` and a native run
+    to the title; step 6, the boot, in the order it reaches the 45 opcodes.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

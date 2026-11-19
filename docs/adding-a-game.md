@@ -45,16 +45,18 @@ in real play.
 **A level includes its documents.** A game is not at a level until the references the level touched are written
 (`AGENTS.md`, "Mandatory reference closeout"). There is no separate "documented" level.
 
-**Where a level is recorded.** Nothing in a profile manifest says how far its game has come, and the launcher reads
-the same registry, so it cannot tell a P1 game from a P3 one. The proposal is a `support` entry in the manifest
-(`play`, `modding`), which the generated games page shows and the launcher warns from (`backlog.md`, "Game
-onboarding"). Until that is built, this table holds the levels:
+**Where a level is recorded.** A profile manifest states its game's two levels in its `support` entry
+(`{ "play": "P3", "modding": "M3" }`), and that entry is their one home:
 
-| Game | Engine build | Play | Modding | Open |
-|---|---|---|---|---|
-| Himegari | 4.24J | P3 | M3 | It has not been driven to its ending on native and the port alike (P4). |
-| Kamidori | 4.33G | P3, but for the diff triage | M3 | 125 revision-diff rows against Himegari are not triaged; the sweep stands at the third stage (`backlog.md`). |
-| Arterial | 4.38D | P0 | none | `backlog.md`, "Onboard 創刻のアテリアル". |
+- the generated games page shows them (`modding/games/README.md`, by `tools/modding_games_build.py`);
+- a run of a game below P3 warns that it is still being added, and the launcher does not offer its install;
+- the test that holds a game to a handler for every opcode reads it (`OpcodeHandlerTableTests`), as later gates
+  of a level should.
+
+A reference install (P0) has no profile, so it has no entry. Two levels are recorded with a known gap, by the
+user's decision of 2026-11-19: Kamidori is P3 though its revision diff against Himegari is not triaged (125 rows;
+`backlog.md`, "Triage the opcode revision diff"), and neither Himegari nor Kamidori has been driven to its ending
+on native and the port alike, which is P4.
 
 ## 2. Before starting
 
@@ -100,11 +102,13 @@ Each step lists what to do, what it is done with, where its facts go, and its ga
   which redirects the shell folders so the real saves are untouched). Check the install is unchanged
   (`native_scratch.py --check`).
 - Import the dump in Ghidra as `/<id>/<build>/range_00400000.bin`: raw binary, `x86:LE:32:default`, base
-  `0x400000` (`engine-re.md`, "Runbook"). Restore the packer's API sites and type the imports. Port names, plates
-  and comments from the nearest build's image through a function alignment, and name the opcode handlers from the
-  registry. An image without names makes every later step slower.
+  `0x400000` (`engine-re.md`, "Runbook"). Restore the packer's API sites and type the imports.
 - Pin the build in `operand_access.py` `ENGINES`: the context constructor, the opcode table's offset, the accessors
   (`--align-accessors --align-to <nearest>`) and `runtime_start`.
+- Carry the names over from the nearest build's image with `tools/ghidra_port_names.py` (`tools-reference.md`,
+  "Native engine RE (Ghidra)"): it pairs the two builds' functions, ports each name and plate with a note of where
+  it came from, and names every other opcode handler from the registry. An image without names makes every later
+  step slower.
 - Run `revision_diff.py <nearest> <id>`. It gives the opcodes only the new engine has, the shared opcodes whose
   native code differs, and the shared helpers that differ.
 - **Facts go to:** `engine-re.md` (the build's row, hashes, what the largest differences are), the Ghidra project.
@@ -115,19 +119,25 @@ Each step lists what to do, what it is done with, where its facts go, and its ga
 - Make the catalog load. A catalog revision can add to `SYS4INI.BIN`. The engine's reader refuses what it does not
   know, and only the intake reads past it, so a new block is reversed and documented before anything else runs.
 - Write the profile, `engine/Ome.Engine/Profiles/<id>.json`: identity, script revision, `engineBuild` and
-  `engineAbiId`, the boot script, and persistence with `writesEnabled` false. `expectedPackedSaveVersion` is the
-  catalog's `SAVEVERSION`. `bankDimensions` are the six saved-prefix counts at header `+0xf0`
-  (`sys4-format-notes.md`, "SYS4INI file header").
+  `engineAbiId`, the boot script, `support` (`P1`, `none`), and persistence with `writesEnabled` false and the
+  reason. `expectedPackedSaveVersion` is the catalog's `SAVEVERSION`. `bankDimensions` are the six saved-prefix
+  counts at header `+0xf0` (`sys4-format-notes.md`, "SYS4INI file header"). The intake prints both.
+- A reference install that gets a profile moves its outputs from `build/engines/<id>/` to `build/games/<id>/` and
+  leaves `paths.REFERENCE_INSTALLS`.
 - Declare the build in `engine/Ome.Engine.Vm/EngineBuilds.cs` as the nearest build with its own id, ABI and save
   stamp, and no other change yet.
 - In `vm-map/opcodes.toml`, add the id to `profile_ids`, and add the game's `[[observation]]` and its
-  `[[abi_layer]]` snapshot. The snapshot claims no parent: it is what this game's scripts use. The intake report's
-  `opcode_occurrences` gives the first opcode list, before any table for the game exists.
-- Scan the whole catalog (`Ome.Cli catalog-scan --game <id> --output
-  build/games/<id>/catalog-opcode-coverage.json`). It gives the opcode set, the opcodes without a handler with
-  every site and operand shape, and the per-operand type census.
-- Derive operand access from the dump (`operand_access.py --game <id>`, then `--check-corpus`, then `--apply`).
+  `[[abi_layer]]` snapshot. The snapshot claims no parent: it is what this game's scripts use. The intake report,
+  kept as `build/games/<id>/intake.json`, gives the first opcode list and the script and instruction counts,
+  before any table for the game exists.
+- Derive operand access from the dump: `operand_access.py --game <id>`, then `--apply`, which writes every
+  observed opcode's contract for all games and takes this game's operand types from `intake.json`. It stops and
+  lists each operand it found no native access for; read those handlers, and pin an accessor the build added.
   This is where an operand read as a float in the new build shows up, with no reading by hand.
+- Run `opcodes_build.py --build`, rebuild the engine, and scan the whole catalog as the profile (`Ome.Cli
+  catalog-scan --game <id> --output build/games/<id>/catalog-opcode-coverage.json`). It gives the opcodes without a
+  handler with every site and operand shape. `operand_access.py --game <id> --check-corpus` then compares native
+  access with the operand types the scripts pass.
 - Add the game's workspace tests (`[Trait("Category", "Workspace")]` and `[Trait("Profile", "<id>")]`): the
   install selects the profile, the header's counts equal the manifest's, the observation equals a fresh scan.
 - Extract what the Python tools read: `parse_sys4ini.py` (asset index, call-script names), `extract_phase2.py`

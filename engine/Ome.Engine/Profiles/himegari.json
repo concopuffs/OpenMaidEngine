@@ -12,6 +12,7 @@
   "engineBuild": "4.24J",
   "engineAbiId": "SYS4422",
   "naturalBootScript": "SYSTEM4.BIN",
+  "support": { "play": "P3", "modding": "M3" },
   "metadataReferences": {
     "portableTextRendering": "res://config/japanese-text-rendering.json"
   },

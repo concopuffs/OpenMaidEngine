@@ -1,0 +1,33 @@
+{
+  "id": "arterial",
+  "displayTitle": "Soukoku no Arterial",
+  "catalogIdentities": [
+    {
+      "catalogRevision": "S4IC438",
+      "title": "創刻のアテリアル"
+    }
+  ],
+  "scriptRevisions": ["SYS4438"],
+  "sysFrontendId": "SYS4",
+  "engineBuild": "4.38D",
+  "engineAbiId": "SYS4438",
+  "naturalBootScript": "SYSTEM4.BIN",
+  "support": { "play": "P1", "modding": "none" },
+  "metadataReferences": {},
+  "persistence": {
+    "storageNamespace": "arterial",
+    "writesEnabled": false,
+    "readOnlyReason": "no native save of AGE 4.38D has been read yet, so its save layout is not proven (docs/adding-a-game.md, step 7)",
+    "magic": "S4SD",
+    "gameId": "創刻のアテリアル",
+    "expectedPackedSaveVersion": 320,
+    "bankDimensions": {
+      "integerGlobals": 260993,
+      "floatGlobals": 1,
+      "stringGlobals": 231,
+      "pointerGlobals": 1,
+      "pointerStrings": 1,
+      "localPointerScratch": 1
+    }
+  }
+}

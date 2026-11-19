@@ -45,9 +45,7 @@ _CONVENTIONAL_EXTRACTED_ROOTS = {
 # Installs kept only for native-engine RE, with no port profile: reference id -> pristine install. Their scratch
 # copies and engine dumps live in ENGINES_BUILD/<id>/ (tools/native_scratch.py and tools/frida/dump_engine.py
 # take ``--reference ID``).
-REFERENCE_INSTALLS = {
-    "arterial": GAMES / "arterial",   # 創刻のアテリアル
-}
+REFERENCE_INSTALLS: dict[str, Path] = {}   # none now: games/arterial got its profile on 2026-11-19
 ENGINES_BUILD = SHARED_BUILD / "engines"
 
 

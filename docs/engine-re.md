@@ -195,15 +195,26 @@ revision changes; a sweep then checks the rows that matter. Four builds have dum
 identity and native read checks" below). This table and the revision diff called it 4.22 before, after the script
 ABI `SYS4422`; the ABI and the build are different names.
 
-**Arterial.** `games/arterial/` is a reference install with no port profile (`paths.REFERENCE_INSTALLS`),
-kept only for engine comparison. Its packed `AGE.EXE` (1,294,848 bytes, SHA-256
-`c6d4b8d03c834350c996832479ec1faf48b5f7c0ec763a101ec5cd601f76d421`, catalog `S4IC438`) was dumped from a
-`native_scratch.py --reference arterial` copy by `dump_engine.py --reference arterial --spawn`, with the shell
-folders redirected into the dump sandbox. The install checked unchanged afterwards, and the real saves under
-`%LOCALAPPDATA%` were not touched. The module is based at `0x400000` and spans 3,227,648 bytes
-(`build/engines/arterial/engine-dump/`). The dispatch-table finder (`lea edi,[reg+table]; mov ecx,0x400;
-rep stosd`) located the constructor, and `operand_access.py --engine arterial --align-accessors --align-to
-kamidori` aligned all 14 accessors unanimously. The Ghidra image is `/arterial/4.38D/range_00400000.bin`.
+**Arterial.** `games/arterial/` was a reference install with no port profile until 2026-11-19, kept for engine
+comparison, and is the `arterial` profile's install since (P1; `adding-a-game.md`). Its packed `AGE.EXE`
+(1,294,848 bytes, SHA-256 `c6d4b8d03c834350c996832479ec1faf48b5f7c0ec763a101ec5cd601f76d421`, catalog `S4IC438`)
+was dumped on 2026-11-09 from a scratch copy by `dump_engine.py --spawn` (then with `--reference arterial`), with
+the shell folders redirected into the dump sandbox. The install checked unchanged afterwards, and the real saves
+under `%LOCALAPPDATA%` were not touched. The module is based at `0x400000` and spans 3,227,648 bytes
+(`build/games/arterial/engine-dump/`, moved from `build/engines/arterial/` with the profile). The dispatch-table
+finder (`lea edi,[reg+table]; mov ecx,0x400; rep stosd`) located the constructor, and `operand_access.py
+--align-accessors --align-to kamidori` aligned all 14 accessors unanimously. A fifteenth is new in 4.38D:
+`vm_operand_resolve_float_address@0x4291a0`, read by hand, which only op `0x320`'s handler calls. The Ghidra image
+is `/arterial/4.38D/range_00400000.bin`.
+
+The image carries names since 2026-11-19. `tools/ghidra_port_names.py kamidori arterial` paired 2,666 functions:
+same-opcode handlers, their callees to the leaves, and 303 pairs of functions that are each the only one in their
+build to name some string literal. It ported 608 of `/kamidori/4.33G`'s 1,015 named or commented functions, each
+plate ending with a `[Ported from …]` note that says its addresses are 4.33G's. The 36 handlers only 4.38D has are
+`op_0xNN_handler`, and the 15 accessors carry their pinned names. 397 of 4.33G's names were not reached: start-up
+code, the frame loop and the C runtime's own. Read by hand since: `engine_load_sys4ini_catalog@0x414290`, the
+catalog loader (`sys4-format-notes.md`, "The font list"), which `WinMain@0x4a0d40` calls for `SYS4INI.BIN` and,
+when that fails, for `SYS3INI.BIN`; and op `0x320`'s handler in part (its plate).
 Function ID names start at `0x566214` (the NFM compression library). The DirectShow base classes follow, and the C
 runtime begins at the `operator new[]` thunk `0x583dd8` (150 callers; `__security_check_cookie` at `0x5843fe`).
 Unlike 4.24J and 4.33, most of 4.38D's engine code from about `0x4a0000` on is not 16-aligned, so alignment does

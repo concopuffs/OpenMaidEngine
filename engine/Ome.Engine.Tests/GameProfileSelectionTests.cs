@@ -64,6 +64,33 @@ public sealed class GameProfileSelectionTests
         Assert.True(kamidori.Matches(KamidoriIdentity));
     }
 
+    /// <summary>創刻のアテリアル is at P1 (docs/adding-a-game.md): the engine names its install and reads all of it,
+    /// nothing of it saves, and its build is declared from 4.33G.</summary>
+    [Fact]
+    public void ArterialIsRecognizedAndReadOnly()
+    {
+        GameProfileManifest arterial = Assert.IsType<GameProfileManifest>(GameProfileRegistry.BuiltIn.Find("arterial"));
+
+        Assert.Equal(("SYS4", "4.38D", "SYS4438", "SYSTEM4.BIN"),
+                     (arterial.SysFrontendId, arterial.EngineBuildId, arterial.EngineAbiId, arterial.NaturalBootScript));
+        Assert.Equal(["SYS4438"], arterial.ScriptRevisions);
+        Assert.True(arterial.Matches(new GameCatalogIdentity("S4IC438", "創刻のアテリアル")));
+        Assert.Equal(new GameSupport(PlayLevel.Recognized, ModdingLevel.None), arterial.Support);
+        Assert.False(arterial.Support.IsPlayable);
+        Assert.Equal(("P1", "none"), (arterial.Support.PlayId, arterial.Support.ModdingId));
+        Assert.Equal(GameSupport.Supported, GameProfileRegistry.BuiltIn.Find("himegari")!.Support);
+        Assert.Equal(GameSupport.Supported, GameProfileRegistry.BuiltIn.Find("kamidori")!.Support);
+        Assert.Throws<InvalidOperationException>(() => GameSupport.Parse("P0", "none"));
+        Assert.Throws<InvalidOperationException>(() => GameSupport.Parse("P3", null));
+        Assert.False(arterial.PersistenceWritesEnabled);
+        Assert.Contains("no native save", arterial.Persistence.ReadOnlyReason);
+        Assert.Equal(320, arterial.Persistence.ExpectedPackedSaveVersion);
+        Assert.Equal([260993, 1, 231, 1, 1, 1], arterial.Persistence.BankDimensions.ToArray());
+        Assert.Null(arterial.DirectSceneDiagnostics);
+        Assert.Null(arterial.DebugSceneLaunch);
+        Assert.Equal("SYS4438", Ome.Engine.Vm.EngineBuilds.ForProfile(arterial).AbiId);
+    }
+
     [Fact]
     public void NormalKamidoriProfileInjectsNoHimegariState()
     {
@@ -196,7 +223,7 @@ public sealed class GameProfileSelectionTests
         var error = Assert.Throws<ArgumentException>(() => GameProfileSelection.Resolve(
             ["--game", "not-a-game"], HimegariIdentity));
 
-        Assert.Contains("unknown game 'not-a-game'; available games: himegari, kamidori", error.Message);
+        Assert.Contains("unknown game 'not-a-game'; available games: ", error.Message);
     }
 
     [Fact]
@@ -226,6 +253,7 @@ public sealed class GameProfileSelectionTests
     [Trait("Category", "Workspace")]
     [InlineData("himegari")]
     [InlineData("kamidori")]
+    [InlineData("arterial")]
     public void InstalledCatalogAutoSelectsExpectedProfile(string expectedProfile)
     {
         string path = Path.Combine(Paths.GameInstall(expectedProfile), "SYS4INI.BIN");
@@ -244,6 +272,7 @@ public sealed class GameProfileSelectionTests
     [Trait("Category", "Workspace")]
     [InlineData("himegari")]
     [InlineData("kamidori")]
+    [InlineData("arterial")]
     public void InstalledSys4IniHeaderDeclaresProfileSaveBankDimensions(string game)
     {
         string path = Path.Combine(Paths.GameInstall(game), "SYS4INI.BIN");

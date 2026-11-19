@@ -11,7 +11,7 @@
 # converted (docs/engine-re.md, "Kamidori engine builds").
 [meta]
 instruction_model = "code = seq of <opcode:u32> then argc*(<argtype:u32><value:u32>); len_dwords = 1 + 2*argc"
-profile_ids = ["himegari", "kamidori"]
+profile_ids = ["himegari", "kamidori", "arterial"]
 inline_array_opcode = 0x64
 
 # Compact defaults resolve the existing semantic evidence text into structured records. They state
@@ -125,6 +125,44 @@ opcodes = [
   0x2da, 0x2db, 0x2dc, 0x2dd, 0x2de,
 ]
 
+[[observation]]
+profile_id = "arterial"
+catalog_revision = "S4IC438"
+script_revision = "SYS4438"
+engine_abi_id = "SYS4438"
+method = "catalog-corpus"
+artifact = "build/games/arterial/catalog-opcode-coverage.json"
+script_count = 693
+instruction_count = 3229915
+opcodes = [
+  0x1, 0x2, 0x3, 0x5, 0x6, 0x8, 0x9, 0x25, 0x26, 0x27, 0x28, 0x32,
+  0x36, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a,
+  0x5b, 0x5c, 0x5d, 0x5e, 0x5f, 0x60, 0x61, 0x63, 0x64, 0x6c, 0x6e, 0x6f,
+  0x70, 0x71, 0x72, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7f,
+  0x80, 0x82, 0x83, 0x85, 0x86, 0x87, 0x88, 0x8b, 0x8c, 0x8f, 0x90, 0x93,
+  0x94, 0x97, 0xa0, 0xa1, 0xa2, 0xa3, 0xae, 0xb4, 0xb5, 0xb6, 0xb7, 0xb8,
+  0xb9, 0xba, 0xbf, 0xc0, 0xc1, 0xc2, 0xc4, 0xc5, 0xc6, 0xc7, 0xc8, 0xcc,
+  0xcd, 0xd0, 0xd3, 0xd4, 0xd5, 0xd9, 0xfa, 0xfb, 0xfe, 0xff, 0x100, 0x101,
+  0x102, 0x103, 0x104, 0x107, 0x108, 0x109, 0x10a, 0x10b, 0x10c, 0x10d, 0x10e, 0x10f,
+  0x12c, 0x12e, 0x12f, 0x130, 0x131, 0x132, 0x133, 0x134, 0x135, 0x136, 0x137, 0x13f,
+  0x140, 0x141, 0x142, 0x143, 0x144, 0x147, 0x149, 0x191, 0x192, 0x193, 0x194, 0x195,
+  0x196, 0x197, 0x198, 0x199, 0x19a, 0x19b, 0x19c, 0x19d, 0x19e, 0x1a0, 0x1a1, 0x1a2,
+  0x1a3, 0x1a4, 0x1a5, 0x1a6, 0x1a7, 0x1a8, 0x1a9, 0x1aa, 0x1ab, 0x1ac, 0x1ad, 0x1ae,
+  0x1af, 0x1b0, 0x1b1, 0x1b2, 0x1b3, 0x1b4, 0x1b5, 0x1b6, 0x1b7, 0x1b8, 0x1b9, 0x1ba,
+  0x1bb, 0x1bc, 0x1bf, 0x1c1, 0x1c4, 0x1c7, 0x1c8, 0x1ca, 0x1cb, 0x1cc, 0x1cd, 0x1ce,
+  0x1cf, 0x1d0, 0x1d2, 0x1d3, 0x1d5, 0x1f4, 0x1f5, 0x1f6, 0x1f7, 0x1f8, 0x1f9, 0x1fa,
+  0x1fb, 0x1fc, 0x1fd, 0x1fe, 0x1ff, 0x202, 0x203, 0x204, 0x205, 0x207, 0x208, 0x20a,
+  0x20b, 0x20c, 0x20d, 0x20e, 0x20f, 0x212, 0x213, 0x214, 0x215, 0x216, 0x217, 0x218,
+  0x219, 0x21a, 0x21b, 0x21c, 0x21d, 0x21e, 0x21f, 0x220, 0x222, 0x223, 0x224, 0x225,
+  0x228, 0x229, 0x22d, 0x22e, 0x22f, 0x230, 0x231, 0x232, 0x233, 0x234, 0x235, 0x236,
+  0x238, 0x239, 0x23b, 0x23c, 0x23d, 0x23f, 0x241, 0x242, 0x243, 0x248, 0x24d, 0x24e,
+  0x24f, 0x250, 0x251, 0x252, 0x253, 0x256, 0x258, 0x259, 0x25a, 0x2bc, 0x2bd, 0x2bf,
+  0x2c0, 0x2c5, 0x2c7, 0x2d0, 0x2d1, 0x2d2, 0x2d3, 0x2d5, 0x2d7, 0x2d8, 0x2da, 0x2db,
+  0x2dc, 0x2dd, 0x2de, 0x2e1, 0x2e3, 0x2e5, 0x2e6, 0x2e7, 0x2e8, 0x2e9, 0x2ea, 0x2eb,
+  0x2ec, 0x320, 0x321, 0x322, 0x323, 0x324, 0x325, 0x326, 0x327, 0x328, 0x329, 0x32b,
+  0x32c, 0x32d, 0x32e,
+]
+
 # Exact snapshots resolve directly today. Future evidence-backed revision layers may name parents and
 # add members, replace full operand contracts/handler ids, or remove inherited entries. An empty
 # `composes` list deliberately makes no base-SYS4 or revision-ancestry claim.
@@ -148,6 +186,18 @@ observation_profile_id = "kamidori"
 evidence_method = "catalog-corpus"
 evidence_artifact = "build/games/kamidori/catalog-opcode-coverage.json"
 evidence_scope = "S4IC433 / SYS4433 complete decoded corpus snapshot"
+members = []
+contracts = []
+removes = []
+
+[[abi_layer]]
+id = "SYS4438"
+kind = "complete-observed-snapshot"
+composes = []
+observation_profile_id = "arterial"
+evidence_method = "catalog-corpus"
+evidence_artifact = "build/games/arterial/catalog-opcode-coverage.json"
+evidence_scope = "S4IC438 / SYS4438 complete decoded corpus snapshot"
 members = []
 contracts = []
 removes = []
@@ -321,8 +371,8 @@ access = ["read"]
 i = 2
 role = "frame_slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "script frame", count = 40 }
+access = ["read"]
 
 [[opcode]]
 op = 0x8
@@ -347,8 +397,8 @@ details = "Implemented by recursively executing the reusable preloaded ExecFrame
 i = 1
 role = "frame_slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "script frame", count = 40 }
+access = ["read"]
 
 [[opcode]]
 op = 0x9
@@ -392,8 +442,8 @@ evidence = "Ghidra /v2: dispatch slot 0x21 resolves to op_0x21_fade_surface_in_f
 i = 1
 role = "captured full-frame surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -424,8 +474,8 @@ evidence = "Ghidra /v2: dispatch slot 0x22 resolves to op_0x22_fade_surface_out_
 i = 1
 role = "captured full-frame surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -456,15 +506,15 @@ evidence = "Ghidra /v2: dispatch handler op_0x25_handler@0x41ce00 checks ADV fas
 i = 1
 role = "captured source surface"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "captured target surface"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -1223,8 +1273,8 @@ evidence = "Native op 0x6e enters adv_text_build_glyph_records@0x4576c0, which s
 i = 1
 role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -1254,8 +1304,8 @@ evidence = "Ghidra /v2 newline paths at 0x456fd0/0x452970 reset x to the layout'
 i = 1
 role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode]]
 op = 0x70
@@ -1279,8 +1329,8 @@ evidence = "Ghidra /v2: op_0x70_handler@0x41e4e0 forwards the five operands and 
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -1329,8 +1379,8 @@ evidence = "Corpus: T1 targets op-0x71 records, but the operand is a layout slot
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm", "l-int"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode]]
 op = 0x72
@@ -1355,8 +1405,8 @@ evidence = "Ghidra /v2: op_0x72_handler@0x41e690 fetches operand 1 and calls FUN
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode]]
 op = 0x73
@@ -1380,8 +1430,8 @@ evidence = "Ghidra /v2: op_0x73_configure_wait_indicator@0x41e900 passes operand
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -1399,8 +1449,8 @@ access = ["read"]
 i = 4
 role = "source surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
@@ -1557,8 +1607,8 @@ evidence = "Ghidra /v2: op_0x79_set_adv_text_reset_cursor@0x41eb50 reads three o
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -1594,8 +1644,8 @@ evidence = "Ghidra /v2: op_0x7a_handler@0x41eba0 fetches operands 3,2,1 and call
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm", "l-int"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -1706,8 +1756,8 @@ evidence = "Ghidra /v2: op_0x80_select_adv_current_layout@0x41ed40 writes operan
 i = 1
 role = "default retained graphics-object slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode]]
 op = 0x85
@@ -2213,8 +2263,8 @@ access = ["read"]
 i = 2
 role = "channel"
 observed_types = ["imm", "g-int", "l-int"]
-access = ["read"]
 unchecked_index = { table = "sound effect channel", count = 10, admits = 13, signed = true }
+access = ["read"]
 
 [[opcode]]
 op = 0xb5
@@ -2262,8 +2312,8 @@ evidence = "Ghidra op 0xb6 handler 0x420250 -> sfx_channel_release@0x482600 -> s
 i = 1
 role = "channel"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "sound effect channel", count = 10 }
+access = ["read"]
 
 [[opcode]]
 op = 0xb7
@@ -3015,8 +3065,8 @@ access = ["read"]
 i = 2
 role = "physical mouse button index"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "physical button", count = 32 }
+access = ["read"]
 
 [[opcode]]
 op = 0x10c
@@ -3046,8 +3096,8 @@ access = ["read"]
 i = 2
 role = "DirectInput DIK scan code"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "scan code", count = 256 }
+access = ["read"]
 
 [[opcode]]
 op = 0x10d
@@ -3303,8 +3353,8 @@ details = "Implemented as native's ten queues. Reset replaces the selected queue
 i = 1
 role = "queue_id"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "queue", count = 10, admits = 11 }
+access = ["read"]
 
 [[opcode]]
 op = 0x133
@@ -3329,8 +3379,8 @@ details = "Implemented with signed 32-bit value normalization into the selected 
 i = 1
 role = "queue_id"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "queue", count = 10, admits = 11 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -3361,8 +3411,8 @@ details = "Implemented as FIFO TryDequeue: nonempty writes success=1 plus the si
 i = 1
 role = "queue_id"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "queue", count = 10, admits = 11 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -3459,8 +3509,8 @@ evidence = "Ghidra /v2: op_0x137_reset_int_stack@0x421940 destroys the pointer a
 i = 1
 role = "stack_id"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "stack", count = 10, admits = 11 }
+access = ["read"]
 
 [[opcode]]
 op = 0x13a
@@ -3488,8 +3538,8 @@ evidence_records = [
 i = 1
 role = "style_index"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "glyph style", count = 10, admits = 11 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -3942,8 +3992,8 @@ evidence = "op_0x196_display_furigana@0x41f2a0 calls adv_text_build_glyph_record
 i = 1
 role = "ADV layout slot; zero selects the current layout"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -4003,8 +4053,8 @@ evidence = "Ghidra /v2: op_0x198_handler@0x41f3f0 passes all three operands to a
 i = 1
 role = "layout slot"
 observed_types = ["imm", "l-int"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -4643,8 +4693,8 @@ access = ["read"]
 i = 3
 role = "source surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode]]
 op = 0x1af
@@ -4681,8 +4731,8 @@ access = ["read"]
 i = 3
 role = "destination surface slot"
 observed_types = ["l-int"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode]]
 op = 0x1b0
@@ -5054,8 +5104,8 @@ evidence = "Ghidra /v2: op_0x1c1_set_adv_text_bounds@0x41f6c0 reads three operan
 i = 1
 role = "layout slot (0 = current)"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -5308,8 +5358,8 @@ evidence = [
 i = 1
 role = "layout slot"
 observed_types = ["l-int"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -5583,8 +5633,8 @@ evidence = "SC0000 CG/UI-draw path disasm; slot/w/h roles read off the operands 
 i = 1
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -5632,8 +5682,8 @@ access = ["read"]
 i = 2
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -5664,8 +5714,8 @@ evidence = "Ghidra handler 0x4224a0 (dispatch ctx[0x26c93+0x1fa]); frees ctx+0x5
 i = 1
 role = "surface slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode]]
 op = 0x1fb
@@ -5695,8 +5745,8 @@ access = ["read"]
 i = 2
 role = "texture slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -5762,19 +5812,19 @@ access = ["read"]
 i = 2
 role = "current X scale percent"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "current Y scale percent"
 observed_types = ["imm", "g-int", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "current Z scale percent"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x1fe
@@ -5804,25 +5854,25 @@ access = ["read"]
 i = 2
 role = "rotation axis X"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "rotation axis Y"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "rotation axis Z"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "angle degrees"
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x1ff
@@ -5852,19 +5902,19 @@ access = ["read"]
 i = 2
 role = ""
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x202
@@ -5978,8 +6028,8 @@ evidence = "Ghidra /v2: op_0x204_handler@0x422a60 resolves operand 4 as a string
 i = 1
 role = "destination surface slot"
 observed_types = ["imm", "l-int"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -6022,8 +6072,8 @@ details = "The field width includes an optional sign. Bit 0 zero-pads; bit 1 cen
 i = 1
 role = "destination surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -6078,15 +6128,15 @@ evidence = "Ghidra /v2: op_0x207_handler@0x422b50 constructs source [x,y,x+w,y+h
 i = 1
 role = "source_surface"
 observed_types = ["imm", "l-int"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "destination_surface"
 observed_types = ["imm", "g-int"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -6183,8 +6233,8 @@ evidence = "Ghidra op_0x20a_publish_adv_text_layout@0x422ce0 passes the requeste
 i = 1
 role = "layout_slot (0 = current)"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode]]
 op = 0x20b
@@ -6208,8 +6258,8 @@ evidence = "Ghidra /v2: op_0x20b_handler@0x422d50 converts x/y/width/height to a
 i = 1
 role = ""
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -6339,8 +6389,8 @@ access = ["read"]
 i = 2
 role = "surface_slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -6370,8 +6420,8 @@ evidence = "Ghidra /v2: handler 0x4230c0 indexes ctx+0x14d54, which is text-mana
 i = 1
 role = "ADV layout slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -6401,8 +6451,8 @@ evidence = "Ghidra /v2: handler 0x423110 indexes the ADV layout pointer table at
 i = 1
 role = "ADV layout slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -6475,8 +6525,8 @@ access = ["write"]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int"]
-access = ["read"]
 unchecked_index = { table = "surface record", count = 2000, first = -1 }
+access = ["read"]
 
 [[opcode]]
 op = 0x217
@@ -6506,19 +6556,19 @@ access = ["read"]
 i = 2
 role = "a"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "b"
 observed_types = ["imm", "g-int", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "c"
 observed_types = ["imm", "g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x218
@@ -6548,19 +6598,19 @@ access = ["read"]
 i = 2
 role = ""
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode]]
 op = 0x219
@@ -6590,19 +6640,19 @@ access = ["read"]
 i = 2
 role = ""
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x21a
@@ -6632,19 +6682,19 @@ access = ["read"]
 i = 2
 role = ""
 observed_types = ["g-int", "l-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = ""
 observed_types = ["g-int", "l-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["g-int", "l-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode]]
 op = 0x21b
@@ -6760,19 +6810,19 @@ access = ["read"]
 i = 4
 role = ""
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = ""
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x21f
@@ -6814,25 +6864,25 @@ access = ["read"]
 i = 4
 role = "rotation axis X"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "rotation axis Y"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = "rotation axis Z"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 7
 role = "target angle degrees"
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x220
@@ -6874,19 +6924,19 @@ access = ["read"]
 i = 4
 role = ""
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = ""
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x222
@@ -6946,8 +6996,8 @@ access = ["read"]
 i = 2
 role = "target surface slot"
 observed_types = ["imm", "l-ptr"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -7038,19 +7088,19 @@ access = ["read"]
 i = 3
 role = ""
 observed_types = ["g-int", "l-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["g-int", "l-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["g-int", "l-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode]]
 op = 0x229
@@ -7086,19 +7136,19 @@ access = ["read"]
 i = 3
 role = "range-transform anchor X"
 observed_types = ["imm", "g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "range-transform anchor Y"
 observed_types = ["imm", "g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "range-transform anchor Z"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x22a
@@ -7122,19 +7172,19 @@ evidence = "Ghidra /v2: op_0x22a_set_gfx_range_scale_current@0x4237b0 divides al
 i = 1
 role = "X scale percent"
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 2
 role = "Y scale percent"
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "Z scale percent"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x22c
@@ -7158,19 +7208,19 @@ evidence = "Ghidra /v2: op_0x22c_set_gfx_range_translation_current@0x423900 pass
 i = 1
 role = "translation X"
 observed_types = ["l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 2
 role = "translation Y"
 observed_types = ["l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 3
 role = "translation Z"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x22d
@@ -7206,19 +7256,19 @@ access = ["read"]
 i = 3
 role = "target X scale percent"
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target Y scale percent"
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target Z scale percent"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x22f
@@ -7254,19 +7304,19 @@ access = ["read"]
 i = 3
 role = "target translation X"
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target translation Y"
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target translation Z"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x230
@@ -7412,19 +7462,19 @@ access = ["read"]
 i = 3
 role = "target scale X percent"
 observed_types = ["l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target scale Y percent"
 observed_types = ["l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target scale Z percent"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x234
@@ -7460,19 +7510,19 @@ access = ["read"]
 i = 3
 role = ""
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = ""
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = ""
 observed_types = ["l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x236
@@ -7503,8 +7553,8 @@ access = ["read"]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int", "l-ptr"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -7624,8 +7674,8 @@ access = ["write"]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "l-int"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode]]
 op = 0x23b
@@ -7659,8 +7709,8 @@ access = ["read"]
 i = 2
 role = "style_index"
 observed_types = ["imm", "l-int"]
-access = ["read"]
 unchecked_index = { table = "glyph style", count = 10, admits = 11 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -7758,8 +7808,8 @@ access = ["write"]
 i = 2
 role = "surface_slot"
 observed_types = ["imm", "g-int", "l-int"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode]]
 op = 0x241
@@ -7790,8 +7840,8 @@ access = ["read"]
 i = 2
 role = "surface slot"
 observed_types = ["l-ptr"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -7913,8 +7963,8 @@ access = ["read"]
 i = 2
 role = "surface slot"
 observed_types = ["imm", "l-int"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -7951,8 +8001,8 @@ access = ["read"]
 i = 2
 role = "scratch movie surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -8062,8 +8112,8 @@ evidence = "Ghidra /v2: op_0x258_set_surface_persistence_flags@0x4250a0 reads th
 i = 1
 role = "surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -8135,8 +8185,8 @@ evidence = "Ghidra /v2: op_0x2bf_schedule_sfx_start@0x425240 calls sfx_set_delay
 i = 1
 role = "sound channel (0..9)"
 observed_types = ["imm", "g-int", "l-int"]
-access = ["read"]
 unchecked_index = { table = "sound effect channel", count = 10, admits = 10, signed = true }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -8652,8 +8702,8 @@ text = "SYS4422 handler @0x41cd40 and SYS4433 handler @0x41adb0 both arm the blo
 i = 1
 role = "captured full-frame surface slot"
 observed_types = []
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -8676,6 +8726,30 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x27
@@ -8702,8 +8776,8 @@ evidence = [
 i = 1
 role = "target captured surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -8748,8 +8822,8 @@ evidence = [
 i = 1
 role = "target captured surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -8922,15 +8996,15 @@ evidence = [
 i = 1
 role = "source surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
 role = "destination surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -9043,6 +9117,24 @@ source = "investigation"
 confidence = "med"
 depends_on = []
 evidence = "Ghidra SYS4433 (Kamidori): dispatch slot 0x36 (ctx+0x9f7dc) resolves to op_0x36_legacy_transition_two_surface@0x41c100. It sets run-state bit 8, arms the sleep timer with operand 3 and calls screen_transition_begin@0x43a6d0(source, target, 9, 0xa0, 0), or with run-state 0x8000000 calls screen_transition_finalize@0x43a320(target, 0). No call in either corpus."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x37
@@ -9310,8 +9402,8 @@ evidence = [
 i = 1
 role = "target ADV layout/surface slot"
 observed_types = ["g-int"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -10018,6 +10110,24 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x103
 label = "u0041E4A0"
@@ -10033,6 +10143,12 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x104
@@ -10109,6 +10225,18 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x10f
 label = "set-system-key-disable-mask"
@@ -10135,6 +10263,7 @@ evidence_records = [
 i = 1
 role = "system-key disable mask (bit 0 F1 screenshot, bit 9 F10 menu focus)"
 observed_types = []
+access = ["read"]
 
 [[opcode]]
 op = 0x12d
@@ -10530,8 +10659,8 @@ access = ["write"]
 i = 2
 role = "native sound channel (0..12)"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "sound channel", count = 13, admits = 13, signed = true }
+access = ["read"]
 
 [[opcode]]
 op = 0x1c0
@@ -10597,6 +10726,12 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
+
 [[opcode]]
 op = 0x1c5
 label = "u00425800"
@@ -10660,6 +10795,18 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-float"]
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-float"]
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x1d6
@@ -10740,6 +10887,12 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x1fc_handler@0x422610 fetches operand 1 and calls gfx_object_reset_transform_current@0x47e5b0, which writes obj+0x68=0, rebuilds the three current matrices as identity and raises redraw dirty owner+0xb558. The six transform setters (0x1fd/0x1fe/0x1ff current, 0x21e/0x21f/0x220 channel) and their range-transform counterparts write the mark as 1; no gfx path reads it, but it reaches the save record (Kamidori SAVE07 objects 0xc382/0xc44b, 2026-11-08). No call in either corpus."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x200
@@ -10902,6 +11055,18 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x226
 label = "u004217D0"
@@ -10955,25 +11120,25 @@ access = ["read"]
 i = 3
 role = "out: current rotation axis X"
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "out: current rotation axis Y"
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "out: current rotation axis Z"
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = "out: current rotation angle in degrees"
 observed_types = ["g-int"]
-access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"] }
+access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode]]
 op = 0x22b
@@ -11028,25 +11193,25 @@ access = ["read"]
 i = 3
 role = "target rotation axis X"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target rotation axis Y"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target rotation axis Z"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 6
 role = "target rotation angle in degrees"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x235
@@ -11085,19 +11250,19 @@ access = ["read"]
 i = 3
 role = "target translation X"
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 4
 role = "target translation Y"
 observed_types = ["imm", "l-int"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode.semantics.args]]
 i = 5
 role = "target translation Z"
 observed_types = ["imm"]
-access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"] }
+access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
 [[opcode]]
 op = 0x237
@@ -11204,8 +11369,8 @@ evidence = [
 i = 1
 role = "movie surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -11279,8 +11444,8 @@ access = ["read"]
 i = 2
 role = "target surface slot"
 observed_types = ["l-ptr"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
@@ -11520,6 +11685,12 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x253
 label = "u00423019"
@@ -11535,6 +11706,18 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x254
@@ -11567,6 +11750,36 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
 
 [[opcode]]
 op = 0x257
@@ -11795,8 +12008,8 @@ evidence = [
 i = 1
 role = "ADV layout slot (zero selects current)"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "layout", count = 10 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -11814,8 +12027,8 @@ access = ["read"]
 i = 4
 role = "source surface slot"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 5
@@ -11955,6 +12168,30 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-str"]
+access = ["write-string"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-str", "l-str-ptr"]
+access = ["read-string"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
 [[opcode]]
 op = 0x2c9
 label = "2C9"
@@ -12062,6 +12299,24 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-float", "l-float-ptr"]
+access = ["write-float"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["float", "l-float", "l-float-ptr"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int", "l-float", "l-ptr"]
+access = ["read-float"]
+
 [[opcode]]
 op = 0x2d1
 label = "u0042B950"
@@ -12077,6 +12332,24 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-float", "l-float-ptr"]
+access = ["write-float"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "float", "l-float", "l-float-ptr"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "float", "g-int", "l-int", "l-float"]
+access = ["read-float"]
 
 [[opcode]]
 op = 0x2d2
@@ -12094,6 +12367,24 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int", "l-float"]
+access = ["write-float"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-float", "l-float-ptr"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "float", "l-float"]
+access = ["read-float"]
+
 [[opcode]]
 op = 0x2d3
 label = "u0042B970"
@@ -12109,6 +12400,24 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-float"]
+access = ["write-float"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-float"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "float", "l-float"]
+access = ["read-float"]
 
 [[opcode]]
 op = 0x2d5
@@ -12126,6 +12435,18 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["g-float", "l-float", "l-float-ptr"]
+access = ["write-float"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "float", "g-int", "l-int", "l-float", "l-ptr"]
+access = ["read-float"]
+
 [[opcode]]
 op = 0x2d7
 label = "u0042B9B0"
@@ -12141,6 +12462,18 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-float-ptr"]
+access = ["read-float"]
 
 [[opcode]]
 op = 0x2d8
@@ -12222,8 +12555,8 @@ evidence = [
 i = 1
 role = "style_index"
 observed_types = ["imm"]
-access = ["read"]
 unchecked_index = { table = "glyph style", count = 10, admits = 11 }
+access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
@@ -12434,6 +12767,24 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-float"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-float"]
+access = ["read-float"]
+
 [[opcode]]
 op = 0x2e2
 label = "u0042CE11"
@@ -12465,6 +12816,24 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-float"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+access = ["read-float"]
 
 [[opcode]]
 op = 0x2e4
@@ -12498,6 +12867,12 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
+
 [[opcode]]
 op = 0x2e6
 label = "u0042CE60"
@@ -12513,6 +12888,18 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x2e7
@@ -12530,6 +12917,18 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
 [[opcode]]
 op = 0x2e8
 label = "u0042CE80"
@@ -12545,6 +12944,12 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x2e9
@@ -12562,6 +12967,12 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
 [[opcode]]
 op = 0x2ea
 label = "u0042CEA0"
@@ -12577,6 +12988,12 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
 
 [[opcode]]
 op = 0x2eb
@@ -12594,6 +13011,12 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-str"]
+access = ["write-string"]
+
 [[opcode]]
 op = 0x2ec
 label = "u0042CEC0"
@@ -12609,6 +13032,18 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["l-int"]
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-str"]
+access = ["read-string"]
 
 [[opcode]]
 op = 0x2ee
@@ -13090,6 +13525,66 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["g-float", "l-float", "l-float-ptr"]
+access = ["address"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["g-float", "l-float", "l-float-ptr"]
+access = ["address"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["g-float", "l-float"]
+access = ["address"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["g-int", "l-int"]
+access = ["address"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["g-int", "l-int"]
+access = ["address"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["g-float", "l-float"]
+access = ["address"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["g-float", "l-float"]
+access = ["address"]
+
+[[opcode.semantics.args]]
+i = 9
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 10
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x321
 label = "u0043AA30"
@@ -13105,6 +13600,24 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x322
@@ -13122,6 +13635,30 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm", "g-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
+
 [[opcode]]
 op = 0x323
 label = "u0043AA50"
@@ -13137,6 +13674,36 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm", "l-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm", "g-int", "l-int"]
+access = ["read"]
 
 [[opcode]]
 op = 0x324
@@ -13170,6 +13737,18 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x326
 label = "u0043AA80"
@@ -13185,6 +13764,30 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x327
@@ -13202,6 +13805,12 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x328
 label = "u0043AAA0"
@@ -13218,6 +13827,24 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["l-int"]
+access = ["address"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x329
 label = "u0043AAB0"
@@ -13233,6 +13860,18 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
 
 [[opcode]]
 op = 0x32a
@@ -13282,6 +13921,42 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["l-int"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
 [[opcode]]
 op = 0x32d
 label = "u0043AAF0"
@@ -13298,6 +13973,18 @@ confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
 
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
 [[opcode]]
 op = 0x32e
 label = "u0043AB10"
@@ -13313,6 +14000,72 @@ source = "kelebek"
 confidence = "low"
 depends_on = []
 evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+
+[[opcode.semantics.args]]
+i = 1
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 4
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 5
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 6
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 7
+role = ""
+observed_types = ["l-float"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 8
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 9
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 10
+role = ""
+observed_types = ["imm"]
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 11
+role = ""
+observed_types = ["imm"]
+access = ["read-float"]
 
 [[opcode]]
 op = 0x32f

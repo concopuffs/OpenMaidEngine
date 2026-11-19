@@ -191,13 +191,33 @@ class GatePlanTests(unittest.TestCase):
             gate for gate in validate.build_gate_plan("workspace")
             if gate.key == "engine-workspace-tests"
         )
-        self.assertIn("Category=Workspace&Profile!=kamidori", installed.command)
+        # Himegari's tests are those no other game's trait claims; a game added later joins the exclusions.
+        self.assertIn("Category=Workspace&Profile!=arterial&Profile!=kamidori", installed.command)
+        self.assertEqual("Category=Workspace&Profile=arterial", validate.workspace_test_filter("arterial"))
         self.assertIn("--no-restore", installed.command)
         self.assertIn("-m:1", installed.command)
         self.assertEqual(
             validate.LOW_MEMORY_DOTNET_ENVIRONMENT,
             installed.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
         )
+
+    def test_a_game_still_being_added_is_asked_only_what_its_level_promises(self) -> None:
+        # Arterial is at P1 with no modding level (its manifest's support entry) and has no global registry yet:
+        # its catalog decodes and its installed-data tests run, and no scene is rebuilt or global reference checked.
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            context = validate.paths.ToolContext.resolve("arterial", root / "game", root / "extract", environ={})
+            plan = validate.build_gate_plan("workspace", game_root=context.game_root, tool_context=context)
+        keys = {gate.key for gate in plan}
+        self.assertFalse(validate.has_script_modding("arterial"))
+        self.assertTrue(validate.has_script_modding("kamidori"))
+        self.assertIn("catalog-corpus-scan", keys)
+        self.assertIn("engine-workspace-tests", keys)
+        self.assertNotIn("oms-canonical-rebuild", keys)
+        self.assertNotIn("oms-idiomatic-rebuild", keys)
+        self.assertNotIn("globals-check", keys)
+        installed = next(gate for gate in plan if gate.key == "engine-workspace-tests")
+        self.assertIn("Category=Workspace&Profile=arterial", installed.command)
 
     def test_kamidori_workspace_uses_only_selected_profile_gates_and_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

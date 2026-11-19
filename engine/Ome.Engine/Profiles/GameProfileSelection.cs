@@ -33,6 +33,11 @@ public sealed record SelectedGameProfile(
         _ => throw new InvalidOperationException($"unknown profile selection source: {Source}"),
     };
 
+    /// <summary>What to tell the user when the game is below P3 (docs/adding-a-game.md, section 1): it is still
+    /// being added, so a run stops at the first opcode without a handler. Null for a game that plays.</summary>
+    public string? SupportDiagnostic => Profile.Support.IsPlayable ? null
+        : $"game '{Profile.Id}' is still being added (play level {Profile.Support.PlayId}): it is not playable yet";
+
     public string? MismatchDiagnostic => IdentityMatched ? null
         : $"explicit game mismatch: requested={Profile.Id}; "
           + $"expected={string.Join(" or ", Profile.CatalogIdentities.Select(value => value.Display))}; "

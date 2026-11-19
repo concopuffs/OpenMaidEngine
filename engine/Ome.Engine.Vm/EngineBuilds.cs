@@ -68,8 +68,24 @@ public static class EngineBuilds
         },
     };
 
+    /// <summary>AGE 4.38D, 創刻のアテリアル's (its version resource; docs/engine-re.md, "Comparing engine builds"). It is
+    /// declared as 4.33G with nothing changed but its names: the game is at P1 (docs/adding-a-game.md), where nothing
+    /// of it runs, and each difference the revision diff lists joins this definition as it is read (the game's item
+    /// in docs/backlog.md).</summary>
+    public static EngineBuild Age438D { get; } = Age433G with
+    {
+        Id = "4.38D",
+        AbiId = "SYS4438",
+        Rules = Age433G.Rules with
+        {
+            // The stamp follows the version, as 4.24J's and 4.33G's do; no 4.38D save has been read. The record size
+            // is 4.33G's, unproven: the profile's writes stay off until a native save is read.
+            Saves = new SaveRules(versionStamp: "438D", numberedGfxRecordSize: NativeGfxSaveLayout.RotationCacheRecordSize),
+        },
+    };
+
     /// <summary>Every build, parents first.</summary>
-    public static IReadOnlyList<EngineBuild> All { get; } = [Age424J, Age433G];
+    public static IReadOnlyList<EngineBuild> All { get; } = [Age424J, Age433G, Age438D];
 
     public static EngineBuild? Find(string id)
         => All.FirstOrDefault(build => string.Equals(build.Id, id, StringComparison.Ordinal));

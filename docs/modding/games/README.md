@@ -6,10 +6,38 @@ The modding guides are written for every game. Each game's facts live in two pla
 block below, and the game's own guide, which covers its install options, worked-example values and quirks.
 Use the game id wherever a guide writes `<game>`.
 
-| Game | Id | Engine ABI | Guide |
-|---|---|---|---|
-| Himegari Dungeon Meister | `himegari` | `SYS4422` | [himegari.md](himegari.md) |
-| Kamidori Alchemy Meister | `kamidori` | `SYS4433` | [kamidori.md](kamidori.md) |
+A game has two support levels, which its profile manifest states (`support`). Play says how well the engine
+runs it: P1 recognized (the engine reads all of it, and nothing runs), P2 boots, P3 complete (every opcode
+its scripts use is handled, and it saves), P4 verified against the original to its ending. Modding says
+what a modder gets: M1 scripts, M2 documented data, M3 a base mod. A game is supported at P3 and M3; one
+below P3 is still being added and is not playable. The levels' gates are in
+[adding-a-game.md](../../adding-a-game.md).
+
+| Game | Id | Engine ABI | Play | Modding | Guide |
+|---|---|---|---|---|---|
+| Soukoku no Arterial | `arterial` | `SYS4438` | P1 (recognized) | none | none yet |
+| Himegari Dungeon Meister | `himegari` | `SYS4422` | P3 (complete) | M3 (base mod) | [himegari.md](himegari.md) |
+| Kamidori Alchemy Meister | `kamidori` | `SYS4433` | P3 (complete) | M3 (base mod) | [kamidori.md](kamidori.md) |
+
+## Soukoku no Arterial
+
+| Fact | Value |
+|---|---|
+| Game id | `arterial` (`--game arterial`) |
+| Title | Soukoku no Arterial (創刻のアテリアル) |
+| Support | play P1 (recognized); modding none |
+| Engine build | AGE `4.38D` |
+| Engine ABI | `SYS4438` |
+| Catalog revision | `S4IC438` |
+| Boot script | `SYSTEM4.BIN` |
+| Conventional install | `games/arterial/` beside the repository |
+| Port saves | disabled (read-only game) |
+| OMS modules | `arterial.globals`, `arterial.scripts` (generated) |
+| Speakers | no dialogue prelude yet |
+| Tables | none yet |
+| Named patch points | none yet (fragments use offsets) |
+| Publisher's page | none |
+| Guide | none yet |
 
 ## Himegari Dungeon Meister
 
@@ -17,6 +45,7 @@ Use the game id wherever a guide writes `<game>`.
 |---|---|
 | Game id | `himegari` (`--game himegari`) |
 | Title | Himegari Dungeon Meister (姫狩りダンジョンマイスター) |
+| Support | play P3 (complete); modding M3 (base mod) |
 | Engine build | AGE `4.24J` |
 | Engine ABI | `SYS4422` |
 | Catalog revision | `S4IC422` |
@@ -36,6 +65,7 @@ Use the game id wherever a guide writes `<game>`.
 |---|---|
 | Game id | `kamidori` (`--game kamidori`) |
 | Title | Kamidori Alchemy Meister (神採りアルケミーマイスター) |
+| Support | play P3 (complete); modding M3 (base mod) |
 | Engine build | AGE `4.33G` |
 | Engine ABI | `SYS4433` |
 | Catalog revision | `S4IC433` |

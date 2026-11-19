@@ -10,7 +10,7 @@ is written beside the scratch copy; ``--check`` compares the install against it 
 
     py -3.11 -X utf8 tools/native_scratch.py --game himegari --overlay build/.../SC0000.BIN --overlay ...
     py -3.11 -X utf8 tools/native_scratch.py --game himegari --check
-    py -3.11 -X utf8 tools/native_scratch.py --reference arterial      (a reference-only install, paths.py)
+    py -3.11 -X utf8 tools/native_scratch.py --reference ID            (a reference-only install, paths.py)
     py -3.11 -X utf8 tools/native_scratch.py --game kamidori --game-root ../games/kamidori-translated --name translated
                                                                         (another install of the game, its own copy)
 

@@ -16,6 +16,12 @@ public class Sys4CorpusScannerTests
     public void InstalledKamidoriCatalogCorpusDecodesThroughRuntimeStore()
         => AssertInstalledCorpus("kamidori", "SYS4433");
 
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "arterial")]
+    [Fact]
+    public void InstalledArterialCatalogCorpusDecodesThroughRuntimeStore()
+        => AssertInstalledCorpus("arterial", "SYS4438");
+
     private static void AssertInstalledCorpus(
         string profileId, string abiId)
     {

@@ -63,6 +63,8 @@ GameCatalogIdentity catalogIdentity = GameCatalogIdentity.ReadSys4IniHeader(sys4
 SelectedGameProfile selectedProfile = GameProfileSelection.Resolve(args, catalogIdentity);
 if (selectedProfile.MismatchDiagnostic is { } mismatchDiagnostic)
     Console.Error.WriteLine($"warning: {mismatchDiagnostic}");
+if (selectedProfile.SupportDiagnostic is { } supportDiagnostic)
+    Console.Error.WriteLine($"warning: {supportDiagnostic}");
 // The engine is put together here: the profile's build gives every rule, and its ABI picks the opcode table.
 EngineBuild engineBuild = EngineBuilds.ForProfile(selectedProfile.Profile);
 var table = OpcodeTableJson.Load(Paths.OpcodesJson, engineBuild.AbiId);
