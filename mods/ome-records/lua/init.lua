@@ -9,6 +9,10 @@
 -- A contribution is { mod = id, file = path, data = document }. The document names records by table, decimal id and
 -- field: data.unit["761"].stats.max_hp = 150. It may be a Lua table or a read-only view of one (a userdata), so the
 -- walk uses pairs and indexing only.
+--
+-- A table or a field may also be named by an old name, which the map lists (old_tables beside tables, old_fields in a
+-- table): it writes the cell its current name does, and config.log, when given, gets one line for each file and old
+-- name. A document that names one cell twice, by an old name and the current one, is refused.
 
 local records = { format = 1 }
 
@@ -55,7 +59,8 @@ Applier.__index = Applier
 
 --- The applier for one record map: what a base mod builds once, when its tables.lua loads.
 ---@param config table map: a record map (format 1); table: a global's name to its accessor (maid.names.table);
----  labels: the built_by labels the caller applies at an event of its own
+---  labels: the built_by labels the caller applies at an event of its own; log (optional): a function that takes the
+---  line naming an old name a file used, such as maid.log.warn
 function records.applier(config)
     if type(config) ~= "table" then error("records.applier takes a table: { map = …, table = …, labels = … }", 2) end
     local map = config.map
@@ -68,6 +73,9 @@ function records.applier(config)
     end
     if type(config.labels) ~= "table" or config.labels[1] == nil then
         error("records.applier: labels lists the built_by labels the caller applies, such as { \"boot\" }", 2)
+    end
+    if config.log ~= nil and type(config.log) ~= "function" then
+        error("records.applier: log is a function that takes a line, such as maid.log.warn", 2)
     end
     local labels = {}
     for _, label in ipairs(config.labels) do labels[label] = true end
@@ -83,14 +91,40 @@ function records.applier(config)
         end
     end
     return setmetatable({ map = map, access = config.table, labels = labels, named = named, views = {},
-                          results = {} }, Applier)
+                          results = {}, log = config.log }, Applier)
 end
 
--- Every problem of a document, as { path, reason }.
+-- A table by its name or an old name: its spec and its current name, or nil.
+function Applier:table_of(name)
+    if type(name) ~= "string" then return nil end
+    local spec = self.map.tables[name]
+    if spec ~= nil then return spec, name end
+    local current = self.map.old_tables and self.map.old_tables[name]
+    if current ~= nil then return self.map.tables[current], current end
+    return nil
+end
+
+-- A table's field by its name or an old name: its spec and its current name, or nil.
+local function field_of(spec, field)
+    if type(field) ~= "string" then return nil end
+    local field_spec = spec.fields[field]
+    if field_spec ~= nil then return field_spec, field end
+    local current = spec.old_fields and spec.old_fields[field]
+    if current ~= nil then return spec.fields[current], current end
+    return nil
+end
+
+-- Every problem of a document, as { path, reason }, and the old names it uses, as sorted lines without the file.
 function Applier:problems(data)
     local problems = {}
     local function problem(path, reason) problems[#problems + 1] = { path, reason } end
     local tables = self.map.tables
+    -- Each cell the document names, by its current spelling, to the paths that name it; and the old names it uses.
+    local cells, old_names = {}, {}
+    local function cell(path, canonical)
+        local paths = cells[canonical]
+        if paths == nil then cells[canonical] = { path } else paths[#paths + 1] = path end
+    end
 
     local function value_of(path, kind, value)
         if kind == "integer" then
@@ -113,9 +147,9 @@ function Applier:problems(data)
         end
     end
 
-    local function row_of(name, field, spec, path, row)
+    local function row_of(name, field, spec, path, row, canonical)
         local named = self.named[name .. "." .. field] or {}
-        for column, cell in pairs(row) do
+        for column, value in pairs(row) do
             local column_path = path .. "." .. tostring(column)
             if type(column) ~= "string" then
                 problem(path, name .. "." .. field .. " takes its columns by name, or by number where a column has no "
@@ -136,8 +170,11 @@ function Applier:problems(data)
                 end
             end
             if index ~= nil then
-                if is_table(cell) then problem(column_path, "a column takes one value, not a table")
-                else value_of(column_path, spec.kind, cell) end
+                if is_table(value) then problem(column_path, "a column takes one value, not a table")
+                else
+                    value_of(column_path, spec.kind, value)
+                    cell(column_path, canonical .. "." .. tostring(column))
+                end
             end
         end
     end
@@ -147,8 +184,11 @@ function Applier:problems(data)
         return problems
     end
     for name, records_of in pairs(data) do
-        local spec = type(name) == "string" and tables[name] or nil
+        local spec, current = self:table_of(name)
         local path = tostring(name)
+        if spec ~= nil and current ~= name then
+            old_names[#old_names + 1] = name .. " is an old name of the table " .. current .. "; write " .. current
+        end
         if spec == nil then
             problem(path, "no record table is named " .. path .. " (tables: "
                     .. table.concat(sorted_names(tables), ", ") .. ")")
@@ -169,7 +209,12 @@ function Applier:problems(data)
                 else
                     for field, value in pairs(record) do
                         local field_path = id_path .. "." .. tostring(field)
-                        local field_spec = type(field) == "string" and spec.fields[field] or nil
+                        local field_spec, field_name = field_of(spec, field)
+                        local canonical = current .. "." .. key .. "." .. tostring(field_name)
+                        if field_spec ~= nil and field_name ~= field then
+                            old_names[#old_names + 1] = field .. " is an old name of the field " .. current .. "."
+                                                        .. field_name .. "; write " .. field_name
+                        end
                         if field_spec == nil then
                             problem(field_path, name .. " has no field " .. tostring(field))
                         elseif field_spec.state then
@@ -177,19 +222,35 @@ function Applier:problems(data)
                                     .. "value back, so a file does not set it")
                         elseif field_spec.width == nil then
                             if is_table(value) then problem(field_path, name .. "." .. field .. " takes one value, not a table")
-                            else value_of(field_path, field_spec.kind, value) end
+                            else
+                                value_of(field_path, field_spec.kind, value)
+                                cell(field_path, canonical)
+                            end
                         elseif not is_table(value) then
                             problem(field_path, name .. "." .. field .. " is a row of " .. field_spec.width
                                     .. " columns: give its columns (" .. field .. ".<column> = …)")
                         else
-                            row_of(name, field, field_spec, field_path, value)
+                            row_of(current, field_name, field_spec, field_path, value, canonical)
                         end
                     end
                 end
             end
         end
     end
-    return problems
+    -- One cell named twice, by an old name and the current one (data patches plan §9.1).
+    for canonical, paths in pairs(cells) do
+        if #paths > 1 then
+            table.sort(paths)
+            problem(paths[1], table.concat(paths, " and ") .. " name one cell, " .. canonical .. "; write it once, as "
+                    .. canonical)
+        end
+    end
+    table.sort(old_names)
+    local unique = {}
+    for _, line in ipairs(old_names) do
+        if unique[#unique] ~= line then unique[#unique + 1] = line end
+    end
+    return problems, unique
 end
 
 -- The kept result of a contribution's check: { ok = true } or { ok = false, message = … }, made once for the applier's
@@ -205,7 +266,11 @@ function Applier:result(contribution)
     local key = mod .. "\n" .. file
     local result = self.results[key]
     if result then return result end
-    local problems = self:problems(contribution.data)
+    local problems, old_names = self:problems(contribution.data)
+    -- One line for each old name the file uses, once in the applier's life (one session).
+    if self.log ~= nil then
+        for _, line in ipairs(old_names) do self.log(mod .. " " .. file .. ": " .. line) end
+    end
     if #problems == 0 then
         result = { ok = true }
     else
@@ -253,14 +318,13 @@ function Applier:apply(contribution, options)
         error(result.message, 0)
     end
     local written = 0
-    local tables = self.map.tables
     for name, records_of in pairs(contribution.data) do
-        local spec = tables[name]
+        local spec = self:table_of(name)
         if spec.built_by == label then
             for key, record in pairs(records_of) do
                 local id = tonumber(key)
                 for field, value in pairs(record) do
-                    local field_spec = spec.fields[field]
+                    local field_spec = field_of(spec, field)
                     local view = self:view(field_spec.global)
                     if field_spec.width == nil then
                         view[id] = value

@@ -357,6 +357,15 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   The scan does not follow branches, local calls or block copies, so the list may be short. Done for a game when
   its guide page (`modding/games/<game>.md`) says, for each field a data file can set, which saved values the game
   derives from it and when, each claim checked on the game's scripts, with a driven run for at least one copy.
+- **The link report misses an overlap through an old name.** A record table or a field the registry renames keeps its
+  old name (a `[[table]]`'s `aliases`, its `[table.field_aliases]`), and a `<game>.tables` file may still write it:
+  the applier writes the cell the current name does and logs the old name (`superpowers/plans/2026-11-18-data-patches.md`
+  §9.1; `mods/ome-records/lua/init.lua`). The report compares the documents' paths as text (`ModLuaLinker.KindLines`,
+  data patches spec §5.7), so a file that writes `units.12.experience_reward` and another that writes
+  `unit.12.experience_reward` set one cell with no shared-path line (`modding/data-files.md`, "The report"). No
+  registry has an old name yet. Done when the report reads each kind's old names from its owner (the record map, or a
+  list the kind declares), lists such a pair as a shared path under the current spelling, and a two-mod link test shows
+  it.
 - **Accepted future work** in the Lua scripting design (`superpowers/specs/2026-11-10-lua-scripting-design.md` §16).
   The UI and settings items below are two of its entries; the others are kept there only:
   - Lua that waits, and queued script calls;

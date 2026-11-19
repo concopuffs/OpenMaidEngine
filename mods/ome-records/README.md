@@ -16,6 +16,7 @@ mod passes its record map and its own access in. The engine mounts it when a mou
       map = require("generated.tables"),  -- the base mod's record map (tools/base_mod_build.py)
       table = maid.names.table,           -- the base mod's own accessors
       labels = { "boot" },                -- the built_by labels the base mod applies at an event of its own
+      log = maid.log.warn,                -- optional: takes the line for each old name a file uses
   }
   applier:apply(contribution, { built_by = "boot" })
   ```
@@ -27,3 +28,8 @@ mod passes its record map and its own access in. The engine mounts it when a mou
   parts whose table `built_by` names `options.built_by`. `apply` returns the number of cells written.
 - A document may be a Lua table or a read-only view of one (a userdata): the library walks it with `pairs` and
   indexing only.
+- **Old names.** A record map may give old names of its tables (`old_tables = { old = "current" }` beside `tables`)
+  and of a table's fields (`old_fields` in the table). A document that names a table or a field by one writes the
+  cell its current name does, and `log` gets one line for each file and old name in the session:
+  `example.a data/a.toml: units is an old name of the table unit; write unit`. A document that names one cell twice,
+  by an old name and the current one, has a problem, and nothing of it is written.

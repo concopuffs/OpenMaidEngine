@@ -18,6 +18,10 @@ enabled mod requires it. A Lua mod reads and writes the game's cells by name thr
   `docs/superpowers/specs/2026-11-17-data-patches-design.md`). `apply_boot` checks a document against the record
   map and writes its boot tables, through `ome-records`, the library the manifest requires.
 - `lua/generated/tables.lua` is the record map, generated with `layout/` by `tools/base_mod_build.py --build` from
-  the registry's `[[table]]` entries and the profile's saved prefix. Do not edit it.
-- `layout/exports.txt` is the list of exported names, checked in: a name in it stays exported, as a global's name
-  or one of its `aliases`, until the major version is raised.
+  the registry's `[[table]]` entries and the profile's saved prefix, with the old names of tables and fields. Do not
+  edit it. `lua/tables.lua` hands the applier `maid.log.warn`, so a file that writes an old name gets a line for it
+  in `lua.log`.
+- `layout/exports.txt` is the list of exported names, checked in: the globals, then the record tables
+  (`table NAME`) and their fields (`field TABLE.FIELD`). A name in it stays exported, as a global's name or one of
+  its `aliases`, a table's name or one of its `aliases`, or a field's name or an old name in its table's
+  `[table.field_aliases]`, until the major version is raised.

@@ -15,13 +15,17 @@ For each profile with a base mod (a hand-written mods/<game>-base/manifest.toml)
 
   layout/globals.json   the layout the engine builds a mod's accessors from (game.g, game.table)
   layout/points.json    the patch points, in the form of build/games/<game>/patch-points.json
-  layout/exports.txt    the names the base mod exports: its API, checked in, so a review sees a name change
+  layout/exports.txt    the names the base mod exports: its API, checked in, so a review sees a name change: the
+                        globals, then the record tables (`table NAME`) and their fields (`field TABLE.FIELD`), each
+                        old name as `OLD = NAME`
   lua/generated/tables.lua   the record map (data patches spec §6.3): each record table's record count and what
                         builds it, and for each field its global, kind, row width, named columns and whether a save
-                        holds it, for the base mod's tables.lua
+                        holds it, for the base mod's tables.lua; and the old names of tables and fields
 
 The rename rule (spec §9.1): a name the checked-in exports.txt lists stays exported, as a global's name or as one of
-its `aliases`, until the base mod's major version is raised. A rename that does neither is refused.
+its `aliases`, until the base mod's major version is raised. A rename that does neither is refused. A record table's
+name and its fields' names follow the same rule, kept as a table's `aliases` or in its `[table.field_aliases]`
+(data patches plan §9.1).
 
   --build   write the layouts; refuses a change the rename rule forbids
   --check   exit nonzero if a layout is stale or the rename rule is broken (the core validation gate)
@@ -232,8 +236,15 @@ def record_tables(tables: list[dict], values: list[dict], prefixes: dict[str, in
                               f"the saved prefix 0x{prefix:x}, so a save would keep part of it")
                 continue
             fields[field] = entry
-        out.append({"name": table["name"], "records": table["records"], "built_by": table["built_by"],
-                    "fields": fields})
+        record_table = {"name": table["name"], "records": table["records"], "built_by": table["built_by"],
+                        "fields": fields}
+        # The old names (data patches plan §9.1), of the fields the map has.
+        if table.get("aliases"):
+            record_table["aliases"] = sorted(table["aliases"])
+        old_fields = {old: current for old, current in (table.get("field_aliases") or {}).items() if current in fields}
+        if old_fields:
+            record_table["old_fields"] = old_fields
+        out.append(record_table)
     out.sort(key=lambda table: table["name"])
     return out, errors
 
@@ -244,6 +255,10 @@ def _lua_key(name: str) -> str:
 
 def render_record_map(profile_id: str, tables: list[dict], source: str, manifest: str) -> str:
     """The record map as a Lua module, one field to a line, so a registry change is a one-line diff."""
+    def names_line(indent: str, key: str, names: dict[str, str]) -> str:
+        return (f"{indent}{key} = {{ " + ", ".join(f"{_lua_key(old)} = {json.dumps(names[old])}" for old in sorted(names))
+                + " },")
+
     def field_line(name: str, entry: dict) -> str:
         parts = [f"global = {json.dumps(entry['global'])}", f"kind = {json.dumps(entry['kind'])}"]
         if "width" in entry:
@@ -260,7 +275,8 @@ def render_record_map(profile_id: str, tables: list[dict], source: str, manifest
              f"table's",
              "-- record count and the part of the game that builds it (the registry's built_by), and for each field its",
              "-- global, its kind, a row's width and named columns (from 0), and state = true where the field's array",
-             "-- lies in its bank's saved prefix, so that a load brings the saved value back.",
+             "-- lies in its bank's saved prefix, so that a load brings the saved value back. old_fields and old_tables",
+             "-- give each old name of a field or a table its current one.",
              "return {",
              f"    format = {RECORD_MAP_FORMAT},",
              "    tables = {"]
@@ -270,27 +286,50 @@ def render_record_map(profile_id: str, tables: list[dict], source: str, manifest
                   f"            built_by = {json.dumps(table['built_by'])},",
                   "            fields = {"]
         lines += [field_line(name, table["fields"][name]) for name in sorted(table["fields"])]
-        lines += ["            },", "        },"]
-    lines += ["    },", "}"]
+        lines += ["            },"]
+        if table.get("old_fields"):
+            lines.append(names_line("            ", "old_fields", table["old_fields"]))
+        lines += ["        },"]
+    lines += ["    },"]
+    old_tables = {alias: table["name"] for table in tables for alias in table.get("aliases", [])}
+    if old_tables:
+        lines.append(names_line("    ", "old_tables", old_tables))
+    lines += ["}"]
     return "\n".join(lines) + "\n"
 
 
-def exported_names(values: list[dict]) -> dict[str, str | None]:
-    """Each exported name: None for a global's own name, the global's name for an alias."""
+TABLE_PREFIX, FIELD_PREFIX = "table ", "field "
+
+
+def exported_names(values: list[dict], tables: list[dict] = ()) -> dict[str, str | None]:
+    """Each exported name: None for a global's own name, the global's name for an alias. A record table is
+    `table NAME` and its field `field TABLE.FIELD` (data patches plan §9.1), an old one with its current name."""
     names: dict[str, str | None] = {}
     for value in values:
         names[value["name"]] = None
         for alias in value.get("aliases", []):
             names[alias] = value["name"]
+    for table in tables:
+        name = table["name"]
+        names[TABLE_PREFIX + name] = None
+        for alias in table.get("aliases") or []:
+            names[TABLE_PREFIX + alias] = name
+        for field in table["fields"]:
+            names[f"{FIELD_PREFIX}{name}.{field}"] = None
+        for old, current in (table.get("field_aliases") or {}).items():
+            names[f"{FIELD_PREFIX}{name}.{old}"] = f"{name}.{current}"
     return names
 
 
 def render_exports(profile_id: str, major: int, names: dict[str, str | None], source: str) -> str:
     lines = [f"# DO NOT EDIT -- generated from {source} by tools/base_mod_build.py --build",
-             f"# The names {base_mod_id(profile_id)} {major} exports (Lua scripting spec §9.1). Each stays until the major",
-             "# version changes: a renamed global keeps its old name in its aliases.",
+             f"# The names {base_mod_id(profile_id)} {major} exports (Lua scripting spec §9.1): its globals, then its",
+             "# record tables and their fields (data patches plan §9.1). Each stays until the major version changes:",
+             "# a renamed global, table or field keeps its old name, listed as OLD = NAME.",
              f"major = {major}"]
-    for name in sorted(names):
+    def group(name: str) -> int:
+        return 1 if name.startswith(TABLE_PREFIX) else 2 if name.startswith(FIELD_PREFIX) else 0
+    for name in sorted(names, key=lambda name: (group(name), name)):
         lines.append(name if names[name] is None else f"{name} = {names[name]}")
     return "\n".join(lines) + "\n"
 
@@ -333,9 +372,31 @@ def rename_errors(profile_id: str, released: tuple[int | None, set[str]] | None,
         return [f"{base_mod_id(profile_id)}: the major version {major} is lower than the released {released_major}"]
     if major > released_major:
         return []
-    return [f"{base_mod_id(profile_id)} {major} exports '{name}', which the registry no longer has: keep it as an alias "
-            f"of the global's new name (aliases = [\"{name}\"]), or raise the base mod's major version"
-            for name in sorted(released_names - names.keys())]
+    # A field of a table's old name is the field of its current name.
+    current_table = {key[len(TABLE_PREFIX):]: target for key, target in names.items()
+                     if key.startswith(TABLE_PREFIX) and target is not None}
+    dropped = released_names - names.keys()
+    errors = []
+    for name in sorted(dropped):
+        if name.startswith(FIELD_PREFIX):
+            table, _, field = name[len(FIELD_PREFIX):].partition(".")
+            # A dropped table's error stands for its fields.
+            if (f"{FIELD_PREFIX}{current_table.get(table, table)}.{field}" in names
+                    or TABLE_PREFIX + table in dropped):
+                continue
+            errors.append(f"{base_mod_id(profile_id)} {major} exports the field '{table}.{field}', which the registry no "
+                          f"longer has: keep it as an old name of the field's new name ([table.field_aliases] "
+                          f"{field} = \"NEW\"), or raise the base mod's major version")
+        elif name.startswith(TABLE_PREFIX):
+            table = name[len(TABLE_PREFIX):]
+            errors.append(f"{base_mod_id(profile_id)} {major} exports the table '{table}', which the registry no longer "
+                          f"has: keep it as an alias of the table's new name (aliases = [\"{table}\"] in its [[table]]), "
+                          f"or raise the base mod's major version")
+        else:
+            errors.append(f"{base_mod_id(profile_id)} {major} exports '{name}', which the registry no longer has: keep "
+                          f"it as an alias of the global's new name (aliases = [\"{name}\"]), or raise the base mod's "
+                          f"major version")
+    return errors
 
 
 def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
@@ -368,7 +429,7 @@ def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
         errors += map_errors
     points, point_errors = render_points(profile_id, points_registry)
     errors += point_errors
-    names = exported_names(values)
+    names = exported_names(values, tables if not table_errors else [])
     exports = root / "layout" / "exports.txt"
     released = parse_exports(exports.read_text(encoding="utf-8")) if exports.is_file() else None
     errors += rename_errors(profile_id, released, major, names)

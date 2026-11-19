@@ -1,6 +1,7 @@
 # DO NOT EDIT -- generated from vm-map/globals.toml by tools/base_mod_build.py --build
-# The names himegari-base 1 exports (Lua scripting spec §9.1). Each stays until the major
-# version changes: a renamed global keeps its old name in its aliases.
+# The names himegari-base 1 exports (Lua scripting spec §9.1): its globals, then its
+# record tables and their fields (data patches plan §9.1). Each stays until the major version changes:
+# a renamed global, table or field keeps its old name, listed as OLD = NAME.
 major = 1
 acting_entity_index
 action_range_distance_grid
@@ -437,3 +438,89 @@ unit_voice_suppression_flag_ids
 unit_weapon_item_category
 usable_action_max_range
 usable_action_min_range
+table item
+table skill
+table unit
+field item.attack_element
+field item.category
+field item.character_whitelist
+field item.defense_element
+field item.equipped_status_levels
+field item.essence_recovery_amount
+field item.granted_skill_id
+field item.handler_script_id
+field item.icon_id
+field item.max_range
+field item.min_range
+field item.random_tier
+field item.resource_recovery_amounts
+field item.sex_restriction_mask
+field item.sort_key
+field item.stat_modifiers
+field item.status_delta_levels
+field item.tuning_curve_ids
+field item.weapon_class
+field skill.acquired_flag
+field skill.attack_element
+field skill.battle_animation_id
+field skill.category
+field skill.change_catalog_eligible
+field skill.combat_stat_deltas
+field skill.handler_script_id
+field skill.icon_id
+field skill.info_revealed_flag
+field skill.max_range_encoded
+field skill.min_range_encoded
+field skill.proc_chance_percent
+field skill.resource_deltas
+field skill.sort_key
+field skill.status_levels
+field unit.auto_level_scale_divisor
+field unit.battle_cutin_asset_ids
+field unit.battle_portrait_asset_ids
+field unit.battle_routine_set
+field unit.battle_sprite_asset_id
+field unit.boss_class
+field unit.canonical_id
+field unit.capturable
+field unit.default_attack_item_id
+field unit.defense_element
+field unit.deployment_cost_base
+field unit.display_name
+field unit.drop_chance
+field unit.drop_item
+field unit.enemy_info_listed
+field unit.essence_yield
+field unit.experience_reward
+field unit.full_name
+field unit.icon_id
+field unit.initial_class_title
+field unit.large_battle_sprite
+field unit.level_cap
+field unit.map_sprite_asset_ids
+field unit.movement_routine_set
+field unit.power_tier
+field unit.roster_state_flag_base_index
+field unit.roster_variant_ids
+field unit.sally_action_unlock_requirements
+field unit.sally_event_ids
+field unit.sex_category
+field unit.sex_magic_bonus_item_id
+field unit.sort_key
+field unit.species_category
+field unit.starting_equipment_item_id
+field unit.starting_level
+field unit.starting_skill
+field unit.stat_growth
+field unit.stats
+field unit.status_art_asset_ids
+field unit.story_display_name
+field unit.story_speaker_seen_flag
+field unit.summon_knowledge_threshold
+field unit.summon_point_cost
+field unit.summon_unlock_flag_index
+field unit.trait_notes
+field unit.voice
+field unit.voice_family_unit_id
+field unit.voice_suppression_flag_id
+field unit.weapon_item_category

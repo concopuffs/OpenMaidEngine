@@ -9,6 +9,8 @@ local applier = records.applier {
     map = require("generated.tables"),
     table = maid.names.table,
     labels = { "boot" },
+    -- A file that names a table or a field by an old name gets one line for each old name in lua.log.
+    log = maid.log.warn,
 }
 
 --- At kamidori.data.layered: a contribution's boot tables, after every layer and before the boot uses them.

@@ -2,7 +2,8 @@
 -- The record tables of himegari-base (data patches spec §6.3), for its tables.lua: each table's
 -- record count and the part of the game that builds it (the registry's built_by), and for each field its
 -- global, its kind, a row's width and named columns (from 0), and state = true where the field's array
--- lies in its bank's saved prefix, so that a load brings the saved value back.
+-- lies in its bank's saved prefix, so that a load brings the saved value back. old_fields and old_tables
+-- give each old name of a field or a table its current one.
 return {
     format = 1,
     tables = {

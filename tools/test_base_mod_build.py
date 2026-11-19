@@ -292,6 +292,122 @@ def test_alias_lint():
               "one alias names one global")
 
 
+def exports_of(files: dict) -> list[str]:
+    return [line for line in next(text for path, text in files.items() if path.name == "exports.txt").splitlines()
+            if not line.startswith("#")]
+
+
+# Old names (data patches plan §9.1): the table hero was heroes, and its field level was lvl.
+OLD_NAMES = HEROES.replace('built_by = "boot"\n', 'built_by = "boot"\naliases = ["heroes"]\n') + '''
+[table.field_aliases]
+lvl = "level"
+'''
+
+
+def test_old_names():
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), OLD_NAMES)
+        files, errors = generate(mods, source)
+        check(not errors, f"a registry with old names of a table and a field generates ({errors})")
+        exports = exports_of(files)
+        check(exports[:2] == ["major = 1", "current_unit_id"], "exports.txt starts with the major version and the globals")
+        tables_at = exports.index("table hero")
+        check(exports[tables_at:tables_at + 3] == ["table hero", "table heroes = hero", "field hero.end"],
+              f"the tables follow the globals, with an old name as OLD = NAME, then the fields ({exports[tables_at:]})")
+        check("field hero.lvl = hero.level" in exports and "field hero.level" in exports,
+              "a field's old name is listed with its table and its current name")
+        check(all(not line.startswith(("table ", "field ")) for line in exports[:tables_at]),
+              "no table or field is among the globals")
+        lines = record_map(files).splitlines()
+        check('            old_fields = { lvl = "level" },' in lines, "the record map gives a table its old field names")
+        check(lines[-2] == '    old_tables = { heroes = "hero" },',
+              "the record map lists the old table names beside its tables")
+        with tempfile.TemporaryDirectory() as other:
+            mods_without, source_without = workspace(Path(other), HEROES)
+            plain, _ = generate(mods_without, source_without)
+            check("old_fields =" not in record_map(plain) and "old_tables =" not in record_map(plain),
+                  "a map without old names has neither list")
+        merged = globals_build.merge(globals_build.load_toml(source)[0], {})
+        reference = globals_build.emit_reference_md(merged, globals_build.load_tables(source))
+        check("Formerly `heroes`." in reference and "| level (formerly lvl) | hero_levels |" in reference,
+              "the reference names the old names")
+        table_json = json.loads(globals_build.emit_json(merged, {}, globals_build.load_tables(source)))["tables"][0]
+        check(table_json["aliases"] == ["heroes"] and table_json["field_aliases"] == {"lvl": "level"},
+              "the registry's JSON carries the old names")
+
+
+def test_old_names_lint():
+    cases = [
+        ('aliases = ["hero"]', "alias hero is also the name of a table", "a table's alias is not a table's name"),
+        ('aliases = ["unit_names"]', "alias unit_names is also the name of a global", "nor a global's name"),
+        ('aliases = ["Heroes"]', "alias 'Heroes' must be a lowercase identifier", "an alias is a lowercase identifier"),
+        ('aliases = "heroes"', "aliases must be a list of names", "aliases is a list"),
+    ]
+    for line, needle, what in cases:
+        registry = HEROES.replace('built_by = "boot"\n', f'built_by = "boot"\n{line}\n')
+        with tempfile.TemporaryDirectory() as directory:
+            mods, source = workspace(Path(directory), registry)
+            _, errors = generate(mods, source)
+            check(any(needle in error for error in errors), f"{what} ({errors})")
+    second = '''
+[[table]]
+name = "villain"
+records = 4
+built_by = "boot"
+aliases = ["heroes"]
+
+[table.fields]
+level = "hero_levels"
+'''
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), OLD_NAMES + second)
+        _, errors = generate(mods, source)
+        check(any("table 'villain': alias heroes is also an alias of table 'hero'" in error for error in errors),
+              f"one old name names one table ({errors})")
+    fields = [
+        ('level = "level"', "old field name level is also the name of a field", "an old field name is no field's name"),
+        ('lvl = "levels"', "old field name lvl names 'levels', which is not a field of the table",
+         "an old field name names a field of the table"),
+        ('Lvl = "level"', "old field name 'Lvl' must be a lowercase identifier", "an old field name is an identifier"),
+    ]
+    for line, needle, what in fields:
+        with tempfile.TemporaryDirectory() as directory:
+            mods, source = workspace(Path(directory), HEROES + f"\n[table.field_aliases]\n{line}\n")
+            _, errors = generate(mods, source)
+            check(any(needle in error for error in errors), f"{what} ({errors})")
+
+
+def test_old_names_rename_rule():
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), HEROES)
+        files, _ = generate(mods, source)
+        write(files)
+        # The table renamed in the same major version, without its old name, is refused.
+        renamed = HEROES.replace('name = "hero"', 'name = "champion"')
+        source.write_text(renamed, encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(len(errors) == 1 and "exports the table 'hero', which the registry no longer has" in errors[0],
+              f"a table renamed without an old name is refused, and its error stands for its fields ({errors})")
+        source.write_text(renamed.replace('built_by = "boot"\n', 'built_by = "boot"\naliases = ["hero"]\n'),
+                          encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(not errors, f"a table renamed with its old name keeps its fields exported under it ({errors})")
+        # A field dropped in the same major version.
+        dropped = HEROES.replace('level = "hero_levels"\n', 'rank = "hero_levels"\n')
+        source.write_text(dropped, encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(any("exports the field 'hero.level', which the registry no longer has: keep it as an old name" in error
+                  for error in errors), f"a field renamed without an old name is refused ({errors})")
+        source.write_text(dropped + '\n[table.field_aliases]\nlevel = "rank"\n', encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(not errors, f"a field renamed with its old name passes ({errors})")
+        # A raised major version allows it without the old name.
+        source.write_text(dropped, encoding="utf-8")
+        (mods / "test-base" / "manifest.toml").write_text('version = "2.0.0"\n', encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(not errors, f"a field dropped with a raised major version passes ({errors})")
+
+
 def main():
     test_shapes()
     test_layout()
@@ -301,6 +417,9 @@ def main():
     test_record_map_without_tables()
     test_record_map_errors()
     test_alias_lint()
+    test_old_names()
+    test_old_names_lint()
+    test_old_names_rename_rule()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

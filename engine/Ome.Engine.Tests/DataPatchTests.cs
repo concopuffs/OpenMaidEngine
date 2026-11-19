@@ -267,13 +267,13 @@ public sealed class DataPatchTests : IDisposable
         } }
         """;
 
-    private Scripting Library(string documents)
+    private Scripting Library(string documents, string map = HeroMap)
     {
         string records = File.ReadAllText(Path.Combine(Paths.Repo, "mods", "ome-records", "lua", "init.lua"));
         var (stack, plan) = new LuaStackBuilder()
             .Mod("ome-records", "-- file: init.lua\n" + records, vm: false, library: true)
             .Mod("docs", "-- file: init.lua\n" + documents, vm: false, library: true)
-            .Base("test-base", HeroLayout, "-- file: init.lua\nreturn {}\n-- file: generated/tables.lua\n" + HeroMap,
+            .Base("test-base", HeroLayout, "-- file: init.lua\nreturn {}\n-- file: generated/tables.lua\n" + map,
                   "ome-records", "docs")
             .Build();
         var native = new Scripting(new ScriptMemory(), new ScriptingSetup { Runtime = _runtime, Stack = stack, Plan = plan });
@@ -343,6 +343,76 @@ public sealed class DataPatchTests : IDisposable
               hero.0.stats.2: column 2 is named: write hero.0.stats.end
               wave: wave is built by stage, which this format does not edit
             """.ReplaceLineEndings("\n").TrimEnd('\n'), text);
+        Assert.Empty(native.Memory.Integers);
+    }
+
+    // ------------------------------------------------------------------------------------------------- old names
+
+    /// <summary>HeroMap with old names (data patches plan §9.1): the table hero was heroes, its level was lvl and its
+    /// stats were st.</summary>
+    private const string OldNamesMap = """
+        return { format = 1, tables = {
+            hero = { records = 4, built_by = "boot", fields = {
+                level = { global = "hero_levels", kind = "integer" },
+                stats = { global = "hero_stats", kind = "integer", width = 3, columns = { hp = 0, ["end"] = 2 } },
+                name = { global = "hero_names", kind = "string" },
+                speed = { global = "hero_speeds", kind = "float" },
+                seen = { global = "hero_seen", kind = "integer", state = true },
+            }, old_fields = { lvl = "level", st = "stats" } },
+            wave = { records = 2, built_by = "stage", fields = { size = { global = "wave_sizes", kind = "integer" } } },
+        }, old_tables = { heroes = "hero" } }
+        """;
+
+    private const string OldNamesApplier = """
+        local applier = require("ome-records").applier { map = require("generated.tables"), table = maid.names.table,
+                                                         labels = { "boot" }, log = maid.log.warn }
+        """;
+
+    [Fact]
+    public void AnOldNameWritesTheCellItsCurrentNameDoesAndIsLoggedOnceForEachFile()
+    {
+        Scripting native = Library("""
+            return { old = { heroes = { ["1"] = { lvl = 7, st = { hp = 30 } }, ["3"] = { lvl = 9 } } } }
+            """, OldNamesMap);
+        Assert.Equal("3\t0", Chunk(native, "test-base", OldNamesApplier + """
+            local old = { mod = "docs", file = "data/old.toml", data = require("docs").old }
+            return applier:apply(old, { built_by = "boot" }), applier:apply(old, { built_by = "boot" }) - 3
+            """));
+        // hero.1.level, hero.3.level and hero.1.stats.hp: the cells the current names address.
+        ScriptMemory memory = native.Memory;
+        Assert.Equal((7, 9, 30), (memory.Integer(0x101), memory.Integer(0x103), memory.Integer(0x200 + 1 * 3)));
+        // One line for each file and old name, however many records use it and however often the file is applied.
+        List<string> lines = native.RecentLog.Where(line => line.Contains(" warn test-base: docs data/old.toml: ", StringComparison.Ordinal))
+                                             .Select(line => line[(line.IndexOf("docs data/old.toml: ", StringComparison.Ordinal) + 20)..])
+                                             .ToList();
+        Assert.Equal(["heroes is an old name of the table hero; write hero",
+                      "lvl is an old name of the field hero.level; write level",
+                      "st is an old name of the field hero.stats; write stats"], lines);
+    }
+
+    [Fact]
+    public void AFileThatNamesOneCellByAnOldNameAndItsCurrentOneIsRefusedWhole()
+    {
+        Scripting native = Library("""
+            return {
+                tables = { hero = { ["1"] = { level = 1 } }, heroes = { ["1"] = { lvl = 2 }, ["2"] = { level = 5 } } },
+                fields = { hero = { ["0"] = { stats = { hp = 1 }, st = { hp = 2, ["end"] = 3 } } } },
+            }
+            """, OldNamesMap);
+        string text = Chunk(native, "test-base", OldNamesApplier + """
+            local docs = require("docs")
+            local _, tables = pcall(applier.apply, applier, { mod = "docs", file = "data/tables.toml", data = docs.tables }, { built_by = "boot" })
+            local _, fields = applier:check({ mod = "docs", file = "data/fields.toml", data = docs.fields })
+            return tables, fields
+            """);
+        string[] parts = text.Split('\t');
+        Assert.Equal(2, parts.Length);
+        Assert.Equal("docs data/tables.toml: 1 problem, so nothing of it is applied\n"
+                     + "  hero.1.level: hero.1.level and heroes.1.lvl name one cell, hero.1.level; write it once, as hero.1.level",
+                     parts[0]);
+        Assert.Equal("docs data/fields.toml: 1 problem, so nothing of it is applied\n"
+                     + "  hero.0.st.hp: hero.0.st.hp and hero.0.stats.hp name one cell, hero.0.stats.hp; write it once, as "
+                     + "hero.0.stats.hp", parts[1]);
         Assert.Empty(native.Memory.Integers);
     }
 }

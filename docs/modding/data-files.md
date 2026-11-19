@@ -164,7 +164,10 @@ kind <game>.tables (<game>-base), at <game>.data.layered
 - **A shared path is listed, not judged.** Which value holds is the kind's rule: `<game>.tables` lets the later file
   replace the earlier one; another kind may add values up.
 - **Paths compare as text.** The report does not know what a key means, so two spellings of one thing hide an overlap
-  from it.
+  from it. `<game>.tables` has one such case: a table or a field the base mod renamed keeps its old name, which a
+  file may still write, and a file that writes `units.12.experience_reward` and another that writes
+  `unit.12.experience_reward` set one cell with no shared-path line. The later file's value holds, as for any shared
+  path, and `diagnostics/lua.log` names each old name a file uses (the game's guide lists the old names).
 - At most 20 shared paths are listed for a kind, and the rest are counted. A file is named by its mod, and by its mod
   and file where the mod ships more than one file of the kind.
 - Each place the files are delivered also lists its handlers in the order they run, a delivery as

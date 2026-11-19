@@ -11,7 +11,9 @@ vm-map/globals-<game>.toml -> docs/global-reference-<game>.md.
   --check   lint, then exit nonzero if the reference doc differs from what --build would write (needs the auto map)
 A registry may also declare `[[table]]` entries: Open Maid Script tables (record views over parallel
 arrays, design spec §5.3), emitted to the JSON's `tables` list and the reference doc. A global's `aliases` keep the
-names it had before a rename, which a base mod still exports (tools/base_mod_build.py; Lua scripting spec §9.1).
+names it had before a rename, which a base mod still exports (tools/base_mod_build.py; Lua scripting spec §9.1). So do
+a table's `aliases` and its `[table.field_aliases]` (old name = current field), which a data file may still write
+(data patches plan §9.1).
 See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md."""
 from __future__ import annotations
 import os, re, sys, json, math, argparse, collections, tomllib
@@ -155,8 +157,8 @@ def load_tables(path) -> list[dict]:
 def lint_tables(tables: list[dict], entries: dict) -> list[str]:
     """Errors: a table or field name that is not a lowercase identifier, a repeated table, a table named like
     a global, a `built_by` label that is missing or not a lowercase identifier (which part of the game writes the
-    table, data patches spec §6.3), and a field whose global is missing or is not a fully sized 1-D or 2-D array of
-    `records` entries or rows."""
+    table, data patches spec §6.3), a field whose global is missing or is not a fully sized 1-D or 2-D array of
+    `records` entries or rows, and the old names' errors (`lint_table_aliases`)."""
     errors: list[str] = []
     by_name: dict[str, dict] = {}
     for e in entries.values():
@@ -197,6 +199,52 @@ def lint_tables(tables: list[dict], entries: dict) -> list[str]:
             if dims is None or len(dims) not in (1, 2) or dims[0] != records:
                 errors.append(f"{tag}: field {field} needs a fully sized [{records}] or [{records}][n] array; "
                               f"{global_name} is {e.get('type')!r}")
+    return errors + lint_table_aliases(tables, by_name)
+
+
+def lint_table_aliases(tables: list[dict], globals_by_name: dict) -> list[str]:
+    """The old names of tables and fields (data patches plan §9.1). Errors: `aliases` that is not a list of lowercase
+    identifiers, or an alias that is a table's name, a global's name or another table's alias; `field_aliases` that is
+    not a table of old name = current field, an old name that is not a lowercase identifier or is a field of the table,
+    and one that names no field of the table. A data file names a table or a field by either, so each names one."""
+    errors: list[str] = []
+    names = {t.get("name") for t in tables if isinstance(t.get("name"), str)}
+    owners: dict[str, str] = {}
+    for t in tables:
+        name = t.get("name")
+        if not isinstance(name, str):
+            continue
+        tag = f"table {name!r}"
+        aliases = t.get("aliases")
+        if aliases is not None:
+            if not isinstance(aliases, list) or not all(isinstance(alias, str) for alias in aliases):
+                errors.append(f"{tag}: aliases must be a list of names")
+            else:
+                for alias in aliases:
+                    if not IDENTIFIER.fullmatch(alias):
+                        errors.append(f"{tag}: alias {alias!r} must be a lowercase identifier")
+                    elif alias in names:
+                        errors.append(f"{tag}: alias {alias} is also the name of a table")
+                    elif alias in globals_by_name:
+                        errors.append(f"{tag}: alias {alias} is also the name of a global")
+                    elif alias in owners:
+                        errors.append(f"{tag}: alias {alias} is also an alias of table {owners[alias]!r}")
+                    else:
+                        owners[alias] = name
+        field_aliases = t.get("field_aliases")
+        if field_aliases is None:
+            continue
+        fields = t.get("fields") if isinstance(t.get("fields"), dict) else {}
+        if not isinstance(field_aliases, dict) or not all(isinstance(v, str) for v in field_aliases.values()):
+            errors.append(f"{tag}: field_aliases must be a table of old name = current field")
+            continue
+        for old, current in field_aliases.items():
+            if not IDENTIFIER.fullmatch(old):
+                errors.append(f"{tag}: old field name {old!r} must be a lowercase identifier")
+            elif old in fields:
+                errors.append(f"{tag}: old field name {old} is also the name of a field")
+            elif current not in fields:
+                errors.append(f"{tag}: old field name {old} names {current!r}, which is not a field of the table")
     return errors
 
 
@@ -314,9 +362,19 @@ def emit_json(merged: Registry, meta: dict, tables: list[dict] = ()) -> str:
     out = {"meta": {**GEN_JSON_META, **meta},
            "globals": legacy,
            "cells": {cell_key(bank, addr): e for (bank, addr), e in sorted(merged.items())},
-           "tables": [{"name": t["name"], "records": t["records"], "built_by": t["built_by"],
-                       "usage": t.get("usage", ""), "fields": dict(t["fields"])} for t in tables]}
+           "tables": [table_json(t) for t in tables]}
     return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
+
+
+def table_json(t: dict) -> dict:
+    """A table as the JSON lists it: its old names only when it has some."""
+    out = {"name": t["name"], "records": t["records"], "built_by": t["built_by"], "usage": t.get("usage", ""),
+           "fields": dict(t["fields"])}
+    if t.get("aliases"):
+        out["aliases"] = sorted(t["aliases"])
+    if t.get("field_aliases"):
+        out["field_aliases"] = dict(sorted(t["field_aliases"].items()))
+    return out
 
 
 def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
@@ -332,13 +390,19 @@ def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
               "Open Maid Script tables (design spec §5.3): `table[record].field` is the field's array element.", ""]
         for t in tables:
             L += [f"### {t['name']}[{t['records']}]", "", f"Built by: `{t['built_by']}`.", ""]
+            if t.get("aliases"):
+                L += ["Formerly " + ", ".join(f"`{alias}`" for alias in sorted(t["aliases"])) + ".", ""]
             if t.get("usage"):
                 L += [t["usage"], ""]
             L += ["| field | global | address | type |", "|---|---|---|---|"]
+            old_fields: dict[str, list[str]] = collections.defaultdict(list)
+            for old, current in sorted((t.get("field_aliases") or {}).items()):
+                old_fields[current].append(old)
             for field, global_name in t["fields"].items():
                 e = by_name[global_name]
                 address = e["address"] if e["bank"] == "G" else f"{e['bank']} {e['address']}"
-                L.append(f"| {field} | {global_name} | `{address}` | `{e['type']}` |")
+                shown = field + (f" (formerly {', '.join(old_fields[field])})" if old_fields.get(field) else "")
+                L.append(f"| {shown} | {global_name} | `{address}` | `{e['type']}` |")
             L.append("")
     by_cat = collections.defaultdict(list)
     for key, e in merged.items():
