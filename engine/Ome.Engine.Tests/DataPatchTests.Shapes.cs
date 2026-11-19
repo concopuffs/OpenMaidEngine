@@ -387,11 +387,12 @@ public sealed partial class DataPatchTests
           "data/a.toml:2: unit.762.stats: takes a table, not an array (unit.stats: unit_base_stats, a row of 14 columns by name; write stats.<column> = ...)" },
         { "himegari", "unit.5 = 3\n",
           "data/a.toml:1: unit.5: takes a table, not 3 (unit: one record's fields, by name; write unit.<id>.<field> = ...)" },
-        // The mistake twins' files before milestone 3 (plan §9.2): each mistake in a stage part fails the link now.
+        // The mistake twins' files before milestone 3 (plan §9.2): each mistake in a stage part fails the link now. A
+        // name cut short has its nearest name (plan §12.5).
         { "kamidori", "[stage.51.enemy.1]\nunit_id = 761\n\n[stage_enemy.3]\nunit_id = 762\n",
           "data/a.toml:4: stage_enemy: stage_enemy is reached through its scope: write stage.<id>.enemy" },
         { "himegari", "[stage.1.enemy.2]\nunit_id = 810\n\n[stage.2.enemy.3]\nunit = 834\n",
-          "data/a.toml:5: stage.2.enemy.3.unit: no such key; the names here are " },
+          "data/a.toml:5: stage.2.enemy.3.unit: no such key; the nearest name here is unit_id" },
     };
 
     [Theory]

@@ -448,7 +448,7 @@ problems are listed and the rest counted.
 
 **"data/FILE.toml:N: PATH: no such key; the nearest name here is NAME", and the other errors with a line and a
 path.** The file does not match its kind's shape, and the link stops before any code runs
-([data-files.md](data-files.md), "Shapes"). A misspelt key lists the nearest names, or the names
+([data-files.md](data-files.md), "Shapes"). A misspelt key or one cut short lists the nearest names, or the names
 there when none is close; a key the format does not offer gives the reason (`unit.761.drop_chance.0: column 0 is
 named: write drop_1`, a saved field, a scoped table's own name); a key that should be a whole number says how
 (`unit.0x2f9: a key here is written in decimal: 761`, `stage.0: a key here is a whole number from 1 to 999, not

@@ -175,6 +175,28 @@ public sealed class DataShapeTests
     }
 
     [Fact]
+    public void ANameCutShortOrWithAWordTooManyHasItsNearestNames()
+    {
+        // Plan §12.5: one of the two starts the other, the shorter having three characters at least, and the near names
+        // rank by distance.
+        const string shape = """
+            { "type": "object", "properties": {
+                "name_id": {}, "min_count": {}, "max_count": {}, "spawn_x": {}, "spawn_y": {}, "spawn_slot": {},
+                "colour": {}, "first_only": {}, "weight": {} },
+              "additionalProperties": false }
+            """;
+        Assert.Equal(["data/a.toml:1: name: no such key; the nearest name here is name_id"], Problems(shape, "name = 1\n"));
+        Assert.Equal(["data/a.toml:1: min: no such key; the nearest name here is min_count"], Problems(shape, "min = 1\n"));
+        Assert.Equal(["data/a.toml:1: spawn: no such key; the nearest names here are spawn_x, spawn_y and spawn_slot"],
+                     Problems(shape, "spawn = 1\n"));
+        Assert.Equal(["data/a.toml:1: weight_percent: no such key; the nearest name here is weight"],
+                     Problems(shape, "weight_percent = 1\n"));
+        // Two characters are too few to start a name.
+        Assert.Equal(["data/a.toml:1: na: no such key; the names here are colour, first_only, max_count, min_count, "
+                      + "name_id, spawn_slot, spawn_x, spawn_y and 1 more"], Problems(shape, "na = 1\n"));
+    }
+
+    [Fact]
     public void AValueOfTheWrongKindWhereATableOrAnArrayGoesSaysWhatGoesThereInTheShapesWords()
     {
         const string shape = """

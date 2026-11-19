@@ -256,7 +256,8 @@ checks TOML against JSON Schema can read the same file:
   most 4 MiB. Each one is named by an `[[accepts]] shape`, or it is an error, since it would do nothing.
 - **An error of a file** names its contributor, then the file, the line, the path and the reason:
   `data/a.toml:4: t.kk: no such key; the nearest names here are k and j`. The nearest names are the names the shape
-  offers there that are closest in spelling.
+  offers there that are closest in spelling, three at most; a name that starts with the key, or that the key starts
+  with, is close when the shorter has three characters or more (`min` gives `min_level`, `unit` gives `unit_id`).
   With none close, the error lists the names there. A key that should be a whole number says how: `by_id.0x10: a key
   here is written in decimal: 16`. A value of the wrong kind where a table or an array goes adds the shape's
   description of what goes there: `names: takes an array, not a string (The names, in order.)`. The link reports the

@@ -296,14 +296,17 @@ public static class DataShapeCheck
         return $"a key here is a whole number in decimal {inRange}, not {DataValue.KeyText(key)}";
     }
 
-    /// <summary>The error for a key an object refuses: the nearest names it offers, or the names there.</summary>
+    /// <summary>The error for a key an object refuses: the nearest names it offers, or the names there. A name is near
+    /// when it is at most a third of the longer name's length away (and 2 at least), or when one of the two starts the
+    /// other and the shorter has three characters or more (<c>max</c> for <c>max_count</c>): a name cut short, or one
+    /// with a word too many, is a slip the distance alone misses. The near names rank by distance.</summary>
     private static string Unknown(DataShapeSchema schema, string key)
     {
         var names = (schema.Properties ?? new Dictionary<string, DataShapeSchema>())
             .Where(pair => !Resolved(pair.Value).NotOffered).Select(pair => pair.Key).Order(StringComparer.Ordinal).ToList();
         if (names.Count == 0) return "no key is taken here";
         var near = names.Select(name => (name, distance: Distance(key, name)))
-            .Where(pair => pair.distance <= Math.Max(2, Math.Max(key.Length, pair.name.Length) / 3))
+            .Where(pair => pair.distance <= Math.Max(2, Math.Max(key.Length, pair.name.Length) / 3) || Starts(key, pair.name))
             .OrderBy(pair => pair.distance).ThenBy(pair => pair.name, StringComparer.Ordinal)
             .Take(3).Select(pair => pair.name).ToList();
         if (near.Count == 1) return $"no such key; the nearest name here is {near[0]}";
@@ -312,6 +315,11 @@ public static class DataShapeCheck
         return names.Count > NamesShown ? $"no such key; the names here are {shown} and {names.Count - NamesShown} more"
                                         : $"no such key; the names here are {List(names)}";
     }
+
+    /// <summary>Whether one of the two starts the other, the shorter having three characters or more.</summary>
+    private static bool Starts(string key, string name)
+        => Math.Min(key.Length, name.Length) >= 3
+           && (name.StartsWith(key, StringComparison.Ordinal) || key.StartsWith(name, StringComparison.Ordinal));
 
     private static string List(IReadOnlyList<string> names)
         => names.Count == 1 ? names[0] : string.Join(", ", names.Take(names.Count - 1)) + " and " + names[^1];
