@@ -104,13 +104,24 @@ public sealed class DataPatchTests : IDisposable
         return column < 0 ? found.Address + row : found.Address + row * found.RowWidth + column;
     }
 
+    /// <summary>The cell of a named column in a row, by the shipped layout.</summary>
+    private static int Address(string profile, string global, int row, string column)
+    {
+        using ModPackage baseMod = ShippedPackages.Open($"{profile}-base")!;
+        Assert.True(baseMod.BaseLayout!.TryGet(global, out LayoutGlobal found));
+        return found.Address + row * found.RowWidth + found.Columns[column];
+    }
+
     // ------------------------------------------------------------------------------------------------- gate 5
 
     [Fact]
     public void TheSpecsFileAsALuaTableWritesTheCellsTheGate6WithBlockWrites()
     {
         // Spec §1.3's file, applied by kamidori-base: the three cells oms/examples/kamidori-gate6's with block
-        // compiles to (its comment, and DataPatchWorkspaceTests' compile of it), and no other cell.
+        // compiles to (DataPatchWorkspaceTests.TheGate6WithBlockCompilesToTheCellsTheApplierWrites), and no other cell.
+        Assert.Equal(0x2c1524, Address("kamidori", "unit_base_stats", 761, "max_hp"));
+        Assert.Equal(0x2c9285, Address("kamidori", "unit_experience_reward", 761));
+        Assert.Equal(0x2cb9c1, Address("kamidori", "unit_drop_chance_percent", 761, "drop_1"));
         Scripting native = Started("kamidori");
         var (applied, written, again) = ApplyTwice(native, "kamidori", "data/slimes.toml", """
             { unit = { ["761"] = { stats = { max_hp = 150 }, experience_reward = 999, drop_chance = { drop_1 = 100 } } } }
