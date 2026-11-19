@@ -357,6 +357,136 @@ public sealed partial class DataPatchWorkspaceTests
                     $"the allowance {ModLimits.Default.DataInstructionsPerValue} does not cover twice the largest cost, {largest:F1} a unit");
     }
 
+    // ------------------------------------------------------------------------------------------- sparse files
+
+    /// <summary>A value a cell of <paramref name="field"/> takes: 0, or a string the save can encode.</summary>
+    private static string AnyValue(RecordField field) => field.Global.Kind == CellKind.String ? "\"x\"" : "0";
+
+    /// <summary>
+    /// A sparse <c>kamidori.tables</c> file over every record of <paramref name="tables"/> (plan §12.6): with
+    /// <paramref name="mix"/> <c>rows</c>, each row field of each record an empty table; <c>row values</c>, each row field
+    /// one value; <c>record values</c>, each record one value; <c>template</c>, each record one value and each row field
+    /// empty. <paramref name="scope"/> names each record through the stage scope, at each stage from 1 to 999, as the
+    /// stage's table must be. Its size counts each table as each value.
+    /// </summary>
+    private static (string Text, int Size) SparseFile(IEnumerable<(string Table, int Records, List<RecordField> Fields)> tables,
+                                                      string mix, bool scope = false)
+    {
+        var text = new StringBuilder();
+        int size = scope ? 1 : 0;
+        foreach (var (table, records, fields) in tables)
+        {
+            var settable = fields.Where(field => !field.State).ToList();
+            var rows = settable.Where(field => field.Columns.Length > 0).ToList();
+            RecordField single = settable.First(field => field.Columns.Length == 0);
+            foreach (int stage in scope ? Enumerable.Range(1, 999) : [0])
+            {
+                string prefix = scope ? $"stage.{stage}.enemy" : table;
+                size += scope ? 2 : 1;
+                for (int record = 0; record < records; record++)
+                {
+                    string id = $"{prefix}.{record.ToString(CultureInfo.InvariantCulture)}";
+                    size++;
+                    if (mix is "record values" or "template")
+                    {
+                        text.Append('[').Append(id).Append("]\n").Append(single.Name).Append(" = ").Append(AnyValue(single)).Append('\n');
+                        size++;
+                    }
+                    if (mix == "record values") continue;
+                    foreach (RecordField row in rows)
+                    {
+                        text.Append('[').Append(id).Append('.').Append(row.Name).Append("]\n");
+                        size++;
+                        if (mix != "row values") continue;
+                        text.Append(row.Columns[0]).Append(" = ").Append(AnyValue(row)).Append('\n');
+                        size++;
+                    }
+                }
+            }
+        }
+        return (text.ToString(), size);
+    }
+
+    /// <summary>A scripting native that runs each delivery to its end, with the trace on.</summary>
+    private Scripting Measuring(ModLinkResult linked)
+    {
+        var native = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = linked.Lua.Stack, Plan = linked.Lua.Plan, Errors = LuaErrorPolicy.Halt, Trace = true,
+            Limits = ModLimits.Default with { DataInstructionsPerValue = 1_000_000 },
+        });
+        _owned.Add(native);
+        return native;
+    }
+
+    /// <summary>The instructions of each delivery of the file <c>data/NAME.toml</c>.</summary>
+    private static long[] Instructions(Scripting native, string name)
+        => native.RecentTrace.Where(line => line.Contains($"\"file\":\"data/{name}.toml\"", StringComparison.Ordinal))
+            .Select(line => JsonDocument.Parse(line).RootElement)
+            .Select(line =>
+            {
+                Assert.Equal("ok", line.GetProperty("result").GetString());
+                return line.GetProperty("instructions").GetInt64();
+            }).ToArray();
+
+    /// <summary>
+    /// Plan §12.6: the files that cost most for their size are sparse ones, whose tables the base mod's applier walks
+    /// with few values to write, and which cost far more than the allowance for each value while tables did not count.
+    /// Each mix is delivered at boot, and a stage's mix at a stage's start too, where the first delivery of a session
+    /// checks the whole document; each costs under half the allowance for each unit of its size.
+    /// </summary>
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void SparseFilesCostLessThanHalfTheAllowanceForTheirSizeAtBootAndAtAStage()
+    {
+        GateGame game = Game("kamidori");
+        var boot = new[] { ("item", 2000), ("skill", 1000), ("unit", 1000) }
+            .Select(table => (table.Item1, table.Item2, RecordFields(game.Base, table.Item1))).ToList();
+        var stage = new[] { ("stage_enemy", 30, RecordFields(game.Base, "stage_enemy")) }.ToList();
+        var files = new List<(string Name, string Text, int Size, bool Stage)>();
+        foreach (string mix in new[] { "rows", "row values", "record values", "template" })
+        {
+            var (text, size) = SparseFile(boot, mix);
+            files.Add(($"boot-{mix.Replace(' ', '-')}", text, size, false));
+        }
+        foreach (string mix in new[] { "rows", "row values", "record values" })
+        {
+            var (text, size) = SparseFile(stage, mix, scope: true);
+            files.Add(($"stage-{mix.Replace(' ', '-')}", text, size, true));
+        }
+        double largest = 0;
+        foreach (var (name, text, size, atStage) in files)
+        {
+            Assert.InRange(size, 1, ValueBound);
+            ModLinkResult linked = LinkedInOrder(game.Base, DataMod("kamidori", "test.sparse-" + name, name + ".toml", text));
+            Assert.Equal(size, linked.Lua.Stack.ContributionList.Single().Values);
+            Scripting booted = Measuring(linked);
+            game.Boot(booted);
+            long[] costs = Instructions(booted, name);
+            if (atStage)
+            {
+                GameSession session = game.Boot(Measuring(linked));
+                session.Seed(Cell("kamidori", "current_stage_id", 0), 51);
+                session.Seed(Cell("kamidori", "field_map_continue_mode", 0), 0);
+                Scripting field = Measuring(linked);
+                SceneResult run = session.RunScene(game.Scripts.RequireByName("FIELD.BIN"), game.Table, new HeadlessWaits(),
+                                                   provider: game.Scripts, build: game.Build, scripting: field);
+                Assert.Equal("STEP-LIMIT", run.Halt);
+                long[] atField = Instructions(field, name);
+                Assert.NotEmpty(atField);
+                costs = [.. costs, .. atField];
+            }
+            double perUnit = (double)costs.Max() / size;
+            largest = Math.Max(largest, perUnit);
+            _output?.WriteLine($"{name}: size {size}, {Encoding.UTF8.GetByteCount(text)} bytes, deliveries {string.Join(", ", costs)} "
+                               + $"instructions; {perUnit:F1} a unit of size");
+        }
+        _output?.WriteLine($"largest {largest:F1} instructions a unit of size; allowance {ModLimits.Default.DataInstructionsPerValue}");
+        Assert.True(2 * largest <= ModLimits.Default.DataInstructionsPerValue,
+                    $"the allowance {ModLimits.Default.DataInstructionsPerValue} does not cover twice the largest cost, {largest:F1} a unit");
+    }
+
     [Fact]
     [Trait("Category", "Workspace")]
     [Trait("Profile", "kamidori")]

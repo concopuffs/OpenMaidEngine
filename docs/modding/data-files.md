@@ -377,6 +377,6 @@ is the contributor, with `file` and the kind's `owner`, and `handler` is the own
   mod for the mod that called it.
 - **A watch on a cell the file sets** names the contributor as the writer: `"writer":"mod","by":"example.a"`.
 - **`budget`** is the delivery's: the handler budget and the allowance for the document's values, its tables and
-  arrays counted. `instructions`
-  counts in steps of 1,000 ([lua.md](lua.md)), so a file of a few values reads 0; one of every item field of a game
-  runs about 100 for each value.
+  arrays counted. `instructions` counts in steps of 1,000 ([lua.md](lua.md)), so a file of a few values reads 0; one
+  of every item field of a game runs about 100 for each value, and a file of empty tables about as much for each of
+  them.
