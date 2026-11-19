@@ -2,7 +2,7 @@ omp = 4
 id = "example.stage-enemies-mistake"
 name = "Stage enemies, with a mistake"
 version = "1.0.0"
-description = "example.stage-enemies with a misspelt field on purpose: the boot reports the file and the path, and nothing of it is applied."
+description = "example.stage-enemies with a unit name the save's code page cannot encode, on purpose: a mistake no shape can say, so the link takes the file, the boot reports the file and the path, and nothing of it is applied."
 
 [game]
 profile = "himegari"

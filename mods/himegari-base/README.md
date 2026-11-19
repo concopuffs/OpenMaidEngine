@@ -24,6 +24,11 @@ enabled mod requires it. A Lua mod reads and writes the game's cells by name thr
   the registry's `[[table]]` and `[[scope]]` entries and the profile's saved prefix, with the old names of tables
   and fields. Do not edit it. `lua/tables.lua` hands the applier `maid.log.warn`, so a file that writes an old name
   gets a line for it in `lua.log`.
+- `shapes/tables.schema.json` is the kind's shape (data patches spec §7), generated with the record map by
+  `tools/base_mod_build.py --build`, and named by the manifest's `[[accepts]] shape`. The link checks each data file
+  of `himegari.tables` against it before any code runs; what it cannot say (text code page 932 cannot encode, one
+  cell named twice through an old name, a part at an event this install does not raise) `lua/tables.lua` checks at
+  the file's first delivery. Do not edit it.
 - `layout/exports.txt` is the list of exported names, checked in: the globals, then the record tables
   (`table NAME`) and their fields (`field TABLE.FIELD`), then the scopes (`scope NAME`) and their tables' short
   names (`scope NAME.SHORT`). A name in it stays exported, as a global's name or one of its `aliases`, a table's

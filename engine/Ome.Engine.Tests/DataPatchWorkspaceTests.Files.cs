@@ -21,7 +21,9 @@ using Xunit.Abstractions;
 /// <c>data.ready</c> finds every file applied), gate 5 (spec §1.3's file leaves exactly the cells the
 /// <c>kamidori-gate6</c> example's <c>with</c> block leaves, and its twin on Himegari), gate 6 (boot, load, return to
 /// title, a load without the mod, and the save made right after boot) and gate 7 (each problem reported with the
-/// contributor, the file and the path, nothing applied, and the halt), gates 6 and 7 on both games.
+/// contributor, the file and the path, nothing applied, and the halt), gates 6 and 7 on both games. Since milestone 3
+/// a problem the base mod's shape says stops the link, with the file's line; one only the owner checks is still
+/// reported at the first delivery.
 /// </summary>
 public sealed partial class DataPatchWorkspaceTests
 {
@@ -419,36 +421,71 @@ public sealed partial class DataPatchWorkspaceTests
 
     // ------------------------------------------------------------------------------------------------- gate 7
 
+    /// <summary>Gate 7's problems that the base mod's shape says (data patches plan §6.2): the link refuses the file,
+    /// with the contributor, the file, the line, the path and the shape's reason, and plans no delivery.</summary>
+    public static TheoryData<string, string, string> ShapeProblems => new()
+    {
+        // The file's other part, the unit's max_hp, is valid: the link refuses the file whole.
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\nexperiance_reward = 999\n",
+          "data/bad.toml:3: unit.761.experiance_reward: no such key; the nearest name here is experience_reward" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[item.5]\ninventory_count = 9\n",
+          "data/bad.toml:5: item.5.inventory_count: item.inventory_count is saved state: a load brings the saved value back, so a file does not set it" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[unit.0x2f9]\nexperience_reward = 999\n",
+          "data/bad.toml:4: unit.0x2f9: a key here is written in decimal: 761" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\ndrop_chance.0 = 100\n",
+          "data/bad.toml:3: unit.761.drop_chance.0: column 0 is named: write drop_1" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\nexperience_reward = \"999\"\n",
+          "data/bad.toml:3: unit.761.experience_reward: takes a whole number, not a string" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\nexperiance_reward = 999\n",
+          "data/bad.toml:3: unit.103.experiance_reward: no such key; the nearest name here is experience_reward" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[skill.5]\nacquired_flag = 1\n",
+          "data/bad.toml:5: skill.5.acquired_flag: skill.acquired_flag is saved state: a load brings the saved value back, so a file does not set it" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[unit.0x67]\nexperience_reward = 999\n",
+          "data/bad.toml:4: unit.0x67: a key here is written in decimal: 103" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\ndrop_chance.0 = 100\n",
+          "data/bad.toml:3: unit.103.drop_chance.0: column 0 is named: write drop_1_percent" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\nexperience_reward = \"999\"\n",
+          "data/bad.toml:3: unit.103.experience_reward: takes a whole number, not a string" },
+        // A stage part's problems stop the link too.
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage.0.enemy.2]\nunit_id = 810\n",
+          "data/bad.toml:4: stage.0: a key here is a whole number from 1 to 999, not 0" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage.1.enemyy.2]\nunit_id = 810\n",
+          "data/bad.toml:4: stage.1.enemyy: no such key; the nearest name here is enemy" },
+        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage_enemy.2]\nunit_id = 810\n",
+          "data/bad.toml:4: stage_enemy: stage_enemy is reached through its scope: write stage.<id>.enemy" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[stage.51.enemy.30]\nunit_id = 810\n",
+          "data/bad.toml:4: stage.51.enemy.30: a key here is a whole number from 0 to 29, not 30" },
+        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[stage.51.enemy.2]\nrequired_story_flags.7 = 1\n",
+          "data/bad.toml:5: stage.51.enemy.2.required_story_flags.7: a key here is a whole number from 0 to 6, not 7" },
+    };
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [MemberData(nameof(ShapeProblems))]
+    public void EachProblemAShapeSaysStopsTheLinkWithTheContributorTheFileTheLineAndThePath(string profile, string text,
+                                                                                         string error)
+    {
+        GateGame game = Game(profile);
+        ModPackage mod = DataMod(profile, "test.bad", "bad.toml", text);
+        IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([mod], new ModLinkReport());
+        _opened.AddRange(shipped);
+        ModLinkResult linked = ModLinker.Link(game.Base with { Lua = _runtime }, [mod, .. shipped], [mod.Id]);
+        Assert.False(linked.Succeeded);
+        ModReportLine stop = Assert.Single(linked.Report.Lines, line => line.Stops);
+        Assert.Equal(["test.bad"], stop.Mods);
+        Assert.Equal(error, stop.Message);
+        Assert.Empty(linked.Lua.Stack.ContributionList);
+    }
+
+    /// <summary>Gate 7's problems that only the owner checks (plan §6.2): text the save's code page cannot encode. The
+    /// link takes the file, and the boot refuses it at its first delivery.</summary>
     public static TheoryData<string, string, string, string> FileProblems => new()
     {
         // The file's other part, the unit's max_hp, is valid: a problem anywhere applies nothing.
-        { "kamidori", "[unit.761]\nstats.max_hp = 150\nexperiance_reward = 999\n", "unit.761.experiance_reward", "unit has no field experiance_reward" },
-        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[item.5]\ninventory_count = 9\n", "item.5.inventory_count",
-          "item.inventory_count is saved state: a load brings the saved value back, so a file does not set it" },
-        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[unit.0x2f9]\nexperience_reward = 999\n", "unit.0x2f9", "a record id is written in decimal: 761" },
-        { "kamidori", "[unit.761]\nstats.max_hp = 150\ndrop_chance.0 = 100\n", "unit.761.drop_chance.0", "column 0 is named: write unit.761.drop_chance.drop_1" },
-        { "kamidori", "[unit.761]\nstats.max_hp = 150\nexperience_reward = \"999\"\n", "unit.761.experience_reward", "takes a whole number, not a string" },
         { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[item.12]\nname = \"Lily 한\"\n", "item.12.name",
           "a string cell holds text the save can encode (code page 932); U+D55C is not in it" },
-        { "himegari", "[unit.103]\nstats.max_hp = 150\nexperiance_reward = 999\n", "unit.103.experiance_reward", "unit has no field experiance_reward" },
-        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[skill.5]\nacquired_flag = 1\n", "skill.5.acquired_flag",
-          "skill.acquired_flag is saved state: a load brings the saved value back, so a file does not set it" },
-        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[unit.0x67]\nexperience_reward = 999\n", "unit.0x67", "a record id is written in decimal: 103" },
-        { "himegari", "[unit.103]\nstats.max_hp = 150\ndrop_chance.0 = 100\n", "unit.103.drop_chance.0",
-          "column 0 is named: write unit.103.drop_chance.drop_1_percent" },
-        { "himegari", "[unit.103]\nstats.max_hp = 150\nexperience_reward = \"999\"\n", "unit.103.experience_reward", "takes a whole number, not a string" },
         { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[unit.12]\ndisplay_name = \"Lily 한\"\n", "unit.12.display_name",
           "a string cell holds text the save can encode (code page 932); U+D55C is not in it" },
-        // A stage part's problems are the boot's too: the whole file is checked at its first delivery (plan §5.2).
-        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage.0.enemy.2]\nunit_id = 810\n", "stage.0", "stage has ids 1 to 999" },
-        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage.1.enemyy.2]\nunit_id = 810\n", "stage.1.enemyy",
-          "stage has no table enemyy (tables: enemy)" },
-        { "himegari", "[unit.103]\nstats.max_hp = 150\n\n[stage_enemy.2]\nunit_id = 810\n", "stage_enemy",
-          "stage_enemy is reached through its scope: write stage.<id>.enemy" },
-        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[stage.51.enemy.30]\nunit_id = 810\n", "stage.51.enemy.30",
-          "stage_enemy has records 0 to 29" },
-        { "kamidori", "[unit.761]\nstats.max_hp = 150\n\n[stage.51.enemy.2]\nrequired_story_flags.7 = 1\n",
-          "stage.51.enemy.2.required_story_flags.7", "stage_enemy.required_story_flags has columns 0 to 6" },
     };
 
     [Theory]
@@ -477,8 +514,9 @@ public sealed partial class DataPatchWorkspaceTests
     public void UnderHaltAShippedFilesProblemEndsTheBootNamingTheContributorItsFileAndThePath(string profile)
     {
         GateGame game = Game(profile);
+        // A problem only the owner checks, since the link refuses one the shape says (plan §6.2).
         ModLinkResult linked = LinkedInOrder(game.Base,
-            DataMod(profile, "test.bad", "bad.toml", $"[unit.{game.Unit}]\nstats.max_hp = 150\nexperiance_reward = 999\n"));
+            DataMod(profile, "test.bad", "bad.toml", $"[unit.{game.Unit}]\nstats.max_hp = 150\ndisplay_name = \"Lily 한\"\n"));
         Scripting native = Native(linked, LuaErrorPolicy.Halt);
         var session = new GameSession();
         SceneResult result = session.RunScene(game.Scripts.RequireByName("INIT2.BIN"), game.Table, new HeadlessWaits(),
@@ -486,8 +524,8 @@ public sealed partial class DataPatchWorkspaceTests
         // The halt reason is the error's first line, which carries the first problem's path; it names the contributor
         // once.
         Assert.Equal($"lua-error: test.bad data/bad.toml ({profile}-base tables.lua:apply_boot) at {profile}.data.layered "
-                     + $"at {game.Layered}: 1 problem, so nothing of it is applied: "
-                     + $"unit.{game.Unit}.experiance_reward: unit has no field experiance_reward", result.Halt);
+                     + $"at {game.Layered}: 1 problem, so nothing of it is applied: unit.{game.Unit}.display_name: a string "
+                     + "cell holds text the save can encode (code page 932); U+D55C is not in it", result.Halt);
         Assert.NotEqual(150, session.Globals.GetValueOrDefault(Cell(profile, "unit_base_stats", game.Unit, "max_hp")));
     }
 

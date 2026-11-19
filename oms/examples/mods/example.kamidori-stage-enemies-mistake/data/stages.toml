@@ -1,9 +1,13 @@
-# example.kamidori-stage-enemies with a mistake on purpose: the enemy table is reached through its stage
-# (stage.52.enemy.3), not by its own name. The file is checked whole at its first delivery, so its valid part,
-# stage 51's slot 1, is not applied either.
+# example.kamidori-stage-enemies with a mistake on purpose, one that no shape can say: unit 761's display name has a
+# letter, é, that the save's code page (932) cannot encode. The file matches its kind's shape, so the link takes it;
+# the base mod checks the whole file at its first delivery, at the boot, and refuses it there, so its stage part is
+# not applied either: stage 51's slot 1 and stage 52's slot 3 keep their own units.
 
-[stage.51.enemy.1]
-unit_id = 761
+[stage.51.enemy.1]          # ◆開けた涼風西湖畔◆ at シセティカ湖, slot 1
+unit_id = 761               # 331, ハルピュア; 761 is 緑プテテット
 
-[stage_enemy.3]
-unit_id = 762
+[stage.52.enemy.3]          # 蒼月の南湖畔, slot 3
+unit_id = 762               # 631, バギル; 762 is 赤プテテット
+
+[unit.761]
+display_name = "Gelée verte"   # the mistake: code page 932 has no é

@@ -1,8 +1,13 @@
-# example.stage-enemies with a mistake on purpose: stage_enemy has no field "unit" (it is unit_id). The file is
-# checked whole at its first delivery, so its valid part, stage 1's slot 2, is not applied either.
+# example.stage-enemies with a mistake on purpose, one that no shape can say: unit 810's display name has a letter, é,
+# that the save's code page (932) cannot encode. The file matches its kind's shape, so the link takes it; the base mod
+# checks the whole file at its first delivery, at the boot, and refuses it there, so its stage part is not applied
+# either: stage 1's slot 2 and stage 2's slot 3 keep their own units.
 
-[stage.1.enemy.2]
-unit_id = 810
+[stage.1.enemy.2]          # stage 1, slot 2
+unit_id = 810              # 200, 緑プテテット; 810 is ハルピュア
 
-[stage.2.enemy.3]
-unit = 834
+[stage.2.enemy.3]          # stage 2, slot 3
+unit_id = 834              # 202, 黒プテテット; 834 is サーペント
+
+[unit.810]
+display_name = "Harpie ailée"   # the mistake: code page 932 has no é

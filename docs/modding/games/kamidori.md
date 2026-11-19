@@ -143,6 +143,11 @@ drop_chance.drop_1 = 100   # 30
 - **Saved fields are refused:** `item.inventory_count`, `item.growth_exp`, `item.growth_level`,
   `item.costume_enhancement_grid` and `item.costume_gem_sockets`. They lie below the saved prefix, so a load would
   bring the saved value back over the edit.
+- **The shape.** `kamidori-base` ships the kind's shape, `shapes/tables.schema.json`, generated from the same record
+  map as the tables above ([../data-files.md](../data-files.md), "Shapes"). So the link, `omp check` and `omp build`
+  refuse a table, field or column the reference does not name, a saved field, an id or a column out of range and a
+  value of the wrong kind, with the file's line, before the game starts. Text that code page 932 cannot encode
+  passes the shape; `kamidori-base` refuses it at the file's first delivery.
 - **A floor's enemies** are the `stage_enemy` table, which a file names through the stage: `stage.51.enemy.3` is
   stage 51's enemy slot 3 (stage ids 1 to 999, of which STINIT writes 1 to 968 and the appends up to 977; slots 0 to
   29, of which FIELD reads 1 to 29). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`,
@@ -358,7 +363,7 @@ read-only:
 | `oms/examples/mods/example.kamidori-prologue-line` | a patch against the translated opening |
 | `oms/examples/kamidori-gate6/` | a boot-time data edit and a script called by packed id |
 | `oms/examples/mods/example.kamidori-double-exp-event` | a Lua subscriber of `kamidori.experience.award`, without `vm` |
-| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake the boot reports; `tools/drive/scenarios/port/kamidori-stage-enemies*.steps` drive both through the stage list's preview, INFO's 獲得地点 view, a floor save and its load with the mod and without |
+| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake no shape can say (a unit name code page 932 cannot encode), which the link takes and the boot reports; `tools/drive/scenarios/port/kamidori-stage-enemies*.steps` drive both through the stage list's preview, INFO's 獲得地点 view, a floor save and its load with the mod and without |
 | `oms/examples/mods/example.kamidori-unit-stats` | a data file that raises ウィル's maximum HP, which reaches only a character who joins after it; `tools/drive/scenarios/port/kamidori-unit-stats.steps` loads a save with it |
 
 The Kamidori scenarios start from saves in the clean install's story: one in ウィルの工房 (the workshop) when

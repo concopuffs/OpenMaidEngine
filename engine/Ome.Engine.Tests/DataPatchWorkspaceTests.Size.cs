@@ -19,7 +19,9 @@ using Ome.Script.Abi;
 /// the installed INIT2 runs, at boot and at a load. The full item file sets every field of the game's largest table
 /// that a file may set (300,000 values); the bound file adds unit records up to the 400,000 values a document may
 /// hold; the refused file is the bound file with every value of the wrong kind; and a file of 1,000 values, the size a
-/// balance mod writes, for what an ordinary file costs. The measurement gives each file's
+/// balance mod writes, for what an ordinary file costs. Since milestone 3 the shipped base mod's shape refuses the
+/// refused file at the link, which is timed, and an owner without a shape (the base mod copied without it) meets it at
+/// the first delivery, where it is measured as before (plan §9.2). The measurement gives each file's
 /// instructions for each value, which the allowance must cover twice over, and the time the item file adds to a boot
 /// and to a load, against the plan's ceiling of 10 seconds. The budget test runs the bound files with the engine's
 /// own limits.
@@ -134,6 +136,46 @@ public sealed partial class DataPatchWorkspaceTests
                 ("refused", refusedText, refusedValues)];
     }
 
+    /// <summary>kamidori-base as the repository has it, without its shape: an owner without a shape, which checks a file
+    /// only at its first delivery (data patches plan §9.2). The refused file reaches its check this way.</summary>
+    private ModPackage ShapelessKamidoriBase()
+    {
+        string from = Path.Combine(Paths.Repo, "mods", "kamidori-base"), to = Path.Combine(_root, "kamidori-base-shapeless");
+        foreach (string file in Directory.GetFiles(from, "*", SearchOption.AllDirectories))
+        {
+            string relative = Path.GetRelativePath(from, file);
+            if (relative.StartsWith("shapes", StringComparison.Ordinal)) continue;
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(to, relative))!);
+            File.Copy(file, Path.Combine(to, relative));
+        }
+        string manifest = Path.Combine(to, "manifest.toml");
+        string text = File.ReadAllText(manifest);
+        Assert.Contains("shape = \"tables.schema.json\"\n", text);
+        File.WriteAllText(manifest, text.Replace("shape = \"tables.schema.json\"\n", ""));
+        ModPackage mod = ModPackage.Open(to);
+        _opened.Add(mod);
+        return mod;
+    }
+
+    /// <summary>The refused file against the shipped base mod: its shape refuses every value at the link, the first 20
+    /// with their lines and the rest counted, and no delivery is planned. The time the link takes.</summary>
+    private TimeSpan RefusedAtTheLink(ModLinkBase linkBase, ModPackage refused)
+    {
+        IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([refused], new ModLinkReport());
+        _opened.AddRange(shipped);
+        var watch = Stopwatch.StartNew();
+        ModLinkResult linked = ModLinker.Link(linkBase with { Lua = _runtime }, [refused, .. shipped], [refused.Id]);
+        watch.Stop();
+        Assert.False(linked.Succeeded);
+        var stops = linked.Report.Lines.Where(line => line.Stops).ToList();
+        Assert.Equal(21, stops.Count);
+        Assert.All(stops, line => Assert.Equal([refused.Id], line.Mods));
+        Assert.StartsWith("data/refused.toml:2: item.0.", stops[0].Message);
+        Assert.Equal($"data/refused.toml: and {ValueBound - 20} more problems", stops[^1].Message);
+        Assert.Empty(linked.Lua.Stack.ContributionList);
+        return watch.Elapsed;
+    }
+
     /// <summary>The delivery's trace line of the file <c>data/NAME.toml</c>.</summary>
     private static JsonElement Delivery(Scripting native, string name)
         => JsonDocument.Parse(Assert.Single(native.RecentTrace,
@@ -211,8 +253,19 @@ public sealed partial class DataPatchWorkspaceTests
         var perValue = new Dictionary<string, double>();
         foreach (var (name, text, values) in SizeFiles(linkBase, game))
         {
+            ModPackage contributor = DataMod("kamidori", "test.size-" + name, name + ".toml", text);
+            string refusedLine = "";
+            if (name == "refused")
+            {
+                // Plan §9.2: the shipped base mod's shape refuses the file at the link, before any delivery; timed.
+                TimeSpan refusedLink = RefusedAtTheLink(linkBase, contributor);
+                refusedLine = $"refused at the link in {refusedLink.TotalSeconds:F2} s; ";
+                Assert.True(refusedLink < Ceiling, refusedLine);
+            }
             watch.Restart();
-            ModLinkResult linked = LinkedInOrder(linkBase, DataMod("kamidori", "test.size-" + name, name + ".toml", text));
+            // An owner without a shape meets the refused file at its first delivery (§10.1), measured as before.
+            ModLinkResult linked = name == "refused" ? LinkedInOrder(linkBase, ShapelessKamidoriBase(), contributor)
+                                                     : LinkedInOrder(linkBase, contributor);
             TimeSpan link = watch.Elapsed;
             var native = new Scripting(new ScriptMemory(), new ScriptingSetup
             {
@@ -226,7 +279,7 @@ public sealed partial class DataPatchWorkspaceTests
             JsonElement delivery = Delivery(native, name);
             long instructions = delivery.GetProperty("instructions").GetInt64();
             perValue[name] = (double)instructions / values;
-            string line = $"{name}: {values} values, {Encoding.UTF8.GetByteCount(text)} bytes, {instructions} instructions "
+            string line = $"{name}: {refusedLine}{values} values, {Encoding.UTF8.GetByteCount(text)} bytes, {instructions} instructions "
                           + $"({perValue[name]:F1} a value), {delivery.GetProperty("result").GetString()}; link {link.TotalSeconds:F2} s, "
                           + $"boot {boot.TotalSeconds:F2} s against {plainBoot.TotalSeconds:F2} s with no mod";
             if (name == "items")
@@ -268,7 +321,11 @@ public sealed partial class DataPatchWorkspaceTests
         RunKamidori(root, provider, saved, null);
         foreach (var (name, text, _) in SizeFiles(linkBase, game).Where(file => file.Name is "bound" or "refused"))
         {
-            ModLinkResult linked = LinkedInOrder(linkBase, DataMod("kamidori", "test.size-" + name, name + ".toml", text));
+            // The refused file fails the shipped base mod's shape at the link (the test above), so it reaches the
+            // owner's check through an owner without a shape (plan §9.2).
+            ModPackage contributor = DataMod("kamidori", "test.size-" + name, name + ".toml", text);
+            ModLinkResult linked = name == "refused" ? LinkedInOrder(linkBase, ShapelessKamidoriBase(), contributor)
+                                                     : LinkedInOrder(linkBase, contributor);
             Scripting booted = Native(linked, LuaErrorPolicy.Continue);
             KamidoriBoot(scripts, booted);
             string loadSaves = Path.Combine(_root, "saves-bound-" + name);

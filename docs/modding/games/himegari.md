@@ -71,6 +71,11 @@ experience_reward = 40     # 30
 - **Saved fields are refused:** `unit.story_speaker_seen_flag`, `skill.acquired_flag` and
   `skill.info_revealed_flag`. They lie below the saved prefix, so a load would bring the saved value back over the
   edit.
+- **The shape.** `himegari-base` ships the kind's shape, `shapes/tables.schema.json`, generated from the same record
+  map as the tables above ([../data-files.md](../data-files.md), "Shapes"). So the link, `omp check` and `omp build`
+  refuse a table, field or column the reference does not name, a saved field, an id or a column out of range and a
+  value of the wrong kind, with the file's line, before the game starts. Text that code page 932 cannot encode
+  passes the shape; `himegari-base` refuses it at the file's first delivery.
 - **TUNE corrects the save against the edited items.** It lowers each saved tuning level to the last level its
   item's curve gives a bonus for (below, "Edit the boot's tables at `data.layered`"). A file that gives an item a
   shorter curve (`item.tuning_curve_ids`) lowers that item's saved levels, and they stay lowered when the mod is
@@ -257,5 +262,5 @@ register their handlers in, so a handler runs after the base game's and every ap
 | `oms/examples/mods/example.double-exp-event` | a Lua subscriber of `himegari.experience.award`, without `vm` |
 | `oms/examples/mods/example.lua-random` | `math.random` in a script hook on `SC0000.BIN`, inside a `pairs` loop too; `tools/drive/scenarios/port/himegari-lua-random.steps` checks that `rand-seed 7` gives the same rolls in every run |
 | `oms/examples/mods/example.random-enemies` | a subscriber of `himegari.stage.loaded` that rewrites the stage's enemies and keeps a seed per playthrough in `maid.state`; `tools/drive/scenarios/port/himegari-random-enemies.steps` checks stage 1's draw under `rand-seed 7` |
-| `oms/examples/mods/example.stage-enemies` | a data file that edits two stages' enemy slots, applied at `himegari.stage.loaded`; `example.stage-enemies-mistake` is its twin with a mistake the boot reports; `tools/drive/scenarios/port/himegari-stage-enemies*.steps` drive both, through the camp, a field save and its load with the mod and without |
+| `oms/examples/mods/example.stage-enemies` | a data file that edits two stages' enemy slots, applied at `himegari.stage.loaded`; `example.stage-enemies-mistake` is its twin with a mistake no shape can say (a unit name code page 932 cannot encode), which the link takes and the boot reports; `tools/drive/scenarios/port/himegari-stage-enemies*.steps` drive both, through the camp, a field save and its load with the mod and without |
 | `oms/examples/mods/example.unit-stats` | a data file that raises リリィ's maximum HP, which UNITECH copies into her saved stats when she joins; `tools/drive/scenarios/port/himegari-unit-stats*.steps` drive a new game with it and the load of its save without it |

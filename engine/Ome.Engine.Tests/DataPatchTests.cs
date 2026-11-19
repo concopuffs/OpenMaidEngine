@@ -15,13 +15,15 @@ using Ome.Scripting.Lua;
 /// the applier's half of gate 5 (the same cells as <c>oms/examples/kamidori-gate6</c>) and of gate 7 (each problem is
 /// reported with the mod, the file and the path, and nothing of the file is written). The library alone takes a
 /// read-only view, as milestone 1 will hand it one. Milestone 2 adds the scopes and gate 11: the two base mods declare
-/// their kinds alike, and the engine names no kind, base mod or game event.
+/// their kinds alike, and the engine names no kind, base mod or game event. Milestone 3's shapes are in
+/// DataPatchTests.Shapes.cs.
 /// </summary>
-public sealed class DataPatchTests : IDisposable
+public sealed partial class DataPatchTests : IDisposable
 {
     private readonly List<ModPackage> _opened = new();
     private readonly List<IDisposable> _owned = new();
     private readonly LazyModRuntime _runtime = LuaModRuntime.Lazy();
+    private readonly string _root = Path.Combine(Path.GetTempPath(), "ome-data-patch-" + Guid.NewGuid().ToString("N"));
 
     private static readonly OpcodeContracts Contracts = OpcodeContracts.Load(Paths.OpcodesJson);
 
@@ -31,6 +33,7 @@ public sealed class DataPatchTests : IDisposable
         for (int i = _owned.Count - 1; i >= 0; i--) _owned[i].Dispose();
         foreach (ModPackage package in _opened) package.Dispose();
         _runtime.Dispose();
+        if (Directory.Exists(_root)) Directory.Delete(_root, recursive: true);
     }
 
     // ------------------------------------------------------------------------------------------------- helpers

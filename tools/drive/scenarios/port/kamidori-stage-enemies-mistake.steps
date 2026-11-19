@@ -1,8 +1,10 @@
 # Port only (scenarios/port/): data patches gate 8 on Kamidori, the error half. example.kamidori-stage-enemies-mistake
-# names the enemy table at the top level (stage_enemy.3) on purpose. The boot checks the file whole at its first
-# delivery (kamidori.data.layered) and applies nothing of it: the port's status line shows the notice at the title,
-# and diagnostics/lua.log names the file and the path:
-#   example.kamidori-stage-enemies-mistake data/stages.toml: 1 problem, so nothing of it is applied: stage_enemy: ...
+# is example.kamidori-stage-enemies with unit 761's display_name holding é on purpose, which code page 932 cannot
+# encode: a mistake no shape can say, so the link takes the file (a mistake a shape can say fails omp check instead,
+# plan §9.2). The boot checks the file whole at its first delivery (kamidori.data.layered) and applies nothing of it,
+# its stage part included: the port's status line shows the notice at the title, and diagnostics/lua.log names the
+# file and the path:
+#   example.kamidori-stage-enemies-mistake data/stages.toml: 1 problem, so nothing of it is applied: unit.761.display_name: ...
 # Then the route of kamidori-stage-enemies.steps enters ◆開けた涼風西湖畔◆ (stage 51) afresh, and its enemy table
 # and placed units are the floor's own: ハルピュア (331) in slot 1, which its spawner places. Cells by number, as in
 # that scenario. The save is slot 019 of the clean install, ウィル's workshop when シセティカ湖 has just opened, in the

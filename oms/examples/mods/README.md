@@ -51,8 +51,11 @@ ran the same scenarios on native AGE.
 - `example.stage-enemies` (data patches gate 8) is a data file and nothing else: `himegari-base`'s
   `himegari.tables` applies its stage parts at `himegari.stage.loaded`. Stage 1's slot 2 gets ハルピュア (810) in
   place of 緑プテテット (200), and stage 2's slot 3 サーペント (834), so at stage 1 slot 3 keeps the stage's own
-  unit. `example.stage-enemies-mistake` is the same file with a field misspelt on purpose (`unit` for `unit_id`):
-  the boot's notice and `diagnostics/lua.log` name the file and the path, and nothing of it is applied. The port
+  unit. `example.stage-enemies-mistake` is the same file with a unit's name the save's code page cannot encode, on
+  purpose (`é` in unit 810's `display_name`). No shape can say that, so the link takes the file, which matches the
+  kind's shape; the boot's notice and `diagnostics/lua.log` name the file and the path, and nothing of it is applied,
+  its stage part included. A mistake a shape can say, such as a misspelt field, fails the link instead
+  (`omp check`; [docs/modding/data-files.md](../../../docs/modding/data-files.md), "Shapes"). The port
   scenarios `tools/drive/scenarios/port/himegari-stage-enemies.steps` (a new game to stage 1, the camp and back, a
   field save and its load), `himegari-stage-enemies-load.steps` and `-load-without.steps` (that save loaded from the
   title with the mod and without it) and `himegari-stage-enemies-mistake.steps` drive them; their headers give the
@@ -62,8 +65,8 @@ ran the same scenarios on native AGE.
   ハルピュア (331), and slot 3 of 蒼月の南湖畔 (stage 52) 赤プテテット (762), so stage 51's slot 3 keeps its own 水精
   (402). Its part is applied again where INFO's third tab, アイテム情報, runs the floor's loaders again for its
   獲得地点 view, and where the stage list runs a stage's loaders for its preview.
-  `example.kamidori-stage-enemies-mistake` names the enemy table at the top level (`stage_enemy.3`) on purpose,
-  which the base mod refuses with the spelling to use. The port scenarios
+  `example.kamidori-stage-enemies-mistake` gives unit 761 a `display_name` with `é` on purpose, which the base mod
+  refuses at the boot, as the Himegari twin does. The port scenarios
   `tools/drive/scenarios/port/kamidori-stage-enemies.steps` (INFO off a floor, the floor entered afresh, INFO on it,
   a floor save and its load), `kamidori-stage-enemies-list.steps` (the stage list's preview),
   `kamidori-stage-enemies-lake.steps` (saves on 蒼月の南湖畔 loaded with the mod),

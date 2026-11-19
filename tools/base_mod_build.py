@@ -24,6 +24,10 @@ For each profile with a base mod (a hand-written mods/<game>-base/manifest.toml)
                         builds it, and for each field its global, kind, row width, named columns and whether a save
                         holds it, for the base mod's tables.lua; the old names of tables and fields; and each scope's
                         ids and its tables by short name (spec §6.2)
+  shapes/tables.schema.json   the shape of the kind <game>.tables (data patches spec §7, plan §6.2), from the same
+                        record map: the link checks each data file of the kind against it before any code runs, and
+                        an editor reads it as JSON Schema; a state field, a scoped table's own name and a named
+                        column's number are marked as not offered, with why
 
 The rename rule (spec §9.1): a name the checked-in exports.txt lists stays exported, as a global's name or as one of
 its `aliases`, until the base mod's major version is raised. A rename that does neither is refused. A record table's
@@ -313,6 +317,114 @@ def render_record_map(profile_id: str, tables: list[dict], source: str, manifest
     return "\n".join(lines) + "\n"
 
 
+SHAPE_FILE = "tables.schema.json"
+SHAPE_DRAFT = "http://json-schema.org/draft-07/schema#"
+DECIMAL_KEYS = "x-ome-decimal-keys"
+INTEGER_RANGE = (-2**31, 2**32 - 1)   # an integer cell's values, as ome-records' applier takes them
+
+
+def _not_offered(why: str) -> dict:
+    """The subset's mark for a key a file does not set (plan §6.2): no value passes, and the error is `why`."""
+    return {"description": why, "type": "null"}
+
+
+def _cell(kind: str, description: str) -> dict:
+    if kind == "integer":
+        return {"description": f"{description}, a whole number", "type": "integer",
+                "minimum": INTEGER_RANGE[0], "maximum": INTEGER_RANGE[1]}
+    if kind == "float":
+        return {"description": f"{description}, a number", "type": "number"}
+    return {"description": f"{description}, text the save's code page (932) can encode", "type": "string"}
+
+
+def _saved_state(name: str) -> dict:
+    return _not_offered(f"{name} is saved state: a load brings the saved value back, so a file does not set it")
+
+
+def _field_shape(table: str, field: str, entry: dict) -> dict:
+    """A field's schema: a value, or a row by its column numbers, or a row by its column names and the numbers of
+    the columns that have none."""
+    name, global_name = f"{table}.{field}", entry["global"]
+    if entry.get("state"):
+        return _saved_state(name)
+    if "width" not in entry:
+        return _cell(entry["kind"], f"{name}: {global_name}")
+    width = entry["width"]
+    columns = entry.get("columns") or {}
+    if not columns:
+        return {"description": f"{name}: {global_name}, a row of {width} columns by number, 0 to {width - 1}",
+                "type": "object", DECIMAL_KEYS: {"minimum": 0, "maximum": width - 1},
+                "additionalProperties": _cell(entry["kind"], f"{name}.<column>: a column of {global_name}")}
+    by_index = {index: column for column, index in columns.items()}
+    properties: dict[str, dict] = {}
+    for index in range(width):
+        column = by_index.get(index)
+        if column is None:
+            properties[str(index)] = _cell(entry["kind"], f"{name}.{index}: column {index} of {global_name}")
+        else:
+            properties[column] = _cell(entry["kind"], f"{name}.{column}: column {index} of {global_name}")
+            properties[str(index)] = _not_offered(f"column {index} is named: write {column}")
+    return {"description": f"{name}: {global_name}, a row of {width} columns, by name where a column has one",
+            "type": "object", "properties": dict(sorted(properties.items())), "additionalProperties": False}
+
+
+def render_shape(profile_id: str, tables: list[dict], source: str, manifest: str, scopes: list[dict] = ()) -> str:
+    """The shape of the kind <game>.tables (data patches spec §7, plan §6.2), as JSON in the shape subset: what
+    ome-records' applier takes, in the terms a shape can say. Each schema's keywords come in one order, with its
+    description first; names in `properties` and `definitions` are sorted, so a registry change is a small diff."""
+    scoped = {table_name: (scope["name"], short) for scope in scopes for short, table_name in scope["tables"].items()}
+    definitions: dict[str, dict] = {}
+    top: dict[str, dict] = {}
+    for table in tables:
+        name, last = table["name"], table["records"] - 1
+        fields = {field: _field_shape(name, field, entry) for field, entry in table["fields"].items()}
+        for old, current in (table.get("old_fields") or {}).items():
+            if table["fields"][current].get("state"):
+                fields[old] = _saved_state(f"{name}.{old}")
+            else:
+                fields[old] = {**fields[current], "description": f"{name}.{old}: an old name of {name}.{current}; "
+                                                                 f"write {current}"}
+        definitions[f"record.{name}"] = {"description": f"{name}: one record's fields, by name", "type": "object",
+                                         "properties": dict(sorted(fields.items())), "additionalProperties": False}
+        definitions[f"records.{name}"] = {"description": f"{name}: records by id, 0 to {last}", "type": "object",
+                                          DECIMAL_KEYS: {"minimum": 0, "maximum": last},
+                                          "additionalProperties": {"$ref": f"#/definitions/record.{name}"}}
+        if name in scoped:
+            scope, short = scoped[name]
+            for spelling in [name, *table.get("aliases", [])]:
+                top[spelling] = _not_offered(f"{name} is reached through its scope: write {scope}.<id>.{short}")
+        else:
+            top[name] = {"$ref": f"#/definitions/records.{name}"}
+            for alias in table.get("aliases", []):
+                top[alias] = {"description": f"{alias}: an old name of the table {name}; write {name}",
+                              "$ref": f"#/definitions/records.{name}"}
+    for scope in scopes:
+        scope_name, first, last = scope["name"], scope["first"], scope["last"]
+        parts = {short: {"$ref": f"#/definitions/records.{table_name}"} for short, table_name in scope["tables"].items()}
+        definitions[f"scope.{scope_name}"] = {
+            "description": f"{scope_name}: each {scope_name}'s tables by its id, {first} to {last}", "type": "object",
+            DECIMAL_KEYS: {"minimum": first, "maximum": last},
+            "additionalProperties": {"description": f"one {scope_name}'s tables, by short name", "type": "object",
+                                     "properties": dict(sorted(parts.items())), "additionalProperties": False}}
+        top[scope_name] = {"$ref": f"#/definitions/scope.{scope_name}"}
+    shape = {
+        "$schema": SHAPE_DRAFT,
+        "description": (f"DO NOT EDIT -- generated from {source} and {manifest} by tools/base_mod_build.py --build. "
+                        f"The shape of {profile_id}.tables, the kind {base_mod_id(profile_id)} accepts (data patches "
+                        f"spec §7): a file's record tables by name, each record by its id in decimal, each field by "
+                        f"name, and each scope's tables by its id and their short names. A field the save holds, a "
+                        f"scoped table's own name and a named column's number take no value, and say why. The base "
+                        f"mod still checks, at a file's first delivery, what a shape cannot say: text the save's code "
+                        f"page cannot encode, one cell named twice through an old name, and a part at an event this "
+                        f"install does not raise."),
+        "type": "object",
+        "properties": dict(sorted(top.items())),
+        "additionalProperties": False,
+        "definitions": dict(sorted(definitions.items())),
+    }
+    return json.dumps(shape, indent=2, ensure_ascii=False) + "\n"
+
+
 TABLE_PREFIX, FIELD_PREFIX, SCOPE_PREFIX = "table ", "field ", "scope "
 
 
@@ -468,7 +580,9 @@ def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
              exports: render_exports(profile_id, major, names, source),
              root / "lua" / "generated" / "tables.lua": render_record_map(profile_id, record_map, source,
                                                                           _shown(manifest),
-                                                                          scopes if not table_errors else [])}
+                                                                          scopes if not table_errors else []),
+             root / "shapes" / SHAPE_FILE: render_shape(profile_id, record_map, source, _shown(manifest),
+                                                        scopes if not table_errors else [])}
     return files, errors
 
 

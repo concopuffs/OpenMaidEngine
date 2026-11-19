@@ -468,6 +468,90 @@ def test_scopes():
               f"a scope's lint error blocks the build ({errors})")
 
 
+def shape_of(files: dict) -> tuple[str, dict]:
+    text = next(text for path, text in files.items() if path.as_posix().endswith("shapes/tables.schema.json"))
+    return text, json.loads(text)
+
+
+# The shape (data patches plan §6.2): a scope, a table's old name and a scoped table's, a field's old name and a state
+# field's, beside HEROES' float, string, state and named row and the scoped table's unnamed row.
+SHAPED = SCOPED.replace('name = "hero"\nrecords = 4\nbuilt_by = "boot"\n',
+                        'name = "hero"\nrecords = 4\nbuilt_by = "boot"\naliases = ["heroes"]\n').replace(
+    'name = "foe"\nrecords = 3\nbuilt_by = "stage"\n', 'name = "foe"\nrecords = 3\nbuilt_by = "stage"\naliases = ["foes"]\n'
+).replace('end = "hero_levels"\n', 'end = "hero_levels"\n\n[table.field_aliases]\nlvl = "level"\nseen = "seen_flag"\n')
+
+
+def test_table_shape():
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), SHAPED)
+        files, errors = generate(mods, source)
+        check(not errors, f"a registry with a scope and old names generates a shape ({errors})")
+        text, shape = shape_of(files)
+        check(list(shape) == ["$schema", "description", "type", "properties", "additionalProperties", "definitions"]
+              and shape["$schema"] == "http://json-schema.org/draft-07/schema#"
+              and shape["description"].startswith("DO NOT EDIT -- generated from vm-map/globals-test.toml and ")
+              and "base_mod_build.py --build" in shape["description"] and shape["additionalProperties"] is False,
+              "the shape says it is generated, and from what, and the top takes no other key")
+        top = shape["properties"]
+        check(list(top) == ["foe", "foes", "hero", "heroes", "stage"], f"the top names each table and scope ({list(top)})")
+        check(top["hero"] == {"$ref": "#/definitions/records.hero"}
+              and top["heroes"] == {"description": "heroes: an old name of the table hero; write hero",
+                                    "$ref": "#/definitions/records.hero"},
+              "a table's old name has its current name's records")
+        reached = "foe is reached through its scope: write stage.<id>.enemy"
+        check(top["foe"] == {"description": reached, "type": "null"} and top["foes"] == top["foe"],
+              "a scoped table's own name, and its old name, are not offered at the top, and say how to reach it")
+        definitions = shape["definitions"]
+        check(list(definitions) == sorted(definitions) == ["record.foe", "record.hero", "records.foe", "records.hero",
+                                                            "scope.stage"], f"the definitions ({list(definitions)})")
+        check(definitions["records.hero"] == {"description": "hero: records by id, 0 to 3", "type": "object",
+                                              "x-ome-decimal-keys": {"minimum": 0, "maximum": 3},
+                                              "additionalProperties": {"$ref": "#/definitions/record.hero"}},
+              "a table's records are keyed by decimal id, from 0 to records - 1")
+        record = definitions["record.hero"]
+        check(record["additionalProperties"] is False and list(record["properties"]) == sorted(record["properties"])
+              == ["end", "level", "lvl", "name", "seen", "seen_flag", "speed", "stats"],
+              f"a record names its fields and old names, sorted, and takes no other ({list(record['properties'])})")
+        fields = record["properties"]
+        check(fields["level"] == {"description": "hero.level: hero_levels, a whole number", "type": "integer",
+                                  "minimum": -2147483648, "maximum": 4294967295},
+              "an integer field takes the applier's range and names its global")
+        check(fields["speed"]["type"] == "number" and fields["name"]["type"] == "string"
+              and "code page (932)" in fields["name"]["description"], "a float field is a number, a string field text")
+        state = "hero.seen_flag is saved state: a load brings the saved value back, so a file does not set it"
+        check(fields["seen_flag"] == {"description": state, "type": "null"}
+              and fields["seen"]["description"] == state.replace("seen_flag", "seen") and fields["seen"]["type"] == "null",
+              "a state field, and its old name, are not offered, and say why")
+        check({key: value for key, value in fields["lvl"].items() if key != "description"}
+              == {key: value for key, value in fields["level"].items() if key != "description"}
+              and fields["lvl"]["description"] == "hero.lvl: an old name of hero.level; write level",
+              "a field's old name has its current name's schema")
+        stats = fields["stats"]
+        check(stats["additionalProperties"] is False and list(stats["properties"]) == ["0", "1", "2", "end", "hp"]
+              and stats["properties"]["0"] == {"description": "column 0 is named: write hp", "type": "null"}
+              and stats["properties"]["2"] == {"description": "column 2 is named: write end", "type": "null"}
+              and stats["properties"]["1"]["type"] == "integer" and stats["properties"]["end"]["type"] == "integer",
+              f"a named row offers its names and its unnamed columns' numbers, not its named ones ({stats})")
+        routines = definitions["record.foe"]["properties"]["routines"]
+        check(routines["x-ome-decimal-keys"] == {"minimum": 0, "maximum": 1}
+              and routines["additionalProperties"]["type"] == "integer" and "properties" not in routines,
+              "a row without names is keyed by its column numbers")
+        scope = definitions["scope.stage"]
+        check(scope["x-ome-decimal-keys"] == {"minimum": 1, "maximum": 99}
+              and scope["additionalProperties"]["properties"] == {"enemy": {"$ref": "#/definitions/records.foe"}}
+              and scope["additionalProperties"]["additionalProperties"] is False and top["stage"]
+              == {"$ref": "#/definitions/scope.stage"}, "a scope is keyed by its ids and names its tables by short name")
+        check(all(list(schema)[0] == "description" for schema in definitions.values())
+              and text.endswith("}\n") and "\r" not in text, "each definition's description comes first; LF, one newline")
+        again, _ = generate(mods, source)
+        check(shape_of(again)[0] == text, "the shape is the same each time it is generated")
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), profile={})
+        files, _ = generate(mods, source)
+        check(shape_of(files)[1]["properties"] == {} and shape_of(files)[1]["definitions"] == {},
+              "a registry without tables has a shape that takes no key")
+
+
 def main():
     test_shapes()
     test_layout()
@@ -481,6 +565,7 @@ def main():
     test_old_names_lint()
     test_old_names_rename_rule()
     test_scopes()
+    test_table_shape()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

@@ -127,9 +127,9 @@ public sealed partial class DataPatchWorkspaceTests
     [Theory]
     [Trait("Category", "Workspace")]
     [InlineData("himegari", "example.stage-enemies", 1, 2, 810L, 3, 200L, 2, 834L, 202L,
-                "stage.2.enemy.3.unit: stage_enemy has no field unit")]
+                "unit.810.display_name: a string cell holds text the save can encode (code page 932); U+00E9 is not in it")]
     [InlineData("kamidori", "example.kamidori-stage-enemies", 51, 1, 761L, 3, 402L, 52, 762L, 631L,
-                "stage_enemy: stage_enemy is reached through its scope: write stage.<id>.enemy")]
+                "unit.761.display_name: a string cell holds text the save can encode (code page 932); U+00E9 is not in it")]
     public void TheStageExamplesEditTheirSlotAndTheirMistakeTwinsAreReportedAtBoot(
         string profile, string example, int stage, int slot, long unit, int otherSlot, long otherOwn,
         int secondStage, long secondUnit, long secondOwn, string mistake)
@@ -168,15 +168,30 @@ public sealed partial class DataPatchWorkspaceTests
         Assert.Contains(secondUnit, PlacedEnemies(profile, second));
         Assert.DoesNotContain(secondUnit, PlacedEnemies(profile, plainSecond));
 
+        // The twin's mistake is one no shape can say (plan §9.2), so the link takes the file and the boot refuses it.
         ModLinkResult twin = LinkedInOrder(game.Base, Open($"{example}-mistake"));
         Scripting native = Native(twin, LuaErrorPolicy.Continue);
-        game.Boot(native);
+        GameSession booted = game.Boot(native);
         string logged = Assert.Single(Logged(native, $"{example}-mistake"));
         Assert.Contains($"{example}-mistake data/stages.toml: 1 problem, so nothing of it is applied: {mistake}\n", logged,
                         StringComparison.Ordinal);
         // The port's status line shows this notice: the file once, then the problem's path.
         Assert.Equal($"Lua: {example}-mistake data/stages.toml failed: 1 problem, so nothing of it is applied: {mistake}",
                      native.LatestNotice);
+        // Its stage, run as AtStageStart runs it, in a session of its own (one native serves one interpreter): there the
+        // stage's delivery is the file's first, which refuses the file whole too, so the slot keeps the stage's own unit.
+        // The port's run keeps one session from the boot, where the stage's delivery passes the file over
+        // (tools/drive/scenarios/port/*-stage-enemies-mistake.steps).
+        booted.Seed(Cell(profile, "current_stage_id", 0), stage);
+        booted.Seed(Cell(profile, "field_map_continue_mode", 0), 0);
+        Scripting atStage = Native(twin, LuaErrorPolicy.Continue);
+        SceneResult field = booted.RunScene(game.Scripts.RequireByName("FIELD.BIN"), game.Table, new HeadlessWaits(),
+                                            provider: game.Scripts, build: game.Build, scripting: atStage);
+        Assert.Equal("STEP-LIMIT", field.Halt);
+        Assert.Contains($"failed at {profile}.stage.loaded", Assert.Single(Logged(atStage, $"{example}-mistake")),
+                        StringComparison.Ordinal);
+        Assert.NotEqual(unit, booted.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", slot)));
+        Assert.DoesNotContain(unit, PlacedEnemies(profile, booted));
     }
 
     /// <summary><paramref name="game"/>'s link base with another FIELD revision, whose bytes no point names, so the

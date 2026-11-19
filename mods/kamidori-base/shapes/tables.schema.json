@@ -1,0 +1,3781 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "DO NOT EDIT -- generated from vm-map/globals-kamidori.toml and engine/Ome.Engine/Profiles/kamidori.json by tools/base_mod_build.py --build. The shape of kamidori.tables, the kind kamidori-base accepts (data patches spec §7): a file's record tables by name, each record by its id in decimal, each field by name, and each scope's tables by its id and their short names. A field the save holds, a scoped table's own name and a named column's number take no value, and say why. The base mod still checks, at a file's first delivery, what a shape cannot say: text the save's code page cannot encode, one cell named twice through an old name, and a part at an event this install does not raise.",
+  "type": "object",
+  "properties": {
+    "item": {
+      "$ref": "#/definitions/records.item"
+    },
+    "skill": {
+      "$ref": "#/definitions/records.skill"
+    },
+    "stage": {
+      "$ref": "#/definitions/scope.stage"
+    },
+    "stage_enemy": {
+      "description": "stage_enemy is reached through its scope: write stage.<id>.enemy",
+      "type": "null"
+    },
+    "unit": {
+      "$ref": "#/definitions/records.unit"
+    }
+  },
+  "additionalProperties": false,
+  "definitions": {
+    "record.item": {
+      "description": "item: one record's fields, by name",
+      "type": "object",
+      "properties": {
+        "affinity_level_deltas": {
+          "description": "item.affinity_level_deltas: item_affinity_level_deltas, a row of 8 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write unused",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write physical",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write earth",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write ice",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write fire",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write lightning",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write holy",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write dark",
+              "type": "null"
+            },
+            "dark": {
+              "description": "item.affinity_level_deltas.dark: column 7 of item_affinity_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "earth": {
+              "description": "item.affinity_level_deltas.earth: column 2 of item_affinity_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fire": {
+              "description": "item.affinity_level_deltas.fire: column 4 of item_affinity_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "holy": {
+              "description": "item.affinity_level_deltas.holy: column 6 of item_affinity_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "ice": {
+              "description": "item.affinity_level_deltas.ice: column 3 of item_affinity_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "lightning": {
+              "description": "item.affinity_level_deltas.lightning: column 5 of item_affinity_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical": {
+              "description": "item.affinity_level_deltas.physical: column 1 of item_affinity_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "unused": {
+              "description": "item.affinity_level_deltas.unused: column 0 of item_affinity_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "attack_element": {
+          "description": "item.attack_element: item_attack_element, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "battle_animation_id": {
+          "description": "item.battle_animation_id: item_battle_animation_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "category": {
+          "description": "item.category: item_category, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "character_whitelist": {
+          "description": "item.character_whitelist: item_character_whitelist, a row of 5 columns by number, 0 to 4",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 4
+          },
+          "additionalProperties": {
+            "description": "item.character_whitelist.<column>: a column of item_character_whitelist, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "condition_level_deltas": {
+          "description": "item.condition_level_deltas: item_condition_level_deltas, a row of 30 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "item.condition_level_deltas.0: column 0 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "1": {
+              "description": "column 1 is named: write instant_death",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write water_flow",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write strong_acid",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write inflammation",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write fear",
+              "type": "null"
+            },
+            "14": {
+              "description": "column 14 is named: write hp_regeneration",
+              "type": "null"
+            },
+            "15": {
+              "description": "column 15 is named: write sp_regeneration",
+              "type": "null"
+            },
+            "16": {
+              "description": "column 16 is named: write fs_regeneration",
+              "type": "null"
+            },
+            "17": {
+              "description": "column 17 is named: write exaltation",
+              "type": "null"
+            },
+            "18": {
+              "description": "column 18 is named: write accuracy_up",
+              "type": "null"
+            },
+            "19": {
+              "description": "column 19 is named: write evasion_up",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write hp_drain",
+              "type": "null"
+            },
+            "20": {
+              "description": "column 20 is named: write physical_attack_up",
+              "type": "null"
+            },
+            "21": {
+              "description": "column 21 is named: write physical_defense_up",
+              "type": "null"
+            },
+            "22": {
+              "description": "column 22 is named: write magic_attack_up",
+              "type": "null"
+            },
+            "23": {
+              "description": "column 23 is named: write magic_defense_up",
+              "type": "null"
+            },
+            "24": {
+              "description": "column 24 is named: write speed_up",
+              "type": "null"
+            },
+            "25": {
+              "description": "column 25 is named: write critical_up",
+              "type": "null"
+            },
+            "26": {
+              "description": "column 26 is named: write movement_down",
+              "type": "null"
+            },
+            "27": {
+              "description": "column 27 is named: write no_return",
+              "type": "null"
+            },
+            "28": {
+              "description": "column 28 is named: write injury",
+              "type": "null"
+            },
+            "29": {
+              "description": "item.condition_level_deltas.29: column 29 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "3": {
+              "description": "column 3 is named: write sp_drain",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write fs_drain",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write curse",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write charm",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write confusion",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write paralysis",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write poison",
+              "type": "null"
+            },
+            "accuracy_up": {
+              "description": "item.condition_level_deltas.accuracy_up: column 18 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "charm": {
+              "description": "item.condition_level_deltas.charm: column 6 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "confusion": {
+              "description": "item.condition_level_deltas.confusion: column 7 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "critical_up": {
+              "description": "item.condition_level_deltas.critical_up: column 25 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "curse": {
+              "description": "item.condition_level_deltas.curse: column 5 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "evasion_up": {
+              "description": "item.condition_level_deltas.evasion_up: column 19 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "exaltation": {
+              "description": "item.condition_level_deltas.exaltation: column 17 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fear": {
+              "description": "item.condition_level_deltas.fear: column 13 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fs_drain": {
+              "description": "item.condition_level_deltas.fs_drain: column 4 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fs_regeneration": {
+              "description": "item.condition_level_deltas.fs_regeneration: column 16 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "hp_drain": {
+              "description": "item.condition_level_deltas.hp_drain: column 2 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "hp_regeneration": {
+              "description": "item.condition_level_deltas.hp_regeneration: column 14 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "inflammation": {
+              "description": "item.condition_level_deltas.inflammation: column 12 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "injury": {
+              "description": "item.condition_level_deltas.injury: column 28 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "instant_death": {
+              "description": "item.condition_level_deltas.instant_death: column 1 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_attack_up": {
+              "description": "item.condition_level_deltas.magic_attack_up: column 22 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_defense_up": {
+              "description": "item.condition_level_deltas.magic_defense_up: column 23 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "movement_down": {
+              "description": "item.condition_level_deltas.movement_down: column 26 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "no_return": {
+              "description": "item.condition_level_deltas.no_return: column 27 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "paralysis": {
+              "description": "item.condition_level_deltas.paralysis: column 8 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_attack_up": {
+              "description": "item.condition_level_deltas.physical_attack_up: column 20 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_defense_up": {
+              "description": "item.condition_level_deltas.physical_defense_up: column 21 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "poison": {
+              "description": "item.condition_level_deltas.poison: column 9 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sp_drain": {
+              "description": "item.condition_level_deltas.sp_drain: column 3 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sp_regeneration": {
+              "description": "item.condition_level_deltas.sp_regeneration: column 15 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "speed_up": {
+              "description": "item.condition_level_deltas.speed_up: column 24 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "strong_acid": {
+              "description": "item.condition_level_deltas.strong_acid: column 11 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "water_flow": {
+              "description": "item.condition_level_deltas.water_flow: column 10 of item_condition_level_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "costume_battle_variant": {
+          "description": "item.costume_battle_variant: item_costume_battle_variant, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "costume_enhancement_grid": {
+          "description": "item.costume_enhancement_grid is saved state: a load brings the saved value back, so a file does not set it",
+          "type": "null"
+        },
+        "costume_gem_sockets": {
+          "description": "item.costume_gem_sockets is saved state: a load brings the saved value back, so a file does not set it",
+          "type": "null"
+        },
+        "costume_graphic_asset_ids": {
+          "description": "item.costume_graphic_asset_ids: item_costume_graphic_asset_ids, a row of 17 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write standing_a",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write standing_b",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write icon_b",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write battle_a",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write battle_b",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write battle_c",
+              "type": "null"
+            },
+            "14": {
+              "description": "column 14 is named: write battle_d",
+              "type": "null"
+            },
+            "15": {
+              "description": "column 15 is named: write battle_icon_c",
+              "type": "null"
+            },
+            "16": {
+              "description": "column 16 is named: write battle_icon_d",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write standing_c",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write standing_full",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write face_a",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write face_b",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write face_c",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write portrait_a",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write portrait_b",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write icon_a",
+              "type": "null"
+            },
+            "battle_a": {
+              "description": "item.costume_graphic_asset_ids.battle_a: column 11 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "battle_b": {
+              "description": "item.costume_graphic_asset_ids.battle_b: column 12 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "battle_c": {
+              "description": "item.costume_graphic_asset_ids.battle_c: column 13 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "battle_d": {
+              "description": "item.costume_graphic_asset_ids.battle_d: column 14 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "battle_icon_c": {
+              "description": "item.costume_graphic_asset_ids.battle_icon_c: column 15 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "battle_icon_d": {
+              "description": "item.costume_graphic_asset_ids.battle_icon_d: column 16 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "face_a": {
+              "description": "item.costume_graphic_asset_ids.face_a: column 4 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "face_b": {
+              "description": "item.costume_graphic_asset_ids.face_b: column 5 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "face_c": {
+              "description": "item.costume_graphic_asset_ids.face_c: column 6 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "icon_a": {
+              "description": "item.costume_graphic_asset_ids.icon_a: column 9 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "icon_b": {
+              "description": "item.costume_graphic_asset_ids.icon_b: column 10 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "portrait_a": {
+              "description": "item.costume_graphic_asset_ids.portrait_a: column 7 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "portrait_b": {
+              "description": "item.costume_graphic_asset_ids.portrait_b: column 8 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "standing_a": {
+              "description": "item.costume_graphic_asset_ids.standing_a: column 0 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "standing_b": {
+              "description": "item.costume_graphic_asset_ids.standing_b: column 1 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "standing_c": {
+              "description": "item.costume_graphic_asset_ids.standing_c: column 2 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "standing_full": {
+              "description": "item.costume_graphic_asset_ids.standing_full: column 3 of item_costume_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "critical_rate_bonus": {
+          "description": "item.critical_rate_bonus: item_critical_rate_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "cursed_flag": {
+          "description": "item.cursed_flag: item_cursed_flag, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "equipped_condition_levels": {
+          "description": "item.equipped_condition_levels: item_equipped_condition_levels, a row of 30 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "item.equipped_condition_levels.0: column 0 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "1": {
+              "description": "column 1 is named: write instant_death",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write water_flow",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write strong_acid",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write inflammation",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write fear",
+              "type": "null"
+            },
+            "14": {
+              "description": "column 14 is named: write hp_regeneration",
+              "type": "null"
+            },
+            "15": {
+              "description": "column 15 is named: write sp_regeneration",
+              "type": "null"
+            },
+            "16": {
+              "description": "column 16 is named: write fs_regeneration",
+              "type": "null"
+            },
+            "17": {
+              "description": "column 17 is named: write exaltation",
+              "type": "null"
+            },
+            "18": {
+              "description": "column 18 is named: write accuracy_up",
+              "type": "null"
+            },
+            "19": {
+              "description": "column 19 is named: write evasion_up",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write hp_drain",
+              "type": "null"
+            },
+            "20": {
+              "description": "column 20 is named: write physical_attack_up",
+              "type": "null"
+            },
+            "21": {
+              "description": "column 21 is named: write physical_defense_up",
+              "type": "null"
+            },
+            "22": {
+              "description": "column 22 is named: write magic_attack_up",
+              "type": "null"
+            },
+            "23": {
+              "description": "column 23 is named: write magic_defense_up",
+              "type": "null"
+            },
+            "24": {
+              "description": "column 24 is named: write speed_up",
+              "type": "null"
+            },
+            "25": {
+              "description": "column 25 is named: write critical_up",
+              "type": "null"
+            },
+            "26": {
+              "description": "column 26 is named: write movement_down",
+              "type": "null"
+            },
+            "27": {
+              "description": "column 27 is named: write no_return",
+              "type": "null"
+            },
+            "28": {
+              "description": "column 28 is named: write injury",
+              "type": "null"
+            },
+            "29": {
+              "description": "item.equipped_condition_levels.29: column 29 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "3": {
+              "description": "column 3 is named: write sp_drain",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write fs_drain",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write curse",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write charm",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write confusion",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write paralysis",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write poison",
+              "type": "null"
+            },
+            "accuracy_up": {
+              "description": "item.equipped_condition_levels.accuracy_up: column 18 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "charm": {
+              "description": "item.equipped_condition_levels.charm: column 6 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "confusion": {
+              "description": "item.equipped_condition_levels.confusion: column 7 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "critical_up": {
+              "description": "item.equipped_condition_levels.critical_up: column 25 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "curse": {
+              "description": "item.equipped_condition_levels.curse: column 5 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "evasion_up": {
+              "description": "item.equipped_condition_levels.evasion_up: column 19 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "exaltation": {
+              "description": "item.equipped_condition_levels.exaltation: column 17 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fear": {
+              "description": "item.equipped_condition_levels.fear: column 13 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fs_drain": {
+              "description": "item.equipped_condition_levels.fs_drain: column 4 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fs_regeneration": {
+              "description": "item.equipped_condition_levels.fs_regeneration: column 16 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "hp_drain": {
+              "description": "item.equipped_condition_levels.hp_drain: column 2 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "hp_regeneration": {
+              "description": "item.equipped_condition_levels.hp_regeneration: column 14 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "inflammation": {
+              "description": "item.equipped_condition_levels.inflammation: column 12 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "injury": {
+              "description": "item.equipped_condition_levels.injury: column 28 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "instant_death": {
+              "description": "item.equipped_condition_levels.instant_death: column 1 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_attack_up": {
+              "description": "item.equipped_condition_levels.magic_attack_up: column 22 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_defense_up": {
+              "description": "item.equipped_condition_levels.magic_defense_up: column 23 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "movement_down": {
+              "description": "item.equipped_condition_levels.movement_down: column 26 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "no_return": {
+              "description": "item.equipped_condition_levels.no_return: column 27 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "paralysis": {
+              "description": "item.equipped_condition_levels.paralysis: column 8 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_attack_up": {
+              "description": "item.equipped_condition_levels.physical_attack_up: column 20 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_defense_up": {
+              "description": "item.equipped_condition_levels.physical_defense_up: column 21 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "poison": {
+              "description": "item.equipped_condition_levels.poison: column 9 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sp_drain": {
+              "description": "item.equipped_condition_levels.sp_drain: column 3 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sp_regeneration": {
+              "description": "item.equipped_condition_levels.sp_regeneration: column 15 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "speed_up": {
+              "description": "item.equipped_condition_levels.speed_up: column 24 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "strong_acid": {
+              "description": "item.equipped_condition_levels.strong_acid: column 11 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "water_flow": {
+              "description": "item.equipped_condition_levels.water_flow: column 10 of item_equipped_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "field_use_target_kind": {
+          "description": "item.field_use_target_kind: item_field_use_target_kind, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_area": {
+          "description": "item.furniture_area: item_furniture_area, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_equipment_bonus": {
+          "description": "item.furniture_equipment_bonus: item_furniture_equipment_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_exclusive_group": {
+          "description": "item.furniture_exclusive_group: item_furniture_exclusive_group, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_garden_bonus": {
+          "description": "item.furniture_garden_bonus: item_furniture_garden_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_height": {
+          "description": "item.furniture_height: item_furniture_height, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_high_price_bonus": {
+          "description": "item.furniture_high_price_bonus: item_furniture_high_price_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_information_bonus": {
+          "description": "item.furniture_information_bonus: item_furniture_information_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_knowledge_bonus": {
+          "description": "item.furniture_knowledge_bonus: item_furniture_knowledge_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_mutation_bonus": {
+          "description": "item.furniture_mutation_bonus: item_furniture_mutation_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_purchase_desire_bonus": {
+          "description": "item.furniture_purchase_desire_bonus: item_furniture_purchase_desire_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_sales_count_bonus": {
+          "description": "item.furniture_sales_count_bonus: item_furniture_sales_count_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_sprite_asset_id": {
+          "description": "item.furniture_sprite_asset_id: item_furniture_sprite_asset_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_staff_count_bonus": {
+          "description": "item.furniture_staff_count_bonus: item_furniture_staff_count_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_visit_rate_bonus": {
+          "description": "item.furniture_visit_rate_bonus: item_furniture_visit_rate_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "furniture_width": {
+          "description": "item.furniture_width: item_furniture_width, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "garden_product_item_id": {
+          "description": "item.garden_product_item_id: item_garden_product_item_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "garden_production_period": {
+          "description": "item.garden_production_period: item_garden_production_period, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "granted_skill_id": {
+          "description": "item.granted_skill_id: item_granted_skill_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "growth_enabled": {
+          "description": "item.growth_enabled: item_growth_enabled, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "growth_exp": {
+          "description": "item.growth_exp is saved state: a load brings the saved value back, so a file does not set it",
+          "type": "null"
+        },
+        "growth_level": {
+          "description": "item.growth_level is saved state: a load brings the saved value back, so a file does not set it",
+          "type": "null"
+        },
+        "growth_mastery_reward_items": {
+          "description": "item.growth_mastery_reward_items: item_growth_mastery_reward_items, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "growth_mastery_story_flag": {
+          "description": "item.growth_mastery_story_flag: item_growth_mastery_story_flags, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "handler_script_id": {
+          "description": "item.handler_script_id: item_handler_script_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "icon_asset_id": {
+          "description": "item.icon_asset_id: item_icon_asset_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "inventory_count": {
+          "description": "item.inventory_count is saved state: a load brings the saved value back, so a file does not set it",
+          "type": "null"
+        },
+        "max_range": {
+          "description": "item.max_range: item_max_range, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "min_range": {
+          "description": "item.min_range: item_min_range, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "name": {
+          "description": "item.name: item_names, text the save's code page (932) can encode",
+          "type": "string"
+        },
+        "price": {
+          "description": "item.price: item_prices, a row of 3 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write buy",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write sell",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write retail_base",
+              "type": "null"
+            },
+            "buy": {
+              "description": "item.price.buy: column 0 of item_prices, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "retail_base": {
+              "description": "item.price.retail_base: column 2 of item_prices, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sell": {
+              "description": "item.price.sell: column 1 of item_prices, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "rank": {
+          "description": "item.rank: item_rank, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "recovery_variance": {
+          "description": "item.recovery_variance: item_recovery_variance, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "resource_recovery_amounts": {
+          "description": "item.resource_recovery_amounts: item_resource_recovery_amounts, a row of 3 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write hp",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write sp",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write fs",
+              "type": "null"
+            },
+            "fs": {
+              "description": "item.resource_recovery_amounts.fs: column 2 of item_resource_recovery_amounts, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "hp": {
+              "description": "item.resource_recovery_amounts.hp: column 0 of item_resource_recovery_amounts, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sp": {
+              "description": "item.resource_recovery_amounts.sp: column 1 of item_resource_recovery_amounts, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "sex_restriction_mask": {
+          "description": "item.sex_restriction_mask: item_sex_restriction_mask, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "short_description": {
+          "description": "item.short_description: item_short_descriptions, text the save's code page (932) can encode",
+          "type": "string"
+        },
+        "sort_key": {
+          "description": "item.sort_key: item_sort_key, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "species_restriction_mask": {
+          "description": "item.species_restriction_mask: item_species_restriction_mask, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "stat_modifiers": {
+          "description": "item.stat_modifiers: item_stat_modifiers, a row of 14 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write accuracy",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write evasion",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write max_hp",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write max_sp",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write max_fs",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write skill_capacity",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write physical_attack",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write physical_defense",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write magic_attack",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write magic_defense",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write agility",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write luck",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write movement",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write customer_service",
+              "type": "null"
+            },
+            "accuracy": {
+              "description": "item.stat_modifiers.accuracy: column 0 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "agility": {
+              "description": "item.stat_modifiers.agility: column 6 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "customer_service": {
+              "description": "item.stat_modifiers.customer_service: column 9 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "evasion": {
+              "description": "item.stat_modifiers.evasion: column 1 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "luck": {
+              "description": "item.stat_modifiers.luck: column 7 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_attack": {
+              "description": "item.stat_modifiers.magic_attack: column 4 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_defense": {
+              "description": "item.stat_modifiers.magic_defense: column 5 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_fs": {
+              "description": "item.stat_modifiers.max_fs: column 12 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_hp": {
+              "description": "item.stat_modifiers.max_hp: column 10 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_sp": {
+              "description": "item.stat_modifiers.max_sp: column 11 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "movement": {
+              "description": "item.stat_modifiers.movement: column 8 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_attack": {
+              "description": "item.stat_modifiers.physical_attack: column 2 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_defense": {
+              "description": "item.stat_modifiers.physical_defense: column 3 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_capacity": {
+              "description": "item.stat_modifiers.skill_capacity: column 13 of item_stat_modifiers, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "usability_flag": {
+          "description": "item.usability_flag: item_usability_flags, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        }
+      },
+      "additionalProperties": false
+    },
+    "record.skill": {
+      "description": "skill: one record's fields, by name",
+      "type": "object",
+      "properties": {
+        "area_cooldown_turns": {
+          "description": "skill.area_cooldown_turns: skill_area_cooldown_turns, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "area_effect_blend_mode": {
+          "description": "skill.area_effect_blend_mode: skill_area_effect_blend_mode, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "area_effect_sound_asset_id": {
+          "description": "skill.area_effect_sound_asset_id: skill_area_effect_sound_asset_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "area_effect_texture_asset_id": {
+          "description": "skill.area_effect_texture_asset_id: skill_area_effect_texture_asset_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "area_shape_id": {
+          "description": "skill.area_shape_id: skill_area_shape_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "area_target_mode": {
+          "description": "skill.area_target_mode: skill_area_target_mode, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "attack_element_encoded": {
+          "description": "skill.attack_element_encoded: skill_attack_element_encoded, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "battle_animation_id": {
+          "description": "skill.battle_animation_id: skill_battle_animation_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "bundled_skill_ids": {
+          "description": "skill.bundled_skill_ids: skill_bundled_skill_ids, a row of 5 columns by number, 0 to 4",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 4
+          },
+          "additionalProperties": {
+            "description": "skill.bundled_skill_ids.<column>: a column of skill_bundled_skill_ids, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "catalog_visible": {
+          "description": "skill.catalog_visible: skill_catalog_visible, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "category": {
+          "description": "skill.category: skill_category, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "combat_stat_deltas": {
+          "description": "skill.combat_stat_deltas: skill_combat_stat_deltas, a row of 10 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write accuracy",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write evasion",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write physical_attack",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write physical_defense",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write magic_attack",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write magic_defense",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write agility",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write luck",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write movement",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write customer_service",
+              "type": "null"
+            },
+            "accuracy": {
+              "description": "skill.combat_stat_deltas.accuracy: column 0 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "agility": {
+              "description": "skill.combat_stat_deltas.agility: column 6 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "customer_service": {
+              "description": "skill.combat_stat_deltas.customer_service: column 9 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "evasion": {
+              "description": "skill.combat_stat_deltas.evasion: column 1 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "luck": {
+              "description": "skill.combat_stat_deltas.luck: column 7 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_attack": {
+              "description": "skill.combat_stat_deltas.magic_attack: column 4 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_defense": {
+              "description": "skill.combat_stat_deltas.magic_defense: column 5 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "movement": {
+              "description": "skill.combat_stat_deltas.movement: column 8 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_attack": {
+              "description": "skill.combat_stat_deltas.physical_attack: column 2 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_defense": {
+              "description": "skill.combat_stat_deltas.physical_defense: column 3 of skill_combat_stat_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "combo_partner_character_ids": {
+          "description": "skill.combo_partner_character_ids: skill_combo_partner_character_ids, a row of 2 columns by number, 0 to 1",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 1
+          },
+          "additionalProperties": {
+            "description": "skill.combo_partner_character_ids.<column>: a column of skill_combo_partner_character_ids, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "condition_levels": {
+          "description": "skill.condition_levels: skill_condition_levels, a row of 30 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "skill.condition_levels.0: column 0 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "1": {
+              "description": "column 1 is named: write instant_death",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write water_flow",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write strong_acid",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write inflammation",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write fear",
+              "type": "null"
+            },
+            "14": {
+              "description": "column 14 is named: write hp_regeneration",
+              "type": "null"
+            },
+            "15": {
+              "description": "column 15 is named: write sp_regeneration",
+              "type": "null"
+            },
+            "16": {
+              "description": "column 16 is named: write fs_regeneration",
+              "type": "null"
+            },
+            "17": {
+              "description": "column 17 is named: write exaltation",
+              "type": "null"
+            },
+            "18": {
+              "description": "column 18 is named: write accuracy_up",
+              "type": "null"
+            },
+            "19": {
+              "description": "column 19 is named: write evasion_up",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write hp_drain",
+              "type": "null"
+            },
+            "20": {
+              "description": "column 20 is named: write physical_attack_up",
+              "type": "null"
+            },
+            "21": {
+              "description": "column 21 is named: write physical_defense_up",
+              "type": "null"
+            },
+            "22": {
+              "description": "column 22 is named: write magic_attack_up",
+              "type": "null"
+            },
+            "23": {
+              "description": "column 23 is named: write magic_defense_up",
+              "type": "null"
+            },
+            "24": {
+              "description": "column 24 is named: write speed_up",
+              "type": "null"
+            },
+            "25": {
+              "description": "column 25 is named: write critical_up",
+              "type": "null"
+            },
+            "26": {
+              "description": "column 26 is named: write movement_down",
+              "type": "null"
+            },
+            "27": {
+              "description": "column 27 is named: write no_return",
+              "type": "null"
+            },
+            "28": {
+              "description": "column 28 is named: write injury",
+              "type": "null"
+            },
+            "29": {
+              "description": "skill.condition_levels.29: column 29 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "3": {
+              "description": "column 3 is named: write sp_drain",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write fs_drain",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write curse",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write charm",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write confusion",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write paralysis",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write poison",
+              "type": "null"
+            },
+            "accuracy_up": {
+              "description": "skill.condition_levels.accuracy_up: column 18 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "charm": {
+              "description": "skill.condition_levels.charm: column 6 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "confusion": {
+              "description": "skill.condition_levels.confusion: column 7 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "critical_up": {
+              "description": "skill.condition_levels.critical_up: column 25 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "curse": {
+              "description": "skill.condition_levels.curse: column 5 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "evasion_up": {
+              "description": "skill.condition_levels.evasion_up: column 19 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "exaltation": {
+              "description": "skill.condition_levels.exaltation: column 17 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fear": {
+              "description": "skill.condition_levels.fear: column 13 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fs_drain": {
+              "description": "skill.condition_levels.fs_drain: column 4 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fs_regeneration": {
+              "description": "skill.condition_levels.fs_regeneration: column 16 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "hp_drain": {
+              "description": "skill.condition_levels.hp_drain: column 2 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "hp_regeneration": {
+              "description": "skill.condition_levels.hp_regeneration: column 14 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "inflammation": {
+              "description": "skill.condition_levels.inflammation: column 12 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "injury": {
+              "description": "skill.condition_levels.injury: column 28 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "instant_death": {
+              "description": "skill.condition_levels.instant_death: column 1 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_attack_up": {
+              "description": "skill.condition_levels.magic_attack_up: column 22 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_defense_up": {
+              "description": "skill.condition_levels.magic_defense_up: column 23 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "movement_down": {
+              "description": "skill.condition_levels.movement_down: column 26 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "no_return": {
+              "description": "skill.condition_levels.no_return: column 27 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "paralysis": {
+              "description": "skill.condition_levels.paralysis: column 8 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_attack_up": {
+              "description": "skill.condition_levels.physical_attack_up: column 20 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_defense_up": {
+              "description": "skill.condition_levels.physical_defense_up: column 21 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "poison": {
+              "description": "skill.condition_levels.poison: column 9 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sp_drain": {
+              "description": "skill.condition_levels.sp_drain: column 3 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sp_regeneration": {
+              "description": "skill.condition_levels.sp_regeneration: column 15 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "speed_up": {
+              "description": "skill.condition_levels.speed_up: column 24 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "strong_acid": {
+              "description": "skill.condition_levels.strong_acid: column 11 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "water_flow": {
+              "description": "skill.condition_levels.water_flow: column 10 of skill_condition_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "critical_rate_bonus": {
+          "description": "skill.critical_rate_bonus: skill_critical_rate_bonus, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "equip_cost": {
+          "description": "skill.equip_cost: skill_equip_cost, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "handler_script_id": {
+          "description": "skill.handler_script_id: skill_handler_script_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "icon_asset_id": {
+          "description": "skill.icon_asset_id: skill_icon_asset_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "max_range_encoded": {
+          "description": "skill.max_range_encoded: skill_max_range_encoded, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "min_range_encoded": {
+          "description": "skill.min_range_encoded: skill_min_range_encoded, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "name": {
+          "description": "skill.name: skill_names, text the save's code page (932) can encode",
+          "type": "string"
+        },
+        "proc_chance_percent": {
+          "description": "skill.proc_chance_percent: skill_proc_chance_percent, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "required_weapon_category_mask": {
+          "description": "skill.required_weapon_category_mask: skill_required_weapon_category_mask, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "resource_deltas": {
+          "description": "skill.resource_deltas: skill_resource_deltas, a row of 3 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write hp",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write sp",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write fs",
+              "type": "null"
+            },
+            "fs": {
+              "description": "skill.resource_deltas.fs: column 2 of skill_resource_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "hp": {
+              "description": "skill.resource_deltas.hp: column 0 of skill_resource_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "sp": {
+              "description": "skill.resource_deltas.sp: column 1 of skill_resource_deltas, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "short_description": {
+          "description": "skill.short_description: skill_short_descriptions, text the save's code page (932) can encode",
+          "type": "string"
+        },
+        "sort_key": {
+          "description": "skill.sort_key: skill_sort_key, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "upgrade_family_id": {
+          "description": "skill.upgrade_family_id: skill_upgrade_family_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        }
+      },
+      "additionalProperties": false
+    },
+    "record.stage_enemy": {
+      "description": "stage_enemy: one record's fields, by name",
+      "type": "object",
+      "properties": {
+        "auto_level_scale_divisor": {
+          "description": "stage_enemy.auto_level_scale_divisor: stage_enemy_auto_level_scale_divisor, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "battle_routine_set_ids": {
+          "description": "stage_enemy.battle_routine_set_ids: stage_enemy_battle_routine_set_ids, a row of 3 columns by number, 0 to 2",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 2
+          },
+          "additionalProperties": {
+            "description": "stage_enemy.battle_routine_set_ids.<column>: a column of stage_enemy_battle_routine_set_ids, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "difficulty_mask": {
+          "description": "stage_enemy.difficulty_mask: stage_enemy_difficulty_mask, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "faction_id": {
+          "description": "stage_enemy.faction_id: stage_enemy_faction_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "first_visit_only": {
+          "description": "stage_enemy.first_visit_only: stage_enemy_first_visit_only, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "forbidden_story_flags": {
+          "description": "stage_enemy.forbidden_story_flags: stage_enemy_forbidden_story_flags, a row of 5 columns by number, 0 to 4",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 4
+          },
+          "additionalProperties": {
+            "description": "stage_enemy.forbidden_story_flags.<column>: a column of stage_enemy_forbidden_story_flags, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "max_level": {
+          "description": "stage_enemy.max_level: stage_enemy_max_level, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "min_level": {
+          "description": "stage_enemy.min_level: stage_enemy_min_level, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "movement_routine_set_ids": {
+          "description": "stage_enemy.movement_routine_set_ids: stage_enemy_movement_routine_set_ids, a row of 3 columns by number, 0 to 2",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 2
+          },
+          "additionalProperties": {
+            "description": "stage_enemy.movement_routine_set_ids.<column>: a column of stage_enemy_movement_routine_set_ids, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "random_selection_weight": {
+          "description": "stage_enemy.random_selection_weight: stage_enemy_random_selection_weight, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "required_story_flags": {
+          "description": "stage_enemy.required_story_flags: stage_enemy_required_story_flags, a row of 7 columns by number, 0 to 6",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 6
+          },
+          "additionalProperties": {
+            "description": "stage_enemy.required_story_flags.<column>: a column of stage_enemy_required_story_flags, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "spawn_object_slot": {
+          "description": "stage_enemy.spawn_object_slot: stage_enemy_spawn_object_slot, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "spawn_tile_x": {
+          "description": "stage_enemy.spawn_tile_x: stage_enemy_spawn_tile_x, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "spawn_tile_y": {
+          "description": "stage_enemy.spawn_tile_y: stage_enemy_spawn_tile_y, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "unit_id": {
+          "description": "stage_enemy.unit_id: stage_enemy_unit_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        }
+      },
+      "additionalProperties": false
+    },
+    "record.unit": {
+      "description": "unit: one record's fields, by name",
+      "type": "object",
+      "properties": {
+        "auto_level_scale_divisor": {
+          "description": "unit.auto_level_scale_divisor: unit_auto_level_scale_divisor, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "bestiary_description": {
+          "description": "unit.bestiary_description: unit_bestiary_description_lines, a row of 3 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write line_1",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write line_2",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write line_3",
+              "type": "null"
+            },
+            "line_1": {
+              "description": "unit.bestiary_description.line_1: column 0 of unit_bestiary_description_lines, text the save's code page (932) can encode",
+              "type": "string"
+            },
+            "line_2": {
+              "description": "unit.bestiary_description.line_2: column 1 of unit_bestiary_description_lines, text the save's code page (932) can encode",
+              "type": "string"
+            },
+            "line_3": {
+              "description": "unit.bestiary_description.line_3: column 2 of unit_bestiary_description_lines, text the save's code page (932) can encode",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "bestiary_knowledge_gain": {
+          "description": "unit.bestiary_knowledge_gain: unit_bestiary_knowledge_gain, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "bestiary_listed": {
+          "description": "unit.bestiary_listed: unit_bestiary_listed, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "boss_class": {
+          "description": "unit.boss_class: unit_boss_class, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "canonical_character_id": {
+          "description": "unit.canonical_character_id: unit_canonical_character_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "cutin_element": {
+          "description": "unit.cutin_element: unit_cutin_element, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "default_attack_item_id": {
+          "description": "unit.default_attack_item_id: unit_default_attack_item_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "default_costume_item_id": {
+          "description": "unit.default_costume_item_id: unit_default_costume_item_id, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "display_name": {
+          "description": "unit.display_name: unit_display_names, text the save's code page (932) can encode",
+          "type": "string"
+        },
+        "drop_chance": {
+          "description": "unit.drop_chance: unit_drop_chance_percent, a row of 5 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write drop_1",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write drop_2",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write drop_3",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write drop_4",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write drop_5",
+              "type": "null"
+            },
+            "drop_1": {
+              "description": "unit.drop_chance.drop_1: column 0 of unit_drop_chance_percent, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_2": {
+              "description": "unit.drop_chance.drop_2: column 1 of unit_drop_chance_percent, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_3": {
+              "description": "unit.drop_chance.drop_3: column 2 of unit_drop_chance_percent, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_4": {
+              "description": "unit.drop_chance.drop_4: column 3 of unit_drop_chance_percent, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_5": {
+              "description": "unit.drop_chance.drop_5: column 4 of unit_drop_chance_percent, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "drop_excluding_flag": {
+          "description": "unit.drop_excluding_flag: unit_drop_excluding_flag_ids, a row of 5 columns by number, 0 to 4",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 4
+          },
+          "additionalProperties": {
+            "description": "unit.drop_excluding_flag.<column>: a column of unit_drop_excluding_flag_ids, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "drop_item": {
+          "description": "unit.drop_item: unit_drop_item_ids, a row of 5 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write drop_1",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write drop_2",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write drop_3",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write drop_4",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write drop_5",
+              "type": "null"
+            },
+            "drop_1": {
+              "description": "unit.drop_item.drop_1: column 0 of unit_drop_item_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_2": {
+              "description": "unit.drop_item.drop_2: column 1 of unit_drop_item_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_3": {
+              "description": "unit.drop_item.drop_3: column 2 of unit_drop_item_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_4": {
+              "description": "unit.drop_item.drop_4: column 3 of unit_drop_item_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_5": {
+              "description": "unit.drop_item.drop_5: column 4 of unit_drop_item_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "drop_knowledge_threshold": {
+          "description": "unit.drop_knowledge_threshold: unit_drop_knowledge_threshold, a row of 5 columns by number, 0 to 4",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 4
+          },
+          "additionalProperties": {
+            "description": "unit.drop_knowledge_threshold.<column>: a column of unit_drop_knowledge_threshold, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "drop_required_flag": {
+          "description": "unit.drop_required_flag: unit_drop_required_flag_ids, a row of 10 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write drop_1_flag_a",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write drop_1_flag_b",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write drop_2_flag_a",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write drop_2_flag_b",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write drop_3_flag_a",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write drop_3_flag_b",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write drop_4_flag_a",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write drop_4_flag_b",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write drop_5_flag_a",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write drop_5_flag_b",
+              "type": "null"
+            },
+            "drop_1_flag_a": {
+              "description": "unit.drop_required_flag.drop_1_flag_a: column 0 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_1_flag_b": {
+              "description": "unit.drop_required_flag.drop_1_flag_b: column 1 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_2_flag_a": {
+              "description": "unit.drop_required_flag.drop_2_flag_a: column 2 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_2_flag_b": {
+              "description": "unit.drop_required_flag.drop_2_flag_b: column 3 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_3_flag_a": {
+              "description": "unit.drop_required_flag.drop_3_flag_a: column 4 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_3_flag_b": {
+              "description": "unit.drop_required_flag.drop_3_flag_b: column 5 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_4_flag_a": {
+              "description": "unit.drop_required_flag.drop_4_flag_a: column 6 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_4_flag_b": {
+              "description": "unit.drop_required_flag.drop_4_flag_b: column 7 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_5_flag_a": {
+              "description": "unit.drop_required_flag.drop_5_flag_a: column 8 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "drop_5_flag_b": {
+              "description": "unit.drop_required_flag.drop_5_flag_b: column 9 of unit_drop_required_flag_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "element_resistance": {
+          "description": "unit.element_resistance: unit_element_resistance_levels, a row of 8 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "unit.element_resistance.0: column 0 of unit_element_resistance_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "1": {
+              "description": "column 1 is named: write physical",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write earth",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write cold",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write fire",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write lightning",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write holy",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write dark",
+              "type": "null"
+            },
+            "cold": {
+              "description": "unit.element_resistance.cold: column 3 of unit_element_resistance_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "dark": {
+              "description": "unit.element_resistance.dark: column 7 of unit_element_resistance_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "earth": {
+              "description": "unit.element_resistance.earth: column 2 of unit_element_resistance_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "fire": {
+              "description": "unit.element_resistance.fire: column 4 of unit_element_resistance_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "holy": {
+              "description": "unit.element_resistance.holy: column 6 of unit_element_resistance_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "lightning": {
+              "description": "unit.element_resistance.lightning: column 5 of unit_element_resistance_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical": {
+              "description": "unit.element_resistance.physical: column 1 of unit_element_resistance_levels, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "equippable_category_mask": {
+          "description": "unit.equippable_category_mask: unit_equippable_category_mask, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "experience_level_cap": {
+          "description": "unit.experience_level_cap: unit_experience_level_cap, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "experience_reward": {
+          "description": "unit.experience_reward: unit_experience_reward, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "full_name": {
+          "description": "unit.full_name: unit_full_names, text the save's code page (932) can encode",
+          "type": "string"
+        },
+        "graphic": {
+          "description": "unit.graphic: unit_graphic_asset_ids, a row of 17 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write status_art_a_CS_AZA",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write status_art_b_CS_AZB",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write cutin_CIC_AB",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write battle_sprite_1_CB_AAA",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write battle_sprite_2_CB_AAA_or_AAB",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write battle_sprite_3_CB_AAA_or_AAB",
+              "type": "null"
+            },
+            "14": {
+              "description": "column 14 is named: write battle_sprite_CB_AB",
+              "type": "null"
+            },
+            "15": {
+              "description": "column 15 is named: write cutin_CIC_AC",
+              "type": "null"
+            },
+            "16": {
+              "description": "column 16 is named: write cutin_CIC_AD",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write status_art_c_CS_AZC",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write room_art_CS_AYA",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write face_CA_AA",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write face_CA_AB",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write face_CA_AC",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write map_sprite_compact_CP_AA",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write map_sprite_directional_CP_AB",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write cutin_CIC_AA",
+              "type": "null"
+            },
+            "battle_sprite_1_CB_AAA": {
+              "description": "unit.graphic.battle_sprite_1_CB_AAA: column 11 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "battle_sprite_2_CB_AAA_or_AAB": {
+              "description": "unit.graphic.battle_sprite_2_CB_AAA_or_AAB: column 12 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "battle_sprite_3_CB_AAA_or_AAB": {
+              "description": "unit.graphic.battle_sprite_3_CB_AAA_or_AAB: column 13 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "battle_sprite_CB_AB": {
+              "description": "unit.graphic.battle_sprite_CB_AB: column 14 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "cutin_CIC_AA": {
+              "description": "unit.graphic.cutin_CIC_AA: column 9 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "cutin_CIC_AB": {
+              "description": "unit.graphic.cutin_CIC_AB: column 10 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "cutin_CIC_AC": {
+              "description": "unit.graphic.cutin_CIC_AC: column 15 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "cutin_CIC_AD": {
+              "description": "unit.graphic.cutin_CIC_AD: column 16 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "face_CA_AA": {
+              "description": "unit.graphic.face_CA_AA: column 4 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "face_CA_AB": {
+              "description": "unit.graphic.face_CA_AB: column 5 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "face_CA_AC": {
+              "description": "unit.graphic.face_CA_AC: column 6 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "map_sprite_compact_CP_AA": {
+              "description": "unit.graphic.map_sprite_compact_CP_AA: column 7 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "map_sprite_directional_CP_AB": {
+              "description": "unit.graphic.map_sprite_directional_CP_AB: column 8 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "room_art_CS_AYA": {
+              "description": "unit.graphic.room_art_CS_AYA: column 3 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "status_art_a_CS_AZA": {
+              "description": "unit.graphic.status_art_a_CS_AZA: column 0 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "status_art_b_CS_AZB": {
+              "description": "unit.graphic.status_art_b_CS_AZB: column 1 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "status_art_c_CS_AZC": {
+              "description": "unit.graphic.status_art_c_CS_AZC: column 2 of unit_graphic_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "habitat_area": {
+          "description": "unit.habitat_area: unit_habitat_area_ids, a row of 4 columns by number, 0 to 3",
+          "type": "object",
+          "x-ome-decimal-keys": {
+            "minimum": 0,
+            "maximum": 3
+          },
+          "additionalProperties": {
+            "description": "unit.habitat_area.<column>: a column of unit_habitat_area_ids, a whole number",
+            "type": "integer",
+            "minimum": -2147483648,
+            "maximum": 4294967295
+          }
+        },
+        "history_face_asset_id": {
+          "description": "unit.history_face_asset_id: unit_history_face_asset_ids, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "initial_affinity_tenths": {
+          "description": "unit.initial_affinity_tenths: unit_initial_affinity_tenths, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "initial_class_title": {
+          "description": "unit.initial_class_title: unit_initial_class_titles, text the save's code page (932) can encode",
+          "type": "string"
+        },
+        "initial_equipment": {
+          "description": "unit.initial_equipment: unit_initial_equipment_item_ids, a row of 3 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write weapon",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write accessory",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write slot_3",
+              "type": "null"
+            },
+            "accessory": {
+              "description": "unit.initial_equipment.accessory: column 1 of unit_initial_equipment_item_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "slot_3": {
+              "description": "unit.initial_equipment.slot_3: column 2 of unit_initial_equipment_item_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "weapon": {
+              "description": "unit.initial_equipment.weapon: column 0 of unit_initial_equipment_item_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "initial_party_capacity": {
+          "description": "unit.initial_party_capacity: unit_initial_party_capacity, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "initial_stat_caps": {
+          "description": "unit.initial_stat_caps: unit_initial_stat_caps, a row of 14 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write accuracy",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write evasion",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write max_hp",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write max_sp",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write max_fs",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write capacity",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write physical_attack",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write physical_defense",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write magic_attack",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write magic_defense",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write agility",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write luck",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write movement",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write customer_service",
+              "type": "null"
+            },
+            "accuracy": {
+              "description": "unit.initial_stat_caps.accuracy: column 0 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "agility": {
+              "description": "unit.initial_stat_caps.agility: column 6 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "capacity": {
+              "description": "unit.initial_stat_caps.capacity: column 13 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "customer_service": {
+              "description": "unit.initial_stat_caps.customer_service: column 9 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "evasion": {
+              "description": "unit.initial_stat_caps.evasion: column 1 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "luck": {
+              "description": "unit.initial_stat_caps.luck: column 7 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_attack": {
+              "description": "unit.initial_stat_caps.magic_attack: column 4 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_defense": {
+              "description": "unit.initial_stat_caps.magic_defense: column 5 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_fs": {
+              "description": "unit.initial_stat_caps.max_fs: column 12 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_hp": {
+              "description": "unit.initial_stat_caps.max_hp: column 10 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_sp": {
+              "description": "unit.initial_stat_caps.max_sp: column 11 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "movement": {
+              "description": "unit.initial_stat_caps.movement: column 8 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_attack": {
+              "description": "unit.initial_stat_caps.physical_attack: column 2 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_defense": {
+              "description": "unit.initial_stat_caps.physical_defense: column 3 of unit_initial_stat_caps, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "initial_weapon_level": {
+          "description": "unit.initial_weapon_level: unit_initial_weapon_level, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "large_battle_sprite": {
+          "description": "unit.large_battle_sprite: unit_large_battle_sprite, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "level_cap": {
+          "description": "unit.level_cap: unit_level_cap, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "party_cost": {
+          "description": "unit.party_cost: unit_party_cost, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "race": {
+          "description": "unit.race: unit_race, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "sex": {
+          "description": "unit.sex: unit_sex, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "skill": {
+          "description": "unit.skill: unit_skill_ids, a row of 8 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write skill_1",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write skill_2",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write skill_3",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write skill_4",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write skill_5",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write skill_6",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write skill_7",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write skill_8",
+              "type": "null"
+            },
+            "skill_1": {
+              "description": "unit.skill.skill_1: column 0 of unit_skill_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_2": {
+              "description": "unit.skill.skill_2: column 1 of unit_skill_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_3": {
+              "description": "unit.skill.skill_3: column 2 of unit_skill_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_4": {
+              "description": "unit.skill.skill_4: column 3 of unit_skill_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_5": {
+              "description": "unit.skill.skill_5: column 4 of unit_skill_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_6": {
+              "description": "unit.skill.skill_6: column 5 of unit_skill_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_7": {
+              "description": "unit.skill.skill_7: column 6 of unit_skill_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_8": {
+              "description": "unit.skill.skill_8: column 7 of unit_skill_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "sort_key": {
+          "description": "unit.sort_key: unit_sort_key, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "speaker_name": {
+          "description": "unit.speaker_name: unit_speaker_names, a row of 5 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write name",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write alternate_name",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write descriptor",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write unused",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write unknown_placeholder",
+              "type": "null"
+            },
+            "alternate_name": {
+              "description": "unit.speaker_name.alternate_name: column 1 of unit_speaker_names, text the save's code page (932) can encode",
+              "type": "string"
+            },
+            "descriptor": {
+              "description": "unit.speaker_name.descriptor: column 2 of unit_speaker_names, text the save's code page (932) can encode",
+              "type": "string"
+            },
+            "name": {
+              "description": "unit.speaker_name.name: column 0 of unit_speaker_names, text the save's code page (932) can encode",
+              "type": "string"
+            },
+            "unknown_placeholder": {
+              "description": "unit.speaker_name.unknown_placeholder: column 4 of unit_speaker_names, text the save's code page (932) can encode",
+              "type": "string"
+            },
+            "unused": {
+              "description": "unit.speaker_name.unused: column 3 of unit_speaker_names, text the save's code page (932) can encode",
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "starting_level": {
+          "description": "unit.starting_level: unit_starting_level, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "stat_growth": {
+          "description": "unit.stat_growth: unit_stat_growth_rates, a row of 14 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write accuracy",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write evasion",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write max_hp",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write max_sp",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write max_fs",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write capacity",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write physical_attack",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write physical_defense",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write magic_attack",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write magic_defense",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write agility",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write luck",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write movement",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write customer_service",
+              "type": "null"
+            },
+            "accuracy": {
+              "description": "unit.stat_growth.accuracy: column 0 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "agility": {
+              "description": "unit.stat_growth.agility: column 6 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "capacity": {
+              "description": "unit.stat_growth.capacity: column 13 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "customer_service": {
+              "description": "unit.stat_growth.customer_service: column 9 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "evasion": {
+              "description": "unit.stat_growth.evasion: column 1 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "luck": {
+              "description": "unit.stat_growth.luck: column 7 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_attack": {
+              "description": "unit.stat_growth.magic_attack: column 4 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_defense": {
+              "description": "unit.stat_growth.magic_defense: column 5 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_fs": {
+              "description": "unit.stat_growth.max_fs: column 12 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_hp": {
+              "description": "unit.stat_growth.max_hp: column 10 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_sp": {
+              "description": "unit.stat_growth.max_sp: column 11 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "movement": {
+              "description": "unit.stat_growth.movement: column 8 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_attack": {
+              "description": "unit.stat_growth.physical_attack: column 2 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_defense": {
+              "description": "unit.stat_growth.physical_defense: column 3 of unit_stat_growth_rates, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "stats": {
+          "description": "unit.stats: unit_base_stats, a row of 14 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write accuracy",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write evasion",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write max_hp",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write max_sp",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write max_fs",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write capacity",
+              "type": "null"
+            },
+            "2": {
+              "description": "column 2 is named: write physical_attack",
+              "type": "null"
+            },
+            "3": {
+              "description": "column 3 is named: write physical_defense",
+              "type": "null"
+            },
+            "4": {
+              "description": "column 4 is named: write magic_attack",
+              "type": "null"
+            },
+            "5": {
+              "description": "column 5 is named: write magic_defense",
+              "type": "null"
+            },
+            "6": {
+              "description": "column 6 is named: write agility",
+              "type": "null"
+            },
+            "7": {
+              "description": "column 7 is named: write luck",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write movement",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write customer_service",
+              "type": "null"
+            },
+            "accuracy": {
+              "description": "unit.stats.accuracy: column 0 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "agility": {
+              "description": "unit.stats.agility: column 6 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "capacity": {
+              "description": "unit.stats.capacity: column 13 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "customer_service": {
+              "description": "unit.stats.customer_service: column 9 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "evasion": {
+              "description": "unit.stats.evasion: column 1 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "luck": {
+              "description": "unit.stats.luck: column 7 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_attack": {
+              "description": "unit.stats.magic_attack: column 4 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "magic_defense": {
+              "description": "unit.stats.magic_defense: column 5 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_fs": {
+              "description": "unit.stats.max_fs: column 12 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_hp": {
+              "description": "unit.stats.max_hp: column 10 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "max_sp": {
+              "description": "unit.stats.max_sp: column 11 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "movement": {
+              "description": "unit.stats.movement: column 8 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_attack": {
+              "description": "unit.stats.physical_attack: column 2 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "physical_defense": {
+              "description": "unit.stats.physical_defense: column 3 of unit_base_stats, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "unused_0x2bd024": {
+          "description": "unit.unused_0x2bd024: unit_unused_0x2bd024, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "voice": {
+          "description": "unit.voice: unit_voice_asset_ids, a row of 30 columns, by name where a column has one",
+          "type": "object",
+          "properties": {
+            "0": {
+              "description": "column 0 is named: write warp",
+              "type": "null"
+            },
+            "1": {
+              "description": "column 1 is named: write treasure_capture",
+              "type": "null"
+            },
+            "10": {
+              "description": "column 10 is named: write critical_normal_attack",
+              "type": "null"
+            },
+            "11": {
+              "description": "column 11 is named: write skill_use_1",
+              "type": "null"
+            },
+            "12": {
+              "description": "column 12 is named: write critical_skill_1",
+              "type": "null"
+            },
+            "13": {
+              "description": "column 13 is named: write skill_use_2",
+              "type": "null"
+            },
+            "14": {
+              "description": "column 14 is named: write critical_skill_2",
+              "type": "null"
+            },
+            "15": {
+              "description": "column 15 is named: write skill_use_3",
+              "type": "null"
+            },
+            "16": {
+              "description": "column 16 is named: write critical_skill_3",
+              "type": "null"
+            },
+            "17": {
+              "description": "unit.voice.17: column 17 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "18": {
+              "description": "unit.voice.18: column 18 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "19": {
+              "description": "column 19 is named: write damage_reaction_1",
+              "type": "null"
+            },
+            "2": {
+              "description": "unit.voice.2: column 2 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "20": {
+              "description": "column 20 is named: write damage_reaction_2",
+              "type": "null"
+            },
+            "21": {
+              "description": "column 21 is named: write damage_reaction_3",
+              "type": "null"
+            },
+            "22": {
+              "description": "column 22 is named: write defeated",
+              "type": "null"
+            },
+            "23": {
+              "description": "column 23 is named: write finishing_blow",
+              "type": "null"
+            },
+            "24": {
+              "description": "column 24 is named: write level_up",
+              "type": "null"
+            },
+            "25": {
+              "description": "unit.voice.25: column 25 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "26": {
+              "description": "unit.voice.26: column 26 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "27": {
+              "description": "unit.voice.27: column 27 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "28": {
+              "description": "unit.voice.28: column 28 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "29": {
+              "description": "unit.voice.29: column 29 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "3": {
+              "description": "column 3 is named: write objective_occupied",
+              "type": "null"
+            },
+            "4": {
+              "description": "unit.voice.4: column 4 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "5": {
+              "description": "unit.voice.5: column 5 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "6": {
+              "description": "unit.voice.6: column 6 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "7": {
+              "description": "column 7 is named: write normal_attack_1",
+              "type": "null"
+            },
+            "8": {
+              "description": "column 8 is named: write normal_attack_2",
+              "type": "null"
+            },
+            "9": {
+              "description": "column 9 is named: write normal_attack_3",
+              "type": "null"
+            },
+            "critical_normal_attack": {
+              "description": "unit.voice.critical_normal_attack: column 10 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "critical_skill_1": {
+              "description": "unit.voice.critical_skill_1: column 12 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "critical_skill_2": {
+              "description": "unit.voice.critical_skill_2: column 14 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "critical_skill_3": {
+              "description": "unit.voice.critical_skill_3: column 16 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "damage_reaction_1": {
+              "description": "unit.voice.damage_reaction_1: column 19 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "damage_reaction_2": {
+              "description": "unit.voice.damage_reaction_2: column 20 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "damage_reaction_3": {
+              "description": "unit.voice.damage_reaction_3: column 21 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "defeated": {
+              "description": "unit.voice.defeated: column 22 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "finishing_blow": {
+              "description": "unit.voice.finishing_blow: column 23 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "level_up": {
+              "description": "unit.voice.level_up: column 24 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "normal_attack_1": {
+              "description": "unit.voice.normal_attack_1: column 7 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "normal_attack_2": {
+              "description": "unit.voice.normal_attack_2: column 8 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "normal_attack_3": {
+              "description": "unit.voice.normal_attack_3: column 9 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "objective_occupied": {
+              "description": "unit.voice.objective_occupied: column 3 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_use_1": {
+              "description": "unit.voice.skill_use_1: column 11 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_use_2": {
+              "description": "unit.voice.skill_use_2: column 13 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "skill_use_3": {
+              "description": "unit.voice.skill_use_3: column 15 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "treasure_capture": {
+              "description": "unit.voice.treasure_capture: column 1 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            },
+            "warp": {
+              "description": "unit.voice.warp: column 0 of unit_voice_asset_ids, a whole number",
+              "type": "integer",
+              "minimum": -2147483648,
+              "maximum": 4294967295
+            }
+          },
+          "additionalProperties": false
+        },
+        "voice_family_unit_id": {
+          "description": "unit.voice_family_unit_id: unit_voice_family_unit_ids, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        },
+        "voice_setting_slot": {
+          "description": "unit.voice_setting_slot: unit_voice_setting_slot, a whole number",
+          "type": "integer",
+          "minimum": -2147483648,
+          "maximum": 4294967295
+        }
+      },
+      "additionalProperties": false
+    },
+    "records.item": {
+      "description": "item: records by id, 0 to 1999",
+      "type": "object",
+      "x-ome-decimal-keys": {
+        "minimum": 0,
+        "maximum": 1999
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/record.item"
+      }
+    },
+    "records.skill": {
+      "description": "skill: records by id, 0 to 999",
+      "type": "object",
+      "x-ome-decimal-keys": {
+        "minimum": 0,
+        "maximum": 999
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/record.skill"
+      }
+    },
+    "records.stage_enemy": {
+      "description": "stage_enemy: records by id, 0 to 29",
+      "type": "object",
+      "x-ome-decimal-keys": {
+        "minimum": 0,
+        "maximum": 29
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/record.stage_enemy"
+      }
+    },
+    "records.unit": {
+      "description": "unit: records by id, 0 to 999",
+      "type": "object",
+      "x-ome-decimal-keys": {
+        "minimum": 0,
+        "maximum": 999
+      },
+      "additionalProperties": {
+        "$ref": "#/definitions/record.unit"
+      }
+    },
+    "scope.stage": {
+      "description": "stage: each stage's tables by its id, 1 to 999",
+      "type": "object",
+      "x-ome-decimal-keys": {
+        "minimum": 1,
+        "maximum": 999
+      },
+      "additionalProperties": {
+        "description": "one stage's tables, by short name",
+        "type": "object",
+        "properties": {
+          "enemy": {
+            "$ref": "#/definitions/records.stage_enemy"
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  }
+}

@@ -446,6 +446,19 @@ cannot: a syntax error or a key given twice (with the line), an integer past 2^5
 key with a control character, or more than a bound allows ([data-files.md](data-files.md), "The file"). The first 20
 problems are listed and the rest counted.
 
+**"data/FILE.toml:N: PATH: no such key; the nearest name here is NAME", and the other errors with a line and a
+path.** The file does not match its kind's shape, and the link stops before any code runs
+([data-files.md](data-files.md), "Shapes"). A misspelt key lists the nearest names, or the names there when none is
+close; a key the format does not offer gives the reason (`unit.761.drop_chance.0: column 0 is named: write drop_1`,
+a saved field, a scoped table's own name); a key that should be a whole number says how (`unit.0x2f9: a key here is
+written in decimal: 761`, `stage.0: a key here is a whole number from 1 to 999, not 0`); and a value of the wrong
+kind or out of range says what the cell takes (`names[2]: takes a string, not 2`). Fix the line it names.
+
+**"accepts[N] K: shapes/FILE: …".** The owner's shape is broken: not JSON, a `$ref` that names no definition, or a
+keyword outside the subset. **"… the shape takes more than N steps on MOD FILE …, so it cannot be checked"**: the
+owner's shape costs too much to check. Both are the owner's errors, and the kind's files are not delivered; tell its
+author.
+
 **"'data/FILE.toml' is not named by a [[data]] entry", "data[N].file: the package has no data/FILE.toml".** Every file
 under `data/` is named by one entry, and every entry names a file the package has.
 

@@ -96,9 +96,9 @@ drop_chance.drop_1 = 100
 - **The record id is decimal,** with no sign and no leading zero, and inside the table.
 - **A field with a row takes its columns,** by name where the reference names the column, and by number only where it
   has none.
-- **Each cell has one spelling.** A hexadecimal id (`unit.0x2f9`), a named column given by its number
-  (`drop_chance.0`) and an array for a whole row are refused, each with the spelling to use. So two files that set
-  one cell share a path in the report.
+- **Each cell has one spelling.** A hexadecimal id (`unit.0x2f9`) and a named column given by its number
+  (`drop_chance.0`) are refused with the spelling to use, and an array for a whole row is refused as a value of the
+  wrong kind. So two files that set one cell share a path in the report.
 - **A value follows its cell:** a whole number from -2147483648 to 4294967295, a float, or a string that the save's
   code page (932) can encode.
 - **Every edit is an assignment.** A later file's value replaces an earlier one's, so the mod later in the load
@@ -122,18 +122,28 @@ drop_chance.drop_1 = 100
   `<game>.stage.loaded` is not raised (a script revision its point does not name), a file with a stage part applies
   nothing, and says why: `stage.12.enemy: stage_enemy is applied at <game>.stage.loaded, which this install does not
   raise`. A file of the boot's tables alone is applied.
-- **A file with a problem applies nothing.** The base mod checks the whole file at its first delivery in a session,
-  before it writes, and `diagnostics/lua.log` lists each problem by its path, the first on the first line:
+- **Most mistakes stop the link.** The base mod ships the kind's shape (below, "Shapes"), so a table, field or
+  column it does not have, a saved field, an id out of range, a hexadecimal id and a value of the wrong kind are link
+  errors, with the file's line, in `omp check` and before the game starts. The check does not look under a key it
+  refuses, so a mistake inside `[unit.0x2f9]` shows once the id is written in decimal:
 
   ```text
-  example.a data/a.toml: 2 problems, so nothing of it is applied: unit.0x2f9: a record id is written in decimal: 761
-    unit.761.experiance_reward: unit has no field experiance_reward
+  error: [example.a] data/a.toml:3: unit.0x2f9: a key here is written in decimal: 761
+  error: [example.a] data/a.toml:7: unit.761.experiance_reward: no such key; the nearest name here is experience_reward
+  ```
+
+- **A file with a problem the shape cannot say applies nothing.** The base mod checks the whole file at its first
+  delivery in a session, before it writes, and `diagnostics/lua.log` lists each problem by its path, the first on the
+  first line:
+
+  ```text
+  example.a data/a.toml: 1 problem, so nothing of it is applied: unit.761.display_name: a string cell holds text the save can encode (code page 932); U+00E9 is not in it
   ```
 
   The notice and the halt reason show that first line after the file's name, so they name the first problem's path
-  too: `Lua: example.a data/a.toml failed: 2 problems, so nothing of it is applied: unit.0x2f9: …`. The file's later
-  deliveries in the session pass it over, with no second error. `--lua-errors halt` ends the run at the first such
-  file.
+  too: `Lua: example.a data/a.toml failed: 1 problem, so nothing of it is applied: unit.761.display_name: …`. The
+  file's later deliveries in the session pass it over, with no second error. `--lua-errors halt` ends the run at the
+  first such file.
 - **The tables are not saved.** A load builds them again and raises `<game>.data.layered` again while it restores,
   and a return to title does the same, so the file is applied again each time. A stage's table lies outside the save
   too: a load of a save made on the stage runs its loaders again, and the stage part is applied again. A save made
@@ -249,7 +259,9 @@ checks TOML against JSON Schema can read the same file:
   a whole number says how: `by_id.0x10: a key here is written in decimal: 16`. The link reports the first 20 problems
   of a file and counts the rest.
 - **What a shape cannot say, the owner still checks.** A shape describes a document's keys and values; the owner's
-  handler checks the rest at the first delivery, and everything when its kind has no shape.
+  handler checks the rest at the first delivery, and everything when its kind has no shape. `<game>.tables` checks
+  three such things there: text the save's code page cannot encode, one cell named twice through an old name, and a
+  part at an event this install does not raise (above).
 - **Work.** A check applies at most 64 schemas for each value of a file, and 100,000 more. A shape like the base mods'
   applies four to six, so only a shape built to cost time reaches the bound, which is its owner's error.
 

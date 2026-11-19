@@ -1,8 +1,10 @@
 # Port only (scenarios/port/): data patches gate 8 on Himegari, the error half. example.stage-enemies-mistake is
-# example.stage-enemies with a field misspelt on purpose (stage.2.enemy.3.unit for unit_id). The boot checks the file
-# whole at its first delivery (himegari.data.layered) and applies nothing of it: the port's status line shows the
-# notice at the title, and diagnostics/lua.log in the sandbox names the file and the path:
-#   example.stage-enemies-mistake data/stages.toml: 1 problem, so nothing of it is applied: stage.2.enemy.3.unit: ...
+# example.stage-enemies with unit 810's display_name holding é on purpose, which code page 932 cannot encode: a
+# mistake no shape can say, so the link takes the file (a mistake a shape can say fails omp check instead, plan
+# §9.2). The boot checks the file whole at its first delivery (himegari.data.layered) and applies nothing of it, its
+# stage part included: the port's status line shows the notice at the title, and diagnostics/lua.log in the sandbox
+# names the file and the path:
+#   example.stage-enemies-mistake data/stages.toml: 1 problem, so nothing of it is applied: unit.810.display_name: ...
 # At stage 1 the enemy table is the stage's own, slot 2 included. Run on a new sandbox:
 #   py -3.11 -X utf8 tools/drive.py port start --sandbox dp-stage-enemies-mistake --mod oms/examples/mods/example.stage-enemies-mistake
 #   py -3.11 -X utf8 tools/drive.py port run tools/drive/scenarios/port/himegari-stage-enemies-mistake.steps
