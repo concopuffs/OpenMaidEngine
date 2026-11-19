@@ -416,17 +416,167 @@ In commit order; each commit builds and passes.
 9. **Closeout.** The backlog's data-patches line, §10, `docs/tools-reference.md` and `docs/PROJECT-STRUCTURE.md`,
    the NativeAOT publish, and the full checks.
 
-## 5. Milestone 2: stages, and both games driven (outline)
+## 5. Milestone 2: stages, and both games driven
 
-- The scope facts in the registry: the scope's key (`stage`), its ids' range, and the short name of each table under
-  it (`enemy` → `stage_enemy`), beside `built_by` (spec §6.2). The record map carries them.
-- Himegari's `stage_enemy` table in `vm-map/globals.toml` (30 slots, `built_by = "stage"`).
-- `records.applier` gains `scopes`: a scoped table is reached only through its scope (`stage.12.enemy.3`), its scope
-  id is checked against the range, and `apply` takes the scope's id (`{ built_by = "stage", scope = { stage = 12 } }`).
-  `labels` gains `stage`.
-- `apply_stage` in both `tables.lua`, bound at `<game>.stage.loaded`; the unraised rule above.
-- An example mod for each game under `oms/examples/mods/`, each game's guide page with its kinds, tables and fields
-  and the derived values of §8. Gates 8 and 11, driven on the port.
+Planned on 2026-11-18, after M1 was accepted and its five corrections were made. §5.1 checks what M2 relies on, §5.2
+settles what the spec leaves open, §5.3 plans the driven gates and the derived values, and §5.4 lists the tasks in
+commit order. §11 keeps what M2 finds while it is built.
+
+### 5.1 What the scripts and the code say for M2
+
+"Ran" and "read" are as in §1. The disassembly read is the main checkout's `build/games/<game>/disasm/` (the
+untranslated Kamidori), read and not regenerated; a scan of it lists every instruction with an operand inside the
+fifteen `stage_enemy_*` arrays of each game.
+
+- **Himegari's stage enemy arrays** (read: `vm-map/globals.toml` and the scan). Fifteen arrays of 30 slots, from
+  `stage_enemy_spawn_tile_x` (`0xe773f`) to `stage_enemy_forbidden_story_flags` (ending at `0xe7aa4`): eleven of one
+  cell a slot, and four rows, the movement and battle routines (`[30][3]`, columns `difficulty_0` to `_2`) and the
+  required and forbidden story flags (`[30][7]`, `[30][5]`, named columns). All lie above the saved prefix
+  (`0x6241b`), so none is state.
+  - **Only STINIT writes them.** It zeroes every slot of each array (`copy-to-global`, `STINIT@0x54` to `0xb6`), then
+    branches on `current_stage_id` (74 stages, ids 1 to 170, none 0) and writes that stage's slots (`mov`, and
+    `copy-inline-int-array` for the rows). No stage gives slot 0 a unit.
+  - **Readers:** FIELD (the placement at a stage's start, slots 0 to 29 from `FIELD@0x7f4`; and `FIELD@0x8533`),
+    ADDEN (one slot, `current_stage_enemy_spawn_slot`, `ADDEN@0x26`: a unit a stage's handler adds later) and SETEN
+    (the routines into the entity).
+- **Kamidori's** (read: the same scan, `vm-map/globals-kamidori.toml`).
+  - STINIT zeroes them (`STINIT@0x7b` to `0xdd`) and writes its stages (181 ids, 1 to 968); each append's `$1$`,
+    `$2$` and `$3$STINIT` writes its own (up to 977). The table's `usage` says "STINIT2 writes them": STINIT2 writes
+    the stage names.
+  - Readers: FIELD, ADDEN, CHANGEEN, SELSTAGE and SETEN.
+  - The registry's `stage_enemy` table has eleven fields. The four rows are typed `int[30x3]`, `int[30x7]` and
+    `int[30x5]`. The layout reads that notation (`base_mod_build.dimensions`), but `globals_build.dims_of` and the OMS
+    module loader (`GameModule.TypeShape`) do not, which is why the table left them out.
+- **Who runs the stage loaders** (read).
+  - Himegari: FIELD alone (`FIELD@0x200`, `stage_loader_script_ids[current_stage_id]`). No other script names that
+    array or calls STINIT.
+  - Kamidori: FIELD (`FIELD@0x50c`), SELSTAGE (`0x13ed`, the stage list's enemy preview), ORGANIZE (`0xa7b`), INFO3
+    (`0xbfd` and `0xd05`), ARENA (`0x14da`), and INIT2 at a load when `G[0x428c]` is set (`INIT2@0x298`).
+  - **INFO3 puts a floor's tables back as authored.** INFO3 is the third tab of INFO (`INFO@0x4f`), which FIELD opens
+    from its menu (choice `0xc`, `FIELD@0x28ac`), as MENU and STUDIO2 do. It runs every stage's loaders in turn
+    (`INFO3@0xb88` to `0xc12`, `current_stage_id` from 1 to 999). Then, when `G[0x428c]` is set, it puts
+    `current_stage_id` back and runs that stage's loaders again (`INFO3@0xcdc` to `0xd1a`). FIELD sets `G[0x428c]` on
+    entering a floor (`FIELD@0x1fd`) and clears it when it leaves the floor for the arena, the town or the world map
+    (`FIELD@0xcafe` to `0xcb54`); scenes write it too. So that second run happens on a floor. No event is raised
+    there.
+- **The game reads the enemy table after the placement** (read), on both games. Kamidori's FIELD spawns
+  reinforcements from it each time a spawner's interval comes round (`stage_object_reinforcement_interval_turns`;
+  `FIELD@0x9d9f` calls `label_9f58`, which reads `stage_enemy_unit_id` at `FIELD@0xa040`). Himegari's ADDEN places one
+  slot when a stage's handler calls it. So a Kamidori floor visited in INFO's third tab spawns the authored enemies for
+  the rest of the floor, whether a data file or a Lua handler made the edit. Spec §6.5 listed this as not known.
+- **Where `<game>.stage.loaded` binds** (ran: `ModLuaLinkTests.HimegarisBaseModRaisesItsBootAndStageEventsAtTheInstalledScripts`
+  and `KamidorisBaseModRaisesItsBootAndStageEventsOnBothInstalls`). Himegari `FIELD@0x20a`; Kamidori `FIELD@0x527`,
+  under both fingerprints. Its one field, `stage`, reads `current_stage_id`. The translated install's
+  `patch/INFO3.BIN` has the restore loop at the same offsets (read: `sys4load.py`, `INFO3@0xcdc` and `0xd20`).
+- **What entering FIELD again does** (read; for Himegari the registry also records a port run on 2026-11-15).
+  - Himegari, `field_map_continue_mode` (`G[0x767d]`): 0 at a stage's start. FIELD runs the loader unless it is 1
+    (`FIELD@0x1f2`) and places the units only at 0 (`FIELD@0x3d8`). It writes 1 once the field is up
+    (`FIELD@0xfbe`). FIELD leaves for CAMP with `system_flow_request` 5 (`FIELD@0x230e`), and CAMP writes 2 or 3
+    when it returns to the field (`CAMP@0x73`, `CAMP@0x300`).
+  - Kamidori (`G[0x4290]`): FIELD runs the loaders unless it is 1 (`FIELD@0x4c9`) and places the units only at 0
+    (`FIELD@0x67d` skips to `0x1264` otherwise). It writes 1 once the floor is up (`FIELD@0x144d`). When FIELD leaves
+    for an ADV scene (`G[0]` 1) it writes 2 (`FIELD@0xc5a8` to `0xc622`), so a scene that leaves the floor brings
+    FIELD back at 2.
+- **The field's save command** (read). Himegari's menu choice 9 writes the mode 2, calls SAVE.BIN and writes 1
+  (`FIELD@0x2349` to `0x2356`); choice 10 calls SAVE.BIN to load (`G[0x6241b]` 1). Kamidori's choice `0xd` does the
+  same (`FIELD@0x28cb` to `0x28d8`). A save made with it loads at 2: FIELD runs the loaders, the event is raised, and
+  nothing is placed, so the units on the field are the save's.
+- **The applier** (read: `mods/ome-records/lua/init.lua`). A top-level key names a table of the map, or an old name of
+  one; a table whose `built_by` is not one of `labels` is refused. `apply` writes every part of the tables that
+  `options.built_by` names. `problems` takes the document alone, so it cannot see `unraised`.
+- **The generators** (read). `globals_build.py` lints `[[table]]` entries and emits them; `base_mod_build.py` writes
+  the record map's `tables` and `old_tables` and `exports.txt`'s `table` and `field` lines. Neither knows a scope.
+- **The engine** (ran: a search of every engine source outside the tests). No source names a base mod, a kind or a game
+  event (`himegari-base`, `kamidori.tables`, `.data.layered`, `.stage.loaded`). A second `at` entry, the scopes and a
+  new point are the base mods' and the registry's, and need no engine change.
+
+### 5.2 What the plan settles for M2
+
+| Question | Settled |
+|---|---|
+| Where the scope facts live (spec §6.2) | A **`[[scope]]`** entry in the registry: `name` (`stage`), `first` and `last` (the ids' range), `usage`, and `[scope.tables]`, each short name to its table (`enemy = "stage_enemy"`). The table keeps its own `[[table]]` entry. `globals_build.py` lints it (a lowercase name that is no table's, alias's or global's; whole numbers with `0 <= first <= last`; a short name that is a lowercase identifier and a table of the registry; a table in one scope at most), the JSON lists it under `scopes`, and the reference shows it beside the tables |
+| The stage ids' range | **1 to 999 on both games.** The per-stage arrays have 1,000 cells (`stage_loader_script_ids[1000]` in Himegari, `stage_display_names[1000]` in both), and no loader has a stage 0. An id inside the range that no loader writes is taken and never applied, since no stage of that id loads; the guide says so |
+| How a scoped table is reached | Only through its scope: `stage.<id>.enemy.<slot>.<field>`. Its own name at the top level is refused with that spelling. An old name of a scoped table is not a short name |
+| The record map | `scopes = { stage = { first = 1, last = 999, tables = { enemy = "stage_enemy" } } }` beside `tables`, only when the registry has a scope. Format 1 stays: the map has not been released |
+| `exports.txt` | `scope stage` and `scope stage.enemy`, after the fields. A name that leaves is refused unless the major version is raised. A scope has no old-name form: nothing is renamed, and §9.1's decision covers tables and fields |
+| The applier's API | `config.events` (optional), each label to the event the caller applies it at: `{ boot = "<game>.data.layered", stage = "<game>.stage.loaded" }`. `apply(c, { built_by = "stage", scope = { stage = 12 } })` writes the parts of stage 12 whose table that label builds; without `scope` it writes the unscoped tables of the label. `scope` names scopes of the map, with whole-number ids |
+| The unraised rule (spec §6.2) | The check takes the contribution. A table whose label's event (`config.events`) is in `contribution.unraised` is a problem at its path (`unit`, or `stage.12.enemy`), "stage_enemy is applied at <game>.stage.loaded, which this install does not raise", so the document is refused whole. A file with boot tables only is applied |
+| The scope's messages | an id outside the range (`stage.0: stage has ids 1 to 999`), an id not in decimal (as a record id), a short name the scope lacks (`stage.12.enemyy: stage has no table enemyy (tables: enemy)`), a scope or an id that is not a table, and a scoped table at the top |
+| Himegari's `stage_enemy` | 30 records, `built_by = "stage"`, the fifteen arrays, named as Kamidori's fields are (Himegari's `first_clear_only` where Kamidori has `first_visit_only`) |
+| Kamidori's `stage_enemy` | **Gains the four rows**, so both games offer the same fields. Their types are written `int[30][3]`, `int[30][7]` and `int[30][5]`: the layout is the same, and OMS can now name them. Their columns stay unnamed, so a file gives them by number. The `usage` says STINIT |
+| INFO3 (§5.1) | **`kamidori.stage.loaded` gains a second point,** `kamidori.stage.after_info_reload` at `INFO3@0xd20`, the instruction after the restore loop, under both INFO3 fingerprints. A file's stage edit, and a Lua handler's, then holds after a visit to INFO's third tab. It is the base mod's choice (spec §6.2), so §9 takes nothing |
+| The kind's description | "Edits to the game's record tables: units, items and skills, which the boot builds, and each stage's enemies, which its loader writes." |
+| The base mods' version | 1.1.0 stays (§10.4): the stage part and the second `at` arrive before any release |
+| The example mods | `oms/examples/mods/example.stage-enemies` (Himegari) and `example.kamidori-stage-enemies`, data only, and a mistake twin of each for gate 8's error half (`example.stage-enemies-mistake`, `example.kamidori-stage-enemies-mistake`), as `example.depth-error` raises an error on purpose. The README says what each shows |
+
+### 5.3 The driven gates, and the derived values
+
+Each driven run uses a sandbox of its own (`dp-…`) and the worktree's port (`tools/drive.py port`), and each reusable
+run is a `.steps` file under `tools/drive/scenarios/port/`. A step reads the table and the placed units with a `lua`
+step in the base mod's environment (`lua mod=<game>-base`).
+
+- **Gate 8 on Himegari.** A new game reaches stage 1, as `himegari-random-enemies.steps` does.
+  `example.stage-enemies` gives stage 1's slot 2 another unit and stage 2's slot 3 another.
+  1. At stage 1, `stage_enemy_unit_id` holds stage 1's edit in slot 2, and slot 3 keeps stage 1's own unit: stage 2's
+     edit leaves another stage as it was. The placed entities (`entity_unit_definition_ids`) include the new unit
+     and lack the one it replaced, and a shot shows it.
+  2. FIELD entered again: to CAMP and back (`system_flow_request` 5, then the mode 2 or 3). The table holds the edit.
+  3. The field's save command (choice 9), then a load of that slot: the table holds the edit, and the placed units
+     are the save's.
+  4. `example.stage-enemies-mistake` on a new sandbox: the boot's notice and `diagnostics/lua.log` name the file and
+     the stage part's path, and at stage 1 the table is the game's own.
+- **Gate 8 on Kamidori.** A sandbox seeded from the main checkout's port sandbox `k1clean` (read only). From a
+  workshop save (014, before 一陣の訓練地, or 019, before the lake), the route enters a floor afresh (the mode 0).
+  `example.kamidori-stage-enemies` edits the floor entered and one other. The same four steps follow: the placement,
+  the table after FIELD is entered again (a visit to INFO's third tab with the new point, and the load of a field save),
+  another stage as it was, and the mistake twin. The UI points are in the sweep's memory notes.
+- **If a route cannot be driven** with reasonable effort, that part stops and the report says what blocked it. A
+  headless test does not stand in for a driven step.
+- **Gate 11.** Tests (§5.4, task 6): both base mods declare `<game>.tables` with the same `at` entries but for the
+  game's name, their `tables.lua` files are the same text but for it, and no engine source names a kind, a base mod
+  or a game event. The driven runs use one engine build for both games.
+- **The derived values** (backlog, "What each game copies from a field a data file can set"). Its done-condition: the
+  guide says, for each field a file can set, which saved values the game derives from it and when; each claim is
+  checked on the game's scripts; and one copy is driven.
+  - Each claim of §8 is read again at its offset, with the condition each copy is made under (Himegari's UNITECH
+    condition was not read in M0).
+  - A second scan follows a field's value through the locals of a script in any order (M0's followed program order),
+    and through block copies, into a cell below the saved prefix. Each candidate it finds is read by hand.
+  - The guide pages get a table of the copies: the field, the saved value, and when the game makes the copy. The
+    fields the scan finds no copy of are named as read where they are, with the scan's limits stated.
+  - The driven copy: on Himegari, a file raises a first-party unit's base stats; after a new game its saved current
+    stats hold the raised value; a field save, loaded without the mod, still holds it while the definition is the
+    game's own (`example.stage-enemies` stays apart from this; the run uses a mod of its own, kept beside the
+    scenario's examples).
+
+### 5.4 Tasks
+
+In commit order; each commit builds and passes.
+
+1. **The plan** (this section, and §10.3's line on the TOML readers).
+2. **The registry.** `[[scope]]` in `globals_build.py` (lint, JSON, the reference's scopes), with its tests in
+   `tools/test_globals.py`. Himegari's `stage_enemy` table and `stage` scope; Kamidori's four rows (the types), the
+   `usage`, and its scope. `globals_build.py --build` for both games (the worktree's `build/` holds the auto maps).
+3. **The record map's scopes.** `base_mod_build.py`: `scopes` in the map, `scope` lines in `exports.txt`, the rename
+   rule over them; `tools/test_base_mod_build.py`; `base_mod_build.py --build`; `docs/tools-reference.md`.
+4. **The applier's scopes and the unraised rule.** `ome-records` (`config.events`, the scope walk, `apply`'s `scope`,
+   the check over the contribution), its README; `DataPatchTests` on a synthetic map (each message of §5.2, an apply
+   per scope id, a boot apply that skips the scopes, the unraised rule both ways).
+5. **The base mods apply the stage tables.** Both `tables.lua` (`labels`, `events`, `apply_stage`), both manifests'
+   second `at` and description; `kamidori.stage.after_info_reload` (`vm-map/patch-points-kamidori.toml`) and
+   `events/stage.toml`; `patch_points_build.py --build`, `base_mod_build.py --build`, `modding_games_build.py --build`;
+   the tests that pin points and offsets; each game's guide page (tables, scope, fields, the loaders and INFO) and
+   `docs/modding/data-files.md` (the scoped tables, the unraised rule).
+6. **Workspace tests and gate 11.** On each installed game: a stage file shipped by a mod and delivered at the
+   installed FIELD's point writes the stage's slots and no other stage's (running FIELD headless where it runs, else
+   STINIT and the delivery's handler through the base mod's console); the stage-part problems at boot; a file with a
+   stage part on an install where `stage.loaded` is not raised. Gate 11's tests (§5.3).
+7. **The example mods,** their README entries, and the guide pages' examples.
+8. **Gate 8, driven** (§5.3), with the scenarios.
+9. **The derived values** (§5.3): the claims read, the second scan, the guide pages, the driven copy; the backlog item
+   goes.
+10. **Closeout.** The backlog's data-patches line, §11, `docs/tools-reference.md` and `docs/PROJECT-STRUCTURE.md`, the
+    NativeAOT publish, and the full checks.
 
 ## 6. Milestone 3: shapes (outline)
 
@@ -619,9 +769,10 @@ installed games.
   probe of Tomlyn 2.10.1 found that 2^63 to 2^64-1 wrap to negative numbers (`18446744073709551615` reads as -1), in
   both of its parsers. The reader reads each integer token's text and refuses one past 2^53 with its line.
 - **A key given twice.** Spec §6.1 says one file cannot name a cell twice because TOML refuses a repeated key.
-  `TomlDocument.Parse` takes one and keeps the last; only `SyntaxParser.Parse(…, validate: true)` refuses it. The
-  data files' reader validates first, so the spec holds for data files. The other readers do not, and the backlog
-  has the item.
+  Tomlyn's serializer takes one and keeps the last; only `SyntaxParser.Parse(…, validate: true)` refuses it. The
+  data files' reader validated first, so the spec held for data files, and the other readers did not. After M1's
+  review every TOML reader of the engine and the launcher refuses one through `TomlDocument.Parse`, with the line,
+  as it refuses a syntax error (`RepeatedTomlKeyTests`).
 - **An integer's problem names its line, not its path,** since it is found in the syntax tree. The guide says so.
 - **§4.2's log example** gives the place as `INIT2@0x20d`; the engine prints `INIT2.BIN@0x20d`, as every hook's
   place. The guide gives the printed form.
