@@ -9,7 +9,8 @@
     <PackageReference Include="Tomlyn" Version="2.10.1" />
   </ItemGroup>
 
-  <!-- The base mods the engine ships (Lua scripting spec §9.1): mods/<profile>-base/, read by ShippedPackages. -->
+  <!-- The packages the engine ships, read by ShippedPackages: the base mods, mods/<profile>-base/ (Lua scripting spec
+       §9.1), and the library they require, mods/ome-records/ (data patches spec §6.4). -->
   <ItemGroup>
     <EmbeddedResource Include="..\..\mods\**\*"
                       LogicalName="Ome.Mods.Shipped/%(RecursiveDir)%(Filename)%(Extension)" />

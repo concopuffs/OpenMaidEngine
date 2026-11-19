@@ -695,8 +695,10 @@ public sealed class ModLuaLinkTests : IDisposable
         _opened.AddRange(shipped);
         ModLinkResult result = ModLinker.Link(SyntheticBase(), [user, .. shipped], []);
         Assert.True(result.Succeeded, result.Report.Render());
-        Assert.Equal(["himegari-base", "user"], result.Lua.Stack.Mods.Select(mod => mod.Id));
-        Assert.True(result.Lua.Stack.Mods[0].Layout!.TryGet("unit_current_levels", out _));
+        // The base mod requires ome-records, which the engine ships and mounts first.
+        Assert.Equal(["ome-records", "himegari-base", "user"], result.Lua.Stack.Mods.Select(mod => mod.Id));
+        Assert.True(result.Lua.Stack.Mods[0].Library);
+        Assert.True(result.Lua.Stack.Mods[1].Layout!.TryGet("unit_current_levels", out _));
     }
 
     // ------------------------------------------------------------------------------------------- watches (§7.3)

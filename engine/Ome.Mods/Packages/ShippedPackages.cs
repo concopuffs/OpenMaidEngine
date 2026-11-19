@@ -38,9 +38,10 @@ public sealed class MemoryPackageContainer : IPackageContainer
 }
 
 /// <summary>
-/// The packages the engine ships inside its own build: the base mods of <c>mods/</c> (Lua scripting spec §9.1),
-/// embedded in this assembly, so an exported build carries them. A base mod joins a stack only when an enabled mod
-/// requires it; an installed package of the same id is used instead.
+/// The packages the engine ships inside its own build: the base mods of <c>mods/</c> (Lua scripting spec §9.1) and
+/// <c>ome-records</c>, the library they require (data patches spec §6.4), embedded in this assembly, so an exported
+/// build carries them. A shipped package joins a stack only when a package in it requires it; an installed package
+/// of the same id is used instead.
 /// </summary>
 public static class ShippedPackages
 {

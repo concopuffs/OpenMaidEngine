@@ -13,3 +13,8 @@ api = 1
 capabilities = ["vm"]
 # The game scripts the helpers in lua/init.lua call (spec §10); omp check walks each.
 calls = ["ADDITEM"]
+
+# The library tables.lua applies the record tables with (data patches spec §6.4); the engine ships it too.
+[[requires]]
+id = "ome-records"
+version = ">=1, <2"

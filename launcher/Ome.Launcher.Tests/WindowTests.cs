@@ -192,10 +192,12 @@ public sealed class WindowTests : IDisposable
              {
                  ModsViewModel mods = model.Page!.Mods;
                  // The base mod sits where the stack loads it: after the ranked packages that are ready, before the one
-                 // that requires it. The disabled package keeps its place at the end.
-                 Assert.Equal(["community.font-fix", "community.big-font", "kamidori-base", "community.uses-base",
-                               "community.random-enemies"], mods.Rows.Select(row => row.Id));
-                 Assert.True(mods.Rows[2].IsEngine);
+                 // that requires it, with ome-records, the library it requires, before it. The disabled package keeps
+                 // its place at the end.
+                 Assert.Equal(["community.font-fix", "community.big-font", "ome-records", "kamidori-base",
+                               "community.uses-base", "community.random-enemies"], mods.Rows.Select(row => row.Id));
+                 Assert.True(mods.Rows[2].IsEngine && mods.Rows[3].IsEngine);
+                 Assert.Equal("Part of the engine. Mounted because kamidori-base requires it.", mods.Rows[2].Note);
                  Assert.Equal(["Conflict", "Conflict"], mods.Rows.Take(2).Select(row => row.Chip));
                  Assert.Contains(mods.Report, line => line.Text
                      == "[community.big-font, community.font-fix] declares a conflict with community.font-fix: both set the font");

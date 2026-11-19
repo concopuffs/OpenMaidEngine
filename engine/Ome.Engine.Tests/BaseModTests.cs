@@ -58,8 +58,9 @@ public sealed class BaseModTests : IDisposable
     [Fact]
     public void TheEngineShipsABaseModForEachGameWithARegistryAndItIsTheRepositorysFolder()
     {
-        Assert.Equal(["himegari-base", "kamidori-base"], ShippedPackages.Ids);
-        foreach (string id in ShippedPackages.Ids)
+        // The base mods, and ome-records, the library they apply record tables with (data patches spec §6.4).
+        Assert.Equal(["himegari-base", "kamidori-base", "ome-records"], ShippedPackages.Ids);
+        foreach (string id in ShippedPackages.Ids.Where(id => id.EndsWith("-base", StringComparison.Ordinal)))
         {
             using ModPackage shipped = ShippedPackages.Open(id)!;
             using ModPackage folder = ModPackage.Open(Path.Combine(Paths.Repo, "mods", id));
@@ -71,6 +72,17 @@ public sealed class BaseModTests : IDisposable
             Assert.True(shipped.Manifest.Lua!.HasVm);
             // The embedded copy is the folder as the repository holds it.
             Assert.Equal(folder.Hash, shipped.Hash);
+            // Each requires the library, which the engine ships too.
+            Assert.Contains(shipped.Manifest.Requires, requirement => requirement.Id == "ome-records");
+        }
+        using (ModPackage library = ShippedPackages.Open("ome-records")!)
+        using (ModPackage folder = ModPackage.Open(Path.Combine(Paths.Repo, "mods", "ome-records")))
+        {
+            // A library: no game, no layout, no capability.
+            Assert.Null(library.Manifest.Profile);
+            Assert.Null(library.BaseLayout);
+            Assert.False(library.Manifest.Lua!.HasVm);
+            Assert.Equal(folder.Hash, library.Hash);
         }
         Assert.Null(ShippedPackages.Open("other-base"));
     }

@@ -132,7 +132,9 @@ public sealed class ModeCheckTests : IDisposable
         {
             var (discovery, report) = Discover(Mods("ext", "names-lib", "app"), mode);
             Assert.False(discovery.FailedToOpen, report.Render());
-            Assert.Equal(["app", "ext", "himegari-base", "names-lib"], discovery.Packages.Select(package => package.Id).Order());
+            // The base mod mounts ome-records, the library it requires.
+            Assert.Equal(["app", "ext", "himegari-base", "names-lib", "ome-records"],
+                         discovery.Packages.Select(package => package.Id).Order());
         }
     }
 

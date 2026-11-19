@@ -163,6 +163,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                           kamidori-gate6/; gate 7 fragment: himegari-patch/; mod loader
     │                                           gate 2 packages: mods/)
     │
+    ├── mods/ome-records/                  the Lua library the base mods apply record tables with (data patches
+    │                                           spec §6.4; embedded in Ome.Mods, mounted when a base mod is): no game
+    │                                           in it; manifest.toml, README.md, lua/init.lua, all hand-written
     ├── mods/<game>-base/                  the base mods the engine ships (Lua scripting spec §9; embedded in
     │   │                                       Ome.Mods, mounted when an enabled mod requires one): manifest.toml,
     │   │                                       README.md, events/ and lua/ hand-written; layout/ and lua/generated/ generated
@@ -171,6 +174,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       fields over named cells; spec §9.2)
     │   ├── lua/                                init.lua: the helpers require gives (give_item), each calling a game
     │   │                                       script its manifest's [lua] calls lists (spec §9.3, §10);
+    │   │                                       tables.lua: the <game>.tables format's handlers (data patches spec
+    │   │                                       §6), through ome-records;
     │   │                                       ⚙ generated/tables.lua: the record map (data patches spec §6.3)
     │   └── layout/                             ⚙ globals.json (every named global's bank, address, shape, columns and
     │                                           aliases), points.json (the patch points' copy), exports.txt (the

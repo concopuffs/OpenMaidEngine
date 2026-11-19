@@ -14,5 +14,10 @@ enabled mod requires it. A Lua mod reads and writes the game's cells by name thr
   FIELD's walks of the stage chains the appends register their handlers in).
 - `lua/init.lua` is hand-written: the helpers the base mod returns to a mod that requires it, each changing the game
   through one of its own scripts (`give_item` through ADDITEM). `[lua] calls` in the manifest lists those scripts.
+- `lua/tables.lua` is hand-written: the handlers of the `kamidori.tables` format (data patches spec §6,
+  `docs/superpowers/specs/2026-11-17-data-patches-design.md`). `apply_boot` checks a document against the record
+  map and writes its boot tables, through `ome-records`, the library the manifest requires.
+- `lua/generated/tables.lua` is the record map, generated with `layout/` by `tools/base_mod_build.py --build` from
+  the registry's `[[table]]` entries and the profile's saved prefix. Do not edit it.
 - `layout/exports.txt` is the list of exported names, checked in: a name in it stays exported, as a global's name
   or one of its `aliases`, until the major version is raised.

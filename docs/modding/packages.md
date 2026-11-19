@@ -229,8 +229,13 @@ The engine ships one base mod per game, `<game>-base`, which names the game's ce
 `layout/globals.json` gives each named global its bank, address and shape; `layout/points.json` copies the game's
 patch points, which the link uses when the game has none of its own; `layout/exports.txt` lists the names it
 exports, which stay exported until its major version is raised. Its `events/` declares the game's events, and its
-`lua/init.lua` returns its helpers, with the game scripts they call under `[lua] calls`. A mod that names cells requires the base mod (`[[requires]] id = "<game>-base"`). The engine mounts it
-only then, and uses an installed package of the same id instead when there is one. The files are written by the
+`lua/init.lua` returns its helpers, with the game scripts they call under `[lua] calls`. Its `lua/tables.lua`
+applies the game's record tables, and `lua/generated/tables.lua` maps them to the cells. A mod that names cells
+requires the base mod (`[[requires]] id = "<game>-base"`). The engine mounts it only then, and uses an installed
+package of the same id instead when there is one.
+
+The engine ships one library too, `ome-records`, which every base mod requires: the code that checks and writes
+record tables, with no game in it. It mounts with the base mod, as any requirement does, and loads before it. The files are written by the
 project's `tools/base_mod_build.py`; a mod has no reason to carry `layout/`, and a package that does needs omp 3,
 its own game's `[game]` and `[lua] capabilities = ["vm"]`. How a Lua mod reads and writes names through a base mod
 is in [lua.md](lua.md), "Game names".
@@ -250,7 +255,8 @@ folder and copies it into the library:
 - **A second copy of an id:** when the library already holds the id, the launcher asks before it replaces that
   copy.
 - **Adding enables nothing.** The switch on the package's row enables it, with the hard dependencies the library
-  holds, each before what needs it. A base mod is never listed: it joins when an enabled package requires it. In a
+  holds, each before what needs it. A base mod is never listed: it joins when an enabled package requires it, and
+  brings `ome-records`. The Mods tab shows each as a row of the engine's, where the stack loads it. In a
   Compatibility profile, switching on a package that needs Extended mode asks to switch the profile to Extended
   first.
 - **Removing** deletes the copy from the library, after naming the profiles that enable it or hold its selector.

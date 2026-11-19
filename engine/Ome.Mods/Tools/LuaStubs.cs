@@ -320,9 +320,12 @@ public static class LuaStubs
         if (bases.All(layout => layout.ModId != profileBase)
             && Ome.Mods.Packages.ShippedPackages.Open(profileBase) is { } shipped)
         {
-            using (shipped)
+            // With the shipped packages it requires in turn (ome-records), which the link needs to find.
+            IReadOnlyList<Ome.Mods.Packages.ModPackage> required =
+                Ome.Mods.Packages.ShippedPackages.Required([shipped], new ModLinkReport());
+            try
             {
-                ModLinkResult alone = ModLinker.Link(linkBase, [shipped], []);
+                ModLinkResult alone = ModLinker.Link(linkBase, [shipped, .. required], []);
                 if (alone.Succeeded)
                 {
                     bases.AddRange(alone.Lua.Stack.Mods.Where(mod => mod.Layout != null)
@@ -330,6 +333,11 @@ public static class LuaStubs
                     Keep(alone.Lua.Stack.Mods);
                     events.AddRange(alone.Lua.Stack.EventList.Where(added => events.All(held => held.Name != added.Name)));
                 }
+            }
+            finally
+            {
+                shipped.Dispose();
+                foreach (Ome.Mods.Packages.ModPackage package in required) package.Dispose();
             }
         }
         return (bases, events, helpers);

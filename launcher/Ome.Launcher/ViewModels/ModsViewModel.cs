@@ -228,6 +228,13 @@ public sealed class ModsViewModel : ViewModel
             var needing = view.Packages.Where(package => package.Enabled
                                                          && package.Entry?.Requires.Any(requirement => requirement.Id == id) == true)
                 .Select(package => package.Entry!.Manifest.Name).ToList();
+            // A shipped package another one mounted (ome-records, which the base mods require) names it, by the id its
+            // own row shows.
+            foreach (string other in order.Where(other => other != id && ShippedPackages.Ids.Contains(other)))
+            {
+                using ModPackage? requiring = ShippedPackages.Open(other);
+                if (requiring?.Manifest.Requires.Any(requirement => requirement.Id == id) == true) needing.Add(other);
+            }
             string version = "";
             using (ModPackage? shipped = ShippedPackages.Open(id)) version = shipped?.Manifest.Version.ToString() ?? "";
             var engine = new ModRowViewModel(id, id, version, true, true, S["chip.engine"], "",

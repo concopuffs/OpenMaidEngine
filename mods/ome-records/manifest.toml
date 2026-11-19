@@ -1,0 +1,9 @@
+omp = 3
+id = "ome-records"
+name = "Open Maid Engine records"
+version = "1.0.0"
+description = "Checks and applies edits to record tables a game keeps as parallel arrays: the code the base mods' <game>.tables formats share. It names no game: a base mod passes its record map and its own access in."
+
+# A library (Lua scripting spec §6.4): no [game], no capability, no hooks. Its init.lua returns what require gives.
+[lua]
+api = 1

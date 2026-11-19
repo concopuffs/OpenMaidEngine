@@ -48,10 +48,10 @@ internal sealed class LuaStackBuilder
         return this;
     }
 
-    /// <summary>A base mod: its layout, and Lua files if it has any.</summary>
-    public LuaStackBuilder Base(string id, GameLayout layout, string files = "")
+    /// <summary>A base mod: its layout, Lua files if it has any, and the mods it requires.</summary>
+    public LuaStackBuilder Base(string id, GameLayout layout, string files = "", params string[] requires)
     {
-        _mods.Add(new ModRuntimeMod(id, "1.0.0", false, true, [],
+        _mods.Add(new ModRuntimeMod(id, "1.0.0", false, true, requires,
             Files(files).Select(file => new ModSource(id, file.Item1, file.Item2)).ToList(), layout));
         return this;
     }

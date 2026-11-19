@@ -1,0 +1,283 @@
+-- ome-records: checks and applies edits to record tables that a game keeps as parallel arrays (data patches spec
+-- §6.4, docs/superpowers/specs/2026-11-17-data-patches-design.md). It names no game and no table: a base mod passes
+-- its record map (its lua/generated/tables.lua) and its own access in, and binds the applier to its own events.
+--
+--   local records = require("ome-records")
+--   local applier = records.applier { map = require("generated.tables"), table = maid.names.table, labels = { "boot" } }
+--   applier:apply(contribution, { built_by = "boot" })
+--
+-- A contribution is { mod = id, file = path, data = document }. The document names records by table, decimal id and
+-- field: data.unit["761"].stats.max_hp = 150. It may be a Lua table or a read-only view of one (a userdata), so the
+-- walk uses pairs and indexing only.
+
+local records = { format = 1 }
+
+local MAX_SHOWN = 20
+local INT_MIN, INT_MAX = -2147483648, 4294967295
+
+local function is_table(value)
+    local kind = type(value)
+    return kind == "table" or kind == "userdata"
+end
+
+local function describe(value)
+    if is_table(value) then return "a table" end
+    if type(value) == "string" then return "a string" end
+    if type(value) == "boolean" then return "a boolean" end
+    return tostring(value)
+end
+
+local function sorted_names(map)
+    local names = {}
+    for name in pairs(map) do names[#names + 1] = name end
+    table.sort(names)
+    return names
+end
+
+-- A decimal key: digits with no sign and no leading zero. Its number, or nil and why it is not one.
+local function decimal(key, what)
+    if type(key) ~= "string" then
+        return nil, what .. " is a key in decimal, not an array's position"
+    end
+    if key == "0" or key:match("^[1-9]%d*$") then return tonumber(key) end
+    if key:match("^0[xX]%x+$") then
+        return nil, what .. " is written in decimal: " .. tostring(tonumber(key))
+    end
+    if key:match("^0%d+$") then
+        return nil, what .. " is written without a leading zero: " .. tostring(tonumber(key))
+    end
+    if key:match("^[+-]") then return nil, what .. " has no sign" end
+    return nil, what .. " is a whole number in decimal, not " .. key
+end
+
+local Applier = {}
+Applier.__index = Applier
+
+--- The applier for one record map: what a base mod builds once, when its tables.lua loads.
+---@param config table map: a record map (format 1); table: a global's name to its accessor (maid.names.table);
+---  labels: the built_by labels the caller applies at an event of its own
+function records.applier(config)
+    if type(config) ~= "table" then error("records.applier takes a table: { map = …, table = …, labels = … }", 2) end
+    local map = config.map
+    if not is_table(map) or map.format ~= records.format then
+        error("records.applier: map is a record map of format " .. records.format .. ", not "
+              .. (is_table(map) and tostring(map.format) or describe(map)), 2)
+    end
+    if type(config.table) ~= "function" then
+        error("records.applier: table is the caller's access, a function from a global's name to its accessor", 2)
+    end
+    if type(config.labels) ~= "table" or config.labels[1] == nil then
+        error("records.applier: labels lists the built_by labels the caller applies, such as { \"boot\" }", 2)
+    end
+    local labels = {}
+    for _, label in ipairs(config.labels) do labels[label] = true end
+    -- Each row field's column names by index, so a named column given by its number can be refused with its name.
+    local named = {}
+    for name, spec in pairs(map.tables) do
+        for field, field_spec in pairs(spec.fields) do
+            if field_spec.columns then
+                local by_index = {}
+                for column, index in pairs(field_spec.columns) do by_index[index] = column end
+                named[name .. "." .. field] = by_index
+            end
+        end
+    end
+    return setmetatable({ map = map, access = config.table, labels = labels, named = named, views = {},
+                          results = {} }, Applier)
+end
+
+-- Every problem of a document, as { path, reason }.
+function Applier:problems(data)
+    local problems = {}
+    local function problem(path, reason) problems[#problems + 1] = { path, reason } end
+    local tables = self.map.tables
+
+    local function value_of(path, kind, value)
+        if kind == "integer" then
+            if type(value) ~= "number" then
+                problem(path, "takes a whole number, not " .. describe(value))
+            elseif value ~= math.floor(value) or value < INT_MIN or value > INT_MAX then
+                problem(path, "takes a whole number in 32 bits, not " .. tostring(value))
+            end
+        elseif kind == "float" then
+            if type(value) ~= "number" then
+                problem(path, "takes a number, not " .. describe(value))
+            elseif value ~= value or value == math.huge or value == -math.huge then
+                problem(path, "takes a finite number, not " .. tostring(value))
+            end
+        elseif type(value) ~= "string" then
+            problem(path, "takes a string, not " .. describe(value))
+        else
+            local fits, reason = maid.text_fits(value)
+            if not fits then problem(path, reason) end
+        end
+    end
+
+    local function row_of(name, field, spec, path, row)
+        local named = self.named[name .. "." .. field] or {}
+        for column, cell in pairs(row) do
+            local column_path = path .. "." .. tostring(column)
+            if type(column) ~= "string" then
+                problem(path, name .. "." .. field .. " takes its columns by name, or by number where a column has no "
+                        .. "name, not a whole row as an array")
+                return
+            end
+            local index = spec.columns and spec.columns[column]
+            if index == nil then
+                local number, reason = decimal(column, "a column")
+                if number == nil then
+                    problem(column_path, name .. "." .. field .. " has no column " .. column)
+                elseif number >= spec.width then
+                    problem(column_path, name .. "." .. field .. " has columns 0 to " .. (spec.width - 1))
+                elseif named[number] then
+                    problem(column_path, "column " .. number .. " is named: write " .. path .. "." .. named[number])
+                else
+                    index = number
+                end
+            end
+            if index ~= nil then
+                if is_table(cell) then problem(column_path, "a column takes one value, not a table")
+                else value_of(column_path, spec.kind, cell) end
+            end
+        end
+    end
+
+    if not is_table(data) then
+        problem("(the file)", "a document is a table of record tables, not " .. describe(data))
+        return problems
+    end
+    for name, records_of in pairs(data) do
+        local spec = type(name) == "string" and tables[name] or nil
+        local path = tostring(name)
+        if spec == nil then
+            problem(path, "no record table is named " .. path .. " (tables: "
+                    .. table.concat(sorted_names(tables), ", ") .. ")")
+        elseif not self.labels[spec.built_by] then
+            problem(path, name .. " is built by " .. spec.built_by .. ", which this format does not edit")
+        elseif not is_table(records_of) then
+            problem(path, name .. " takes its records by id: [" .. name .. ".<id>]")
+        else
+            for key, record in pairs(records_of) do
+                local id_path = path .. "." .. tostring(key)
+                local id, reason = decimal(key, "a record id")
+                if id == nil then
+                    problem(id_path, reason)
+                elseif id >= spec.records then
+                    problem(id_path, name .. " has records 0 to " .. (spec.records - 1))
+                elseif not is_table(record) then
+                    problem(id_path, "a record is a table of its fields, not " .. describe(record))
+                else
+                    for field, value in pairs(record) do
+                        local field_path = id_path .. "." .. tostring(field)
+                        local field_spec = type(field) == "string" and spec.fields[field] or nil
+                        if field_spec == nil then
+                            problem(field_path, name .. " has no field " .. tostring(field))
+                        elseif field_spec.state then
+                            problem(field_path, name .. "." .. field .. " is saved state: a load brings the saved "
+                                    .. "value back, so a file does not set it")
+                        elseif field_spec.width == nil then
+                            if is_table(value) then problem(field_path, name .. "." .. field .. " takes one value, not a table")
+                            else value_of(field_path, field_spec.kind, value) end
+                        elseif not is_table(value) then
+                            problem(field_path, name .. "." .. field .. " is a row of " .. field_spec.width
+                                    .. " columns: give its columns (" .. field .. ".<column> = …)")
+                        else
+                            row_of(name, field, field_spec, field_path, value)
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return problems
+end
+
+-- The kept result of a contribution's check: { ok = true } or { ok = false, message = … }, made once for the applier's
+-- life (one Lua session), by the contribution's mod and file.
+function Applier:result(contribution)
+    if type(contribution) ~= "table" and type(contribution) ~= "userdata" then
+        error("a contribution is a table: { mod = …, file = …, data = … }", 3)
+    end
+    local mod, file = contribution.mod, contribution.file
+    if type(mod) ~= "string" or type(file) ~= "string" then
+        error("a contribution names its mod and its file as strings", 3)
+    end
+    local key = mod .. "\n" .. file
+    local result = self.results[key]
+    if result then return result end
+    local problems = self:problems(contribution.data)
+    if #problems == 0 then
+        result = { ok = true }
+    else
+        table.sort(problems, function(a, b) return a[1] < b[1] end)
+        local lines = { mod .. " " .. file .. ": " .. #problems .. (#problems == 1 and " problem" or " problems")
+                        .. ", so nothing of it is applied" }
+        for i = 1, math.min(#problems, MAX_SHOWN) do
+            lines[#lines + 1] = "  " .. problems[i][1] .. ": " .. problems[i][2]
+        end
+        if #problems > MAX_SHOWN then lines[#lines + 1] = "  and " .. (#problems - MAX_SHOWN) .. " more" end
+        result = { ok = false, message = table.concat(lines, "\n") }
+    end
+    self.results[key] = result
+    return result
+end
+
+--- Whether a contribution's document passes every check: true, or false and the message apply raises.
+function Applier:check(contribution)
+    local result = self:result(contribution)
+    if result.ok then return true end
+    return false, result.message
+end
+
+function Applier:view(global)
+    local view = self.views[global]
+    if view == nil then
+        view = self.access(global)
+        self.views[global] = view
+    end
+    return view
+end
+
+--- Write a contribution's parts whose table is built by options.built_by, after checking the whole document. A
+--- document that fails raises one error, at its first apply, and writes nothing; each later apply of it returns 0.
+---@return integer written the number of cells written
+function Applier:apply(contribution, options)
+    local label = type(options) == "table" and options.built_by or nil
+    if type(label) ~= "string" or not self.labels[label] then
+        error("apply: options.built_by is one of the applier's labels", 2)
+    end
+    local result = self:result(contribution)
+    if not result.ok then
+        if result.reported then return 0 end
+        result.reported = true
+        error(result.message, 0)
+    end
+    local written = 0
+    local tables = self.map.tables
+    for name, records_of in pairs(contribution.data) do
+        local spec = tables[name]
+        if spec.built_by == label then
+            for key, record in pairs(records_of) do
+                local id = tonumber(key)
+                for field, value in pairs(record) do
+                    local field_spec = spec.fields[field]
+                    local view = self:view(field_spec.global)
+                    if field_spec.width == nil then
+                        view[id] = value
+                        written = written + 1
+                    else
+                        local row = view[id]
+                        local columns = field_spec.columns
+                        for column, cell in pairs(value) do
+                            row[(columns and columns[column]) or tonumber(column)] = cell
+                            written = written + 1
+                        end
+                    end
+                end
+            end
+        end
+    end
+    return written
+end
+
+return records
