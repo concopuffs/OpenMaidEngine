@@ -3,6 +3,7 @@ using Ome.Engine.Model;
 using Ome.Engine.Modding;
 using Ome.Engine.Natives;
 using Ome.Engine.Sys4;
+using Ome.Mods.Data;
 using Ome.Mods.Manifest;
 using Ome.Mods.Packages;
 using Ome.Script.Patch;
@@ -11,12 +12,17 @@ namespace Ome.Mods.Linking;
 
 /// <summary>The Lua part of a link (Lua scripting spec §6, §7): the mods that ship Lua with their sources, every
 /// handler their hooks name, the hook plan bound to the linked scripts, and the writes the source names that a mod's
-/// list lacks (spec §9.3), which <c>omp build</c> refuses.</summary>
-public sealed record LinkedLua(ModRuntimeStack Stack, HookPlan Plan, IReadOnlyList<ModUndeclaredWrite>? UndeclaredWrites = null)
+/// list lacks (spec §9.3), which <c>omp build</c> refuses. <paramref name=DataTexts/> are the data files as they were
+/// read, one for each of the stack's contributions (data patches spec §5.4), which the link cache keeps.</summary>
+public sealed record LinkedLua(ModRuntimeStack Stack, HookPlan Plan, IReadOnlyList<ModUndeclaredWrite>? UndeclaredWrites = null,
+                               IReadOnlyList<string>? DataTexts = null)
 {
     public static readonly LinkedLua None = new(ModRuntimeStack.Empty, HookPlan.Empty);
 
     public IReadOnlyList<ModUndeclaredWrite> Undeclared => UndeclaredWrites ?? [];
+
+    /// <summary>The data files' texts, empty when the stack has none.</summary>
+    public IReadOnlyList<string> DataTextList => DataTexts ?? [];
 }
 
 /// <summary>A write the source spells out (<c>game.g.NAME = …</c>, <c>game.table("NAME")[…] = …</c>) to a name a base
@@ -45,9 +51,27 @@ public static class ModLuaLinker
         ["ome.text.present"] = "is reserved for the localization filter (Lua scripting spec §7.7)",
     };
 
-    /// <summary>A hook on its way into the plan; <paramref name="GameEvent"/> names the event at a point that it
-    /// subscribes to.</summary>
-    private sealed record Pending(ModHook Hook, HandlerId Handler, int LoadOrder, string? GameEvent = null);
+    /// <summary>A hook or a delivery on its way into the plan; <paramref name="GameEvent"/> names the event at a point
+    /// that it subscribes to. A delivery (data patches spec §5.5) has no <paramref name="Hook"/>: it is the kind's owner's
+    /// handler with a <paramref name="Contribution"/>, at the data entry's priority and the contributor's load order, and
+    /// its <paramref name="Phase"/> puts a mod's data files before its hooks at one priority (plan §4.2).</summary>
+    private sealed record Pending(HandlerId Handler, int Priority, int LoadOrder, int Phase, ModHook? Hook,
+                                  string? GameEvent = null, ContributionId? Contribution = null)
+    {
+        public const int DeliveryPhase = 0, HookPhase = 1;
+
+        public static Pending Of(ModHook hook, HandlerId handler, int loadOrder, string? gameEvent = null)
+            => new(handler, hook.Priority, loadOrder, HookPhase, hook, gameEvent);
+
+        public bool Skip => Hook?.Skip == true;
+        public bool IsSite => Hook?.Form == ModHookForm.Site;
+        public string? When => Hook?.When;
+    }
+
+    /// <summary>A kind a mod accepts (data patches spec §5.2), checked: its events that this install raises, each with
+    /// the owner's handler there, and those it does not raise, with the reason.</summary>
+    private sealed record AcceptedKind(string Owner, ModKind Kind, IReadOnlyList<(ModKindEvent At, DeclaredEvent Event)> Raised,
+                                       IReadOnlyList<(ModKindEvent At, UnavailableEvent Missing)> Unraised);
 
     /// <summary>An event the link read, with its place when it is raised at a point.</summary>
     /// <summary>A declared event and, unless Lua raises it, the instruction each of its points names.</summary>
@@ -68,7 +92,13 @@ public static class ModLuaLinker
                                  IReadOnlyList<LinkedCatalog>? catalogs = null)
     {
         var luaMods = order.Where(ShipsLua).ToList();
-        if (luaMods.Count == 0) return LinkedLua.None;
+        // Data patches spec §5.4: a kind's owner ships Lua, so a stack without Lua accepts no kind. The data files are
+        // checked even then, so a contributor whose owner is missing does not link without a word.
+        if (luaMods.Count == 0)
+        {
+            Contributions(order, new Dictionary<string, AcceptedKind>(), new HashSet<string>(), new Dictionary<string, int>(), report);
+            return LinkedLua.None;
+        }
         if (linkBase.Lua is not { } lazy)
         {
             foreach (ModPackage mod in luaMods)
@@ -92,6 +122,10 @@ public static class ModLuaLinker
         OmsPatchPoints? points = linkBase.PatchPoints ?? order.Select(mod => mod.BasePoints).FirstOrDefault(found => found != null);
         var (declared, brokenEvents, unavailableEvents) = Events(luaMods, order, linkBase, points, scripts, report);
         var undeclared = new List<ModUndeclaredWrite>();
+        // Data patches spec §5.4, step 1: the kinds, by name; a kind declared twice, or broken, is in neither list.
+        var kinds = new Dictionary<string, AcceptedKind>(StringComparer.Ordinal);
+        var kindOwners = new Dictionary<string, string>(StringComparer.Ordinal);
+        var brokenKinds = new HashSet<string>(StringComparer.Ordinal);
 
         foreach (ModPackage mod in luaMods)
         {
@@ -238,16 +272,76 @@ public static class ModLuaLinker
                     handlers.Add(runtimeHandler);
                 }
                 if (subscribed is { Places: null })
-                    luaEventHooks.Add((new Pending(hook, id, loadOrder), hook.Target));
+                    luaEventHooks.Add((Pending.Of(hook, id, loadOrder), hook.Target));
                 else if (subscribed is { Places: { } places })
                     foreach (EventPlace place in places)
-                        pointHooks.Add((new Pending(hook, id, loadOrder, hook.Target), place.Script, place.Offset, place.Site,
+                        pointHooks.Add((Pending.Of(hook, id, loadOrder, hook.Target), place.Script, place.Offset, place.Site,
                                         place.Point));
-                else if (hook.Form == ModHookForm.Engine) engineHooks.Add((new Pending(hook, id, loadOrder), hook.Target));
-                else if (hook.Form == ModHookForm.Script) scriptHooks.Add((new Pending(hook, id, loadOrder), hookedScript!));
-                else if (hook.Form == ModHookForm.Watch) watchHooks.Add((new Pending(hook, id, loadOrder), watched!));
-                else pointHooks.Add((new Pending(hook, id, loadOrder), bound!.Value.Script, bound.Value.Offset, bound.Value.Site,
+                else if (hook.Form == ModHookForm.Engine) engineHooks.Add((Pending.Of(hook, id, loadOrder), hook.Target));
+                else if (hook.Form == ModHookForm.Script) scriptHooks.Add((Pending.Of(hook, id, loadOrder), hookedScript!));
+                else if (hook.Form == ModHookForm.Watch) watchHooks.Add((Pending.Of(hook, id, loadOrder), watched!));
+                else pointHooks.Add((Pending.Of(hook, id, loadOrder), bound!.Value.Script, bound.Value.Offset, bound.Value.Site,
                                      hook.Form == ModHookForm.Point ? hook.Target : null));
+            }
+            // Data patches spec §5.2, §5.4 step 1: the kinds the mod accepts, each checked as a subscription to each of
+            // its events. The handler gets its id only with a delivery (step 3), so an owner without a contributor loads
+            // what it loads today.
+            foreach (ModKind kind in mod.Manifest.Accepts)
+            {
+                string where = kind.Describe();
+                if (kindOwners.TryGetValue(kind.Kind, out string? firstOwner))
+                {
+                    report.Add(ModReportClass.HardConflict, [firstOwner, mod.Id], null,
+                               $"{firstOwner} and {mod.Id} both accept the kind {kind.Kind}; a kind has one owner");
+                    brokenKinds.Add(kind.Kind);
+                    continue;
+                }
+                kindOwners[kind.Kind] = mod.Id;
+                var raised = new List<(ModKindEvent, DeclaredEvent)>();
+                var unraised = new List<(ModKindEvent, UnavailableEvent)>();
+                bool failed = false;
+                foreach (ModKindEvent at in kind.At)
+                {
+                    string atWhere = $"{where}: at[{at.Index}] {at.Event}";
+                    string? eventOwner = null;
+                    if (brokenEvents.Contains(at.Event))
+                    {
+                        failed = true;   // its declaration's error is reported
+                        continue;
+                    }
+                    if (unavailableEvents.TryGetValue(at.Event, out UnavailableEvent? missing)) eventOwner = missing.Owner;
+                    else if (declared.TryGetValue(at.Event, out DeclaredEvent? found)) eventOwner = found.Event.Owner;
+                    else
+                    {
+                        Error(null, $"{atWhere}: no mod of the stack declares the event"
+                                    + (declared.Count == 0 ? "" : $" (it declares {string.Join(", ", declared.Keys.Order(StringComparer.Ordinal))})"));
+                        failed = true;
+                        continue;
+                    }
+                    if (eventOwner != mod.Id && !requires.Contains(eventOwner, StringComparer.Ordinal))
+                    {
+                        Error(null, $"{atWhere}: {eventOwner} declares the event, and the mod does not require it "
+                                    + $"([[requires]] id = \"{eventOwner}\"), so it could not subscribe to it");
+                        failed = true;
+                        continue;
+                    }
+                    if (!checks.TryGetValue(at.Handler.File, out ModSourceCheck? check) || !check.Parsed)
+                    {
+                        failed = true;   // the layout, or the file's check, reported it
+                        continue;
+                    }
+                    if (!check.TopLevelFunctions.Contains(at.Handler.Function))
+                    {
+                        Error(null, $"{atWhere}: lua/{at.Handler.File} declares no top-level function {at.Handler.Function}; "
+                                    + $"a handler is a global function of its file (function {at.Handler.Function}(…))");
+                        failed = true;
+                        continue;
+                    }
+                    if (missing != null) unraised.Add((at, missing));
+                    else raised.Add((at, declared[at.Event]));
+                }
+                if (failed) brokenKinds.Add(kind.Kind);
+                else kinds[kind.Kind] = new AcceptedKind(mod.Id, kind, raised, unraised);
             }
             // A base mod is in the session with no Lua of its own: the accessors of the mods that require it read its
             // layout (spec §9.1, §9.3).
@@ -263,17 +357,62 @@ public static class ModLuaLinker
                            + "what it changes");
         }
 
-        // The merged order (spec §7.4): ascending priority, then load order; one mod's hooks keep manifest order.
+        // Data patches spec §5.4, steps 2 and 3: the data files, then a delivery for each of a kind's raised events.
+        foreach (string name in brokenKinds) kinds.Remove(name);
+        var contributions = new List<ModContribution>();
+        var priorities = new List<int>();
+        var dataTexts = new List<string>();
+        foreach (var (contribution, entry, contributorOrder, kind, text) in Contributions(order, kinds, brokenKinds, loadOrders, report))
+        {
+            var id = new ContributionId(contributions.Count);
+            contributions.Add(contribution);
+            priorities.Add(entry.Priority);
+            dataTexts.Add(text);
+            foreach (var (at, gameEvent) in kind.Raised)
+            {
+                var runtimeHandler = new ModRuntimeHandler(kind.Owner, at.Handler.File, at.Handler.Function);
+                if (!handlerIds.TryGetValue(runtimeHandler, out HandlerId handler))
+                {
+                    handlerIds[runtimeHandler] = handler = new HandlerId(handlers.Count);
+                    handlers.Add(runtimeHandler);
+                }
+                var delivery = new Pending(handler, entry.Priority, contributorOrder, Pending.DeliveryPhase, null, Contribution: id);
+                if (gameEvent.Places is not { } places) luaEventHooks.Add((delivery, at.Event));
+                else
+                    foreach (EventPlace place in places)
+                        pointHooks.Add((delivery with { GameEvent = at.Event }, place.Script, place.Offset, place.Site, place.Point));
+            }
+        }
+        // Spec §5.4: an event of a kind that is not raised loses its deliveries, which the report says once.
+        foreach (AcceptedKind kind in kinds.Values.Where(kind => kind.Raised.Count > 0))
+        {
+            var contributors = contributions.Where(found => found.Kind == kind.Kind.Kind).Select(found => found.Mod).Distinct().ToList();
+            if (contributors.Count == 0) continue;
+            foreach (var (at, missing) in kind.Unraised)
+                report.Add(ModReportClass.Note, contributors.Prepend(kind.Owner), null,
+                           $"kind {kind.Kind.Kind} ({kind.Owner}): {at.Event} is not raised in this install, so its data files "
+                           + $"are not delivered there, and each delivery lists it in contribution.unraised: {missing.Reason}; "
+                           + $"the files: {string.Join(", ", contributions.Where(found => found.Kind == kind.Kind.Kind))}");
+        }
+
+        // The merged order (spec §7.4): ascending priority, then load order; one mod's hooks keep manifest order. Data
+        // patches spec §5.5: at one priority, a mod's data files come before its hooks, in manifest order.
         static IEnumerable<Pending> Merged(IEnumerable<Pending> due)
-            => due.OrderBy(entry => entry.Hook.Priority).ThenBy(entry => entry.LoadOrder);
+            => due.OrderBy(entry => entry.Priority).ThenBy(entry => entry.LoadOrder).ThenBy(entry => entry.Phase);
         PlannedHandler Planned(Pending entry)
-            => new(entry.Handler, entry.Hook.Priority, entry.LoadOrder, entry.Hook.Skip, GameEvent: entry.GameEvent,
-                   Site: entry.Hook.Form == ModHookForm.Site);
+            => new(entry.Handler, entry.Priority, entry.LoadOrder, entry.Skip, GameEvent: entry.GameEvent, Site: entry.IsSite,
+                   Contribution: entry.Contribution);
         // Spec §7.4: after the instruction, the after hooks run in one list by the same rule.
         static bool IsAfter(Pending entry) => entry.Hook is { Form: ModHookForm.Site, When: "after" };
-        string Describe(Pending entry) => $"{handlers[entry.Handler.Index]}"
+        // A delivery is named by its contributor and file, then the owner's handler (spec §5.7).
+        string Handler(HandlerId handler, ContributionId? contribution)
+            => contribution is { } delivered ? $"{contributions[delivered.Index]} ({handlers[handler.Index]})"
+                                             : $"{handlers[handler.Index]}";
+        string ModOf(Pending entry)
+            => entry.Contribution is { } delivered ? contributions[delivered.Index].Mod : handlers[entry.Handler.Index].ModId;
+        string Describe(Pending entry) => Handler(entry.Handler, entry.Contribution)
                                           + (entry.GameEvent is { } name ? $" on {name}" : "")
-                                          + $" (priority {entry.Hook.Priority}{(entry.Hook.Skip ? ", may skip" : "")})";
+                                          + $" (priority {entry.Priority}{(entry.Skip ? ", may skip" : "")})";
 
         var sites = new Dictionary<string, IReadOnlyList<PlannedSite>>(StringComparer.Ordinal);
         foreach (var byScript in pointHooks.GroupBy(hook => TextCatalog.NormalizeScriptName(hook.Script), StringComparer.Ordinal)
@@ -289,10 +428,10 @@ public static class ModLuaLinker
                                             after.Count == 0 ? null : after.Select(Planned).ToList()));
                 string at = $"0x{bySite.First().Site:x}" + (point is { } name ? $" ({name})" : "");
                 if (due.Count > 1)
-                    report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId),
+                    report.Add(ModReportClass.OrderedInteraction, due.Select(ModOf),
                         byScript.First().Script, $"{at}: handlers run in this order: " + string.Join(", ", due.Select(Describe)));
                 if (after.Count > 1)
-                    report.Add(ModReportClass.OrderedInteraction, after.Select(entry => handlers[entry.Handler.Index].ModId),
+                    report.Add(ModReportClass.OrderedInteraction, after.Select(ModOf),
                         byScript.First().Script, $"{at}: after it, handlers run in this order: "
                                                  + string.Join(", ", after.Select(Describe)));
             }
@@ -304,13 +443,13 @@ public static class ModLuaLinker
                      .OrderBy(group => group.Key, StringComparer.Ordinal))
         {
             List<Pending> When(string when)
-                => Merged(byScript.Where(hook => hook.Pending.Hook.When == when).Select(hook => hook.Pending)).ToList();
+                => Merged(byScript.Where(hook => hook.Pending.When == when).Select(hook => hook.Pending)).ToList();
             var enter = When("enter");
             var exit = When("exit");
             scriptPlans[byScript.Key] = new PlannedScript(enter.Select(Planned).ToList(), exit.Select(Planned).ToList());
             foreach (var (when, due) in new[] { ("enter", enter), ("exit", exit) })
                 if (due.Count > 1)
-                    report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId),
+                    report.Add(ModReportClass.OrderedInteraction, due.Select(ModOf),
                         byScript.First().Script, $"{when}: handlers run in this order: " + string.Join(", ", due.Select(Describe)));
         }
         var engine = new Dictionary<string, IReadOnlyList<PlannedHandler>>(StringComparer.Ordinal);
@@ -319,7 +458,7 @@ public static class ModLuaLinker
             var due = Merged(byEvent.Select(hook => hook.Pending)).ToList();
             engine[byEvent.Key] = due.Select(Planned).ToList();
             if (due.Count > 1)
-                report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId), null,
+                report.Add(ModReportClass.OrderedInteraction, due.Select(ModOf), null,
                     $"{byEvent.Key}: handlers run in this order: " + string.Join(", ", due.Select(Describe)));
         }
         // Spec §7.4: an event raised from Lua runs its subscribers inside the emit, in their own order.
@@ -329,7 +468,7 @@ public static class ModLuaLinker
             var due = Merged(byEvent.Select(hook => hook.Pending)).ToList();
             luaEvents[byEvent.Key] = due.Select(Planned).ToList();
             if (due.Count > 1)
-                report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId), null,
+                report.Add(ModReportClass.OrderedInteraction, due.Select(ModOf), null,
                     $"{byEvent.Key}: subscribers run in this order: " + string.Join(", ", due.Select(Describe)));
         }
         // Spec §7.3, §7.4: each watch once for its cells, with every handler of a hook on them in the merged order. A cell
@@ -343,7 +482,7 @@ public static class ModLuaLinker
             watches.Add(new PlannedWatch(cells.Watch, cells.Kind, cells.Address, cells.Count, due.Select(Planned).ToList(),
                                          cells.Global, cells.Dimensions, cells.RowWidth));
             if (due.Count > 1)
-                report.Add(ModReportClass.OrderedInteraction, due.Select(entry => handlers[entry.Handler.Index].ModId), null,
+                report.Add(ModReportClass.OrderedInteraction, due.Select(ModOf), null,
                     $"watch {cells.Watch}: handlers run in this order: " + string.Join(", ", due.Select(Describe)));
         }
         for (int i = 0; i < watches.Count; i++)
@@ -368,12 +507,121 @@ public static class ModLuaLinker
         foreach (var (name, ids) in writers.Where(pair => pair.Value.Count > 1).OrderBy(pair => pair.Key, StringComparer.Ordinal))
             report.Add(ModReportClass.OrderedInteraction, ids, null,
                        $"{name} is written by {string.Join(", then ", ids)} (load order); the trace shows each write (--lua-trace)");
-        report.Lua = Summary(mods, handlers, sites, scriptPlans, engine, luaEvents, declared, watches);
+        report.Lua = Summary(mods, handlers, sites, scriptPlans, engine, luaEvents, declared, watches, kinds, contributions,
+                             priorities);
 
         var events = declared.Values.Select(entry => entry.Event).OrderBy(gameEvent => gameEvent.Name, StringComparer.Ordinal).ToList();
-        return new LinkedLua(new ModRuntimeStack(mods, handlers, events),
-                             new HookPlan(sites, engine, luaEvents, scriptPlans, watches), undeclared);
+        return new LinkedLua(new ModRuntimeStack(mods, handlers, events, contributions.Count > 0 ? contributions : null),
+                             new HookPlan(sites, engine, luaEvents, scriptPlans, watches), undeclared,
+                             dataTexts.Count > 0 ? dataTexts : null);
     }
+
+    /// <summary>
+    /// Data patches spec §5.4, step 2: each <c>[[data]]</c> entry of the stack, in load order and each mod's in manifest
+    /// order. A mod of the stack accepts its kind; the contributor requires that mod or is that mod; one of the kind's
+    /// events is raised; and the file reads as a document inside the bounds, with only values Lua can hold. Each problem
+    /// names the contributor and the file, and the line where the parser gives one. Nothing here runs mod code.
+    /// </summary>
+    private static List<(ModContribution Contribution, ModDataEntry Entry, int LoadOrder, AcceptedKind Kind, string Text)> Contributions(
+        IReadOnlyList<ModPackage> order, IReadOnlyDictionary<string, AcceptedKind> kinds, IReadOnlySet<string> brokenKinds,
+        IReadOnlyDictionary<string, int> loadOrders, ModLinkReport report)
+    {
+        var found = new List<(ModContribution, ModDataEntry, int, AcceptedKind, string)>();
+        var luaIds = order.Where(ShipsLua).Select(mod => mod.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (ModPackage mod in order)
+            foreach (ModDataFile file in mod.Layout.Data)
+            {
+                ModDataEntry entry = file.Entry;
+                string where = entry.PackagePath;
+                void Error(string message) => report.Add(ModReportClass.Error, mod.Id, null, message);
+                if (brokenKinds.Contains(entry.Kind)) continue;   // the kind's error is reported
+                if (!kinds.TryGetValue(entry.Kind, out AcceptedKind? kind))
+                {
+                    Error($"{where}: no mod of the stack accepts the kind {entry.Kind}"
+                          + (kinds.Count == 0 ? "" : $" (it accepts {string.Join(", ", kinds.Keys.Order(StringComparer.Ordinal))})"));
+                    continue;
+                }
+                if (kind.Owner != mod.Id && mod.Manifest.Requires.All(requirement => requirement.Id != kind.Owner))
+                {
+                    Error($"{where}: {kind.Owner} accepts {entry.Kind}, and the mod does not require it "
+                          + $"([[requires]] id = \"{kind.Owner}\")");
+                    continue;
+                }
+                if (kind.Raised.Count == 0)
+                {
+                    Error($"{where}: none of the events of {entry.Kind} is raised in this install, so the file would never be "
+                          + "delivered: " + string.Join("; ", kind.Unraised.Select(pair => $"{pair.At.Event}: {pair.Missing.Reason}")));
+                    continue;
+                }
+                string text;
+                try
+                {
+                    text = mod.ReadText(file.File);
+                }
+                catch (ModPackageException error)
+                {
+                    Error($"{where}: {error.Message}");
+                    continue;
+                }
+                DataReadResult read = DataDocumentReader.Read(text, where);
+                foreach (DataProblem problem in read.Problems) Error(problem.Describe(where));
+                if (read.ProblemCount > read.Problems.Count)
+                    Error($"{where}: and {read.ProblemCount - read.Problems.Count} more problems");
+                if (read.Document is not { } document) continue;
+                var requires = mod.Manifest.Requires.Select(requirement => requirement.Id).Where(luaIds.Contains).ToList();
+                found.Add((new ModContribution(entry.Kind, kind.Owner, mod.Id, where, document.Root, document.Values,
+                                               kind.Unraised.Select(pair => pair.At.Event).ToList(), requires),
+                           entry, loadOrders.GetValueOrDefault(mod.Id), kind, text));
+            }
+        return found;
+    }
+
+    /// <summary>The report's kinds (data patches spec §5.7, plan §4.2): each kind with its owner and events, its documents
+    /// in delivery order with their values, and the paths two of them give a value at, at most
+    /// <see cref="SharedPathsShown"/> of them.</summary>
+    private static IEnumerable<string> KindLines(IReadOnlyDictionary<string, AcceptedKind> kinds,
+                                                 IReadOnlyList<ModContribution> contributions,
+                                                 IReadOnlyList<int> priorities)
+    {
+        foreach (AcceptedKind kind in kinds.Values.OrderBy(kind => kind.Kind.Kind, StringComparer.Ordinal))
+        {
+            string at = string.Join(" and ", kind.Raised.Select(pair => pair.At.Event));
+            string unraised = kind.Unraised.Count == 0 ? ""
+                : $"; not raised in this install: {string.Join(", ", kind.Unraised.Select(pair => pair.At.Event))}";
+            // Delivery order: the entry's priority, then the contributor's load order, then manifest order.
+            var documents = contributions.Select((contribution, index) => (contribution, index))
+                .Where(pair => pair.contribution.Kind == kind.Kind.Kind)
+                .OrderBy(pair => priorities[pair.index]).ThenBy(pair => pair.index)
+                .Select(pair => pair.contribution).ToList();
+            yield return $"kind {kind.Kind.Kind} ({kind.Owner}), at {(at.Length == 0 ? "no raised event" : at)}{unraised}"
+                         + (documents.Count == 0 ? ": no data files" : "");
+            var several = documents.GroupBy(document => document.Mod).Where(group => group.Count() > 1).Select(group => group.Key)
+                .ToHashSet(StringComparer.Ordinal);
+            string Name(ModContribution document) => several.Contains(document.Mod) ? $"{document.Mod} {document.File}" : document.Mod;
+            foreach (ModContribution document in documents)
+                yield return $"  {document.Mod} {document.File}: {document.Values} values";
+            if (documents.Count < 2) continue;
+            var givers = new Dictionary<string, List<ModContribution>>(StringComparer.Ordinal);
+            var paths = new List<string>();
+            foreach (ModContribution document in documents)
+                foreach (string path in DataPaths.Of(document.Document))
+                {
+                    if (!givers.TryGetValue(path, out List<ModContribution>? list))
+                    {
+                        givers[path] = list = [];
+                        paths.Add(path);
+                    }
+                    list.Add(document);
+                }
+            var shared = paths.Where(path => givers[path].Count > 1).ToList();
+            foreach (string path in shared.Take(SharedPathsShown))
+                yield return $"  {path}: {string.Join(", then ", givers[path].Select(Name))} (shared path, in delivery order)";
+            if (shared.Count > SharedPathsShown) yield return $"  and {shared.Count - SharedPathsShown} more shared paths";
+        }
+    }
+
+    /// <summary>How many shared paths a kind's report lists before it counts the rest.</summary>
+    public const int SharedPathsShown = 20;
 
     /// <summary>The report's Lua section (spec §12): each mod with its capabilities and the names it writes, each hook with
     /// its handlers in the order they run, and each event with its owner, its fields and its subscribers.</summary>
@@ -383,12 +631,16 @@ public static class ModLuaLinker
                                         IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> engine,
                                         IReadOnlyDictionary<string, IReadOnlyList<PlannedHandler>> luaEvents,
                                         IReadOnlyDictionary<string, DeclaredEvent> declared,
-                                        IReadOnlyList<PlannedWatch> watches)
+                                        IReadOnlyList<PlannedWatch> watches,
+                                        IReadOnlyDictionary<string, AcceptedKind> kinds,
+                                        IReadOnlyList<ModContribution> contributions, IReadOnlyList<int> priorities)
     {
         var lines = new List<string>();
         var baseIds = mods.Where(mod => mod.Layout != null).Select(mod => mod.Id).ToHashSet(StringComparer.Ordinal);
         string Describe(PlannedHandler planned, bool withEvent = true)
-            => $"{handlers[planned.Handler.Index]}"
+            => (planned.Contribution is { } delivered
+                   ? $"{contributions[delivered.Index]} ({handlers[planned.Handler.Index]})"
+                   : $"{handlers[planned.Handler.Index]}")
                + (withEvent && planned.GameEvent is { } name ? $" on {name}" : "")
                + $" (priority {planned.Priority}{(planned.Skip ? ", may skip" : "")})";
 
@@ -451,6 +703,7 @@ public static class ModLuaLinker
             lines.Add($"event {gameEvent.Name} ({gameEvent.Owner}, {where}): fields {(fields.Length == 0 ? "none" : fields)}; "
                       + $"subscribers {(listed.Count == 0 ? "none" : string.Join(", ", listed))}");
         }
+        lines.AddRange(KindLines(kinds, contributions, priorities));
         return lines;
     }
 

@@ -33,15 +33,22 @@ public sealed record ModRuntimeMod(string Id, string Version, bool Library, bool
     public IReadOnlyList<string> CallList => Calls ?? [];
 }
 
-/// <summary>The mods that ship Lua, in load order, every handler their hooks name, and the events they declare.</summary>
+/// <summary>The mods that ship Lua, in load order, every handler their hooks name, the events they declare, and the data
+/// files delivered to the kinds' owners (data patches spec §5.4), in load order and each mod's in manifest order.</summary>
 public sealed record ModRuntimeStack(IReadOnlyList<ModRuntimeMod> Mods, IReadOnlyList<ModRuntimeHandler> Handlers,
-                                     IReadOnlyList<GameEvent>? Events = null)
+                                     IReadOnlyList<GameEvent>? Events = null,
+                                     IReadOnlyList<ModContribution>? Contributions = null)
 {
     public static readonly ModRuntimeStack Empty = new([], []);
 
     public bool HasLua => Mods.Count > 0;
 
     public ModRuntimeHandler this[HandlerId handler] => Handlers[handler.Index];
+
+    public ModContribution this[ContributionId contribution] => ContributionList[contribution.Index];
+
+    /// <summary>The contributions, empty when none.</summary>
+    public IReadOnlyList<ModContribution> ContributionList => Contributions ?? [];
 
     /// <summary>The declared events, empty when none.</summary>
     public IReadOnlyList<GameEvent> EventList => Events ?? [];
@@ -58,9 +65,12 @@ public sealed record ModRuntimeStack(IReadOnlyList<ModRuntimeMod> Mods, IReadOnl
 /// engine event the handler subscribes to when the event's subscribers take their places in an instruction's list
 /// (<c>ome.save.writing</c> before each numbered save, spec §7.7); <paramref name="GameEvent"/> names the game event at
 /// the instruction's point that it subscribes to (spec §9.2). Such a handler is given the event's context.
-/// <paramref name="Site"/> marks a site hook's handler (spec §6.3), which its context and the trace name as one.</summary>
+/// <paramref name="Site"/> marks a site hook's handler (spec §6.3), which its context and the trace name as one.
+/// <paramref name="Contribution"/> makes it a delivery (data patches spec §5.5): the owner's handler, run for that data
+/// file's contributor, whose load order <paramref name="LoadOrder"/> is.</summary>
 public sealed record PlannedHandler(HandlerId Handler, int Priority, int LoadOrder, bool Skip = false,
-                                    string? EngineEvent = null, string? GameEvent = null, bool Site = false);
+                                    string? EngineEvent = null, string? GameEvent = null, bool Site = false,
+                                    ContributionId? Contribution = null);
 
 /// <summary>A hooked instruction (spec §7.1, §7.5): its linked offset, its original offset, the point it is if it is
 /// one, its handlers before it in order, and its <c>after</c> hooks in order.</summary>

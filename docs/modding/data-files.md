@@ -89,8 +89,59 @@ event = "example.lists.ready"          # an event the owner could subscribe to: 
 handler = "lists.lua:apply"            # a file under lua/, then a top-level function of it
 ```
 
+- **Each `at` names an event the owner could subscribe to:** one it declares, or one a mod it requires declares.
+  `handler` is a top-level function of a file under `lua/`, as a hook's is ([lua.md](lua.md)).
+- **The handler's file is loaded only in a stack that holds a file of the kind.** An owner with no contributor loads
+  and runs what it did before.
 - **A kind is unique in a stack.** Two mods that declare one kind are a hard conflict.
 - **A kind is part of its owner's API.** Adding to a format is a minor version of the owner; taking a field away,
   or changing what a value means, is a major one.
 - **`shape`** (a description the link checks a file against) is not read yet. A manifest that gives one is refused
   until the engine checks shapes.
+
+## What the link checks
+
+The link checks every data file before any mod code runs, and so do `omp check` and `omp build`
+([cli.md](cli.md)). Each of these stops the load, with a report line that names the mod and the file:
+
+- no mod of the stack accepts the file's kind;
+- the contributor does not require the kind's owner;
+- the file does not read (a syntax error or a key given twice, with its line), holds a value the owner's Lua cannot
+  hold, or passes a bound;
+- none of the kind's events is raised in this install (below).
+
+A file under `data/` that no entry names, a file past 16 MiB, and `[[data]]` in a package without `[game]` or with
+`target = "native"` stop the load sooner, when the package is opened.
+
+The owner's own mistakes are its link errors: a kind two mods declare (a hard conflict naming both), an `at` event no
+mod declares or the owner cannot subscribe to, and a handler that is not a top-level function.
+
+**An event this install does not raise.** A base mod declares its events over the game's scripts, and an event is not
+raised when one of its points does not bind: another revision of a script, or a point the game does not name. Such
+an event loses its deliveries and nothing else. The report says so once, as a note naming the kind, the event, the
+reason and the files, and the kind's other events deliver as planned. The owner's handler finds the missing events in
+the delivery's `unraised` list and decides what that means for a file. When none of a kind's events is raised, its
+files fail to link.
+
+## The report
+
+The link report's Lua section lists each kind with its owner and its events, then its files in delivery order with the
+values each holds, then each path that two files give a value at:
+
+```text
+kind <game>.tables (<game>-base), at <game>.data.layered
+  example.tougher-slimes data/slimes.toml: 3 values
+  example.hard-mode data/hard.toml: 212 values
+  unit.12.experience_reward: example.tougher-slimes, then example.hard-mode (shared path, in delivery order)
+```
+
+- **A path** is the keys from the top of the file down to a value that is not a table, joined by dots; an array is one
+  path. A key that is not a bare TOML key is printed quoted.
+- **A shared path is listed, not judged.** Which value holds is the kind's rule: `<game>.tables` lets the later file
+  replace the earlier one; another kind may add values up.
+- **Paths compare as text.** The report does not know what a key means, so two spellings of one thing hide an overlap
+  from it.
+- At most 20 shared paths are listed for a kind, and the rest are counted. A file is named by its mod, and by its mod
+  and file where the mod ships more than one file of the kind.
+- Each place the files are delivered also lists its handlers in the order they run, a delivery as
+  `example.a data/a.toml (<game>-base tables.lua:apply_boot)`.

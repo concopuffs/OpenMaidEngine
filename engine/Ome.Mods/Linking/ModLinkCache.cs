@@ -5,7 +5,9 @@ using System.Text.Json.Serialization;
 using Ome.Engine.Localization;
 using Ome.Engine.Modding;
 using Ome.Engine.Sys4;
+using Ome.Mods.Data;
 using Ome.Mods.Localization;
+using Ome.Mods.Manifest;
 using Ome.Mods.Packages;
 using Ome.Script.Patch;
 using Ome.Script.Syntax;
@@ -119,14 +121,35 @@ public sealed record LinkedLuaHandlerEntry(
     [property: JsonPropertyName("function")] string Function);
 
 /// <summary>One handler due at a place, in the merged order; <c>event</c> names the game event at the instruction's
-/// point that it subscribes to.</summary>
+/// point that it subscribes to, and <c>contribution</c> makes it a delivery of that contribution (data patches spec
+/// §5.5).</summary>
 public sealed record LinkedLuaDueEntry(
     [property: JsonPropertyName("handler")] int Handler,
     [property: JsonPropertyName("priority")] int Priority,
     [property: JsonPropertyName("load_order")] int LoadOrder,
     [property: JsonPropertyName("skip")] bool Skip = false,
     [property: JsonPropertyName("event")] string? Event = null,
-    [property: JsonPropertyName("site")] bool Site = false);
+    [property: JsonPropertyName("site")] bool Site = false,
+    [property: JsonPropertyName("contribution"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    int? Contribution = null);
+
+/// <summary>A contribution in <c>link.json</c> (data patches spec §5.4): its index in the list is its
+/// <see cref="ContributionId"/>. The file is kept as it was read, under the cache directory's
+/// <c>data/&lt;mod&gt;/</c> by its path inside the package's <c>data/</c>, and read again at the mount.</summary>
+public sealed record LinkedLuaContributionEntry(
+    [property: JsonPropertyName("kind")] string Kind,
+    [property: JsonPropertyName("owner")] string Owner,
+    [property: JsonPropertyName("mod")] string Mod,
+    [property: JsonPropertyName("file")] string File,
+    [property: JsonPropertyName("values")] int Values,
+    [property: JsonPropertyName("unraised")] IReadOnlyList<string> Unraised,
+    [property: JsonPropertyName("requires")] IReadOnlyList<string> Requires)
+{
+    /// <summary>The kept file's path under the cache directory: <c>data/example.a/slimes.toml</c> for the package's
+    /// <c>data/slimes.toml</c>.</summary>
+    [JsonIgnore]
+    public string CachePath => $"{ModDataEntry.Folder}/{Mod}/{File[(ModDataEntry.Folder.Length + 1)..]}";
+}
 
 /// <summary>A field of a declared event, as written: its location is read again over the owner's layout.</summary>
 public sealed record LinkedLuaEventFieldEntry(
@@ -197,6 +220,9 @@ public sealed record LinkedLuaEntry
         = new Dictionary<string, IReadOnlyList<LinkedLuaDueEntry>>();
     /// <summary>The watches.</summary>
     [JsonPropertyName("watches")] public IReadOnlyList<LinkedLuaWatchEntry> Watches { get; init; } = [];
+    /// <summary>The data files delivered to the kinds' owners (data patches spec §5.4); absent when there are none.</summary>
+    [JsonPropertyName("contributions"), JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IReadOnlyList<LinkedLuaContributionEntry>? Contributions { get; init; }
 
     /// <summary>A source's path under the cache directory.</summary>
     public static string PathOf(string mod, string file) => $"{Folder}/{mod}/{file}";
@@ -205,11 +231,12 @@ public sealed record LinkedLuaEntry
     public static string LayoutPathOf(string mod) => $"layout/{mod}/globals.json";
 
     private static LinkedLuaDueEntry Due(PlannedHandler handler)
-        => new(handler.Handler.Index, handler.Priority, handler.LoadOrder, handler.Skip, handler.GameEvent, handler.Site);
+        => new(handler.Handler.Index, handler.Priority, handler.LoadOrder, handler.Skip, handler.GameEvent, handler.Site,
+               handler.Contribution?.Index);
 
     private static PlannedHandler Planned(LinkedLuaDueEntry entry)
         => new(new HandlerId(entry.Handler), entry.Priority, entry.LoadOrder, entry.Skip, GameEvent: entry.Event,
-               Site: entry.Site);
+               Site: entry.Site, Contribution: entry.Contribution is { } index ? new ContributionId(index) : null);
 
     public static LinkedLuaEntry Of(LinkedLua lua, string runtime) => new()
     {
@@ -238,6 +265,10 @@ public sealed record LinkedLuaEntry
         Watches = lua.Plan.Watches.Select(watch => new LinkedLuaWatchEntry(watch.Watch,
             watch.Kind == CellKind.String ? "GS" : "G", watch.Address, watch.Count, watch.Handlers.Select(Due).ToList(),
             watch.Global, watch.Dimensions, watch.RowWidth)).ToList(),
+        Contributions = lua.Stack.ContributionList.Count == 0 ? null
+            : lua.Stack.ContributionList.Select(contribution => new LinkedLuaContributionEntry(contribution.Kind,
+                contribution.Owner, contribution.Mod, contribution.File, contribution.Values, contribution.Unraised,
+                contribution.Requires)).ToList(),
     };
 
     /// <summary>The stack, with each source read from under <paramref name="directory"/>. An event's locations are
@@ -258,8 +289,20 @@ public sealed record LinkedLuaEntry
         var events = Events.Select(entry => new GameEvent(entry.Name, entry.Owner, entry.Points, entry.Description,
             entry.Fields.Select(field => GameEvent.BuildField(field.Name, field.Type, field.Access, field.At,
                 entry.Points.Count > 0, LayoutFor(entry.Owner))).ToList())).ToList();
+        // Data patches plan §4.2: each kept file is read again with the reader the link used.
+        var contributions = (Contributions ?? []).Select(entry =>
+        {
+            string text = File.ReadAllText(Path.Combine(directory, entry.CachePath), Encoding.UTF8);
+            DataReadResult read = DataDocumentReader.Read(text, entry.File);
+            if (read.Document is not { } document)
+                throw new InvalidDataException($"the link cache's copy of {entry.Mod} {entry.File} no longer reads: "
+                                               + string.Join("; ", read.Problems.Select(problem => problem.Describe(entry.File))));
+            return new ModContribution(entry.Kind, entry.Owner, entry.Mod, entry.File, document.Root, document.Values,
+                                       entry.Unraised, entry.Requires);
+        }).ToList();
         return new ModRuntimeStack(mods,
-            Handlers.Select(handler => new ModRuntimeHandler(handler.Mod, handler.File, handler.Function)).ToList(), events);
+            Handlers.Select(handler => new ModRuntimeHandler(handler.Mod, handler.File, handler.Function)).ToList(), events,
+            contributions.Count > 0 ? contributions : null);
     }
 
     public HookPlan ToPlan()
@@ -478,7 +521,8 @@ public static class ModLinkCache
                     .Any(path => !File.Exists(Path.Combine(directory, path)))
                 || (manifest.Lua?.Mods ?? []).Any(mod => mod.Files.Any(file =>
                     !File.Exists(Path.Combine(directory, LinkedLuaEntry.PathOf(mod.Id, file))))
-                    || mod.Layout && !File.Exists(Path.Combine(directory, LinkedLuaEntry.LayoutPathOf(mod.Id)))))
+                    || mod.Layout && !File.Exists(Path.Combine(directory, LinkedLuaEntry.LayoutPathOf(mod.Id))))
+                || (manifest.Lua?.Contributions ?? []).Any(entry => !File.Exists(Path.Combine(directory, entry.CachePath))))
                 return null;
             // A hit counts as recent use, so pruning keeps the entries that are actually launched.
             try
@@ -621,6 +665,15 @@ public static class ModLinkCache
                     File.WriteAllText(path, layout.Json, new UTF8Encoding(false));
                 }
             }
+            LinkedLuaEntry? lua = result.Lua.Stack.HasLua || !result.Lua.Plan.IsEmpty
+                ? LinkedLuaEntry.Of(result.Lua, linkBase.Lua?.Identity ?? "none") : null;
+            // Data patches plan §4.2: each data file as it was read.
+            foreach (var (entry, text) in (lua?.Contributions ?? []).Zip(result.Lua.DataTextList))
+            {
+                string path = Path.Combine(temporary, entry.CachePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                File.WriteAllText(path, text, new UTF8Encoding(false));
+            }
             var manifest = new ModLinkManifest
             {
                 Key = key,
@@ -637,8 +690,7 @@ public static class ModLinkCache
                 Offsets = result.Scripts.Values.Where(script => script.Offsets != null)
                     .OrderBy(script => script.Name, StringComparer.Ordinal)
                     .ToDictionary(script => script.Name, script => script.Offsets!.ToArrays(), StringComparer.OrdinalIgnoreCase),
-                Lua = result.Lua.Stack.HasLua || !result.Lua.Plan.IsEmpty
-                    ? LinkedLuaEntry.Of(result.Lua, linkBase.Lua?.Identity ?? "none") : null,
+                Lua = lua,
             };
             string report = result.Report.Render();
             File.WriteAllText(Path.Combine(temporary, MountedModLayer.ManifestFile), JsonSerializer.Serialize(manifest, Json.ModLinkManifest),
