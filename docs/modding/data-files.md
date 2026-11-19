@@ -360,7 +360,7 @@ kind <game>.tables (<game>-base), at <game>.data.layered and <game>.stage.loaded
   session"). The owner's handler goes on with the other files. `--lua-errors halt` ends the run at the first failure
   instead. What a delivery wrote before its error stays. `<game>.tables` checks the whole document before it writes,
   so a file with a problem the check finds writes nothing; a delivery stopped after its first write, by its budget or
-  the Lua memory limit, keeps what it wrote until the tables are built again.
+  by an error the check does not foresee, keeps what it wrote until the tables are built again.
 - **A mod is on or off as a whole.** A contributor that is off for the session (its own Lua failed, or a mod it
   requires is off) has no deliveries, and a contributor with no Lua is off when a Lua mod it requires is off. When the
   owner is off, so is every mod that requires it. The notice of a mod that is off ends with the files it leaves

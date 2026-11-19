@@ -49,10 +49,12 @@ public sealed record ModLimits
 {
     public long HandlerInstructions { get; init; } = 1_000_000;
     /// <summary>What a delivery (data patches spec §5.6) may run beyond <see cref="HandlerInstructions"/> for each value
-    /// of its document. One constant of the engine: an owner has no setting for it (data patches plan §4.3). Measured
-    /// with a base mod's applier on an installed game (plan §10.1): at most 115 instructions a value, over a file of
-    /// every field of its largest table, a file at the value bound, and one at the bound of which every value is refused; doubled
-    /// and rounded up. DataPatchWorkspaceTests fails when a measured cost passes half of it.</summary>
+    /// of its document, each table and array counting one (plan §12.6). One constant of the engine: an owner has no
+    /// setting for it (data patches plan §4.3). Measured with a base mod's applier on an installed game (plan §10.1,
+    /// §12.6): at most 115 instructions a value, over a file of every field of its largest table, a file at the value
+    /// bound, and one at the bound of which every value is refused, doubled and rounded up; with tables counted, at most
+    /// 110 for each unit of size over those and the sparse files (empty rows, one value a row or a record, at boot and at
+    /// a stage). DataPatchWorkspaceTests fails when a measured cost passes half of it.</summary>
     public long DataInstructionsPerValue { get; init; } = 250;
 
     /// <summary>The instructions a call may run: a delivery's grows with its document.</summary>
