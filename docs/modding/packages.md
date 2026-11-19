@@ -20,6 +20,7 @@ An Open Maid Pack (OMP) is one mod. It comes in two forms that load identically:
 ├── lua/            Lua sources; init.lua is optional (format version 3; lua.md)
 ├── events/         game event declarations (NAME.toml), for a mod that declares events (format version 3; lua.md)
 ├── layout/         a game's base mod only: the names of its cells (format version 3)
+├── data/           data files (NAME.toml, subfolders allowed), each named by a [[data]] entry (format version 4; data-files.md)
 ├── README.md       optional
 └── LICENSE         optional
 ```
@@ -30,7 +31,7 @@ changes behavior without a mention.
 ## Manifest
 
 ```toml
-omp = 1                              # package format version: 1, 2 for languages, 3 for Lua (required)
+omp = 1                              # package format version: 1, 2 for languages, 3 for Lua, 4 for data files (required)
 id = "example.double-exp"            # required
 name = "Double EXP"                  # required
 version = "1.2.0"                    # required, MAJOR.MINOR.PATCH
@@ -76,6 +77,19 @@ capabilities = ["vm"]
 [[hooks]]                            # format version 3; repeatable (lua.md)
 point = "<a patch point>"
 handler = "double_exp.lua:on_award"
+
+[[data]]                             # format version 4; repeatable (data-files.md)
+kind = "<game>.tables"               # a kind that a mod of the stack accepts
+file = "slimes.toml"                 # a path under data/
+priority = 0                         # optional, as a hook's
+
+[[accepts]]                          # format version 4; repeatable: a kind this mod defines (data-files.md)
+kind = "example.lists"
+description = "Lists of names."
+
+[[accepts.at]]                       # one or more: an event the kind's files are delivered at
+event = "example.lists.ready"
+handler = "lists.lua:apply"
 ```
 
 Unknown keys are errors, so a misspelled setting cannot be silently ignored.
@@ -86,6 +100,9 @@ version 2 loader still reads. A version 1 package with any of these, or without 
 `omp = 3` adds the `[lua]` table, `[[hooks]]`, the `lua/` folder and the `extended` target ([lua.md](lua.md)); a
 version 3 loader still reads versions 1 and 2. A package with Lua and an earlier version, or with Lua and
 `target = "native"`, is an error.
+`omp = 4` adds `[[data]]`, `[[accepts]]` and the `data/` folder ([data-files.md](data-files.md)); a version 4 loader
+still reads versions 1 to 3. In a package of an earlier version, a `data/` folder is outside the layout: it is
+ignored and reported as a note. A package with data files targets `extended`, as one with Lua does.
 
 ### Identity
 
@@ -104,7 +121,8 @@ version 3 loader still reads versions 1 and 2. A package with Lua and an earlier
   and holds only the engine's own text in other languages: `[[language]]` tables, catalogs with `[[engine]]` entries
   alone, and `fonts/` ([languages.md](languages.md), "A shell language for every game").
 - **`target`:** `native`: the mod uses only what the original engine supports, so it can be exported for
-  `AGE.EXE`. `extended` (format version 3): the mod has Lua, which only the port runs, so `omp export` refuses it.
+  `AGE.EXE`. `extended` (format version 3): the mod has Lua or data files, which only the port runs, so `omp export`
+  refuses it.
   A player profile in Compatibility mode (`mode = "native"` in its `profile.toml`) refuses a package that targets
   `extended`, ships Lua (a Lua library too, though it has no `[game]` table), or requires such a package, the
   game's base mod among them. Extended mode takes every package ([cli.md](cli.md)).
@@ -223,6 +241,14 @@ a `[lua]` table, and it is never presentation only: Lua can change what the game
 events the mod declares (`*.toml`, no subfolders), and takes a `[lua]` table and a `[game]` too. See
 [lua.md](lua.md), "Game events".
 
+### Data files: `data/`
+
+`data/` (format version 4) holds data files: TOML files, in subfolders if you like, each named by one `[[data]]`
+entry with its kind. A file that no entry names is an error, and so is an entry whose file is missing. A package
+names at most 64 data files, and a file is at most 16 MiB. A data file needs no Lua of its own: the mod that accepts
+its kind applies it. A package with `data/` is never presentation only, since what it holds changes what the game
+stores. See [data-files.md](data-files.md).
+
 ### Base mods: `layout/`
 
 The engine ships one base mod per game, `<game>-base`, which names the game's cells for Lua mods. Its
@@ -230,15 +256,15 @@ The engine ships one base mod per game, `<game>-base`, which names the game's ce
 patch points, which the link uses when the game has none of its own; `layout/exports.txt` lists the names it
 exports, which stay exported until its major version is raised. Its `events/` declares the game's events, and its
 `lua/init.lua` returns its helpers, with the game scripts they call under `[lua] calls`. Its `lua/tables.lua`
-applies the game's record tables, and `lua/generated/tables.lua` maps them to the cells. A mod that names cells
+applies the game's record tables, and `lua/generated/tables.lua` maps them to the cells. The layout and the map
+are written by the project's `tools/base_mod_build.py`; a mod has no reason to carry `layout/`, and a package that
+does needs omp 3 or later, its own game's `[game]` and `[lua] capabilities = ["vm"]`. A mod that names cells
 requires the base mod (`[[requires]] id = "<game>-base"`). The engine mounts it only then, and uses an installed
-package of the same id instead when there is one.
+package of the same id instead when there is one. How a Lua mod reads and writes names through a base mod is in
+[lua.md](lua.md), "Game names".
 
 The engine ships one library too, `ome-records`, which every base mod requires: the code that checks and writes
-record tables, with no game in it. It mounts with the base mod, as any requirement does, and loads before it. The files are written by the
-project's `tools/base_mod_build.py`; a mod has no reason to carry `layout/`, and a package that does needs omp 3,
-its own game's `[game]` and `[lua] capabilities = ["vm"]`. How a Lua mod reads and writes names through a base mod
-is in [lua.md](lua.md), "Game names".
+record tables, with no game in it. It mounts with the base mod, as any requirement does, and loads before it.
 
 ## Installing through the launcher
 

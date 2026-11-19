@@ -1,4 +1,5 @@
 using Ome.Engine.Localization;
+using Ome.Mods.Data;
 using Ome.Mods.Localization;
 using Ome.Mods.Manifest;
 
@@ -36,15 +37,20 @@ public sealed record ModLuaFile(string Path, PackageEntry File);
 /// <summary>An event declaration under <c>events/</c> (Lua scripting spec §9.2).</summary>
 public sealed record ModEventFile(string Name, PackageEntry File);
 
+/// <summary>A data file under <c>data/</c> and the <c>[[data]]</c> entry that names it (data patches spec §5.1).</summary>
+public sealed record ModDataFile(ModDataEntry Entry, PackageEntry File);
+
 /// <summary>A base mod's generated layout (Lua scripting spec §9.1): <c>layout/globals.json</c>, the patch points'
 /// copy <c>layout/points.json</c>, and the exported names <c>layout/exports.txt</c>, which the engine does not read.</summary>
 public sealed record ModLayoutFiles(PackageEntry Globals, PackageEntry? Points, PackageEntry? Exports);
 
 /// <summary>
 /// A package's files sorted into the content kinds of spec §3.2 and §4, and the localization spec's <c>text/</c> and
-/// <c>fonts/</c> (§9.1, format version 2), and the Lua scripting spec's <c>lua/</c>, <c>events/</c> and a base mod's
-/// <c>layout/</c> (§6.1, §9.1, format version 3). Directories are matched case-insensitively. Files outside the layout are
-/// kept as notes (spec §3.2); a wrongly typed or nested file inside a content directory is an error.
+/// <c>fonts/</c> (§9.1, format version 2), the Lua scripting spec's <c>lua/</c>, <c>events/</c> and a base mod's
+/// <c>layout/</c> (§6.1, §9.1, format version 3), and the data patches spec's <c>data/</c> (§5.1, format version 4).
+/// Directories are matched case-insensitively. Files outside the layout are kept as notes (spec §3.2), as a
+/// <c>data/</c> folder is before format version 4; a wrongly typed or nested file inside a content directory is an
+/// error.
 /// </summary>
 public sealed record ModLayout(
     IReadOnlyList<ModPatchFiles> Patches,
@@ -55,7 +61,7 @@ public sealed record ModLayout(
 {
     public const string PlanSuffix = ".omspatch.json";
     public const string TextFolder = "text", FontsFolder = "fonts", LuaFolder = "lua", EventsFolder = "events",
-                        LayoutFolder = "layout";
+                        LayoutFolder = "layout", DataFolder = ModDataEntry.Folder;
     /// <summary>The files a base mod's <c>layout/</c> holds; <c>tools/base_mod_build.py</c> writes them.</summary>
     public const string LayoutGlobalsFile = "globals.json", LayoutPointsFile = "points.json", LayoutExportsFile = "exports.txt";
     /// <summary>Largest Lua source a package may carry, and the most files under <c>lua/</c> (Lua scripting spec
@@ -78,13 +84,17 @@ public sealed record ModLayout(
     /// <summary>A base mod's <c>layout/</c>, or null: a package that carries one is a base mod (Lua scripting spec
     /// §8.4, §9.1).</summary>
     public ModLayoutFiles? BaseLayout { get; init; }
+    /// <summary>The data files under <c>data/</c>, in the manifest order of their <c>[[data]]</c> entries (data patches
+    /// spec §5.1).</summary>
+    public IReadOnlyList<ModDataFile> Data { get; init; } = [];
 
     /// <summary>Whether the package changes no script or asset: it holds only <c>text/</c>, <c>fonts/</c>,
     /// language assets and <c>[[language]]</c> tables (localization spec §8, save stamps). A language asset changes
     /// what is shown, not what the game stores. Lua can change what the game stores, so a package with <c>lua/</c> or
-    /// <c>events/</c> is never one (Lua scripting spec §11).</summary>
+    /// <c>events/</c> is never one (Lua scripting spec §11), and neither is one with <c>data/</c>, which a mod's Lua
+    /// applies (data patches spec §5.8).</summary>
     public bool ChangesNoContent => Patches.Count == 0 && Scripts.Count == 0 && Replacements.Count == 0 && Assets.Count == 0
-                                    && Lua.Count == 0 && Events.Count == 0;
+                                    && Lua.Count == 0 && Events.Count == 0 && Data.Count == 0;
     private static readonly string[] Documents = ["README.md", "README.txt", "LICENSE", "LICENSE.md", "LICENSE.txt"];
 
     public static ModLayout Classify(ModManifest manifest, IReadOnlyList<PackageEntry> entries, List<string> problems)
@@ -101,6 +111,7 @@ public sealed record ModLayout(
         var lua = new List<ModLuaFile>();
         var events = new List<ModEventFile>();
         var layoutFiles = new Dictionary<string, PackageEntry>(StringComparer.Ordinal);
+        var dataFiles = new Dictionary<string, PackageEntry>(StringComparer.Ordinal);
 
         foreach (PackageEntry entry in entries)
         {
@@ -199,6 +210,13 @@ public sealed record ModLayout(
                     problems.Add($"'{entry.Path}': layout/ holds {LayoutGlobalsFile}, {LayoutPointsFile} and "
                                  + $"{LayoutExportsFile}, which tools/base_mod_build.py writes");
                     break;
+                // Data patches spec §5.1: before format version 4, data/ is outside the layout (the default below).
+                case DataFolder when manifest.OmpVersion >= ModManifest.DataOmpVersion && manifest.TargetsAnyProfile:
+                    problems.Add($"'{entry.Path}': a package without [game] holds no data/: a kind is one game's");
+                    break;
+                case DataFolder when manifest.OmpVersion >= ModManifest.DataOmpVersion:
+                    dataFiles[rest] = entry;
+                    break;
                 case "patches":
                     problems.Add($"'{entry.Path}': patches/ holds only *.oms fragments and *{PlanSuffix} plans");
                     break;
@@ -268,6 +286,24 @@ public sealed record ModLayout(
         foreach (ModHook hook in manifest.Hooks.Where(hook => hook.Handler.File.Length > 0 && !luaPaths.Contains(hook.Handler.File)))
             problems.Add($"hooks[{hook.Index}].handler: the package has no lua/{hook.Handler.File}");
 
+        // Data patches spec §5.1: every file under data/ is named by one entry, and each entry's file is there.
+        var data = new List<ModDataFile>();
+        foreach (ModDataEntry named in manifest.Data)
+        {
+            if (!dataFiles.Remove(named.File, out PackageEntry? file))
+                problems.Add($"data[{named.Index}].file: the package has no {named.PackagePath}");
+            else if (file.Length > DataBounds.MaxFileBytes)
+                problems.Add($"'{file.Path}': a data file may be at most {DataBounds.MaxFileBytes >> 20} MiB");
+            else data.Add(new ModDataFile(named, file));
+        }
+        foreach (PackageEntry unnamed in dataFiles.Values.OrderBy(file => file.Path, StringComparer.Ordinal))
+            problems.Add($"'{unnamed.Path}' is not named by a [[data]] entry, so it would do nothing; name it (kind and "
+                         + "file) or remove it");
+        // A kind's handlers name files under lua/, as hooks do.
+        foreach (ModKind kind in manifest.Accepts)
+            foreach (ModKindEvent at in kind.At.Where(at => at.Handler.File.Length > 0 && !luaPaths.Contains(at.Handler.File)))
+                problems.Add($"accepts[{kind.Index}].at[{at.Index}].handler: the package has no lua/{at.Handler.File}");
+
         ModLayoutFiles? baseLayout = null;
         if (layoutFiles.TryGetValue(LayoutGlobalsFile, out PackageEntry? layoutGlobals))
             baseLayout = new ModLayoutFiles(layoutGlobals, layoutFiles.GetValueOrDefault(LayoutPointsFile),
@@ -278,6 +314,7 @@ public sealed record ModLayout(
         return new ModLayout(patches, scripts, replacements, assets, notes)
         {
             BaseLayout = baseLayout,
+            Data = data,
             Lua = lua.OrderBy(file => file.Path, StringComparer.Ordinal).ToList(),
             Events = events.OrderBy(file => file.Name, StringComparer.Ordinal).ToList(),
             Text = text.OrderBy(file => file.Language, StringComparer.Ordinal)

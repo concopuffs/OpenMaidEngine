@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Ome.Mods.Data;
 using Ome.Mods.Localization;
 using Tomlyn;
 using Tomlyn.Model;
@@ -230,11 +231,52 @@ public static partial class ManifestReader
                                     + "cannot run it");
         }
 
+        // Data patches spec §5.1, §5.2: format version 4 adds [[data]] and [[accepts]].
+        var data = new List<ModDataEntry>();
+        var accepts = new List<ModKind>();
+        if ((root.ContainsKey("data") || root.ContainsKey("accepts")) && omp < ModManifest.DataOmpVersion)
+        {
+            reader.Consume("data");
+            reader.Consume("accepts");
+            reader.Problems.Add($"data: [[data]] and [[accepts]] need omp = {ModManifest.DataOmpVersion}");
+        }
+        else
+        {
+            int index = 0;
+            foreach (TableReader entry in reader.TableArray("data"))
+                if (ReadData(entry, index++) is { } file) data.Add(file);
+            index = 0;
+            foreach (TableReader entry in reader.TableArray("accepts"))
+                if (ReadKind(entry, index++) is { } kind) accepts.Add(kind);
+            if (profile == null)
+            {
+                if (root.ContainsKey("data"))
+                    reader.Problems.Add("data: a package without [game] holds no data files: a kind is one game's (data "
+                                        + "patches spec §5.1)");
+                if (root.ContainsKey("accepts"))
+                    reader.Problems.Add("accepts: a package without [game] is a library, and declares no kind (data "
+                                        + "patches spec §5.2)");
+            }
+            else if (data.Count > 0 && target is { Length: > 0 } && target != ModManifest.ExtendedTarget)
+                reader.Problems.Add($"game.target: a mod with data files targets \"{ModManifest.ExtendedTarget}\": "
+                                    + "the port applies them through a mod's Lua, which native AGE cannot run");
+            if (accepts.Count > 0 && lua == null)
+                reader.Problems.Add("accepts: [[accepts]] needs a [lua] table: a kind's handlers are the owner's Lua");
+            if (data.Count > DataBounds.MaxFilesPerPackage)
+                reader.Problems.Add($"data: a package names at most {DataBounds.MaxFilesPerPackage} data files; this one "
+                                    + $"names {data.Count}");
+            foreach (var repeated in data.GroupBy(entry => entry.File, StringComparer.OrdinalIgnoreCase)
+                         .Where(group => group.Count() > 1))
+                reader.Problems.Add($"data: data/{repeated.Key} is named by {repeated.Count()} entries; a file has one");
+            foreach (var repeated in accepts.GroupBy(kind => kind.Kind, StringComparer.Ordinal).Where(group => group.Count() > 1))
+                reader.Problems.Add($"accepts: the kind '{repeated.Key}' is declared {repeated.Count()} times");
+        }
+
         reader.RejectUnknown();
         if (reader.Problems.Count > 0) throw new ModManifestException(origin, reader.Problems);
         return new ModManifest
         {
-            OmpVersion = omp, Languages = languages, Lua = lua, Hooks = hooks,
+            OmpVersion = omp, Languages = languages, Lua = lua, Hooks = hooks, Data = data, Accepts = accepts,
             Id = id, Name = name, Version = version, Authors = authors, Description = description,
             Profile = profile, Target = target, Revisions = revisions, OmsVersion = oms,
             Requires = requires, Conflicts = conflicts, After = after, Before = before,
@@ -359,6 +401,78 @@ public static partial class ManifestReader
         {
             Priority = priority, Fingerprint = fingerprint, Site = site, When = when, Skip = skip,
         };
+    }
+
+    /// <summary>One <c>[[data]]</c> entry (data patches spec §5.1). Whether a mod of the stack accepts the kind, and
+    /// whether the file parses, the link decides.</summary>
+    private static ModDataEntry ReadData(TableReader entry, int index)
+    {
+        string kind = entry.String("kind", required: true) ?? "";
+        string file = entry.String("file", required: true) ?? "";
+        int priority = entry.Integer("priority") ?? 0;
+        if (kind.Length > 0 && !DottedNamePattern().IsMatch(kind))
+            entry.Problems.Add($"{entry.Path}kind: '{kind}' is not a dotted name (a kind is named as an event is: "
+                               + "kamidori.tables)");
+        if (file.Length > 0 && DataPathProblem(file) is { } why)
+            entry.Problems.Add($"{entry.Path}file: '{file}' {why}");
+        entry.RejectUnknown();
+        return new ModDataEntry(index, kind, file, priority);
+    }
+
+    /// <summary>Why a <c>[[data]]</c> file is not a path under <c>data/</c> (plan §4.2), or null.</summary>
+    public static string? DataPathProblem(string file)
+    {
+        if (file.Contains('\\')) return "has a backslash; a path under data/ uses forward slashes";
+        if (file.Any(char.IsControl)) return "has a control character";
+        if (file.Split('/').Any(part => part is "" or "." or ".."))
+            return "is not a path under data/: no part of it is empty, '.' or '..'";
+        if (!file.EndsWith(".toml", StringComparison.OrdinalIgnoreCase)) return "is not a .toml file";
+        return null;
+    }
+
+    /// <summary>One <c>[[accepts]]</c> entry (data patches spec §5.2): the kind and at least one event with its handler.
+    /// Whether the owner can subscribe to the event, and whether the function is declared, the link decides.</summary>
+    private static ModKind ReadKind(TableReader entry, int index)
+    {
+        string kind = entry.String("kind", required: true) ?? "";
+        string? description = entry.String("description");
+        if (kind.Length > 0 && !DottedNamePattern().IsMatch(kind))
+            entry.Problems.Add($"{entry.Path}kind: '{kind}' is not a dotted name (a kind is named as an event is: "
+                               + "kamidori.tables)");
+        // Spec §7: a shape is checked from milestone 3. Taking one now and checking nothing would skip a check unsaid.
+        if (entry.Has("shape"))
+        {
+            entry.Consume("shape");
+            entry.Problems.Add($"{entry.Path}shape: shape checks come with data patches milestone 3; this engine does "
+                               + "not read a shape yet");
+        }
+        var at = new List<ModKindEvent>();
+        int place = 0;
+        foreach (TableReader item in entry.TableArray("at"))
+        {
+            string eventName = item.String("event", required: true) ?? "";
+            string handlerText = item.String("handler", required: true) ?? "";
+            if (eventName.Length > 0 && !DottedNamePattern().IsMatch(eventName))
+                item.Problems.Add($"{item.Path}event: '{eventName}' is not a dotted name");
+            ModHandlerRef handler = new("", "");
+            if (handlerText.Length > 0)
+            {
+                Match match = HandlerPattern().Match(handlerText);
+                if (match.Success) handler = new ModHandlerRef(match.Groups["file"].Value, match.Groups["function"].Value);
+                else item.Problems.Add($"{item.Path}handler: '{handlerText}' is not FILE.lua:FUNCTION (a file under lua/ "
+                                       + "and a top-level function of it)");
+            }
+            item.RejectUnknown();
+            at.Add(new ModKindEvent(place++, eventName, handler));
+        }
+        if (at.Count == 0 && !entry.Problems.Any(problem => problem.StartsWith($"{entry.Path}at", StringComparison.Ordinal)))
+            entry.Problems.Add($"{entry.Path}at: a kind is delivered at one event at least ([[accepts.at]] with event "
+                               + "and handler)");
+        foreach (var repeated in at.Where(item => item.Event.Length > 0).GroupBy(item => item.Event, StringComparer.Ordinal)
+                     .Where(group => group.Count() > 1))
+            entry.Problems.Add($"{entry.Path}at: the event {repeated.Key} is named {repeated.Count()} times");
+        entry.RejectUnknown();
+        return new ModKind(index, kind, description, at);
     }
 
     private static void CheckReference(TableReader table, string key, string other, string self)

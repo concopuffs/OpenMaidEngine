@@ -162,8 +162,8 @@ public sealed class ModPackageTests : IDisposable
                 "is not a lowercase, dot-separated id")]
     [InlineData("omp = 1\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"native\"",
                 "is not a semantic version")]
-    [InlineData("omp = 4\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"native\"",
-                "format version 4 is not supported")]
+    [InlineData("omp = 5\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"native\"",
+                "format version 5 is not supported")]
     [InlineData("omp = 1\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"extended\"",
                 "\"extended\" needs omp = 3")]
     [InlineData("omp = 1\nid = \"a.b\"\nname = \"x\"\nversion = \"1.0.0\"\n[game]\nprofile = \"himegari\"\ntarget = \"other\"",

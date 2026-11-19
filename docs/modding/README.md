@@ -30,6 +30,9 @@ has every rule). They run in the port only.
 Format version 3 adds **Lua**: handlers the engine calls at a named instruction or at an engine event, with raw
 access to the game's cells and state saved beside each save ([lua.md](lua.md)). Lua mods run in the port only.
 
+Format version 4 adds **data files**: TOML files of values that the mod defining their kind applies, such as edits to
+a game's record tables that its base mod writes ([data-files.md](data-files.md)). They run in the port only.
+
 Mods cannot yet extend the engine or patch code another mod inserted. `../backlog.md` and the mod loader design's
 future work list what may come later.
 
@@ -57,6 +60,7 @@ Test a mod in the port first: its link report names every conflict, while native
 | translate a game, step by step | [translating.md](translating.md) |
 | look up a language package's keys and rules | [languages.md](languages.md) |
 | run Lua beside the game's scripts | [lua.md](lua.md) |
+| change a game's data tables with a data file, or define a kind of data file | [data-files.md](data-files.md) |
 | look up a command or a port flag | [cli.md](cli.md) |
 | understand an error or a crash | [troubleshooting.md](troubleshooting.md) |
 | find your game's options, values and quirks | [games/README.md](games/README.md) |
