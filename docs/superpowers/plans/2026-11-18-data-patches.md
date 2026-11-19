@@ -1204,3 +1204,167 @@ The review of `326e88e7` accepted M3 with five fixes, made on the branch in `15d
   kind or a name cut short, so neither message change reaches them. The two reasons that change are in the review's
   own file of mistakes, `unit.762.stats` and `stage.51.enemy.1.unit` above. Gate 8 was not driven again: what it
   shows is the CP932 error at the first delivery, which no fix touched.
+
+### 12.6 After the review of the untrusted input (2026-11-19)
+
+An independent review of `1364248c` fed the link files built to cost it: four defects (A to D) and nine items. They
+are fixed on the branch in `d18ff34f` (Tomlyn's false repeated keys), `2f427346` (one size for values, tables and
+arrays; no syntax tree; the line finder), `ff7c3e18` (the sparse files' budget), `d5e7b450` (a cached copy that does
+not read), `72172641` and `cf0269c3` (the smaller fixes), `430c738f` and `960da8a9` (the guides), `9db875e9` (the
+cache key's scripts), `b7ea11c6` (gate 3's sizes) and the commit of this section (the backlog's two items, a line of
+`PROJECT-STRUCTURE.md` and this section). Numbers are ran, on one machine, unless a line gives them as the
+review's.
+
+- **Tomlyn's validating parser reported keys repeated that were not (defect C).** Its `SyntaxValidator` keeps each
+  path it has seen in a dictionary; `ObjectPath.Clone` is `MemberwiseClone`, so a stored path shares its list's
+  backing array with the walk and changes as the walk goes on, and `Equals` compares a cached hash. One table of
+  distinct keys was refused with 3 to 6 false repeats at 150,000 keys, 5 to 6 at 200,000, 6 to 8 at 300,000 and 17 to
+  20 at 400,000 (three runs each; none at 1,000, 10,000, 50,000 or 100,000). The code is the same in 2.10.2, 2.11.0,
+  2.11.1 and `main` (read in a clone of its repository). Nothing was filed upstream; these findings are here for the
+  owner to decide on. Since no release fixes it, the engine has its own check rather than an upgrade:
+  `Ome.Mods.TomlStructure` walks Tomlyn's lexer once, with no syntax tree, and holds TOML 1.0's table rules by the
+  keys' decoded text (a key or a table defined once; a dotted key's tables closed to headers, a header's to dotted
+  keys; inline tables and arrays closed; `[[a]]` over a static array, and `[a]` after `[[a]]`, a redefinition). Every
+  reader through `TomlDocument` runs it before the serializer (manifests, event files, text catalogs, selectors, save
+  stamps, player profiles, the launcher's settings), and so does the data reader. Against toml-test (`74eb956a`) its
+  262 valid files read, with the walk's count equal to the model's, and none of the 483 invalid files the old check
+  refused is taken. `RepeatedTomlKeyTests` holds the
+  review's 17 forms with a static array and a nested array (19 cases, each refused with the second's line), 400,000
+  distinct keys in one table through both `Parse` overloads, and a key given twice among them found with both lines;
+  `DataDocumentTests` holds the same for a data file.
+- **A second Tomlyn defect: an interrupted array of tables loses its tables.** The serializer's model
+  (`TomlUntypedObjectConverter.ReadTableInto`, `table[name] = ReadValue(reader)`) reads an array of tables that
+  another header interrupts afresh: `[[a0]]`, `[[a1]]`, `[[a0]]` gives 5 tables where TOML gives 6, `[[a]] [b] [[a]]`
+  and `[[a]] [[a.b]] [a.x] [[a.b]]` lose the earlier tables, and `[[a]] [b] [a.c]` makes `a` a table. TOML's own
+  fruits example reads right. A manifest with `[[requires]]`, `[game]`, `[[requires]]` lost its first entry. Not
+  fixed in 2.11.1 or `main`; not filed. The walk refuses the form, with the spelling that keeps it ("write an array's
+  tables, with their sub-tables, one after another"): a departure from TOML 1.0, which takes it, chosen over reading
+  data that the model then drops without a word. The engine's rule is that a header reaches an array of tables only
+  when the previous header's chain is in it. `data-files.md` ("The file") and `troubleshooting.md` say so.
+- **Tables and arrays counted toward no bound (defect A).** The size of a document now counts each string, boolean
+  and number (each element of an array too) and each table and array, an empty one included, the tables a header or
+  a dotted key makes on the way and each table of an array of tables; the document's own table does not count. This
+  departs from spec §5.3, which counts values: the bound stays 400,000, and the same size is the report's count, the
+  delivery's budget (§5.6) and the shape's step limit. The walk counts it over the lexer and stops past the bound
+  before Tomlyn builds anything. Gate 10's item file of 300,000 cells has a size of 318,001. The review's files:
+  - `m-partial`, 2,000 `[item.N]` of `rank = 77` with eight empty row tables each (2,000 values, size 16,001): its
+    delivery ran past its budget after 853 of its 2,000 writes (the review's figure). Driven on the port
+    (`tools/drive.py --game kamidori port start --sandbox dp-partial --port-arg=--lua-trace`, to the title): the
+    boot's delivery wrote all 2,000 cells (1,000 listed and `writes_not_listed` 1,000), `ok`, 1,734,000
+    instructions of a budget of 5,000,250; 867 instructions for each value, 108 for each unit of size.
+  - `m-steps`, every stage's 30 slots with their four row tables empty (no value, size 151,849): the shape ran past
+    its steps, the error blamed `kamidori-base`, and `--skip-failed-mods` dropped the base mod. It links now (`omp
+    check`, 1.0 s), so nothing is dropped; gate 10's sparse test delivers a file of its shape and size at boot and
+    at a stage.
+  - The bombs: `m-big`, `m-mem1`, `m-mem2`, `m-multi` and `m-tables` are refused by `omp check` in 0.6 to 0.8 s each,
+    the CLI's start included, with "the document holds more than 400,000 values, counting each table and array as
+    one; a data file holds at most that many". Read alone, 5.3 million empty arrays are refused in 0.12 s at a peak of
+    104 MB (before: read as 0 values in 9.2 s, 4,111 MB), 1.6 million empty tables in 0.32 s at 209 MB (before: 5.3 s,
+    2,624 MB).
+- **Memory (defect A, the review's 4.1 GB and 2.6 GB).** The reader built Tomlyn's syntax tree to find a problem's
+  line; it builds none now, and the line comes from a second walk (`DataLines`). The peak working set of one read,
+  the Release build in a process of its own (`DataDocumentReader.Read`, the file's text already read):
+
+  | File (16 MiB at most) | Size | Before | After |
+  |---|---|---|---|
+  | 16 MiB of blank lines | 0 | 1,965 MB | 95 MB |
+  | 16 MiB of comments | 0 | 1,966 MB | 95 MB |
+  | dotted keys to 16 MiB | 399,014 | 3,013 MB | 230 MB |
+  | 399,999 empty tables | 399,999 | 607 MB | 252 MB |
+  | 400,000 values in one table | 400,000 | 621 MB (refused at random, defect C) | 231 MB |
+  | 400,000 empty inline arrays | 400,000 | 350 MB (0 values) | 124 MB |
+  | 400,000 empty inline tables | 400,000 | 384 MB (0 values) | 150 MB |
+  | keys of 128 characters to 16 MiB | 126,144 | 353 MB | 184 MB |
+  | one string of 16 MiB | 1 | 187 MB | 155 MB |
+
+  New files inside every bound, after only: unit records with five one-value row tables to the bound 227 MB, an
+  array of 133,333 tables 171 MB, 99,999 inline tables three deep 220 MB, 200,000 dotted tables 207 MB, headers of
+  128-character keys to 16 MiB 221 MB, 300,000 strings of 40 characters 196 MB. The worst inside every bound is
+  252 MB, of which 38 MB is the process and the text before the read; a read document keeps 25 to 101 MB.
+- **The line finder was quadratic in distinct `[[name]]` headers (defect B).** `DataLines.Find` scanned every array
+  name at each `[[header]]`: 157 s for 160,000 distinct `[[aN]]` (the review's figure). It is the walk now, with a
+  callback at each written path; `omp check` refuses that file in 1.8 s, the CLI's start included.
+  `DataShapeTests.TheLineAfter160000ArraysOfTablesIsFoundInTimeLinearInTheText` builds the size the old finder took
+  minutes on, under 30 s. The same pattern elsewhere: the walk's check of an array a header reaches looks at the last
+  header's chain only (as deep as a key has parts), the report's shared paths are a dictionary
+  (`ModLuaLinker.KindLines`), and a nearest name is measured only for a problem kept (§12.5); gate 10's cost for each
+  unit of size is flat from 1,000 to 400,000.
+- **The budget fits every file inside the bounds (item 2).** Measured with gate 10's files and a new sparse test
+  (`SparseFilesCostLessThanHalfTheAllowanceForTheirSizeAtBootAndAtAStage`) on the installed Kamidori, each delivery
+  run to its end, the most instructions of a file's deliveries for each unit of its size:
+
+  | File | Size | Instructions a unit |
+  |---|---|---|
+  | a balance mod's 1,000 | 1,000 | 96.0 |
+  | every item field (300,000 cells) | 318,001 | 96.6 |
+  | unit records to the bound | 400,000 | 96.3 |
+  | the bound file refused at the first delivery (an owner with no shape) | 400,000 | 107.1 |
+  | every boot record's row tables, empty | 41,003 | 108.7 |
+  | one value in each boot row | 78,003 | 100.8 |
+  | one value in each boot record | 8,003 | 91.5 |
+  | one value in each boot record, its rows empty | 45,003 | 110.0 |
+  | every stage's rows, empty, at boot and at stage 51 | 151,849 | 72.1 |
+  | one value in each stage row | 271,729 | 83.1 |
+  | one value in each stage record | 61,939 | 70.7 |
+
+  The largest, 110.0, is under half of the allowance of 250, so neither the count nor the allowance changed; before
+  the count, the same sparse files had an allowance of nothing for their empty tables (`m-partial` ran 867 for each
+  of its values). The file of unknown keys at the bound now has 399,001 keys, and is refused at the link in 0.69 s.
+- **Spec §6.1 when the applier stops partway (item 3; not built).** §6.1 has a file with an error apply nothing. It
+  holds for a problem the check finds, since `Applier:apply` checks the whole document before its first write. It
+  does not hold when a delivery stops after its first write: the writes go through the base mod's accessors with no
+  journal (`LuaModSession.Invoke`, `Guarded`), so what was written stays until the tables are built again. Such a stop
+  is the budget (`m-partial` before the count: 853 of 2,000 cells), an error the check does not foresee, in an
+  accessor or in the applier, or a mod's runaway memory, which nothing bounds (`lua.md`, "Errors and budgets").
+  `--lua-errors halt` ends the run, so what it leaves is not played. With the budget now at least twice what a base
+  mod's applier costs on any file inside the bounds, the budget no longer stops a base mod's delivery; the gap is
+  for the rest. The smallest fix: the engine journals each write of a delivery (the cell and its old value, in the
+  accessor's path the trace already sees) and, when the delivery fails, puts the old values back in reverse order.
+  It has to be the engine's: a budget stop cancels the call and cannot be caught by `pcall`, so a journal in
+  `ome-records` would not run. The backlog has it; `data-files.md` no longer says that a stopped delivery writes
+  nothing.
+- **A cached copy that no longer reads threw out of `_Ready` (defect D).** The layer read its data files when the port
+  first asked for its Lua stack. `ModLinkCache.TryOpen` now reads the stack before it hands an entry out; a copy that
+  does not read, or reads to another size than the link counted (an engine whose reader changed, as this count does),
+  makes the entry a miss, the launch links again, and its report has a note that the port prints (`[mods] link cache
+  entry cannot be used, so the stack was linked again: …`).
+  `DataLinkTests.ACachedCopyThatNoLongerReadsIsAMissAndTheStackIsLinkedAgainWithANote`.
+- **The cache key and the scripts the events bind to (item 9; real, fixed).** The key holds the base fingerprints of
+  the scripts a mod patches or replaces; a hook's point, an event's point, a skip, a script hook and a call bind to
+  others (Kamidori's stage event binds to FIELD, INFO3 and SELSTAGE), which a fan patch's loose files change under the
+  same catalog. The cached plan then kept its old sites and its old list of events this install does not raise. The
+  link now records each base script it reads with its fingerprint (`link.json`'s `scripts_read`), an entry whose
+  scripts differ from the install's is a miss with a note naming the script, and the key's format number is 2, so no
+  entry written before is used. `DataLinkTests.AnEntryIsAMissWhenAScriptItsLinkReadIsNotTheInstallsAnyMore`. Not
+  covered: the text linker's scan of every installed script, whose result is only the report's lines (backlog).
+- **The smaller fixes (item 7).** A key holds no character that does not print: a control or format character
+  (Unicode Cc, Cf: U+200B, U+202E, U+E0001), U+2028, U+2029 or half of a surrogate pair; a printed key or string
+  escapes each one, `\U` past U+FFFF. A shape's property name longer than 128 characters is refused when the shape is
+  read. A table or an array where an `enum` stands fails it (`DataShapeCheck` took any value that was not a scalar).
+  `base_mod_build.py` refuses a table that no scope reaches whose `built_by` is the label of a scoped table, since
+  `ome-records` writes such a label only through its scopes; the rule names no label, so a scoped table built by
+  the boot's label is refused too. `DataValue`'s comment shows what `ToText` prints, with no game's names, and
+  `DataDeliveryTests`' comment counts the document's three values, the array counting one.
+- **The generic guide (item 8).** `data-files.md`'s record-table example set `drop_chance.drop_1`, which only
+  Kamidori names (Himegari's is `drop_1_percent`); it now sets `stats.max_hp` and `experience_reward`, which both base
+  mods map, with placeholder ids: `omp check` links it on both games, and the mistakes the guide quotes give its
+  messages on both. The messages that name a game's global, width, range or place are placeholders
+  (`<global>`, `<N>`, `<first>`, `<script>@<offset>`), and the guides say the game's page has the real ones; on
+  today's two games those messages read the same, but the generic guide names no game. The step limit's text says
+  why a file inside the bounds does not reach it with a shape like the base mods', and `troubleshooting.md`'s entry
+  on a key given twice says to write each table one way and each key once.
+- **Decisions.** Our own table check, not a Tomlyn upgrade, since no release fixes it; the interrupted array refused,
+  against TOML 1.0, since the model would drop its tables; the size counts the tables a header or a dotted key makes
+  on the way, so `[unit.12]` with one key is three; the allowance and the bound kept, as measured above.
+  `kamidori.stage.loaded` is as it was.
+- **The closing checks** (ran, at `b7ea11c6` with this section, its backlog items and `PROJECT-STRUCTURE.md`'s line
+  uncommitted): `tools/validate.py --level core`, 56 gates passed, with 2,879 engine core tests and 86 launcher
+  tests; the data and base mod test classes (`RepeatedTomlKeyTests`, `DataDocumentTests`, `DataLinkTests`,
+  `DataShapeTests`, `DataPatchTests`, `DataDeliveryTests`, `DataPackageTests`, `BaseModTests`), 293 passed;
+  `DataPatchWorkspaceTests`, 44 passed, after `b7ea11c6`: gate 3 read a file's size in the report, 1 where it is 3
+  now, which `2f427346` left since the workspace tests did not run before it; `test_base_mod_build.py` and
+  `base_mod_build.py --check` (in the core level); `omp check` over all 18 examples, each with its game
+  (`example.kamidori-prologue-line` on the translated install); the review's mods above; and the NativeAOT publish,
+  with no trim or AOT warning but GodotSharp's own (IL2104, IL3053). Not run: the workspace, runtime and full levels
+  of `validate.py`, gate 8 (no change here reaches its CP932 error), §12.2's hand check, and a driven stage of
+  `m-steps` on the port (the sparse test delivers a file of its shape and size headless at FIELD instead).

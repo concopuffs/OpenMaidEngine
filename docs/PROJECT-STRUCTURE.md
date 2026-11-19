@@ -327,7 +327,9 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │                                       Open Maid Pack containers (.omp ZIP or folder) with path and size checks,
     │                                       package hash and layout classification, a base mod's layout read at open,
     │                                       and the base mods the engine ships (ShippedPackages) (Packages/), manifest.toml reader
-    │                                       on Tomlyn plus semantic versions and ranges (Manifest/), and the linker:
+    │                                       on Tomlyn plus semantic versions and ranges (Manifest/), the TOML readers' own
+    │                                       check of a text's tables and keys before Tomlyn reads it (TomlStructure,
+    │                                       TomlDocument), and the linker:
     │                                       stack resolution and load order, replacements, plan composition, the
     │                                       spec §7 report, selector allocation, per-mod append catalogs, asset
     │                                       overrides, the stack's text, fonts, languages and language assets, the
