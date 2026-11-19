@@ -108,10 +108,19 @@ profile this engine made.
 **"… : unknown key".** The file holds a key this engine does not know. `profile.toml` is strict, as `manifest.toml`
 is: a mistyped key would otherwise be dropped silently.
 
-**"not valid TOML: (L,C) : error : The key `K` is already defined at … and cannot be redefined".** The file gives
-one key, or one `[table]`, twice; the position is the second. TOML forbids it, and every TOML file the engine and the
-launcher read refuses it as it refuses a syntax error: `manifest.toml`, an `events/` file, a text catalog,
-`profile.toml`, the launcher's `launcher.toml` and the engine's own state files. Keep one of the two.
+**"not valid TOML: (L,C) : error : The key `K` is already defined at … and cannot be redefined".** The file defines
+`K` a second time at (L,C); the first is the position after "at". It may be one key given twice, one `[table]` given
+twice, or one table written two ways: a `[t.u]` header and a `u.k = …` key under `[t]`, or `t = { … }` and a `[t.u]`
+header. TOML forbids it, and every TOML file the engine and the launcher read refuses it as it refuses a syntax error:
+`manifest.toml`, an `events/` file, a text catalog, `profile.toml`, the launcher's `launcher.toml` and the engine's own
+state files. Write each table one way and each key once: move the second's keys into the first, or remove the one you
+did not mean. In `K`, `[N]` is the Nth table of an array of tables, and a quoted part is a key that is not a bare key.
+
+**"not valid TOML: (L,C) : error : The array of tables `K` is interrupted by another table before this header; …".**
+The file's `[[K]]` tables come back after another table's header, as in `[[requires]]`, `[game]`, `[[requires]]`; or
+a `[K.sub]` header reaches into the array's last table after another table. TOML takes it, but the engine's TOML
+library would keep only the tables after the interruption, or make `K` a table, so every reader refuses it. Put the
+array's tables together, each followed by its own sub-tables.
 
 **Links inside a profile root are allowed.** A package folder in the root's `mods/` (or in a folder its `[mods]`
 table names) may itself be a link to your working copy, and `SAVE/` may be a link too. Only a link *inside* a
