@@ -340,8 +340,8 @@ public static class ModLuaLinker
                     if (missing != null) unraised.Add((at, missing));
                     else raised.Add((at, declared[at.Event]));
                 }
-                // Spec §7: the kind's shape, read whether or not a file of the kind is in the stack, so that a broken
-                // one is its owner's error at once. The layout checked the file is there.
+                // Spec §7, plan §6.2: the kind's shape, read in step 1 whether or not a file of the kind is in the
+                // stack, so that a broken one is its owner's link error at once. The layout checked the file is there.
                 DataShape? shape = null;
                 if (kind.Shape != null && mod.Layout.Shapes.FirstOrDefault(file => file.Path == kind.Shape) is { } shapeFile)
                 {

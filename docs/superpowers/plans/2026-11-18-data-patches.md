@@ -1056,3 +1056,93 @@ The coordinator accepted M2 and asked for six follow-ups before milestone 3. "Ra
 - **The words of the modder pages.** "The sweep" left `kamidori.md` and `oms/examples/mods/README.md`: they say
   where in the story the Kamidori scenarios' saves are (ウィル's workshop when シセティカ湖 has just opened; 蒼月の南湖畔
   at turns 1 and 5) and that the repository does not ship them. Three over-long lines are rewrapped.
+
+## 12. What M3 found
+
+M3 landed on `feature/data-patches` on 2026-11-19, tasks 1 to 8 of §6.3: the plan (`8bb25495`), the checker
+(`5541117f`), the manifest, the layout and the link (`dc301fea`), the generated shapes with the examples and the
+Workspace tests (`0d3f695a`), `omp lua-stubs`' copies (`8c2b20b7`) and the closeout. "Ran", "read" and "driven" are
+as in §11.
+
+### 12.1 The gates and their proofs
+
+Every gate of spec §12 as it stands after M3. "core" runs in `dotnet test --filter "Category!=Workspace"`,
+"Workspace" reads the installed games; §10.2 and §11.1 name the tests M3 left as they were.
+
+| Gate | Proof | What M3 changed |
+|---|---|---|
+| 1. Off means off | §10.2 (core) | The link reads each accepted kind's shape whether or not a file of the kind is in the stack, so that a broken one is its owner's error at once: a stack that mounts a base mod parses 122 KB (Himegari) or 150 KB (Kamidori) of JSON at a link the cache does not answer. Nothing else runs, and nothing at play; not measured |
+| 2. Link | §10.2 (core), and `DataLinkTests.ADocumentThatFailsItsShapeStopsTheLinkWithTheContributorTheFileTheLineThePathAndTheNearestNames`, `ADocumentThatPassesItsShapeIsDelivered`, `ABrokenShapeIsItsOwnersErrorAndStopsTheKindWithoutALineForEachContributor` (`required`, a `$ref` to no definition, not JSON) and `AShapeThatTakesMoreThanItsStepsIsItsOwnersError`; `DataPackageTests.AKindsShapeIsUnderShapesAndTheLayoutKeepsIt`, `LayoutProblemsOfShapesAreRejectedWithTheirReason` and `BeforeFormatFourAShapesFolderIsANoteAndALibraryHoldsNone`; `DataShapeTests` for the checker itself (core) | A file that fails its shape stops the load, before any mod code runs |
+| 3. Order | §10.2 (core, Workspace) | — |
+| 4. Attribution | §10.2 (core) | — |
+| 5. Same cells | §10.2 (Workspace, both games) | Its files pass the shipped shapes |
+| 6. Loads | §10.2 (Workspace, both games) | — |
+| 7. Errors | `DataPatchWorkspaceTests.EachProblemAShapeSaysStopsTheLinkWithTheContributorTheFileTheLineAndThePath` (the misspelt field, the state field, the hexadecimal id, the named column given by its number, the value of the wrong kind, and ids, slots and columns out of range: a link error with the line, and no delivery planned), `EachProblemOfAShippedFileIsReportedWithTheContributorTheFileAndThePathAndNothingOfItIsApplied` (the two strings CP932 cannot encode, at the first delivery) and `UnderHaltAShippedFilesProblemEndsTheBootNamingTheContributorItsFileAndThePath` (a CP932 string) (Workspace, both games); `DataPatchTests.TheShapeAndTheApplierAgreeOnEachFieldEachStateFieldAndEachMistake` (core, both games) | Five of the six mistakes are link errors; a file that fails the link is never delivered, so nothing of it is applied at any event |
+| 8. Stage | §11.1 (driven), and after M3 the twins' new mistake, a unit name with `é`, driven again on both games (§12.2); `DataPatchWorkspaceTests.TheStageExamplesEditTheirSlotAndTheirMistakeTwinsAreReportedAtBoot` runs FIELD after each twin's boot: no error at `stage.loaded`, and the slot keeps the stage's own unit (Workspace, both games). A stage part's mistakes that a shape can say (the scoped table at the top level, a stage, a slot or a column out of range) fail `omp check` with their line: `DataPatchTests`' `ShapeErrors` and the Workspace `ShapeProblems` | §9.2 |
+| 9. Not shaped by records | §10.2 (core) | — (its kind has no shape) |
+| 10. Size | `DataPatchWorkspaceTests.TheLargestFilesCostLessThanHalfTheAllowanceAndTheItemFileStaysUnderTheCeiling` and `AFileAtTheValueBoundIsAppliedInsideItsBudgetAtBootAndAtALoadAndARefusedOneFailsItsCheckNotItsBudget` (Workspace, Kamidori), one run, with the link now checking the shape: the balance file links in 0.01 s; the item file links in 1.44 s, boots in 0.74 s and loads in 1.49 s (0.79 s with no mod); the file at the value bound links in 2.26 s; the refused file is refused at the link in 2.26 s. Each cost a value is §10.1's (102.0, 102.4, 102.9, 114.4) | The refused file fails at the link; the owner's check at the bound runs on a copy of the base mod without its shape, which is what an owner without a shape meets (§9.2) |
+| 11. Second game | §11.1 (core), and every M3 test that takes a game runs both; the two shapes come from the two record maps by one generator | — |
+| 12. Shape | `DataPatchTests.OmpCheckAndOmpBuildRefuseAFileThatFailsItsShapeWithTheFileTheLineThePathAndTheReason` (both games: a misspelt field with its nearest name, `unit.761.experiance_reward: no such key; the nearest name here is experience_reward`; a state field, `item.5.inventory_count: item.inventory_count is saved state: …`; both exit 1, and `omp build` writes no package), `AFileThatPassesItsShapeChecksAndBuilds`, `OmpCheckRefusesAShapeWithAKeywordOutsideTheSubsetAsItsOwnersError` and `EveryShippedDataExampleLinksAndPassesItsShape` (core). By hand: `omp check` over 17 mistakes and Taplo over the same (§12.2) | New |
+| 13. Layers | `ProjectBoundaryTests` (core); the checker is in `Ome.Mods` and reads JSON with System.Text.Json's `JsonDocument` (no reflection); `tools/publish_engine.py --runtime win-x64` publishes at `8c2b20b7` with no trim or AOT warning but GodotSharp's own | — |
+
+### 12.2 By hand and driven
+
+- **Gate 8's error half, driven again** (sandboxes `dp-stage-enemies-mistake-m3` and `dp-kamidori-stage-mistake-m3`,
+  the second seeded from the main checkout's `k1clean`; `himegari-stage-enemies-mistake.steps`,
+  `kamidori-stage-enemies-mistake.steps`). The title's notice reads "Lua: example.stage-enemies-mistake
+  data/stages.toml failed: 1 problem, so nothing of it is applied: unit.810.display_name: a string cell holds text the
+  save can encode (code page 932); U+00E9 is not in it" (Kamidori: `unit.761.display_name`). `diagnostics/lua.log`
+  has that error at `INIT2.BIN@0x180` (Kamidori `0x20d`, and once more at the save's load from the title, which starts
+  a new session) and none at the stage. The floor holds its own enemies: `stage=1 slots=205,200,200 placed=2,200,205,200` and `stage=51
+  mode=0 slots=331,402,402 placed=331`.
+- **`omp check` over every example** of `oms/examples/mods/`, each with its game: all 18 link,
+  `example.kamidori-prologue-line` on the translated install (`--game-root ../Kamidori_Translated --overlay-root
+  patch`), as its README says; the three Kamidori data examples link on that install too.
+- **Taplo** (taplo 0.9.0, §6.1; the file on standard input, with the first line `#:schema` that `omp lua-stubs`
+  printed for a folder whose name has a space, so `%20`). The six shipped data files pass on both games. Of 17
+  mistakes over both games (`omp check` refuses all 17, each with its line), Taplo marks the 11 the shape gives with
+  `properties`, types and ranges: misspelt fields, saved fields, a named column given by its number, the scoped
+  table at the top level, values out of range and of the wrong kind. It takes the 6 under `x-ome-decimal-keys`: a
+  hexadecimal id on each game, id 1000, stage 0, slot 30 and column 7. Its messages are its own (`1 is not of type
+  "null"` for a saved field, where the link gives the description). `data-files.md` says so.
+
+### 12.3 Where the plan, the spec and the code disagreed
+
+- **The decimal key's message** (§6.2): the plan's sample is "a key here is a whole number in decimal from 0 to 999,
+  not 0x2f9". The checker gives two: "a key here is written in decimal: 761" for a key that reads as a number in
+  range in another spelling, and "a key here is a whole number from 0 to 999, not 1000" otherwise. The guides give
+  the built text.
+- **The twins' mistake** (§6.2, gate 8's row) was "the twins' scoped table at the top level". Only Kamidori's twin was
+  that; Himegari's misspelt a field (`stage.2.enemy.3.unit`), which has no nearest name, since `unit_id` is 3 edits
+  away and a 7-letter name allows 2. Both twins now carry the CP932 mistake, and both old mistakes are among gate 12's
+  cases.
+- **The shape's order** (§6.2): "the keys are written sorted". The generator writes each schema's keywords in one fixed
+  order, `description` first, and sorts the names under `properties` and `definitions`; the diff of a registry change
+  stays small.
+- **Tasks 4 and 5 are one commit** (`0d3f695a`), against §6.3's "each commit builds and passes": the shipped shape
+  turns the Workspace tests' mistakes and the twins into link errors, so neither half passes alone. Task 6's guide
+  sentences went in its own commit.
+- **A synthetic link base binds no point** (§6.3, task 4). The link refuses a file whose kind has no raised event
+  before it reads the file, so a contributor against the shipped base mods on `ModLinkBase` without the installed
+  scripts never reached the shape. The tests bind each base mod's points at synthetic scripts of their own
+  (`DataPatchTests.Shapes`' `BoundBase`); the link's order is unchanged.
+- **A scripting native serves one interpreter.** The twins' FIELD run after their boot takes a new native and a new
+  Lua session, where the test first reused the boot's.
+
+### 12.4 What M3 settled beside §6.2
+
+- **The base mods stay at 1.1.0**: the shape is part of the kind, which arrived in 1.1.0 on this branch, and 1.1.0
+  has not been released.
+- **A key the check refuses is not looked under**, so a misspelt field inside `[unit.0x2f9]` shows once the id is
+  written in decimal. The guide says so.
+- **The order of a file's problems** follows the document's tables as the reader gives them, not the lines: a file
+  that writes `unit`, then `skill`, then `unit` again lists every `unit` problem first.
+- **An array for a whole row** is "unit.103.stats: takes a table, not an array". The applier said what to write
+  instead ("takes its columns by name, or by number where a column has no name, not a whole row as an array"); the
+  shape's error does not.
+- **The closing checks** (ran, at `8c2b20b7` with this section uncommitted): `tools/validate.py --level core`, 56
+  gates passed, with 2,821 engine core tests and 86 launcher tests; the NativeAOT publish above; and the Workspace
+  tests by class, ten batches of one to seven classes: 173 passed and 18 failed, the 18 a fresh worktree fails for the
+  build outputs it lacks (15 of `MovieOpcodeTests` for the FFmpeg shim, `SharedProfileTests`' one for `CGINIT.json`,
+  and `Sys4AssetStoreTests`' two for `asset-index.json` and `bin/BinExtractALF.exe`). `DataPatchWorkspaceTests`: 43
+  passed.

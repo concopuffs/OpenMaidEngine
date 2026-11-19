@@ -342,14 +342,6 @@ still handled on their own. Each change should be behaviour-neutral and pass the
 - **Accepted future work** in the mod loader design (`superpowers/specs/2026-11-03-mod-loader-design.md` §12; its
   launcher is built: `superpowers/specs/2026-11-15-launcher-design.md`, `launcher/`):
   - mod-owned sites (patching another mod's inserted code);
-  - declarative data patches: designed, and accepted on 2026-11-18
-    (`superpowers/specs/2026-11-17-data-patches-design.md`, which replaces that spec's sentence). Milestones 0 to 2
-    are built on `feature/data-patches` (`superpowers/plans/2026-11-18-data-patches.md`, §8, §10 and §11): the record
-    map, `ome-records`, `<game>.data.layered` and `maid.text_fits`; format version 4 with `[[data]]`, `[[accepts]]`
-    and `data/`, the document reader, the link, the delivery and its attribution, the report and the trace, the
-    allowance measured, and both base mods accepting `<game>.tables` at boot. Milestone 2 (§5 and §11) adds the
-    scopes and each game's stage tables, applied at `<game>.stage.loaded`, with an example mod and driven runs on
-    each game. Gates 1 to 11 and 13 pass. Left: milestone 3 (shapes; gate 12). Done when the gates of its §12 pass;
   - mod merging;
   - precompiled new scripts.
 - **The link report misses an overlap through an old name.** A record table or a field the registry renames keeps its
