@@ -339,10 +339,13 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   launcher is built: `superpowers/specs/2026-11-15-launcher-design.md`, `launcher/`):
   - mod-owned sites (patching another mod's inserted code);
   - declarative data patches: designed, and accepted on 2026-11-18
-    (`superpowers/specs/2026-11-17-data-patches-design.md`, which replaces that spec's sentence). Milestone 0 is
-    built on `feature/data-patches` (`superpowers/plans/2026-11-18-data-patches.md`): the record map, `ome-records`,
-    `<game>.data.layered` and `maid.text_fits`. No data file reaches a game yet. Done when the gates of its §12
-    pass;
+    (`superpowers/specs/2026-11-17-data-patches-design.md`, which replaces that spec's sentence). Milestones 0 and 1
+    are built on `feature/data-patches` (`superpowers/plans/2026-11-18-data-patches.md`, §8 and §10): the record
+    map, `ome-records`, `<game>.data.layered` and `maid.text_fits`; format version 4 with `[[data]]`, `[[accepts]]`
+    and `data/`, the document reader, the link, the delivery and its attribution, the report and the trace, the
+    allowance measured, and both base mods accepting `<game>.tables` at boot. Gates 1 to 7, 9, 10 and 13 pass.
+    Left: milestone 2 (the stage tables, an example mod and a driven run on each game; gates 8 and 11) and
+    milestone 3 (shapes; gate 12). Done when the gates of its §12 pass;
   - mod merging;
   - precompiled new scripts.
 - **What each game copies from a field a data file can set.** A data file or a Lua edit at `<game>.data.layered`
@@ -357,6 +360,15 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   The scan does not follow branches, local calls or block copies, so the list may be short. Done for a game when
   its guide page (`modding/games/<game>.md`) says, for each field a data file can set, which saved values the game
   derives from it and when, each claim checked on the game's scripts, with a driven run for at least one copy.
+- **The other TOML readers take a key given twice.** Tomlyn 2.10.1's `TomlDocument.Parse` (and
+  `TomlSerializer.Deserialize<TomlTable>`) keeps the last of a repeated key and of a repeated `[table]` without a
+  word; only `SyntaxParser.Parse(…, validate: true)` refuses them (a probe run on 2026-11-18, data patches plan
+  §10). The data files' reader validates first (`Ome.Mods/Data/DataDocumentReader.cs`), but the manifest reader
+  (`Manifest/ManifestReader.cs`), the event declarations (`ModEvents`), the text catalogs
+  (`Localization/TextCatalogFileReader.cs`), the save stamp, the selector store, the machine state, the player
+  profile (`Launch/ProfileFile.cs`) and the launcher's `ProfileDocument` and `LauncherSettings` parse alone: a
+  probe of `ManifestReader.Parse` read a manifest that gives `version` twice as its second, `2.0.0`. Done when
+  each reader refuses a repeated key or table with its line, as TOML has it, with a test for each.
 - **The link report misses an overlap through an old name.** A record table or a field the registry renames keeps its
   old name (a `[[table]]`'s `aliases`, its `[table.field_aliases]`), and a `<game>.tables` file may still write it:
   the applier writes the cell the current name does and logs the old name (`superpowers/plans/2026-11-18-data-patches.md`

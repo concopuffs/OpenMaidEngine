@@ -455,9 +455,10 @@ is not an error: the other events of the kind deliver the files.
 does not require the mod that declares it, or the handler is not a top-level function of its file.
 
 **"error MOD: data/FILE.toml (OWNER FILE:FUNCTION) failed at EVENT …" in `diagnostics/lua.log`.** The owner's handler
-failed on your file; the message is the owner's. For `<game>.tables` it names the path and what is wrong with it, and
-nothing of the file is applied. After three failures in a row the file is not applied again that session; other
-files go on. **"… ran out of its instruction budget"**: the owner's handler ran past the delivery's budget
+failed on your file; the message is the owner's. For `<game>.tables` it reads "MOD FILE: N problems, so nothing of it
+is applied", then the first 20 problems by path, each with what is wrong ([data-files.md](data-files.md), "The record
+tables"); the file is passed over for the rest of the session, with no second error. For another kind, after three
+failures in a row the file is not applied again that session; other files go on. **"… ran out of its instruction budget"**: the owner's handler ran past the delivery's budget
 ([data-files.md](data-files.md), "Delivery").
 
 **"Lua: MOD is off for this session: …; not applied: …".** The mod named first is off (the notice says why), and the

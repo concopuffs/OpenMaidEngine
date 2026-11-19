@@ -584,3 +584,54 @@ changed below; the instructions did not change between them.
 - **A file a balance mod writes** costs nothing a player sees: 1,000 values link in 0.01 s, and the boot takes the
   0.02 s it takes with no mod. The Lua runtime was already started in the test process, so its own start is not in
   these numbers.
+
+### 10.2 The gates and their tests
+
+M1 landed on `feature/data-patches` on 2026-11-18, tasks 1 to 9 of §4.4 (`942c66d7` to the closeout). Each gate is
+proven by tests that ran: "core" runs in `dotnet test --filter "Category!=Workspace"`, "Workspace" reads the
+installed games.
+
+| Gate | Tests |
+|---|---|
+| 1. Off means off | `DataLinkTests.AnOwnerWithoutAContributorLinksAsItDidAndGetsNoHandler` and `AStackWithoutDataWritesNoContributionsToTheCache`; `DataDeliveryTests.AnOwnerWithoutAContributorRunsAsItDidAndItsHandlerFileIsNeverLoaded` (core). Every test that links a shipped base mod with no data file runs it as before |
+| 2. Link | `DataLinkTests` (each case that stops the load, with a top-level `error()` in every owner's Lua that only running it would show); `DataDocumentTests` (the syntax error with its line, the date, the integer past 2^53, the bounds); `DataPackageTests` (`[[data]]` in a library or a native package, an unnamed file under `data/`, the 64 files and 16 MiB) (core) |
+| 3. Order | `DataDeliveryTests.TwoDataModsAndALuaModRunInTheReportsOrderAndTheLoadOrderDecidesWhichValueHolds` and `APriorityPutsAFileBeforeTheModsLoadedEarlier` (core); `DataPatchWorkspaceTests.AHandlerAtDataReadyFindsEveryFileAppliedWhateverTheLoadOrder` (Workspace, Himegari) |
+| 4. Attribution | `DataDeliveryTests.TheTraceAndAWatchNameTheContributorAndItsFile` and `ThreeFailuresOfOneFileSwitchOffThatFileAndLeaveAnotherModsFileDelivered` (core) |
+| 5. Same cells | `DataPatchWorkspaceTests.TheSpecsFileShippedByAModLeavesUnit761AsTheWithBlockDoesAndNothingElse` (Workspace, both Kamidori installs), with M0's `TheGate6WithBlockCompilesToTheCellsTheApplierWrites` |
+| 6. Loads | `DataPatchWorkspaceTests.TheEditHoldsAtBootAtALoadAndAfterAReturnToTitleAndASaveKeepsNoneOfIt` (Workspace, Himegari) |
+| 7. Errors | `DataPatchWorkspaceTests.EachProblemOfAShippedFileIsReportedWithTheContributorTheFileAndThePathAndNothingOfItIsApplied` (six cases) and `UnderHaltAShippedFilesProblemEndsTheBootNamingTheContributorAndItsFile` (Workspace, Kamidori); `DataDeliveryTests.UnderHaltADeliverysErrorEndsTheRunNamingTheContributorAndItsFile` (core) |
+| 9. Not shaped by records | `DataDeliveryTests.TheOwnerGetsTheContributionAsAReadOnlyViewMadeOnceForTheSession`: the kind is a list of strings and the stack has no base mod (core) |
+| 10. Size | §10.1 |
+| 13. Layers | `ProjectBoundaryTests.OnlyTheModsProjectNamesTheTomlLibrary` (core) |
+
+- **Gate 6's return to title** runs op `0x9` into a synthetic script 0 that calls INIT2, as the game's root does in
+  its prologue (M0's load test, §8). The installed SYSTEM4 is not run.
+- **One game each.** Gates 3 and 6 run on Himegari, 5, 7 and 10 on Kamidori. The engine code is the same; gate 11
+  (milestone 2) runs both base mods on both games.
+- **Old names** (§9.1): `tools/test_base_mod_build.py` (the lint, `exports.txt`, the record map and the rename rule,
+  on a synthetic registry) and `DataPatchTests.AnOldNameWritesTheCellItsCurrentNameDoesAndIsLoggedOnceForEachFile`
+  and `AFileThatNamesOneCellByAnOldNameAndItsCurrentOneIsRefusedWhole` (on a synthetic record map).
+
+### 10.3 Where the plan, the spec and the code disagreed
+
+- **§4.1 said an integer past 2^63 is already a syntax error** (read, from Tomlyn's documentation). It is not: a
+  probe of Tomlyn 2.10.1 found that 2^63 to 2^64-1 wrap to negative numbers (`18446744073709551615` reads as -1), in
+  both of its parsers. The reader reads each integer token's text and refuses one past 2^53 with its line.
+- **A key given twice.** Spec §6.1 says one file cannot name a cell twice because TOML refuses a repeated key.
+  `TomlDocument.Parse` takes one and keeps the last; only `SyntaxParser.Parse(…, validate: true)` refuses it. The
+  data files' reader validates first, so the spec holds for data files. The other readers do not, and the backlog
+  has the item.
+- **An integer's problem names its line, not its path,** since it is found in the syntax tree. The guide says so.
+- **§4.2's log example** gives the place as `INIT2@0x20d`; the engine prints `INIT2.BIN@0x20d`, as every hook's
+  place. The guide gives the printed form.
+- **The halt reason has the error's first line** (§4.2): for a `<game>.tables` file that is "N problems, so nothing of
+  it is applied", and the paths are in `diagnostics/lua.log`, as for any Lua error.
+
+### 10.4 What M1 settled beside §4.2
+
+- **The base mods stay at 1.1.0.** That version has not left this branch, and `<game>.data.layered` and the kind
+  arrive in it together. A data mod requires `>=1.1, <2`.
+- **The kind's description** is "Edits to the game's record tables that the boot builds: units, items and skills."
+  M2 adds the stage's enemies with the stage event.
+- **The report counts "1 value"** in the singular.
+- **The allowance is 250** (§10.1), and `ome-records` keeps only the first 20 problems and a count.
