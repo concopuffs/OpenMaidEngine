@@ -88,6 +88,7 @@ public static class LuaStubs
             ---@field session maid.session
             ---@field events maid.events
             ---@field state table the mod's own table, kept beside each numbered save
+            ---@field text_fits fun(text: string): boolean, string? whether a string cell would take the text: true, or false and the reason the write would give; writes nothing
             maid = {}
 
             ---@class maid.log

@@ -107,10 +107,27 @@ internal sealed class ModEnvironment
         maid["mod"] = mod;
         maid["session"] = LuaValue.FromUserData(new SessionView(_session));
         maid["events"] = new LuaTable { ["emit"] = Emit() };
+        maid["text_fits"] = TextFits();
         maid["state"] = new LuaTable();
         MaidTable = maid;
         return maid;
     }
+
+    /// <summary>
+    /// <c>maid.text_fits(text)</c> (data patches spec §6.2): <c>true</c> when a string cell would take the text, else
+    /// <c>false</c> and the reason the write would give. It reads and writes nothing, so every mod has it; a mod that
+    /// checks what it is given before its first write needs it, since a string cell refuses a text only at the write.
+    /// </summary>
+    private LuaFunction TextFits() => _session.Fn("text_fits", context =>
+    {
+        LuaValue argument = context.ArgumentCount > 0 ? context.GetArgument(0) : LuaValue.Nil;
+        if (argument.Type != LuaValueType.String)
+            throw new LuaRuntimeException(context.State,
+                $"bad argument #1 to 'text_fits' (a string expected, got {argument.TypeToString()})", 1);
+        return Access.TextRefusal(argument.Read<string>()) is { } reason
+            ? context.Return(new LuaValue(false), reason)
+            : context.Return(new LuaValue(true));
+    });
 
     /// <summary>
     /// <c>maid.events.emit(name, fields)</c> (spec §8.2): the engine checks that this mod declares the event and raises

@@ -55,6 +55,11 @@ public interface IModAccess
     /// <summary><c>maid.events.emit</c> (spec §8.2): raise an event this mod declares with <c>raised_by = "lua"</c>, with
     /// every declared field's value. Its subscribers run before it returns; the result is the values they left.</summary>
     IReadOnlyDictionary<string, CellValue> Emit(string eventName, IReadOnlyDictionary<string, CellValue> fields);
+
+    /// <summary><c>maid.text_fits</c> (data patches spec §6.2): why a string cell would refuse <paramref name="text"/>,
+    /// by the rule every string write applies (<see cref="CellRules.Text"/>, in the save's code page), or null when it
+    /// would take it. It reads and writes nothing, so a mod can check a text before its first write.</summary>
+    string? TextRefusal(string text);
 }
 
 /// <summary>

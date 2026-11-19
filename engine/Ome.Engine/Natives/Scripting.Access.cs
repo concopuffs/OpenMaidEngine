@@ -66,6 +66,20 @@ public sealed partial class Scripting
         public IReadOnlyDictionary<string, CellValue> Emit(string eventName, IReadOnlyDictionary<string, CellValue> fields)
             => owner.Emit(ModId, eventName, fields);
 
+        // The code page WriteCell encodes a string cell in, so a text that passes here is one a write takes.
+        public string? TextRefusal(string text)
+        {
+            try
+            {
+                CellRules.Text(text, owner._memory.Encoding.CodePage);
+                return null;
+            }
+            catch (ScriptAccessException error)
+            {
+                return error.Message;
+            }
+        }
+
         public INamedAccess? Names(string baseModId)
         {
             if (!_names.TryGetValue(baseModId, out INamedAccess? face)) _names[baseModId] = face = Build(baseModId);

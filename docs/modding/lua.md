@@ -629,10 +629,13 @@ vm.call("NAME")          -- run a script [lua] calls lists ("Calling a script")
 `maid.vm` is raw access: it can corrupt game state and the saves made after it. The link report lists the mods that
 have it.
 
-### `maid.log`, `maid.mod`, `maid.session`
+### `maid.log`, `maid.mod`, `maid.session`, `maid.text_fits`
 
 - `maid.log.info(…)`, `maid.log.warn(…)`, `maid.log.error(…)` write a line to `diagnostics/lua.log`, with the
   mod's id. `print` writes at `info`.
+- `maid.text_fits(text)` says whether a string cell would take `text`: `true`, or `false` and the reason the write
+  would give (a character CP932 cannot encode). It reads and writes nothing, and every mod has it. A string cell
+  refuses a text only at the write, so a mod that checks what it was given before its first write asks this.
 - `maid.mod.id` and `maid.mod.version` are the mod's own; `maid.mod.state_version` is the version that wrote the
   loaded state ("State").
 - `maid.session.reason` is why the session was built: `"boot"`, `"title"`, `"load"` or `"reload"`.

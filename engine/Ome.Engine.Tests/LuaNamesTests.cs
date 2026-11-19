@@ -261,4 +261,28 @@ public sealed class LuaNamesTests : IDisposable
         Assert.Throws<ScriptAccessException>(() => LayoutCells.Address(open, 3, 0));
         Assert.Throws<ScriptAccessException>(() => LayoutCells.Address(open, 0, -1));
     }
+
+    [Fact]
+    public void TextFitsSaysWhatAStringCellWouldTakeAndWritesNothing()
+    {
+        // Data patches spec §6.2: a mod can test a text before its first write. The answer is the write's own: a text
+        // CP932 encodes fits, and one it cannot is refused with the reason the write would give. A mod without vm and
+        // without a write list has it, and the console too.
+        Scripting native = Stack("unit_names");
+        ScriptMemory memory = native.Memory;
+        memory.SetString(0x1, "ユイ");
+        Assert.Equal("true\ttrue\ttrue", Chunk(native, "user", """
+            return maid.text_fits("リリィ"), maid.text_fits(""), maid.text_fits("Lily ~ 100%")
+            """));
+        string refused = Chunk(native, "user", "return maid.text_fits(\"Lily 한\")");
+        Assert.Equal("false\ta string cell holds text the save can encode (code page 932); U+D55C is not in it", refused);
+        string written = Fails(native, "user", "require('test-base').table('unit_names')[1] = \"Lily 한\"");
+        Assert.Contains(refused["false\t".Length..], written);
+        Assert.Equal("ユイ", memory.String(0x1));
+        Assert.Equal("true", Chunk(native, null, "return maid.text_fits('名前')"));
+        Assert.Contains("bad argument #1 to 'text_fits' (a string expected, got number)",
+                        Fails(native, "user", "return maid.text_fits(5)"));
+        Assert.Contains("bad argument #1 to 'text_fits' (a string expected, got nil)",
+                        Fails(native, "user", "return maid.text_fits()"));
+    }
 }

@@ -573,6 +573,7 @@ public sealed class LuaScriptingTests : IDisposable
         public string? OwnLayout => null;
         public IReadOnlyDictionary<string, CellValue> Emit(string eventName, IReadOnlyDictionary<string, CellValue> fields)
             => fields;
+        public string? TextRefusal(string text) => null;
         public double ReadInteger(double address) => throw new UnwindException();
         public void WriteInteger(double address, double value) { }
         public double ReadFloat(double address) => 0;
