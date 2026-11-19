@@ -3,7 +3,7 @@
 
 [[event]]
 name = "kamidori.stage.loaded"
-point = ["kamidori.stage.after_loader", "kamidori.stage.after_info_reload"]
+point = ["kamidori.stage.after_loader", "kamidori.stage.after_info_reload", "kamidori.stage.after_list_preview"]
 description = """
 The stage's loaders have run (the base's and each append's). At the stage's start nothing is placed yet, and a \
 handler that rewrites the stage's enemy or object slots changes what the stage places. FIELD runs the loaders, and \
@@ -11,7 +11,10 @@ raises this, again each time it is entered again during the stage (back from the
 made in the field), and INFO's third tab (アイテム情報) runs every stage's loaders for its 獲得地点 view and, on a \
 floor, that floor's again, and raises this there: the loaders write their tables afresh and nothing new is placed, \
 so a handler makes the same change each time. The floor reads the enemy table again later, for its \
-reinforcements."""
+reinforcements. The stage list raises this too, for a stage that is not being played: it runs the loaders of the \
+stage under its cursor for its preview, when it opens, each time the cursor moves onto another stage and when the \
+party screen comes back to it, and stage is that stage. Work that belongs once to a played stage goes to \
+kamidori.stage.ready."""
 
 [[event.field]]
 name = "stage"

@@ -45,7 +45,7 @@ Use the game id wherever a guide writes `<game>`.
 | OMS modules | `kamidori.globals`, `kamidori.scripts` (generated); `kamidori.adv` (`oms/kamidori/adv.oms`) |
 | Speakers | 114 in `kamidori.adv`'s `enum speaker` |
 | Tables | `unit[1000]` (44 fields), `item[2000]` (53 fields), `skill[1000]` (27 fields), `stage_enemy[30]` (15 fields) ([reference](../../global-reference-kamidori.md)) |
-| Named patch points | `kamidori.experience.after_calculation`, `kamidori.boot.data_layered`, `kamidori.boot.data_ready`, `kamidori.stage.after_loader`, `kamidori.stage.after_info_reload`, `kamidori.stage.after_ready_handlers`, `kamidori.stage.after_round_handlers`, `kamidori.stage.after_close_handlers` ([reference](../../patch-point-reference-kamidori.md)) |
+| Named patch points | `kamidori.experience.after_calculation`, `kamidori.boot.data_layered`, `kamidori.boot.data_ready`, `kamidori.stage.after_loader`, `kamidori.stage.after_info_reload`, `kamidori.stage.after_list_preview`, `kamidori.stage.after_ready_handlers`, `kamidori.stage.after_round_handlers`, `kamidori.stage.after_close_handlers` ([reference](../../patch-point-reference-kamidori.md)) |
 | Publisher's page | <https://www.eukleia.co.jp/eushully/> |
 | Guide | [kamidori.md](kamidori.md) |
 

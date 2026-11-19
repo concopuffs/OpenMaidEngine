@@ -1687,7 +1687,10 @@ public sealed class ModLuaLinkTests : IDisposable
         // kamidori.stage.loaded is raised where INFO's third tab runs a floor's loaders again, too (data patches plan
         // §5.2): one revision of INFO3 serves both installs.
         Assert.Equal([0xd20], Offsets(linked, "INFO3"));
-        Assert.Equal(["kamidori.stage.after_loader", "kamidori.stage.after_info_reload"],
+        // And where the stage list runs the loaders of the stage under its cursor for its preview (plan §11): the two
+        // installs' SELSTAGE revisions have the loop at the same offsets.
+        Assert.Equal([0x1408], Offsets(linked, "SELSTAGE"));
+        Assert.Equal(["kamidori.stage.after_loader", "kamidori.stage.after_info_reload", "kamidori.stage.after_list_preview"],
                      linked.Lua.Stack.Event("kamidori.stage.loaded")!.Points);
     }
 

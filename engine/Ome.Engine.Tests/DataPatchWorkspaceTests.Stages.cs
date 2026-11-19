@@ -30,13 +30,24 @@ public sealed partial class DataPatchWorkspaceTests
     /// the step limit.</summary>
     private GameSession AtStageStart(GateGame game, ModLinkResult? linked, int stage)
     {
+        GameSession session = AtStageStart(game, linked, stage, out string? halt);
+        Assert.Equal("STEP-LIMIT", halt);
+        return session;
+    }
+
+    /// <param name="onFloor">Kamidori: start as if the floor had been entered already (<c>G[0x428c]</c> set, unnamed in
+    /// the registry), so FIELD skips the arrival scenes it would leave for first (<c>FIELD@0x1ef</c> to <c>0x304</c>),
+    /// which a booted session's story state reaches at some floors.</param>
+    private GameSession AtStageStart(GateGame game, ModLinkResult? linked, int stage, out string? halt, bool onFloor = false)
+    {
         GameSession session = game.Boot(linked is null ? null : Native(linked, LuaErrorPolicy.Halt));
         session.Seed(Cell(game.Profile, "current_stage_id", 0), stage);
         session.Seed(Cell(game.Profile, "field_map_continue_mode", 0), 0);
+        if (onFloor) session.Seed(0x428c, 1);
         SceneResult field = session.RunScene(game.Scripts.RequireByName("FIELD.BIN"), game.Table, new HeadlessWaits(),
                                              provider: game.Scripts, build: game.Build,
                                              scripting: linked is null ? null : Native(linked, LuaErrorPolicy.Halt));
-        Assert.Equal("STEP-LIMIT", field.Halt);
+        halt = field.Halt;
         Assert.Equal(stage, session.Globals.GetValueOrDefault(Cell(game.Profile, "current_stage_id", 0)));
         return session;
     }
@@ -115,11 +126,13 @@ public sealed partial class DataPatchWorkspaceTests
 
     [Theory]
     [Trait("Category", "Workspace")]
-    [InlineData("himegari", "example.stage-enemies", 1, 2, 810L, 3, 200L, "stage.2.enemy.3.unit: stage_enemy has no field unit")]
-    [InlineData("kamidori", "example.kamidori-stage-enemies", 51, 1, 761L, 3, 402L,
+    [InlineData("himegari", "example.stage-enemies", 1, 2, 810L, 3, 200L, 2, 834L, 202L,
+                "stage.2.enemy.3.unit: stage_enemy has no field unit")]
+    [InlineData("kamidori", "example.kamidori-stage-enemies", 51, 1, 761L, 3, 402L, 52, 762L, 631L,
                 "stage_enemy: stage_enemy is reached through its scope: write stage.<id>.enemy")]
     public void TheStageExamplesEditTheirSlotAndTheirMistakeTwinsAreReportedAtBoot(
-        string profile, string example, int stage, int slot, long unit, int otherSlot, long otherOwn, string mistake)
+        string profile, string example, int stage, int slot, long unit, int otherSlot, long otherOwn,
+        int secondStage, long secondUnit, long secondOwn, string mistake)
     {
         // The example mods of oms/examples/mods/ that gate 8 drives (plan §5.3), linked and run headless here.
         GateGame game = Game(profile);
@@ -134,6 +147,26 @@ public sealed partial class DataPatchWorkspaceTests
         Assert.Equal(unit, edited.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", slot)));
         Assert.Equal(otherOwn, edited.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", otherSlot)));
         Assert.Contains(unit, PlacedEnemies(profile, edited));
+
+        // The example's second part, at its own stage: the other slot (3) holds the edit there, in place of the stage's
+        // own unit, and FIELD places it at the stage's start (a slot whose random_selection_weight is 0).
+        // In a booted session's story state Kamidori's stage 52 has scenes: an arrival scene, which the run skips by
+        // starting on the floor, and one after the placement, for which FIELD leaves (G[0] 1, the mode 2) and the run ends.
+        bool onFloor = profile == "kamidori";
+        void Ended(GameSession session, string? halt)
+        {
+            if (onFloor) Assert.Equal(("exit", 1L), (halt, session.Globals.GetValueOrDefault(0)));
+            else Assert.Equal("STEP-LIMIT", halt);
+        }
+        GameSession plainSecond = AtStageStart(game, null, secondStage, out string? plainHalt, onFloor);
+        Ended(plainSecond, plainHalt);
+        Assert.Equal(secondOwn, plainSecond.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", otherSlot)));
+        Assert.Equal(0, plainSecond.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_random_selection_weight", otherSlot)));
+        GameSession second = AtStageStart(game, LinkedInOrder(game.Base, Open(example)), secondStage, out string? halt, onFloor);
+        Ended(second, halt);
+        Assert.Equal(secondUnit, second.Globals.GetValueOrDefault(Cell(profile, "stage_enemy_unit_id", otherSlot)));
+        Assert.Contains(secondUnit, PlacedEnemies(profile, second));
+        Assert.DoesNotContain(secondUnit, PlacedEnemies(profile, plainSecond));
 
         ModLinkResult twin = LinkedInOrder(game.Base, Open($"{example}-mistake"));
         Scripting native = Native(twin, LuaErrorPolicy.Continue);

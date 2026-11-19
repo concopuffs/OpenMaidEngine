@@ -156,8 +156,8 @@ drop_chance.drop_1 = 100   # 30
   `random_selection_weight` is 0 is placed there and then. One whose weight is not 0 joins the pool of the spawner
   its `spawn_object_slot` names; spawners place from their pools at the floor's start (`FIELD@0xc8a`) and send
   reinforcements from them later (`FIELD@0xa040`). So an edit shows at the start only on a slot placed then: at
-  ◆開けた涼風西湖畔◆ (stage 51) in the sweep's story state, only slot 1, ハルピュア, whose spawner places it. This file
-  puts 緑プテテット there:
+  ◆開けた涼風西湖畔◆ (stage 51), when シセティカ湖 has just opened (before the first visit to 蒼月の南湖畔), only
+  slot 1, ハルピュア, whose spawner places it. This file puts 緑プテテット there:
 
   ```toml
   # data/stages.toml
@@ -171,18 +171,21 @@ drop_chance.drop_1 = 100   # 30
   is applied after each run, so the edit changes what the floor places, and the reinforcements a spawner sends later
   follow it. A save made on the floor keeps the units placed (`battle_unit_unit_ids`): loaded without the mod, the
   table is the floor's own again, and a unit the edit placed is still on the field.
-- **The stage list and INFO show the floors as authored.** The stage list's preview (SELSTAGE) and INFO's 獲得地点
-  view run every stage's loaders for what they show and raise no event for those stages, so they show the floors'
-  own enemies and dig points, not a file's edit. Off a floor (INFO opened from the town or the workshop) the view
-  raises no event at all and leaves `current_stage_id` at 1000.
+- **The stage list's preview shows the edit.** The stage list (SELSTAGE) runs the loaders of the stage under its
+  cursor for its preview, which lists the enemies whose gates pass, and `stage.loaded` is raised after them, so the
+  preview shows a file's edit. That stage is not being played: nothing is placed, and the list runs them again each
+  time the cursor moves onto another stage.
+- **INFO's 獲得地点 view reads no enemy.** To find the floors whose dig points yield an item, it runs every stage's
+  loaders and reads the stages' objects, which no data file edits; it raises no event for those stages. Off a floor
+  (INFO opened from the town or the workshop) it raises no event at all and leaves `current_stage_id` at 1000.
 - **A character keeps a copy of its definition.** When a unit joins, UNITECH copies part of its definition into the
   character's saved state (`../../kamidori-data-tables.md`, "Runtime character state"), which the game uses from
   then on. An edit to these fields reaches a character who joins after it, not one who has joined, and what was copied
   while the mod was on stays in the save when the mod is removed. UNITECH takes the character through
   `unit.canonical_character_id`, refuses one of 100 or more (`UNITECH@0x6d`), and makes the first join's copies when
   the character's `character_levels` is 0 (`UNITECH@0x13a`). `example.kamidori-unit-stats` raises ウィル's maximum HP:
-  `tools/drive/scenarios/port/kamidori-unit-stats.steps` loads the sweep's workshop save with it, where his
-  definition holds the edit and his saved stats the save's own.
+  `tools/drive/scenarios/port/kamidori-unit-stats.steps` loads a save made after he joined with it (below,
+  "Examples"), where his definition holds the edit and his saved stats the save's own.
 
   | Field | Saved value | When |
   |---|---|---|
@@ -215,12 +218,18 @@ drop_chance.drop_1 = 100   # 30
   costs, and the result is saved. `item.price` is paid from `player_money` when an item is bought (SHOP), and its
   `sell` column is added to it when one is sold (SALE, `CHANGEARM@0x103`, `USEITEM@0x20d`) and for the part of a
   stock past 999 when an item is added (`ADDITEM@0x8d`); `unit.bestiary_knowledge_gain` is added to
-  `bestiary_knowledge_percent` for each unit beaten (`COMMITBTL@0x50e`); and `item.rank` is added to a saved tally in
-  the shop's settlement (`G[0x63c89]`, unnamed, `CALCSETTLE@0x4ac`).
+  `bestiary_knowledge_percent` for each unit beaten (`COMMITBTL@0x50e`); `item.rank` is added to a saved tally in
+  the shop's settlement (`G[0x63c89]`, unnamed, `CALCSETTLE@0x4ac`), and the settlement's sales, which CALCSETTLE
+  works out from each item sold's `price.retail_base` (`CALCSETTLE@0x4de`), to a saved cell (`G[0x3698]`, unnamed,
+  `SHOWSETTLE@0x2b`); `unit.experience_reward` sets the experience a battle awards (`COMMITBTL@0x3f9`, which
+  ADDEXP adds through `shared_scratch_value`), and the levels and stats that follow are saved; and
+  `item.growth_mastery_reward_items` names the item added to the inventory when an item's growth is mastered
+  (`CHECKIMPROVE@0x139`, through ADDITEM).
 - **Every other field** is read where the game uses it, so an edit reaches a save made before it. These lists come
   from a scan of the installed scripts that follows each field's value through a script's locals and block copies
-  into a cell the save keeps, and from reading each cell it found. The scan does not follow a value from one script
-  into another through a global, so a copy made that way can be missing.
+  into a cell the save keeps, and into a global it leaves for a script it calls or takes back from one, and from
+  reading each cell it found. The scan does not follow a value left in a global for a script that runs later without
+  being called there (another screen), so a copy made that way can be missing.
 - **Old names.** No table or field has been renamed yet. When one is, the old name keeps working until
   `kamidori-base`'s next major version, and `diagnostics/lua.log` names each old name a file uses.
 
@@ -296,7 +305,7 @@ read-only:
 |---|---|---|
 | `kamidori.data.layered` | `kamidori.boot.data_layered` (INIT2, after op `0x143`): every layer has written its tables, the appends' included, and the boot has not used them yet | none |
 | `kamidori.data.ready` | `kamidori.boot.data_ready` (INIT2's exit): every data table is built, and INIT2's own work on them is done | none |
-| `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run; and `kamidori.stage.after_info_reload` (INFO3): INFO's third tab, アイテム情報, has run them again for its 獲得地点 view on the floor. A data file's stage part is applied there | `stage` (`current_stage_id`) |
+| `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run; `kamidori.stage.after_info_reload` (INFO3): INFO's third tab, アイテム情報, has run them again for its 獲得地点 view on the floor; and `kamidori.stage.after_list_preview` (SELSTAGE): the stage list has run them for its preview of the stage under its cursor, which is not being played. A data file's stage part is applied there | `stage` (`current_stage_id`) |
 | `kamidori.stage.ready` | `kamidori.stage.after_ready_handlers`: once per floor, at its start, with the units placed | `stage` |
 | `kamidori.stage.round` | `kamidori.stage.after_round_handlers`: each player turn after the first | `stage`, `turn` (`current_stage_turn`) |
 | `kamidori.stage.close` | `kamidori.stage.after_close_handlers`: the floor ends | `stage`, `result` (`stage_result`: 1 won, 2 lost), `turn` |
@@ -315,8 +324,13 @@ read-only:
   on it, for one) it runs them again and raises `stage.loaded` again, but places nothing and raises no `stage.ready`.
   INFO's third tab, アイテム情報 (FIELD's menu, then INFO), runs every stage's loaders when its 獲得地点 view is
   opened for an item, to find the floors whose dig points yield it, then the floor's again, and `stage.loaded` is
-  raised after that second run (`kamidori.stage.after_info_reload`, `INFO3@0xd20`).
-  A handler that rewrites the layers' tables makes the same change each time.
+  raised after that second run (`kamidori.stage.after_info_reload`, `INFO3@0xd20`). A handler that rewrites the
+  layers' tables makes the same change each time.
+- **The stage list raises `stage.loaded` for a stage that is not being played.** For its preview it runs the loaders
+  of the stage under its cursor (`SELSTAGE@0x13d0` to `0x1405`), when it opens, each time the pointer moves onto
+  another stage's panel or a key moves the cursor, and when the party screen comes back to it without setting out;
+  `stage.loaded` is raised after each run (`kamidori.stage.after_list_preview`, `SELSTAGE@0x1408`), and `stage` is
+  the stage under the cursor. Work that belongs once to a played floor goes to `stage.ready`.
 - **`result`.** Withdrawing from a free floor (撤退, 探索を終了しますか？) closes it with 1, as winning does, and the
   floor's clear screen follows; forfeiting an arena match (試合を放棄しますか？) closes it with 2.
 
@@ -344,5 +358,10 @@ read-only:
 | `oms/examples/mods/example.kamidori-prologue-line` | a patch against the translated opening |
 | `oms/examples/kamidori-gate6/` | a boot-time data edit and a script called by packed id |
 | `oms/examples/mods/example.kamidori-double-exp-event` | a Lua subscriber of `kamidori.experience.award`, without `vm` |
-| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake the boot reports; `tools/drive/scenarios/port/kamidori-stage-enemies*.steps` drive both from the sweep's workshop save, through INFO's 獲得地点 view, a floor save and its load with the mod and without |
-| `oms/examples/mods/example.kamidori-unit-stats` | a data file that raises ウィル's maximum HP, which reaches only a character who joins after it; `tools/drive/scenarios/port/kamidori-unit-stats.steps` loads the sweep's workshop save with it |
+| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake the boot reports; `tools/drive/scenarios/port/kamidori-stage-enemies*.steps` drive both through the stage list's preview, INFO's 獲得地点 view, a floor save and its load with the mod and without |
+| `oms/examples/mods/example.kamidori-unit-stats` | a data file that raises ウィル's maximum HP, which reaches only a character who joins after it; `tools/drive/scenarios/port/kamidori-unit-stats.steps` loads a save with it |
+
+The Kamidori scenarios start from saves in the clean install's story: one in ウィルの工房 (the workshop) when
+シセティカ湖 has just opened, before the first visit to 蒼月の南湖畔, and two on 蒼月の南湖畔 (turns 1 and 5). Each
+scenario's header names the save slots it loads. The repository does not ship them: make saves at those places, or
+change the slots in the scenario.

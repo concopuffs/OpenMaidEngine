@@ -1,9 +1,9 @@
 # Each stage's part is applied at kamidori.stage.loaded, each time the floor's loaders have run: when FIELD enters
-# the floor, when it is entered again, and when INFO's third tab (アイテム情報) opens its 獲得地点 view on the floor.
-# The comments give the game's own values.
+# the floor, when it is entered again, when INFO's third tab (アイテム情報) opens its 獲得地点 view on the floor, and
+# when the stage list shows the stage in its preview. The comments give the game's own values.
 
 [stage.51.enemy.1]          # ◆開けた涼風西湖畔◆ at シセティカ湖, slot 1: its spawner places it at the floor's start
 unit_id = 761               # 331, ハルピュア; 761 is 緑プテテット
 
-[stage.52.enemy.3]          # 蒼月の南湖畔, slot 3; stage 51's slot 3 keeps its own unit
-unit_id = 762               # 762 is 赤プテテット
+[stage.52.enemy.3]          # 蒼月の南湖畔, slot 3, placed at the floor's start; stage 51's slot 3 keeps its own unit
+unit_id = 762               # 631, バギル; 762 is 赤プテテット

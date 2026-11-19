@@ -98,6 +98,26 @@ fingerprint = "sha256:3b5e1175ed376da324d2a0e9080cd9831f549f6ec2cfe99a241e804351
 site = 0xd20
 
 [[point]]
+name = "kamidori.stage.after_list_preview"
+script = "SELSTAGE.BIN"
+description = """
+The stage list (SELSTAGE, the world map's choice of a floor) has put the stage under its cursor into current_stage_id \
+(SELSTAGE@0x13c4) and run that stage's loaders (SELSTAGE@0x13d0 to 0x1405) for its preview, which then reads the \
+enemy slots whose gates pass (from SELSTAGE@0x1a8a). The list does this when it opens (SELSTAGE@0x4d), each time \
+the pointer moves onto another stage's panel (SELSTAGE@0x1d18) or a key or the wheel moves the cursor (0xa03, \
+0xa61), and when the party screen (ORGANIZE) comes back to the list without setting out (0xcb8). The stage is not \
+being played: nothing is placed, and the loaders write the tables afresh each time. current_stage_id is the stage \
+under the cursor."""
+
+[[point.at]]                    # the clean install
+fingerprint = "sha256:c8389a8e2e4e458f67a291eec354f8f8fcff0dc4b646ecceb9de0daf105e14f6"
+site = 0x1408
+
+[[point.at]]                    # the translated install's patch/SELSTAGE.BIN: the same code, other text
+fingerprint = "sha256:be5dae26bea9f372872bea96d97bcc64c00a6b32785582c1d533e280d35a0d17"
+site = 0x1408
+
+[[point]]
 name = "kamidori.stage.after_ready_handlers"
 script = "FIELD.BIN"
 description = """

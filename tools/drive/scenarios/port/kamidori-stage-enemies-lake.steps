@@ -1,0 +1,41 @@
+# Port only (scenarios/port/): data patches, example.kamidori-stage-enemies's second part on Kamidori (plan §11). Its
+# part for 蒼月の南湖畔 (stage 52) gives slot 3 赤プテテット (762) in place of the floor's バギル (631). Two saves made on
+# that floor in the clean install's story (slot 020 at turn 1 and slot 021 at turn 5) are loaded with the mod, the
+# first from the title and the second through the floor's LOAD: each load runs the floor's loaders again
+# (FIELD@0x527 in the trace), slot 3 holds 762 after it and every other slot of 1 to 15 holds the floor's own unit, so
+# the part for ◆開けた涼風西湖畔◆ (stage 51, slot 1) is nowhere in it. Before the second load a console step marks
+# slot 3 with 12345, so the 762 read after it shows the loaders wrote the slot again and the part was applied after
+# them. The saves are in the sandbox k1clean of the main checkout (the native-vs-port sweep's; the repository does
+# not ship them). Cells by number (the console has no names): current_stage_id 0x378b, current_stage_turn 0x429b,
+# stage_enemy_unit_id from 0x140a2c. Run on a new sandbox seeded with k1clean, with --lua-trace:
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-stage-lake --seed port:k1clean --mod oms/examples/mods/example.kamidori-stage-enemies --port-arg=--lua-trace
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-stage-enemies-lake.steps
+
+wait-state top=TITLE@0x9ab click=adv.next every=3 timeout=120   # the title's input loop
+wait 4
+move 775 362
+click 775 362                                                    # Load Data
+wait 2
+click 62 132                                                     # slots 20-29
+wait 1.5
+click 360 102                                                    # slot 020: 蒼月の南湖畔, turn 1
+wait 1.5
+click 470 298                                                    # はい
+wait 4
+wait-state top=FIELD@0x1495 waiting=menu timeout=60
+lua local g = maid.vm.g local s = {} for i = 1, 15 do s[#s + 1] = g[0x140a2c + i] end local got = string.format("stage=%d turn=%d slots=%s", g[0x378b], g[0x429b], table.concat(s, ",")) assert(got == "stage=52 turn=1 slots=401,631,762,441,441,631,441,601,601,601,601,631,631,631,631", got) return got
+shot kamidori-stage-lake-020
+
+lua maid.vm.g[0x140a2f] = 12345 return maid.vm.g[0x140a2f]
+click 790 25                                                     # LOAD
+wait-state script=SAVE timeout=30
+wait 1
+click 62 132                                                     # slots 20-29
+wait 1.5
+click 360 149                                                    # slot 021: 蒼月の南湖畔, turn 5
+wait 1.5
+click 470 298                                                    # ロードしますか？ -> はい
+wait 4
+wait-state top=FIELD@0x1495 waiting=menu timeout=60
+lua local g = maid.vm.g local s = {} for i = 1, 15 do s[#s + 1] = g[0x140a2c + i] end local got = string.format("stage=%d turn=%d slots=%s", g[0x378b], g[0x429b], table.concat(s, ",")) assert(got == "stage=52 turn=5 slots=401,631,762,441,441,631,441,601,601,601,601,631,631,631,631", got) return got
+shot kamidori-stage-lake-021

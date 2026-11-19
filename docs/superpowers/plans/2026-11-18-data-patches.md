@@ -837,8 +837,9 @@ the worktree's build.
   edit and loaded without the mod keeps the unit the edit placed. Kamidori's battle slots likewise
   (`battle_unit_unit_ids`, with the slot state `G[0x53c16]` bit 0 set for a placed slot; stale slots keep old
   units).
-- **SELSTAGE** runs every stage's loaders for the stage list's preview and raises no event, so the preview shows the
-  floors' own enemies, not a file's edit (read; the guide says so).
+- **SELSTAGE** runs the loaders of one stage for the stage list's preview, the stage under the list's cursor
+  (`SELSTAGE@0x13c4` to `0x1405`). This bullet said every stage's, which holds for INFO3 only; after M2's review the
+  event is raised there too (§11.5).
 - **The port's Kamidori title loop** waits at `TITLE@0x9ab`, where the steps first tried `0x9a6`.
 - **One doc comment** in `ManifestReader` named a Himegari event as an example; it names the guide's example.
 
@@ -857,7 +858,7 @@ the worktree's build.
   `roster_equipment_item_ids`, also at `GAMESTART@0xb0d`, and the first four skills into
   `roster_equipped_skill_ids`) and `unit_initial_class_titles` into `character_class_titles`. The rest were shared
   temporaries (`G[0xfec0c]`, a few of FIELD's locals), the battle units, or the results of play. Its limit: a value
-  passed from one script to another through a global is not followed.
+  passed from one script to another through a global is not followed. §11.5 follows those.
 - **The guide pages** list the copies, the battle copies and the results of play, and say the rest is read where it is
   used.
 - **Driven:** `example.unit-stats` raises リリィ's (unit 2) maximum HP from 14 to 40; a new game with it gives her saved
@@ -873,5 +874,92 @@ the worktree's build.
   (`ANoticeAndAHaltReasonNameTheContributorOnceWhereTheOwnersMessageOpensWithIt`), and the port's status line wraps
   upward instead of running off the window. It also showed "Lua: " twice, which the port no longer adds; that was
   older than this branch.
-- **Stage 52 was not run.** The tests and the drives show stage 52's part leaving stage 51 as authored; no run enters
-  蒼月の南湖畔 itself.
+- **Stage 52 was not run** in M2. The tests and the drives showed stage 52's part leaving stage 51 as authored; after
+  M2's review both are run on 蒼月の南湖畔 itself (§11.5).
+
+### 11.5 After M2's review (2026-11-19)
+
+The coordinator accepted M2 and asked for six follow-ups before milestone 3. "Ran", "read" and "driven" as in §11.
+
+- **The stage list's preview shows a file's edit** (driven and ran). The list (SELSTAGE) puts the stage under its
+  cursor into `current_stage_id` (`SELSTAGE@0x13c4`) and runs that stage's 32 loader slots (`0x13d0` to `0x1405`);
+  from `0x1a8a` the preview collects the unit of each slot 1 to 29 whose gates pass (`label_7ba`) and, for a cleared
+  stage only (`stage_cleared_flags`, `0x16b2`), names them in its 出現モンスターリスト. `kamidori.stage.loaded` has
+  a third point, `kamidori.stage.after_list_preview`, at `SELSTAGE@0x1408`, the loop's exit, under each install's
+  SELSTAGE fingerprint (`c8389a8e…` clean, `be5dae26…` translated; the same code, other text, so the same offset).
+  The only subscriber in the repository is the base mods' `apply_stage`, which makes the same change each time. The
+  event's description, the point's, the guide and both READMEs say the list raises it for a stage that is not being
+  played, with `stage` that stage, and that work that belongs once to a played floor goes to `stage.ready`.
+  `ModLuaLinkTests` pins `0x1408` on both installs.
+  - **Driven:** `tools/drive/scenarios/port/kamidori-stage-enemies-list.steps` (sandbox `dp-kamidori-stage-list`,
+    `--lua-trace`). With the cursor on stage 51 slot 1 holds 761; on stage 52 slot 1 holds 401 and slot 3 762; back on
+    51, 761 again, each time after a console mark of 12345 in slots 1 and 3. The trace has four deliveries at
+    `SELSTAGE.BIN@0x1408`: two for stage 51 as the list opens (which of the triggers below made the second was not
+    settled), then 52, then 51, each writing only its slot. With stage 51 marked cleared in memory (the save has not
+    cleared it), the preview's 出現モンスターリスト reads 緑プテテット with the mod and ハルピュア without it (the
+    second shot by hand, from the same sandbox without the mod).
+  - **How often the list runs the loaders:** when it opens (`SELSTAGE@0x4d`), each time the pointer moves onto
+    another stage's panel (`0x1d18`, through the hover routine at `0x1c7a`), each move of the cursor by a key or the
+    wheel (`0xa03`, `0xa61`), and when the party screen (ORGANIZE) comes back to the list without setting out
+    (`0xcb8`). Not every frame: a pointer resting on a panel runs nothing.
+  - **What a delivery costs:** `ome-records` checks a file once a session (`Applier:result`, by mod and file), at the
+    boot's `data.layered`, so a delivery at the list writes the stage's part only. The trace gives 0.1 ms for a part of
+    one value (4 ms for the session's first, which warms the handler up). A stage's part holds at most 30 slots of 29
+    cells, 870 values; at §10.1's cost (102 instructions and about 3 to 4 µs a value at boot) that is about 89,000
+    instructions and 3 ms, for each cursor move onto a stage the file edits. Estimated, not measured with such a file.
+  - **INFO3's every-stage loop** (`INFO3@0xb88` to `0xc12`) reads the stages' objects for the 獲得地点 view, which no
+    data file edits; it raises no event for those stages. If a stage's objects become a table a file edits, a point
+    goes at that loop's exit, as at SELSTAGE's. The guide's bullet says INFO's view reads no enemy, so it no longer
+    reads as a limit of an enemy edit.
+- **Scopes have no old-name form** (accepted): `data-files.md`'s old-names bullet says a scope's name and a table's
+  short name in it do not change inside a major version.
+- **Stage 52, driven.** `kamidori-stage-enemies-lake.steps` (sandbox `dp-kamidori-stage-lake`, `--lua-trace`) loads
+  the main checkout's k1clean saves on 蒼月の南湖畔 with the mod: slot 020 (turn 1) from the title and slot 021
+  (turn 5) through the floor's LOAD, after a console mark in slot 3. After each load slots 1 to 15 are STINIT's own
+  for stage 52 but slot 3, which holds 762 (`401,631,762,441,441,631,441,601,601,601,601,631,631,631,631`), and the
+  trace has the deliveries at `FIELD.BIN@0x527`, each writing slot 3 only: stage 51's part touched nothing.
+  - **The second edits' own values,** read in STINIT: Himegari's stage 2 slot 3 is 202 (黒プテテット) with weight 0,
+    placed at the stage's start; Kamidori's stage 52 slot 3 is 631 (バギル) with weight 0, placed at the floor's
+    start. Each example's comment gives the value and the name.
+  - **Headless:** `DataPatchWorkspaceTests.TheStageExamplesEditTheirSlotAndTheirMistakeTwinsAreReportedAtBoot` also
+    runs each example at its second stage: the slot holds the edit in place of the stage's own unit, and FIELD placed
+    it. In a booted session's story state Kamidori's stage 52 has scenes (an arrival scene FIELD leaves for first, and
+    one after the placement), so that run starts on the floor (`G[0x428c]` set) and ends where FIELD leaves for the
+    second scene, after the placement.
+- **The scan through globals** (read; a scratch script, not kept). The first scan's taint stays in one script, so a
+  value left in a global for another script was not followed. The second run lists each unsaved global that takes a
+  field's value in a script (42 on Himegari, 51 on Kamidori, among them `G[0x62ccb]` and `shared_scratch_value`,
+  `G[0xfec0c]`), the scripts that read each one, and the values passed around a call through one: a field left in a
+  global before a call to a script that reads it, and a global a called script leaves that the caller then copies
+  into a saved cell (33 such sites on Himegari, 58 on Kamidori, each read by hand). FIELD's locals need no such pass:
+  a script's local banks are its own, and its pool temporaries never outlive their statement
+  (`../../sys4-format-notes.md`, "Local banks and temporaries"), so the first scan already followed every copy out of
+  them.
+  - **What reaches a saved cell that way** is a result of play or a copy the guides list: the experience a battle
+    awards from `unit.experience_reward` (Himegari `BTL@0x366e` through `G[0x62ccb]`, Kamidori `COMMITBTL@0x3f9`
+    through `shared_scratch_value`, both into ADDEXP), Himegari's dropped item (`unit.drop_item`, `BTL@0x3939`, into
+    ADDITEM), Kamidori's mastery reward (`item.growth_mastery_reward_items`, `CHECKIMPROVE@0x139`, into ADDITEM) and
+    its settlement's sales (`item.price.retail_base`, `CALCSETTLE@0x4de`, into `G[0x3698]` at `SHOWSETTLE@0x2b`),
+    the prices and stock payouts the guide already gave, the battle units' copies (SETEN, SETCH, ADDILLSUB), and one
+    copy past the first join: Himegari's FORT (SYSTEM4's mode 2) gives the unit it shows each skill of its
+    `unit.starting_skill` row that the game has not acquired (`FORT@0x3e7` to `0x42a`, into ADDSKILL). The rest were
+    ids used as indices, a scene's voice slot used to pick a voice, or the flow-insensitive taint of one script
+    reaching an unrelated value (FIELD's experience at `0x67b6` is worked out from the battle pools; SALLY's item at
+    `0x18a3` from a local).
+  - **The guides** list the new results of play and FORT's copy, and their sentence on the scan's limit now says what
+    is left: a value left in a global for a script that runs later without being called there.
+- **Number text in shipped Lua** (ran, `Ome.Scripting.Lua.Spike conformance-eval`). On Lua-CSharp 0.5.8,
+  `string.format("%d", n)` and `tostring(n)` give the same text for a whole number (51, 51.0, 2^40, 2^53), and `%d`
+  raises "number has no integer representation" for a fraction (2.5), as Lua 5.3 does and 5.2 does not.
+  `ome-records`'s `string.format("%d", id)` (`init.lua:478`) gets an id the line at `init.lua:454` has refused unless
+  it is whole, so it stays. The memory's note that shipped Lua should not use `%d` is the one that is too broad: `%d`
+  needs a whole number, as `docs/modding/lua.md` says.
+- **The validating parse of TOML** (ran, a throwaway test in the Release test build, median of five after a warm-up,
+  on the largest converted catalog, `build/games/kamidori/import-en/text/en/_global.toml`, 5.4 million characters).
+  `SyntaxParser.Parse(…, validate: true)` takes 306 to 350 ms, the plain syntax parse the catalog reader used for its
+  lines 246 ms, Tomlyn's model about 47 ms, and the whole catalog read 751 ms. The validation added more than 100 ms,
+  so `TomlDocument.Parse(text, out syntax)` gives the validated syntax tree, and the catalog reader takes its lines
+  from it: the read takes 479 ms, against about 420 ms before M1 added the validation.
+- **The words of the modder pages.** "The sweep" left `kamidori.md` and `oms/examples/mods/README.md`: they say
+  where in the story the Kamidori scenarios' saves are (ウィル's workshop when シセティカ湖 has just opened; 蒼月の南湖畔
+  at turns 1 and 5) and that the repository does not ship them. Three over-long lines are rewrapped.

@@ -56,8 +56,8 @@ not identifiers such as `？？？？`, carry their id (`speaker_0x10`).
 A data file ([../data-files.md](../data-files.md)) changes the unit, item and skill tables, and each stage's
 enemies, with no Lua and no script. `himegari-base` accepts the kind `himegari.tables`. It applies each file's boot
 tables at `himegari.data.layered`, after every layer has written them and before TUNE reads them, and a stage's part
-at `himegari.stage.loaded`, each time FIELD has run the stage's loaders. This one raises the experience unit 103 gives; the comment
-gives the game's own value:
+at `himegari.stage.loaded`, each time FIELD has run the stage's loaders. This one raises the experience unit 103
+gives; the comment gives the game's own value:
 
 ```toml
 # data/rewards.toml; the manifest names it with [[data]] kind = "himegari.tables", file = "rewards.toml"
@@ -89,7 +89,7 @@ experience_reward = 40     # 30
   | `unit.canonical_id`, `unit.roster_variant_ids` | the unit a party slot holds (`party_slot_character_id`) | each join (`UNITECH@0x2ab`) and each form change (`SALLY@0x1668`) |
   | `unit.starting_level` | `unit_current_levels` | the first join (`UNITECH@0x34b`) and a form's first use (`SALLY@0x16aa`) |
   | `unit.stats` | `unit_current_stats`, all 14 columns | the same (`UNITECH@0x37c`, `SALLY@0x16db`) |
-  | `unit.starting_skill` | `unit_skill_ids` | the same (`UNITECH@0x3a3`, `SALLY@0x1702`) |
+  | `unit.starting_skill` | `unit_skill_ids` | the same (`UNITECH@0x3a3`, `SALLY@0x1702`); and FORT (SYSTEM4's mode 2) gives the unit it shows each skill of the row the game has not acquired yet (`skill_acquired_flags`, `FORT@0x3e7` to `0x42a`, through ADDSKILL) |
   | `unit.starting_equipment_item_id` | the party slot's item (`G[0x6868]`, unnamed), and the item itself | the slot's item at the first join (`UNITECH@0x338`); the item, through ADDITEM, at each join that equips (`UNITECH@0x27f`) |
   | `unit.stat_growth` | `unit_current_stats` and `unit_stat_growth_fractions` | the first join, for each level it adds past the starting level (`UNITECH@0x419`), and each level up (`ADDEXP@0x20b`). The rate is read each time, so an edit changes later levels' growth, and the growth already added stays |
 
@@ -102,18 +102,21 @@ experience_reward = 40     # 30
   above. CALCREVISE works out an entity's effective stats and ranges from its equipment and skills
   (`item.stat_modifiers`, `min_range`, `max_range` and `granted_skill_id`, `skill.min_range_encoded` and
   `max_range_encoded`) each time the game calls it, among others when a unit is placed, levels up, or uses an item or
-  a spell. The
-  entities are saved, so a save made on a stage keeps them as they were placed and worked out, with the mod or without
-  it.
+  a spell. The entities are saved, so a save made on a stage keeps them as they were placed and worked out, with the
+  mod or without it.
 - **Play keeps its results,** as it does without a mod: while the mod is on, an edit changes what an action gives or
   costs, and the result is saved. `item.essence_recovery_amount` is added to the user's side's essence when the item
   is used (`USEITEM@0x2fb`; the player's is `current_spirit`); `unit.summon_point_cost` is taken from
-  `shared_spendable_points` at a summon (`SUMMON@0xe13`); and `unit.essence_yield` is added to `current_spirit`, with
-  a change to `familiar_alignment`, when 配下 releases a unit (`SALLY@0xd12`, `0xd49`).
+  `shared_spendable_points` at a summon (`SUMMON@0xe13`); `unit.essence_yield` is added to `current_spirit`, with
+  a change to `familiar_alignment`, when 配下 releases a unit (`SALLY@0xd12`, `0xd49`); `unit.experience_reward` sets
+  the experience a battle awards (`BTL@0x366e`, which ADDEXP adds through `G[0x62ccb]`, unnamed), and the levels and
+  growth that follow are saved; and an item of the beaten unit's `unit.drop_item` row is added to the inventory when
+  the battle drops it (`BTL@0x3939`, through ADDITEM).
 - **Every other field** is read where the game uses it, so an edit reaches a save made before it. These lists come
   from a scan of the installed scripts that follows each field's value through a script's locals and block copies
-  into a cell the save keeps, and from reading each cell it found. The scan does not follow a value from one script
-  into another through a global, so a copy made that way can be missing.
+  into a cell the save keeps, and into a global it leaves for a script it calls or takes back from one, and from
+  reading each cell it found. The scan does not follow a value left in a global for a script that runs later without
+  being called there (another screen), so a copy made that way can be missing.
 - **A stage's enemies** are the `stage_enemy` table, which a file names through the stage: `stage.1.enemy.2` is
   stage 1's enemy slot 2 (stage ids 1 to 999, of which STINIT writes 1 to 170; slots 0 to 29, and no stage gives
   slot 0 a unit). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`, `max_level`,

@@ -136,13 +136,14 @@ drop_chance.drop_1 = 100
   file.
 - **The tables are not saved.** A load builds them again and raises `<game>.data.layered` again while it restores,
   and a return to title does the same, so the file is applied again each time. A stage's table lies outside the save
-  too: a load of a save made on the stage runs its loaders again, and the stage part is applied again. A save made with the mod and loaded
-  without it has the game's own values. What the game itself copies from an edited field into saved state stays in
-  the save; the game's guide names such fields.
+  too: a load of a save made on the stage runs its loaders again, and the stage part is applied again. A save made
+  with the mod and loaded without it has the game's own values. What the game itself copies from an edited field into
+  saved state stays in the save; the game's guide names such fields.
 - **An old name keeps working.** When the base mod renames a table or a field, a file may still use the old name
   until the base mod's next major version. It writes the cell the current name does, and `diagnostics/lua.log` says
   so once a session: `example.a data/a.toml: units is an old name of the table unit; write unit`. A file that names
-  one cell by its old name and its current one is refused.
+  one cell by its old name and its current one is refused. A scope's name (`stage`) and a table's short name in it
+  (`enemy`) have no old names: they do not change inside a major version.
 - **A Lua handler on the same tables.** A hook on `<game>.data.layered` runs among the files, in load order. A hook on
   `<game>.data.ready` runs after every file, whatever the load order, because that event comes later in the boot. A
   mod whose edits should take their place among the files by load order subscribes to `<game>.data.layered`. A hook

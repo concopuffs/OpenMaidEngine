@@ -61,18 +61,23 @@ ran the same scenarios on native AGE.
   ◆開けた涼風西湖畔◆ (stage 51), which its spawner places at the floor's start, gets 緑プテテット (761) in place of
   ハルピュア (331), and slot 3 of 蒼月の南湖畔 (stage 52) 赤プテテット (762), so stage 51's slot 3 keeps its own 水精
   (402). Its part is applied again where INFO's third tab, アイテム情報, runs the floor's loaders again for its
-  獲得地点 view. `example.kamidori-stage-enemies-mistake` names the enemy table at the top level (`stage_enemy.3`) on
-  purpose, which the base mod refuses with the spelling to use. The port scenarios
-  `tools/drive/scenarios/port/kamidori-stage-enemies.steps` (from the Kamidori sweep's workshop save: INFO off a
-  floor, the floor entered afresh, INFO on it, a floor save and its load), `kamidori-stage-enemies-load-without.steps`
-  (that save loaded from the title without the mod) and `kamidori-stage-enemies-mistake.steps` drive them.
+  獲得地点 view, and where the stage list runs a stage's loaders for its preview.
+  `example.kamidori-stage-enemies-mistake` names the enemy table at the top level (`stage_enemy.3`) on purpose,
+  which the base mod refuses with the spelling to use. The port scenarios
+  `tools/drive/scenarios/port/kamidori-stage-enemies.steps` (INFO off a floor, the floor entered afresh, INFO on it,
+  a floor save and its load), `kamidori-stage-enemies-list.steps` (the stage list's preview),
+  `kamidori-stage-enemies-lake.steps` (saves on 蒼月の南湖畔 loaded with the mod),
+  `kamidori-stage-enemies-load-without.steps` (the floor save loaded from the title without the mod) and
+  `kamidori-stage-enemies-mistake.steps` drive them. They start from saves in the clean install's story: one in ウィル's
+  workshop when シセティカ湖 has just opened, before the first visit to 蒼月の南湖畔, and two on 蒼月の南湖畔 (turns 1
+  and 5), at the slots each header names. The repository does not ship them.
 - `example.unit-stats` and `example.kamidori-unit-stats` (the data patches plan's derived values, §5.3) each raise
   one unit's maximum HP, which the game copies into the unit's saved stats when it joins (each game's guide page,
   "A unit keeps a copy of its definition" and "A character keeps a copy of its definition").
   `tools/drive/scenarios/port/himegari-unit-stats.steps` starts a new game with the Himegari one, where リリィ (unit
   2) joins and her saved stats take the edit, and saves; `himegari-unit-stats-load-without.steps` loads that save
   without the mod, where her definition is the game's own and her saved stats keep the edit.
-  `kamidori-unit-stats.steps` loads the Kamidori sweep's workshop save with the Kamidori one: ウィル (unit 1)
+  `kamidori-unit-stats.steps` loads the Kamidori workshop save (above) with the Kamidori one: ウィル (unit 1)
   joined long before, so his definition holds the edit and his saved stats the save's own.
 
 - `example.kamidori-title-hover` makes Kamidori's title draw the hovered button in the same tick that finds it. The

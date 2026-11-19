@@ -1,0 +1,54 @@
+# Port only (scenarios/port/): data patches, the stage list's preview on Kamidori (plan §11). The stage list
+# (SELSTAGE) runs the loaders of the stage under its cursor for its preview, and kamidori.stage.loaded is raised after
+# them (kamidori.stage.after_list_preview, SELSTAGE@0x1408), so example.kamidori-stage-enemies's part for that stage
+# is applied there: with the cursor on ◆開けた涼風西湖畔◆ (stage 51) slot 1 holds 緑プテテット (761) in place of
+# ハルピュア (331), and on 蒼月の南湖畔 (stage 52) slot 3 holds 赤プテテット (762) in place of バギル (631), with
+# stage 51's part nowhere in it. Before each move a console step marks slots 1 and 3 with 12345, so the values read
+# after it show the loaders wrote the slots again and the part was applied after them.
+# The save is slot 019 of the clean install: ウィル's workshop when シセティカ湖 has just opened, before the first visit
+# to 蒼月の南湖畔 (the sandbox k1clean of the main checkout, the native-vs-port sweep's, holds it; the repository does
+# not ship it). Cells by number (the console has no names): current_stage_id 0x378b, stage_enemy_unit_id from
+# 0x140a2c. Run on a new sandbox seeded with k1clean, with --lua-trace, whose diagnostics/lua-trace.jsonl then has
+# the deliveries at SELSTAGE.BIN@0x1408:
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-stage-list --seed port:k1clean --mod oms/examples/mods/example.kamidori-stage-enemies --port-arg=--lua-trace
+#   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-stage-enemies-list.steps
+
+wait-state top=TITLE@0x9ab click=adv.next every=3 timeout=120   # the title's input loop
+wait 4
+move 775 362
+click 775 362                                                    # Load Data
+wait 2
+click 62 111                                                     # slots 10-19
+wait 1.5
+click 360 525                                                    # slot 019: the workshop, before the lake
+wait 1.5
+click 470 298                                                    # はい
+wait-state top=STUDIO@0x424 waiting=menu timeout=30
+wait 1
+click 125 235                                                    # 街へ行く
+wait-state top=TOWN@0x2df waiting=menu timeout=30
+wait 1
+click 936 465                                                    # 街を出る: the world map
+wait-state script=ALLMAP timeout=30
+wait 2
+# The preview names the enemies only for a cleared stage (SELSTAGE@0x16b2), and stage 51 is not cleared in this save:
+# mark it cleared in memory (stage_cleared_flags from 0x4a6d; nothing is saved), so the shots show the names.
+lua maid.vm.g[0x4a6d + 51] = 1 return maid.vm.g[0x4a6d + 51]
+click 655 125                                                    # シセティカ湖: the list opens on its first stage
+wait-state script=SELSTAGE waiting=menu timeout=30
+wait 1
+lua local g = maid.vm.g local got = string.format("stage=%d slots=%d,%d,%d", g[0x378b], g[0x140a2d], g[0x140a2e], g[0x140a2f]) assert(got == "stage=51 slots=761,402,402", got) return got
+
+# The pointer onto the second stage's panel: the preview runs stage 52's loaders.
+lua maid.vm.g[0x140a2d] = 12345 maid.vm.g[0x140a2f] = 12345 return 12345
+move 902 262                                                     # 蒼月の南湖畔
+wait 1.5
+lua local g = maid.vm.g local got = string.format("stage=%d slots=%d,%d,%d", g[0x378b], g[0x140a2d], g[0x140a2e], g[0x140a2f]) assert(got == "stage=52 slots=401,631,762", got) return got
+shot kamidori-stage-list-52
+
+# Back onto the first: stage 51's loaders again, and its part.
+lua maid.vm.g[0x140a2d] = 12345 maid.vm.g[0x140a2f] = 12345 return 12345
+move 902 212                                                     # ◆開けた涼風西湖畔◆
+wait 1.5
+lua local g = maid.vm.g local got = string.format("stage=%d slots=%d,%d,%d", g[0x378b], g[0x140a2d], g[0x140a2e], g[0x140a2f]) assert(got == "stage=51 slots=761,402,402", got) return got
+shot kamidori-stage-list-51
