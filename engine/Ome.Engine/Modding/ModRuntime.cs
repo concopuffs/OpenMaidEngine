@@ -50,8 +50,8 @@ public sealed record ModLimits
     public long HandlerInstructions { get; init; } = 1_000_000;
     /// <summary>What a delivery (data patches spec §5.6) may run beyond <see cref="HandlerInstructions"/> for each value
     /// of its document. One constant of the engine: an owner has no setting for it (data patches plan §4.3). Measured
-    /// with the base mods' applier on the installed Kamidori (plan §10): at most 115 instructions a value, over a file
-    /// of every item field, a file at the value bound, and one at the bound of which every value is refused; doubled
+    /// with a base mod's applier on an installed game (plan §10.1): at most 115 instructions a value, over a file of
+    /// every field of its largest table, a file at the value bound, and one at the bound of which every value is refused; doubled
     /// and rounded up. DataPatchWorkspaceTests fails when a measured cost passes half of it.</summary>
     public long DataInstructionsPerValue { get; init; } = 250;
 

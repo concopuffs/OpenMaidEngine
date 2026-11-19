@@ -34,7 +34,7 @@ public sealed record ModKindEvent(int Index, string Event, ModHandlerRef Handler
 /// events its documents are delivered at.</summary>
 public sealed record ModKind(int Index, string Kind, string? Description, IReadOnlyList<ModKindEvent> At)
 {
-    /// <summary>How reports name the entry: <c>accepts[0] kamidori.tables</c>.</summary>
+    /// <summary>How reports name the entry: <c>accepts[0] example.lists</c>.</summary>
     public string Describe() => $"accepts[{Index}] {Kind}";
 }
 

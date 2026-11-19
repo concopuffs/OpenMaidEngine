@@ -356,7 +356,7 @@ public sealed partial class Scripting : IDisposable
     private string RunningMod
         => _runningContribution is { } file ? _setup.Stack[file].Mod : _setup.Stack[_running!.Value].ModId;
 
-    /// <summary>How the log, the trace and the halt reason name a call: <c>example.a data/a.toml (kamidori-base
+    /// <summary>How the log, the trace and the halt reason name a call: <c>example.a data/a.toml (&lt;game&gt;-base
     /// tables.lua:apply_boot)</c> for a delivery, <c>MOD FILE:FUNCTION</c> otherwise.</summary>
     private string CallName(HandlerId handler, ContributionId? contribution)
         => contribution is { } file ? $"{_setup.Stack[file]} ({_setup.Stack[handler]})" : _setup.Stack[handler].ToString();

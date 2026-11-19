@@ -412,7 +412,7 @@ public static partial class ManifestReader
         int priority = entry.Integer("priority") ?? 0;
         if (kind.Length > 0 && !DottedNamePattern().IsMatch(kind))
             entry.Problems.Add($"{entry.Path}kind: '{kind}' is not a dotted name (a kind is named as an event is: "
-                               + "kamidori.tables)");
+                               + "example.lists)");
         if (file.Length > 0 && DataPathProblem(file) is { } why)
             entry.Problems.Add($"{entry.Path}file: '{file}' {why}");
         entry.RejectUnknown();
@@ -438,7 +438,7 @@ public static partial class ManifestReader
         string? description = entry.String("description");
         if (kind.Length > 0 && !DottedNamePattern().IsMatch(kind))
             entry.Problems.Add($"{entry.Path}kind: '{kind}' is not a dotted name (a kind is named as an event is: "
-                               + "kamidori.tables)");
+                               + "example.lists)");
         // Spec §7: a shape is checked from milestone 3. Taking one now and checking nothing would skip a check unsaid.
         if (entry.Has("shape"))
         {

@@ -4,7 +4,7 @@ namespace Ome.Mods.Data;
 /// The bounds of a data file (data patches spec §5.3, §9; plan §4.3): a package names a bounded number of files, and
 /// each file is bounded in size, in nesting, in the values it holds and in the length of its keys. They are what limit a
 /// delivery's budget, which grows with the document (spec §5.6). The numbers were set from a file that sets every
-/// authored cell of the largest record table, Kamidori's items (300,000 values).
+/// authored cell of the largest record table of the games the engine runs (300,000 values).
 /// </summary>
 public static class DataBounds
 {
