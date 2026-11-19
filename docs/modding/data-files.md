@@ -63,7 +63,10 @@ priority = 0                   # optional; where the file comes among the event'
 
 ## The file
 
-- **TOML 1.0, in UTF-8.** A key given twice is an error, as TOML has it.
+- **TOML 1.0, in UTF-8.** A key or a table given twice is an error, as TOML has it. So is one thing TOML takes: an
+  array of tables that another table interrupts (`[[rows]]`, `[other]`, `[[rows]]`). The engine's TOML library would
+  keep only the tables after the interruption, so an array's tables come together, each followed by its own
+  sub-tables.
 - **Values are strings, booleans, integers and floats.** An integer of more than 2^53 in size, a float that is not
   finite (`inf`, `nan`), and a date or a time are errors: the owner's Lua cannot hold them as they were written.
 - **An error names the line** where the parser gives one, and otherwise the path to the value:
@@ -71,9 +74,11 @@ priority = 0                   # optional; where the file comes among the event'
   `data/slimes.toml: unit.12.when: a date or a time has no value here`. The link reports the first 20 problems of a
   file and counts the rest.
 - **Keys are strings.** `[unit.761]` has the key `"761"`. What a key means is the kind's.
-- **Bounds.** A document holds at most 400,000 values (a string, a boolean or a number; each element of an array
-  counts), nests tables and arrays at most 16 deep, and has keys of at most 128 characters with no control
-  character.
+- **Bounds.** A document holds at most 400,000 values, where each string, boolean and number counts one (each
+  element of an array too) and so does each table and array, an empty one included: `[unit.12]` with one key under it
+  is three, the tables `unit` and `12` and the value. It nests tables and arrays at most 16 deep, and has keys of at
+  most 128 characters with no control character. This count is the document's size in the report, the budget and
+  the shape's check below.
 
 ## The record tables: `<game>.tables`
 
@@ -274,8 +279,9 @@ checks TOML against JSON Schema can read the same file:
   where a record id, a stage, a slot or an unnamed column goes (`unit.0x2f9`, `unit.1000`, `stage.1.enemy.30`), and
   its messages are its own (`1 is not of type "null"` for a saved field). The link refuses those keys, and its
   messages give the reason and the spelling to use, so run `omp check` before you ship.
-- **Work.** A check applies at most 64 schemas for each value of a file, and 100,000 more. A shape like the base mods'
-  applies four to six, so only a shape built to cost time reaches the bound, which is its owner's error.
+- **Work.** A check applies at most 64 schemas for each value of a file, each table and array counting one, and
+  100,000 more. A shape like the base mods' applies four to six, so only a shape built to cost time reaches the bound,
+  which is its owner's error.
 
 ## What the link checks
 
@@ -306,7 +312,8 @@ files fail to link.
 ## The report
 
 The link report's Lua section lists each kind with its owner and its events, then its files in delivery order with the
-values each holds, then each path that two files give a value at:
+values each holds (each table and array counting one, as in "The file"), then each path that two files give a value
+at:
 
 ```text
 kind <game>.tables (<game>-base), at <game>.data.layered and <game>.stage.loaded
@@ -355,7 +362,7 @@ kind <game>.tables (<game>-base), at <game>.data.layered and <game>.stage.loaded
   owner is off, so is every mod that requires it. The notice of a mod that is off ends with the files it leaves
   unapplied: `Lua: <game>-base is off for this session: …; not applied: example.a data/a.toml, …`.
 - **Budget.** A delivery may run the handler budget, 1,000,000 Lua instructions, and 250 more for each value of its
-  document. The allowance is one constant of the engine; a kind has no setting for it.
+  document, each table and array counting one. The allowance is one constant of the engine; a kind has no setting for it.
 
 ## The trace
 
@@ -369,6 +376,7 @@ is the contributor, with `file` and the kind's `owner`, and `handler` is the own
 - **A write is the contributor's,** with `through` naming the owner, as a base mod's helper's write names the base
   mod for the mod that called it.
 - **A watch on a cell the file sets** names the contributor as the writer: `"writer":"mod","by":"example.a"`.
-- **`budget`** is the delivery's: the handler budget and the allowance for the document's values. `instructions`
+- **`budget`** is the delivery's: the handler budget and the allowance for the document's values, its tables and
+  arrays counted. `instructions`
   counts in steps of 1,000 ([lua.md](lua.md)), so a file of a few values reads 0; one of every item field of a game
   runs about 100 for each value.

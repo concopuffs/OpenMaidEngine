@@ -451,9 +451,11 @@ defines it is not enabled; the parenthesis lists the kinds the stack has. **"…
 require it"**: add `[[requires]] id = "X"` ([data-files.md](data-files.md)).
 
 **"data/FILE.toml:N: …" or "data/FILE.toml: PATH: …".** The file does not read, or holds something a data file
-cannot: a syntax error or a key given twice (with the line), an integer past 2^53, a date or a time, `inf` or `nan`, a
-key with a control character, or more than a bound allows ([data-files.md](data-files.md), "The file"). The first 20
-problems are listed and the rest counted.
+cannot: a syntax error, a key given twice or an array of tables another table interrupts (with the line), an integer
+past 2^53, a date or a time, `inf` or `nan`, a key with a control character, or more than a bound allows
+([data-files.md](data-files.md), "The file"). The first 20 problems are listed and the rest counted. **"… holds more
+than 400,000 values, counting each table and array as one …"**: an empty table or array counts too, so split the file,
+or drop the empty tables it does not need.
 
 **"data/FILE.toml:N: PATH: no such key; the nearest name here is NAME", and the other errors with a line and a
 path.** The file does not match its kind's shape, and the link stops before any code runs

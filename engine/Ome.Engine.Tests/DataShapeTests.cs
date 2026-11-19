@@ -305,6 +305,23 @@ public sealed class DataShapeTests
         ], problems);
     }
 
+    /// <summary>The line finder keeps each array of tables' count in its tree (plan §12.6): it scanned every array
+    /// name so far at each <c>[[header]]</c>, which the review timed at 157 s for 160,000 names; this one reads them in
+    /// about a second.</summary>
+    [Fact]
+    public void TheLineAfter160000ArraysOfTablesIsFoundInTimeLinearInTheText()
+    {
+        const string shape = """
+            { "type": "object", "additionalProperties": { "type": "array",
+              "items": { "type": "object", "additionalProperties": false } } }
+            """;
+        string text = string.Concat(Enumerable.Range(0, 160_000).Select(k => $"[[a{k}]]\n")) + "[[a159999]]\nx = 1\n";
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Assert.Equal(["data/a.toml:160002: a159999[2].x: no key is taken here"], Problems(shape, text));
+        // Far above the second or two the read, the check and the lines take; the old finder took minutes.
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(30), $"{watch.Elapsed.TotalSeconds:F1} s");
+    }
+
     [Fact]
     public void APathsLineIsThatOfTheFirstKeyOrHeaderThatWritesIt()
     {
@@ -333,7 +350,8 @@ public sealed class DataShapeTests
             """;
         string nested = "a.b.c.d.e.f.g.h.i.j.k.l.m.n.o = 1\n";
         DataShapeResult costlyResult = Check(costly, nested);
-        Assert.Equal(DataShapeCheck.StepsBase + DataShapeCheck.StepsPerValue, costlyResult.StepLimit);
+        // The document's size is 15: fourteen tables and the value (plan §12.6).
+        Assert.Equal(DataShapeCheck.StepsBase + 15 * DataShapeCheck.StepsPerValue, costlyResult.StepLimit);
         Assert.False(costlyResult.Ok);
     }
 

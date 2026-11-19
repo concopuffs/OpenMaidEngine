@@ -362,9 +362,9 @@ public sealed class DataDeliveryTests : IDisposable
                       delivery.GetProperty("owner").GetString(), delivery.GetProperty("handler").GetString(),
                       delivery.GetProperty("hook").GetString(), delivery.GetProperty("kind").GetString(),
                       delivery.GetProperty("result").GetString()));
-        // The budget: the handler's and 1,000 for each of the document's two values. A write by the owner's access
-        // is through the owner, for the contributor.
-        Assert.Equal(ModLimits.Default.HandlerInstructions + 2 * ModLimits.Default.DataInstructionsPerValue,
+        // The budget: the handler's and the allowance for each of the document's three values, the array counting
+        // one (plan §12.6). A write by the owner's access is through the owner, for the contributor.
+        Assert.Equal(ModLimits.Default.HandlerInstructions + 3 * ModLimits.Default.DataInstructionsPerValue,
                      delivery.GetProperty("budget").GetInt64());
         Assert.True(delivery.GetProperty("instructions").GetInt64() >= 0);
         JsonElement write = Assert.Single(delivery.GetProperty("writes").EnumerateArray());
@@ -426,7 +426,8 @@ public sealed class DataDeliveryTests : IDisposable
     public void ADeliveryHasTheHandlerBudgetAndAnAllowanceForEachValue()
     {
         var limits = ModLimits.Default with { HandlerInstructions = 50_000, DataInstructionsPerValue = 10_000 };
-        ModLinkResult result = Link(Owner(), Contributor("test.spin", "spin = true\nn = [1, 2, 3, 4]\n"));
+        // Five values: spin, n, and n's three elements.
+        ModLinkResult result = Link(Owner(), Contributor("test.spin", "spin = true\nn = [1, 2, 3]\n"));
         Scripting native = Native(result, limits: limits);
 
         Run(native);

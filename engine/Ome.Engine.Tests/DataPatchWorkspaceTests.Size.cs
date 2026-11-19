@@ -17,15 +17,15 @@ using Ome.Script.Abi;
 /// Gate 10 of docs/superpowers/specs/2026-11-17-data-patches-design.md, on the installed Kamidori (data patches plan
 /// §4.3): three files built from the record map and the game's own values, each shipped by a mod and delivered while
 /// the installed INIT2 runs, at boot and at a load. The full item file sets every field of the game's largest table
-/// that a file may set (300,000 values); the bound file adds unit records up to the 400,000 values a document may
-/// hold; the refused file is the bound file with every value of the wrong kind; and a file of 1,000 values, the size a
-/// balance mod writes, for what an ordinary file costs. Since milestone 3 the shipped base mod's shape refuses the
-/// refused file at the link, which is timed, and an owner without a shape (the base mod copied without it) meets it at
-/// the first delivery, where it is measured as before (plan §9.2); a file at the bound whose every key is unknown, the
-/// costliest problem the shape gives, is timed at the link too (§12.5). The measurement gives each file's
-/// instructions for each value, which the allowance must cover twice over, and the time the item file adds to a boot
-/// and to a load, against the plan's ceiling of 10 seconds. The budget test runs the bound files with the engine's
-/// own limits.
+/// that a file may set (300,000 values); the bound file adds unit records up to the size a document may have, 400,000
+/// with each table counting as each value does (plan §12.6); the refused file is the bound file with every value of the
+/// wrong kind; and a file of size 1,000, what a balance mod writes, for what an ordinary file costs. Since milestone 3
+/// the shipped base mod's shape refuses the refused file at the link, which is timed, and an owner without a shape (the
+/// base mod copied without it) meets it at the first delivery, where it is measured as before (plan §9.2); a file at
+/// the bound whose every key is unknown, the costliest problem the shape gives, is timed at the link too (§12.5). The
+/// measurement gives each file's instructions for each unit of its size, which the allowance must cover twice over,
+/// and the time the item file adds to a boot and to a load, against the plan's ceiling of 10 seconds. The budget test
+/// runs the bound files with the engine's own limits.
 /// </summary>
 public sealed partial class DataPatchWorkspaceTests
 {
@@ -90,23 +90,30 @@ public sealed partial class DataPatchWorkspaceTests
 
     /// <summary>
     /// A <c>kamidori.tables</c> file that sets every cell of each field a file may set, record by record, with the
-    /// game's own values (<paramref name="refused"/>: each of the wrong kind), until it holds <paramref name="limit"/>
-    /// values or the tables end.
+    /// game's own values (<paramref name="refused"/>: each of the wrong kind), until its size, which counts each table
+    /// as each value (plan §12.6), is <paramref name="limit"/> or the tables end. <c>Values</c> counts the cells.
     /// </summary>
-    private static (string Text, int Values) TablesFile(IEnumerable<(string Table, int Records, List<RecordField> Fields)> tables,
-                                                        GameSession game, int limit, bool refused)
+    private static (string Text, int Values, int Size) TablesFile(IEnumerable<(string Table, int Records, List<RecordField> Fields)> tables,
+                                                                  GameSession game, int limit, bool refused)
     {
         var text = new StringBuilder();
-        int values = 0;
+        int values = 0, size = 0;
         foreach (var (table, records, fields) in tables)
-            for (int record = 0; record < records && values < limit; record++)
+        {
+            // The table's own, then each record's, then each row's, the first time a key passes through it.
+            int tableSize = 1;
+            for (int record = 0; record < records && size + tableSize + 1 <= limit; record++)
             {
                 text.Append('[').Append(table).Append('.').Append(record.ToString(CultureInfo.InvariantCulture)).Append("]\n");
+                size += tableSize + 1;
+                tableSize = 0;
                 foreach (RecordField field in fields.Where(field => !field.State))
                 {
                     string[] keys = field.Columns.Length == 0 ? [field.Name] : field.Columns.Select(column => field.Name + "." + column).ToArray();
-                    for (int column = 0; column < keys.Length && values < limit; column++, values++)
+                    for (int column = 0; column < keys.Length; column++)
                     {
+                        int cost = field.Columns.Length > 0 && column == 0 ? 2 : 1;
+                        if (size + cost > limit) break;
                         int cell = field.Columns.Length == 0 ? field.Global.Address + record
                                                              : field.Global.Address + record * field.Global.RowWidth + column;
                         bool isString = field.Global.Kind == CellKind.String;
@@ -115,26 +122,31 @@ public sealed partial class DataPatchWorkspaceTests
                             : isString ? TomlString(game.GlobalStrings.GetValueOrDefault(cell) ?? "")
                                        : game.Globals.GetValueOrDefault(cell).ToString(CultureInfo.InvariantCulture);
                         text.Append(keys[column]).Append(" = ").Append(value).Append('\n');
+                        size += cost;
+                        values++;
                     }
                 }
             }
-        return (text.ToString(), values);
+        }
+        return (text.ToString(), values, size);
     }
 
     /// <summary>The three files of plan §4.3, from the installed Kamidori, after a file of the size a balance mod
     /// writes.</summary>
-    private (string Name, string Text, int Values)[] SizeFiles(ModLinkBase linkBase, GameSession game)
+    private (string Name, string Text, int Values, int Size)[] SizeFiles(ModLinkBase linkBase, GameSession game)
     {
         List<RecordField> items = RecordFields(linkBase, "item"), units = RecordFields(linkBase, "unit");
-        var (balanceText, balanceValues) = TablesFile([("item", 2000, items)], game, 1_000, refused: false);
-        var (itemText, itemValues) = TablesFile([("item", 2000, items)], game, int.MaxValue, refused: false);
-        var (boundText, boundValues) = TablesFile([("item", 2000, items), ("unit", 1000, units)], game, ValueBound, refused: false);
-        var (refusedText, refusedValues) = TablesFile([("item", 2000, items), ("unit", 1000, units)], game, ValueBound, refused: true);
-        Assert.Equal(300_000, itemValues);
-        Assert.Equal(ValueBound, boundValues);
-        Assert.Equal(ValueBound, refusedValues);
-        return [("balance", balanceText, balanceValues), ("items", itemText, itemValues), ("bound", boundText, boundValues),
-                ("refused", refusedText, refusedValues)];
+        var balance = TablesFile([("item", 2000, items)], game, 1_000, refused: false);
+        var item = TablesFile([("item", 2000, items)], game, int.MaxValue, refused: false);
+        var bound = TablesFile([("item", 2000, items), ("unit", 1000, units)], game, ValueBound, refused: false);
+        var refused = TablesFile([("item", 2000, items), ("unit", 1000, units)], game, ValueBound, refused: true);
+        Assert.Equal(300_000, item.Values);
+        Assert.Equal(ValueBound, bound.Size);
+        Assert.Equal(ValueBound, refused.Size);
+        _output?.WriteLine($"sizes: balance {balance.Size} ({balance.Values} cells), items {item.Size} ({item.Values} cells), "
+                           + $"bound {bound.Size} ({bound.Values} cells)");
+        return [("balance", balance.Text, balance.Values, balance.Size), ("items", item.Text, item.Values, item.Size),
+                ("bound", bound.Text, bound.Values, bound.Size), ("refused", refused.Text, refused.Values, refused.Size)];
     }
 
     /// <summary>kamidori-base as the repository has it, without its shape: an owner without a shape, which checks a file
@@ -158,26 +170,30 @@ public sealed partial class DataPatchWorkspaceTests
         return mod;
     }
 
-    /// <summary>A file at the value bound whose every key is one the unit record does not take (data patches plan
-    /// §12.5): 1,000 records of 400 keys of 30 characters. Its problem is the costliest the shape gives, since the
-    /// reason looks for the nearest names among the record's, and the check builds it only for the 20 it keeps.</summary>
-    private static string UnknownKeysFile()
+    /// <summary>A file at the size bound whose every key is one the unit record does not take (data patches plan
+    /// §12.5): 1,000 records of keys of 30 characters, 400 to a record until the file's size, its tables counted, is the
+    /// bound. Its problem is the costliest the shape gives, since the reason looks for the nearest names among the
+    /// record's, and the check builds it only for the 20 it keeps. <c>Keys</c> counts the problems.</summary>
+    private static (string Text, int Keys) UnknownKeysFile()
     {
         var text = new StringBuilder();
-        for (int record = 0; record < 1000; record++)
+        int size = 1, keys = 0;
+        for (int record = 0; record < 1000 && size < ValueBound; record++)
         {
             text.Append("[unit.").Append(record.ToString(CultureInfo.InvariantCulture)).Append("]\n");
-            for (int key = 0; key < 400; key++)
+            size++;
+            for (int key = 0; key < 400 && size < ValueBound; key++, size++, keys++)
                 text.Append("zz_unknown_field_name_").Append(record.ToString("D4", CultureInfo.InvariantCulture))
                     .Append(key.ToString("D4", CultureInfo.InvariantCulture)).Append(" = 1\n");
         }
-        return text.ToString();
+        Assert.Equal(ValueBound, size);
+        return (text.ToString(), keys);
     }
 
-    /// <summary>A file at the value bound against the shipped base mod, whose shape refuses every value at the link:
-    /// the first 20 with their lines (the first starting <paramref name="first"/>) and the rest counted, and no delivery
-    /// is planned. The time the link takes.</summary>
-    private TimeSpan RefusedAtTheLink(ModLinkBase linkBase, ModPackage refused, string name, string first)
+    /// <summary>A file at the size bound against the shipped base mod, whose shape refuses each of its
+    /// <paramref name="problems"/> values at the link: the first 20 with their lines (the first starting
+    /// <paramref name="first"/>) and the rest counted, and no delivery is planned. The time the link takes.</summary>
+    private TimeSpan RefusedAtTheLink(ModLinkBase linkBase, ModPackage refused, string name, string first, int problems)
     {
         IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([refused], new ModLinkReport());
         _opened.AddRange(shipped);
@@ -189,7 +205,7 @@ public sealed partial class DataPatchWorkspaceTests
         Assert.Equal(21, stops.Count);
         Assert.All(stops, line => Assert.Equal([refused.Id], line.Mods));
         Assert.StartsWith($"data/{name}.toml:2: {first}", stops[0].Message);
-        Assert.Equal($"data/{name}.toml: and {ValueBound - 20} more problems", stops[^1].Message);
+        Assert.Equal($"data/{name}.toml: and {problems - 20} more problems", stops[^1].Message);
         Assert.Empty(linked.Lua.Stack.ContributionList);
         return watch.Elapsed;
     }
@@ -266,17 +282,18 @@ public sealed partial class DataPatchWorkspaceTests
         CopyFolder(saved, plainLoadSaves);
         TimeSpan plainLoad = RunKamidori(loader, provider, plainLoadSaves, null);
 
-        // Measured with an allowance no file reaches, so that each delivery runs to its end.
+        // Measured with an allowance no file reaches, so that each delivery runs to its end. The allowance is for each
+        // unit of a document's size, which counts its tables as its values (plan §12.6), so the cost is measured so.
         ModLimits measuring = ModLimits.Default with { DataInstructionsPerValue = 1_000_000 };
         var perValue = new Dictionary<string, double>();
-        foreach (var (name, text, values) in SizeFiles(linkBase, game))
+        foreach (var (name, text, values, size) in SizeFiles(linkBase, game))
         {
             ModPackage contributor = DataMod("kamidori", "test.size-" + name, name + ".toml", text);
             string refusedLine = "";
             if (name == "refused")
             {
                 // Plan §9.2: the shipped base mod's shape refuses the file at the link, before any delivery; timed.
-                TimeSpan refusedLink = RefusedAtTheLink(linkBase, contributor, name, "item.0.");
+                TimeSpan refusedLink = RefusedAtTheLink(linkBase, contributor, name, "item.0.", values);
                 refusedLine = $"refused at the link in {refusedLink.TotalSeconds:F2} s; ";
                 Assert.True(refusedLink < Ceiling, refusedLine);
             }
@@ -296,9 +313,10 @@ public sealed partial class DataPatchWorkspaceTests
             TimeSpan boot = watch.Elapsed;
             JsonElement delivery = Delivery(native, name);
             long instructions = delivery.GetProperty("instructions").GetInt64();
-            perValue[name] = (double)instructions / values;
-            string line = $"{name}: {refusedLine}{values} values, {Encoding.UTF8.GetByteCount(text)} bytes, {instructions} instructions "
-                          + $"({perValue[name]:F1} a value), {delivery.GetProperty("result").GetString()}; link {link.TotalSeconds:F2} s, "
+            perValue[name] = (double)instructions / size;
+            string line = $"{name}: {refusedLine}size {size} ({values} cells), {Encoding.UTF8.GetByteCount(text)} bytes, "
+                          + $"{instructions} instructions ({perValue[name]:F1} a unit of size, {(double)instructions / values:F1} a cell), "
+                          + $"{delivery.GetProperty("result").GetString()}; link {link.TotalSeconds:F2} s, "
                           + $"boot {boot.TotalSeconds:F2} s against {plainBoot.TotalSeconds:F2} s with no mod";
             if (name == "items")
             {
@@ -321,19 +339,22 @@ public sealed partial class DataPatchWorkspaceTests
             _output?.WriteLine(line);
         }
 
-        // Plan §12.5: every key unknown, at the value bound, is refused at the link as fast as the refused file; its
+        // Plan §12.5: every key unknown, at the size bound, is refused at the link as fast as the refused file; its
         // reasons, the nearest names, are built for the 20 problems kept only.
-        ModPackage unknown = DataMod("kamidori", "test.size-unknown", "unknown.toml", UnknownKeysFile());
-        TimeSpan unknownLink = RefusedAtTheLink(linkBase, unknown, "unknown", "unit.0.zz_unknown_field_name_00000000: no such key");
-        string unknownLine = $"unknown: {ValueBound} values, every key unknown; refused at the link in {unknownLink.TotalSeconds:F2} s";
+        var (unknownText, unknownKeys) = UnknownKeysFile();
+        ModPackage unknown = DataMod("kamidori", "test.size-unknown", "unknown.toml", unknownText);
+        TimeSpan unknownLink = RefusedAtTheLink(linkBase, unknown, "unknown", "unit.0.zz_unknown_field_name_00000000: no such key",
+                                                unknownKeys);
+        string unknownLine = $"unknown: size {ValueBound} ({unknownKeys} keys), every key unknown; refused at the link in "
+                             + $"{unknownLink.TotalSeconds:F2} s";
         _output?.WriteLine(unknownLine);
         Assert.True(unknownLink < Ceiling, unknownLine);
 
         Assert.Equal(4, perValue.Count);
         double largest = perValue.Values.Max();
-        _output?.WriteLine($"largest {largest:F1} instructions a value; allowance {ModLimits.Default.DataInstructionsPerValue}");
+        _output?.WriteLine($"largest {largest:F1} instructions a unit of size; allowance {ModLimits.Default.DataInstructionsPerValue}");
         Assert.True(2 * largest <= ModLimits.Default.DataInstructionsPerValue,
-                    $"the allowance {ModLimits.Default.DataInstructionsPerValue} does not cover twice the largest cost, {largest:F1} a value");
+                    $"the allowance {ModLimits.Default.DataInstructionsPerValue} does not cover twice the largest cost, {largest:F1} a unit");
     }
 
     [Fact]
@@ -346,7 +367,7 @@ public sealed partial class DataPatchWorkspaceTests
         var (provider, root, loader) = KamidoriRoot(scripts);
         string saved = Path.Combine(_root, "saves-bound");
         RunKamidori(root, provider, saved, null);
-        foreach (var (name, text, _) in SizeFiles(linkBase, game).Where(file => file.Name is "bound" or "refused"))
+        foreach (var (name, text, values, _) in SizeFiles(linkBase, game).Where(file => file.Name is "bound" or "refused"))
         {
             // The refused file fails the shipped base mod's shape at the link (the test above), so it reaches the
             // owner's check through an owner without a shape (plan §9.2).
@@ -369,7 +390,7 @@ public sealed partial class DataPatchWorkspaceTests
                     continue;
                 }
                 Assert.Equal("error", delivery.GetProperty("result").GetString());
-                Assert.Contains($"test.size-refused data/refused.toml: {ValueBound} problems, so nothing of it is applied",
+                Assert.Contains($"test.size-refused data/refused.toml: {values} problems, so nothing of it is applied",
                                 delivery.GetProperty("error").GetString(), StringComparison.Ordinal);
             }
         }

@@ -55,8 +55,9 @@ public sealed class DataDocumentTests
         Assert.Equal(["761", "12"], unit.Entries.Select(entry => entry.Key));
         Assert.Equal(999, Assert.IsType<DataInteger>(Assert.IsType<DataTable>(unit["761"])["experience_reward"]).Value);
         Assert.Null(unit["13"]);
-        // Each string, boolean and number counts once, and an array's elements each: 2 + 3 + 5 + 2.
-        Assert.Equal(12, document.Values);
+        // Each string, boolean and number counts one, and so does each table and array (plan §12.6): twelve of the
+        // first kind; unit, 761, stats, drop_chance, 12, names, its inner array, stage and stage's two tables.
+        Assert.Equal(22, document.Values);
     }
 
     [Fact]
@@ -68,7 +69,7 @@ public sealed class DataDocumentTests
     }
 
     [Theory]
-    [InlineData("a = 1\nb = \nc = 3", "data/a.toml:2: Unexpected token end-of-line found while expecting a value")]
+    [InlineData("a = 1\nb = \nc = 3", "data/a.toml:2: Missing value after `=`.")]
     [InlineData("a = 1\n[t\nb = 2", "data/a.toml:2:")]
     // Tomlyn's model alone takes a repeated key, the last winning; the reader refuses it, as TOML 1.0 does.
     [InlineData("a = 1\na = 2", "data/a.toml:2: The key `a` is already defined")]
@@ -147,7 +148,7 @@ public sealed class DataDocumentTests
     {
         // The document's table is the first level, so 16 dotted keys make 15 tables in it, the last holding a value.
         string deepest = string.Join(".", Enumerable.Range(1, DataBounds.MaxDepth).Select(k => $"k{k}")) + " = 1";
-        Assert.Equal(1, Read(deepest).Values);
+        Assert.Equal(DataBounds.MaxDepth, Read(deepest).Values);
         string past = string.Join(".", Enumerable.Range(1, DataBounds.MaxDepth + 1).Select(k => $"k{k}")) + " = 1";
         string path = string.Join(".", Enumerable.Range(1, DataBounds.MaxDepth).Select(k => $"k{k}"));
         Assert.Equal([$"data/a.toml: {path}: tables and arrays nest deeper than {DataBounds.MaxDepth}"], Refused(past));
@@ -159,13 +160,68 @@ public sealed class DataDocumentTests
                         problem => problem.EndsWith($"tables and arrays nest deeper than {DataBounds.MaxDepth}", StringComparison.Ordinal));
     }
 
+    /// <summary>The size bound counts each value, table and array as one (plan §12.6): a file of empty tables or empty
+    /// arrays has a size, and past the bound the read stops before Tomlyn builds anything.</summary>
     [Fact]
-    public void TheValueBoundCountsEachArrayElement()
+    public void TheSizeBoundCountsEachValueTableAndArray()
     {
+        string tooLarge = $"data/a.toml: the document holds more than {DataBounds.MaxValues:N0} values, counting each table "
+                          + "and array as one; a data file holds at most that many";
+        Assert.Equal(tooLarge, "data/a.toml: " + DataDocumentReader.TooLarge);
         static string Zeros(int count) => "a = [" + string.Join(",", Enumerable.Repeat("0", count)) + "]";
-        Assert.Equal(DataBounds.MaxValues, Read(Zeros(DataBounds.MaxValues)).Values);
-        Assert.Equal([$"data/a.toml: the document holds more than {DataBounds.MaxValues:N0} values; a data file holds at most that many"],
-                     Refused(Zeros(DataBounds.MaxValues) + "\nb = 1"));
+        Assert.Equal(DataBounds.MaxValues, Read(Zeros(DataBounds.MaxValues - 1)).Values);
+        Assert.Equal([tooLarge], Refused(Zeros(DataBounds.MaxValues)));
+        static string Tables(int count) => string.Concat(Enumerable.Range(0, count).Select(k => $"[t{k}]\n"));
+        Assert.Equal(DataBounds.MaxValues, Read(Tables(DataBounds.MaxValues)).Values);
+        Assert.Equal([tooLarge], Refused(Tables(DataBounds.MaxValues + 1)));
+        static string Arrays(int count) => "a = [" + string.Concat(Enumerable.Repeat("[],", count)) + "]";
+        Assert.Equal(DataBounds.MaxValues, Read(Arrays(DataBounds.MaxValues - 1)).Values);
+        // The review's files: 5.3 million empty arrays and 1.6 million empty tables, read before at 4.1 and 2.6 GB.
+        Assert.Equal([tooLarge], Refused(Arrays(5_300_000)));
+        Assert.Equal([tooLarge], Refused(Tables(1_600_000)));
+        // A header's super-tables count once, and an array of tables counts with each of its tables.
+        Assert.Equal(3, Read("[a.b.c]\n[a.b]\n").Values);
+        Assert.Equal(3, Read("[[a]]\n[[a]]\n").Values);
+        Assert.Equal(1, Read("a = {}").Values);
+    }
+
+    /// <summary>Tomlyn's validating parser took two different keys for one where their hashes met (plan §12.6); the
+    /// reader compares keys by their text.</summary>
+    [Fact]
+    public void ATableOf400000DistinctKeysReadsAndAKeyGivenTwiceInItIsRefusedWithItsLine()
+    {
+        var text = new StringBuilder();
+        for (int k = 0; k < DataBounds.MaxValues; k++) text.Append('k').Append(k).Append(" = 1\n");
+        Assert.Equal(DataBounds.MaxValues, Read(text.ToString()).Root.Count);
+        text.Remove(text.Length - "k399999 = 1\n".Length, "k399999 = 1\n".Length).Append("k12345 = 2\n");
+        Assert.Equal(["data/a.toml:400000: The key `k12345` is already defined at (12346,1) and cannot be redefined"],
+                     Refused(text.ToString()));
+    }
+
+    [Theory]
+    [InlineData("[t]\nk = 1\nk = 2\n", 3, "t.k")]
+    [InlineData("t = { k = 1, k = 2 }\n", 1, "t.k")]
+    [InlineData("t.u.k = 1\n[t.u]\nk = 2\n", 2, "t.u")]
+    [InlineData("[[a]]\nk = 1\n[a]\nk = 2\n", 3, "a")]
+    [InlineData("[unit.761]\nstats.max_hp = 1\n[unit.761.stats]\nmax_hp = 2\n", 3, "unit.761.stats")]
+    [InlineData("[t]\nk = 1\n'k' = 2\n", 3, "t.k")]
+    [InlineData("a = [ { k = 1, k = 2 } ]\n", 1, "a[1].k")]
+    [InlineData("[t]\n\"\" = 1\n\"\" = 2\n", 3, "t.\"\"")]
+    public void AKeyOrATableGivenTwiceIsRefusedWithItsLine(string text, int line, string path)
+    {
+        string problem = Assert.Single(Refused(text));
+        Assert.StartsWith($"data/a.toml:{line}: The key `{path}` is already defined at ", problem);
+    }
+
+    /// <summary>Tomlyn's model would keep the second <c>rows</c> table alone (plan §12.6).</summary>
+    [Fact]
+    public void AnArrayOfTablesThatAnotherTableInterruptsIsRefusedWithItsLine()
+    {
+        Assert.Equal(["data/a.toml:4: The array of tables `rows` is interrupted by another table before this header; write "
+                      + "an array's tables, with their sub-tables, one after another"],
+                     Refused("[[rows]]\nn = 1\n[other]\n[[rows]]\nn = 2\n"));
+        // A table inside the array's last table does not interrupt it: rows, its two tables, their n, and inner.
+        Assert.Equal(6, Read("[[rows]]\nn = 1\n[rows.inner]\n[[rows]]\nn = 2\n").Values);
     }
 
     [Fact]

@@ -146,7 +146,8 @@ public sealed class DataLinkTests : IDisposable
         // The owner's handler has an id because a delivery names it; a's hook got its id first, in the mods' loop.
         Assert.Equal([new ModRuntimeHandler("test.a", "a.lua", "on_award"), new ModRuntimeHandler("test.owner", "lists.lua", "apply")],
                      stack.Handlers);
-        Assert.Equal([("test.lists", "test.owner", "test.a", "data/a.toml", 3), ("test.lists", "test.owner", "test.b", "data/b.toml", 2)],
+        // Each value counts, and each table and array as one (plan §12.6): names, its two elements, t and k; t, k and j.
+        Assert.Equal([("test.lists", "test.owner", "test.a", "data/a.toml", 5), ("test.lists", "test.owner", "test.b", "data/b.toml", 3)],
                      stack.ContributionList.Select(found => (found.Kind, found.Owner, found.Mod, found.File, found.Values)));
         Assert.Equal("""{names = ["x", "y"], t = {k = 1}}""", stack.ContributionList[0].Document.ToText());
         Assert.All(stack.ContributionList, found => Assert.Empty(found.Unraised));
@@ -173,8 +174,8 @@ public sealed class DataLinkTests : IDisposable
         Assert.Equal("test.owner.computed: subscribers run in this order: test.b data/b.toml (test.owner lists.lua:apply) "
                      + "(priority -5), test.a data/a.toml (test.owner lists.lua:apply) (priority 0)", orders[1].Message);
         Assert.Equal(["kind test.lists (test.owner), at test.owner.award and test.owner.computed",
-                      "  test.b data/b.toml: 2 values",
-                      "  test.a data/a.toml: 3 values",
+                      "  test.b data/b.toml: 3 values",
+                      "  test.a data/a.toml: 5 values",
                       "  t.k: test.b, then test.a (shared path, in delivery order)"],
                      result.Report.Lua.SkipWhile(line => !line.StartsWith("kind ", StringComparison.Ordinal)));
         Assert.Contains(result.Report.Lua, line => line.StartsWith("event test.owner.computed (test.owner, raised from Lua)", StringComparison.Ordinal)
@@ -491,7 +492,8 @@ public sealed class DataLinkTests : IDisposable
                                "deep2": { "type": "object", "additionalProperties": { "$ref": "#/definitions/deep" } } } }
             """;
         ModLinkResult result = Link(ShapedOwner(costly), Contributor("test.a", "a.b.c.d.e.f.g.h.i.j.k.l.m.n.o = 1\n"));
-        ModReportLine line = Stop(result, "the shape takes more than 100,064 steps on test.a data/a.toml");
+        ModReportLine line = Stop(result, "the shape takes more than 100,960 steps on test.a data/a.toml (64 for each of its 15 "
+                                          + "values and 100,000)");
         Assert.Equal(["test.owner"], line.Mods);
         Assert.Empty(result.Lua.Stack.ContributionList);
     }

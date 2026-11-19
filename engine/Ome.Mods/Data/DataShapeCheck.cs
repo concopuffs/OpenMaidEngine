@@ -17,20 +17,23 @@ public sealed record DataShapeResult(IReadOnlyList<DataProblem> Problems, int Pr
 /// code and changes nothing. Each problem gives its path, as the reader prints one, and its reason: a key an object
 /// does not take, with the nearest names it does; a key that should be a whole number in decimal, with its range; a
 /// value of the wrong kind or outside its range; or a field the shape does not offer, with the shape's reason. The line
-/// is found in the syntax tree the reader kept (<see cref="DataLines"/>), only for a document with problems.
+/// is found in the text the reader kept (<see cref="DataLines"/>), only for a document with problems. The check's steps
+/// are bounded by the document's size, which counts each table and array as each value (plan §12.6), so a document of
+/// empty tables meets a limit that grows with it.
 /// </summary>
 public static class DataShapeCheck
 {
-    /// <summary>The schemas a check may apply for each value of the document, and once more: a shape written as the
-    /// generated ones applies four to six to a value, so only one built to cost time reaches the bound.</summary>
+    /// <summary>The schemas a check may apply for each value of the document, each table and array counting one, and
+    /// once more: a shape written as the generated ones applies four to six to a value, so only one built to cost time
+    /// reaches the bound.</summary>
     public const int StepsPerValue = 64;
     public const int StepsBase = 100_000;
     /// <summary>The names an error lists when none is near the key.</summary>
     public const int NamesShown = 8;
 
-    /// <summary>The marker of an array's element in a path's parts; a key never holds a control character
-    /// (<see cref="DataDocumentReader"/>).</summary>
-    internal const char IndexMark = '\u0001';
+    /// <summary>The marker of an array's element in a path's parts, as <see cref="DataLines"/> has it; a key never holds
+    /// a control character (<see cref="DataDocumentReader"/>).</summary>
+    internal const char IndexMark = TomlStructure.IndexMark;
 
     public static DataShapeResult Check(DataShape shape, DataReadResult read)
     {
@@ -40,8 +43,8 @@ public static class DataShapeCheck
         walk.Value(shape.Root, document.Root);
         if (walk.Over) return new DataShapeResult([], 0, limit);
         if (walk.Count == 0) return new DataShapeResult([], 0, null);
-        int?[] lines = read.Syntax is { } syntax
-            ? DataLines.Find(syntax, walk.Kept.Select(problem => problem.Parts).ToList())
+        int?[] lines = read.Text is { } text
+            ? DataLines.Find(text, walk.Kept.Select(problem => problem.Parts).ToList())
             : new int?[walk.Kept.Count];
         var problems = walk.Kept.Select((problem, k) => new DataProblem(lines[k], $"{PathText(problem.Parts)}: {problem.Reason}"))
             .ToList();

@@ -7,7 +7,8 @@ public readonly record struct ContributionId(int Index);
 /// A data file the link delivers to its kind's owner (data patches spec §5.2, §5.5). <paramref name="Kind"/> and its
 /// <paramref name="Owner"/>; <paramref name="Mod"/>, the contributor, and <paramref name="File"/>, the file's path in its
 /// package as the report and the trace print it (<c>data/slimes.toml</c>); the <paramref name="Document"/> and the
-/// <paramref name="Values"/> it holds, which set the delivery's budget (spec §5.6); <paramref name="Unraised"/>, the
+/// <paramref name="Values"/> it holds, each table and array counting one as each string, boolean and number does (data
+/// patches plan §12.6), which set the delivery's budget (spec §5.6); <paramref name="Unraised"/>, the
 /// kind's events this install does not raise, in the order of the kind's <c>at</c> entries (spec §5.4); and
 /// <paramref name="Requires"/>, the Lua mods of the stack the contributor requires, whose state its own follows when it
 /// ships no Lua of its own (spec §5.6, "A mod is on or off as a whole").
