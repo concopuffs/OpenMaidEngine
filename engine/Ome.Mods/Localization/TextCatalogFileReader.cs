@@ -3,7 +3,6 @@ using Ome.Engine.Localization;
 using Ome.Mods.Manifest;
 using Tomlyn;
 using Tomlyn.Model;
-using Tomlyn.Parsing;
 using Tomlyn.Syntax;
 
 namespace Ome.Mods.Localization;
@@ -38,9 +37,10 @@ public static partial class TextCatalogFileReader
     public static TextCatalogFile Parse(string text, string origin)
     {
         TomlTable root;
+        DocumentSyntax syntax;
         try
         {
-            root = TomlDocument.Parse(text) ?? new TomlTable();
+            root = TomlDocument.Parse(text, out syntax) ?? new TomlTable();
         }
         catch (TomlException error)
         {
@@ -49,7 +49,7 @@ public static partial class TextCatalogFileReader
         }
 
         var problems = new List<string>();
-        Dictionary<string, List<int>> tableLines = TableArrayLines(text, origin);
+        Dictionary<string, List<int>> tableLines = TableArrayLines(syntax);
         var top = new Fields(root, origin, problems);
         string? fileScript = top.String("script");
         string? fingerprint = top.String("fingerprint");
@@ -97,9 +97,10 @@ public static partial class TextCatalogFileReader
     public static IReadOnlyList<LanguageSettings> ParseLanguages(string text, string origin)
     {
         TomlTable root;
+        DocumentSyntax syntax;
         try
         {
-            root = TomlDocument.Parse(text) ?? new TomlTable();
+            root = TomlDocument.Parse(text, out syntax) ?? new TomlTable();
         }
         catch (TomlException error)
         {
@@ -107,7 +108,7 @@ public static partial class TextCatalogFileReader
             throw new TextCatalogException([$"{at}: not valid TOML: {error.Message}"]);
         }
         var problems = new List<string>();
-        Dictionary<string, List<int>> tableLines = TableArrayLines(text, origin);
+        Dictionary<string, List<int>> tableLines = TableArrayLines(syntax);
         var top = new Fields(root, origin, problems);
         var languages = new List<LanguageSettings>();
         var tags = new HashSet<string>(StringComparer.Ordinal);
@@ -300,11 +301,11 @@ public static partial class TextCatalogFileReader
             ? $"{origin}:{starts[index]}"
             : $"{origin}: [[{table}]] {index + 1}";
 
-    /// <summary>The 1-based line of each top-level <c>[[name]]</c> header, in order.</summary>
-    private static Dictionary<string, List<int>> TableArrayLines(string text, string origin)
+    /// <summary>The 1-based line of each top-level <c>[[name]]</c> header, in order, from the syntax tree the
+    /// document's parse validated.</summary>
+    private static Dictionary<string, List<int>> TableArrayLines(DocumentSyntax document)
     {
         var lines = new Dictionary<string, List<int>>(StringComparer.Ordinal);
-        DocumentSyntax document = SyntaxParser.Parse(text, origin, false);
         foreach (TableSyntaxBase table in document.Tables)
         {
             if (table is not TableArraySyntax || table.Name == null) continue;
