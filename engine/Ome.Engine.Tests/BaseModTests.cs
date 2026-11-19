@@ -113,7 +113,7 @@ public sealed class BaseModTests : IDisposable
         ModDiscovery with = ModLaunch.Discover(mods, [], report);
         ModPackage shipped = Assert.Single(with.Packages, package => package.Id == "himegari-base");
         Assert.Equal(ShippedPackages.LocationOf("himegari-base"), shipped.Location);
-        Assert.Contains(report.Lines, line => line.Message.Contains("the engine's own himegari-base 1.0.0 is mounted: needs-base requires it"));
+        Assert.Contains(report.Lines, line => line.Message.Contains("the engine's own himegari-base 1.1.0 is mounted: needs-base requires it"));
         // The resolver finds the requirement met, and the base mod loads before the mod that requires it.
         var order = new ModLinkReport();
         IReadOnlyList<ModPackage> resolved = StackResolver.Resolve(with.Packages, SyntheticBase(), with.UserOrder, order);

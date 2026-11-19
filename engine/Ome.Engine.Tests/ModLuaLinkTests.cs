@@ -1407,7 +1407,7 @@ public sealed class ModLuaLinkTests : IDisposable
             end
             """), []);
         Assert.True(result.Succeeded, result.Report.Render());
-        Assert.Contains(result.Report.Lua, line => line.StartsWith("mod himegari-base 1.0.0: ", StringComparison.Ordinal)
+        Assert.Contains(result.Report.Lua, line => line.StartsWith("mod himegari-base 1.1.0: ", StringComparison.Ordinal)
                                                    && line.EndsWith("; calls ADDITEM", StringComparison.Ordinal));
 
         using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
@@ -1612,18 +1612,23 @@ public sealed class ModLuaLinkTests : IDisposable
     private static readonly string[] StageEvents = ["stage.loaded", "stage.ready", "stage.round", "stage.close"];
 
     /// <summary>A mod of <paramref name="profile"/> that subscribes to its base mod's boot and stage events, with the
-    /// base mods it requires: on_ready logs the class-change chain's second slot, which only the append writes.</summary>
+    /// base mods it requires: on_layered and on_ready log the class-change chain's second slot, which only the append
+    /// writes.</summary>
     private IReadOnlyList<ModPackage> StageSubscriber(string profile)
     {
-        string hooks = $"[[requires]]\nid = \"{profile}-base\"\nversion = \">=1, <2\"\n"
+        string hooks = $"[[requires]]\nid = \"{profile}-base\"\nversion = \">=1.1, <2\"\n"
+                       + $"[[hooks]]\nevent = \"{profile}.data.layered\"\nhandler = \"hooks.lua:on_layered\"\n"
                        + $"[[hooks]]\nevent = \"{profile}.data.ready\"\nhandler = \"hooks.lua:on_ready\"\n"
                        + string.Concat(StageEvents.Select(name
                            => $"[[hooks]]\nevent = \"{profile}.{name}\"\nhandler = \"hooks.lua:on_stage\"\n"));
         ModPackage user = Mod("stage-user", hooks, Hooks($$"""
-            function on_ready(e)
+            local function chain(e)
               local game = require("{{profile}}-base")
-              maid.log.info("ready " .. tostring(game.table("class_change_rule_script_ids")[1]))
+              return tostring(game.table("class_change_rule_script_ids")[1])
+                  .. (maid.session.restoring and " restoring" or "")
             end
+            function on_layered(e) maid.log.info("layered " .. chain(e)) end
+            function on_ready(e) maid.log.info("ready " .. chain(e)) end
             function on_stage(e) maid.log.info(e.event .. " " .. e.stage) end
             """), lua: "api = 1", profile: profile);
         IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([user], new ModLinkReport());
@@ -1641,13 +1646,13 @@ public sealed class ModLuaLinkTests : IDisposable
         ModLinkResult linked = ModLinker.Link(InstalledBase(), StageSubscriber("himegari"), []);
         Assert.True(linked.Succeeded, linked.Report.Render());
         Assert.DoesNotContain(linked.Report.Lines, line => line.Message.Contains("not raised in this install", StringComparison.Ordinal));
-        Assert.Equal([0x183], Offsets(linked, "INIT2"));
+        Assert.Equal([0x180, 0x183], Offsets(linked, "INIT2"));
         Assert.Equal([0x20a, 0xa27, 0x764a, 0xbaa1, 0xbabd], Offsets(linked, "FIELD"));
         Assert.Equal(["himegari.stage.after_close_handlers_won", "himegari.stage.after_close_handlers_lost"],
                      linked.Lua.Stack.Event("himegari.stage.close")!.Points);
         Assert.Equal(["stage", "result", "turn"], linked.Lua.Stack.Event("himegari.stage.close")!.Fields.Select(field => field.Name));
 
-        // At boot the event comes once, after the append's AUTORUN: the class-change chain's slot 1 is $1$CCINIT.
+        // At boot each event comes once, after the append's AUTORUN: the class-change chain's slot 1 is $1$CCINIT.
         var catalog = Sys4AssetCatalog.Load(Paths.Sys4Ini);
         var scripts = new Sys4ScriptProvider(HimegariTable, catalog, new Sys4AssetStore(catalog, Paths.GameDir, Paths.GameDir));
         using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
@@ -1657,9 +1662,9 @@ public sealed class ModLuaLinkTests : IDisposable
         SceneResult result = new GameSession().RunScene(scripts.RequireByName("INIT2.BIN"), HimegariTable, new HeadlessWaits(),
                                                         provider: scripts, scripting: scripting);
         Assert.True(result.Halt is null or "exit" or "end", result.Halt);
-        Assert.Equal([$"ready {0x1000017}"], scripting.RecentLog
+        Assert.Equal([$"layered {0x1000017}", $"ready {0x1000017}"], scripting.RecentLog
             .Select(line => line[(line.LastIndexOf(": ", StringComparison.Ordinal) + 2)..])
-            .Where(text => text.StartsWith("ready ", StringComparison.Ordinal)));
+            .Where(text => text.StartsWith("layered ", StringComparison.Ordinal) || text.StartsWith("ready ", StringComparison.Ordinal)));
     }
 
     [Theory]
@@ -1675,7 +1680,7 @@ public sealed class ModLuaLinkTests : IDisposable
         ModLinkResult linked = ModLinker.Link(linkBase, StageSubscriber("kamidori"), []);
         Assert.True(linked.Succeeded, linked.Report.Render());
         Assert.DoesNotContain(linked.Report.Lines, line => line.Message.Contains("not raised in this install", StringComparison.Ordinal));
-        Assert.Equal([0x2cf], Offsets(linked, "INIT2"));
+        Assert.Equal([0x20d, 0x2cf], Offsets(linked, "INIT2"));
         Assert.Equal([0x527, 0xd58, 0x933d, 0xc785], Offsets(linked, "FIELD"));
     }
 

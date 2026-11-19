@@ -15,9 +15,20 @@
       ]
     },
     {
+      "name": "himegari.boot.data_layered",
+      "script": "INIT2.BIN",
+      "description": "The instruction after op 0x143 (INIT2@0x17f), before INIT2 calls TUNE. Every layer has written its data: the base *INIT scripts, then each mounted append's $n$AUTORUN and its $n$*INIT layers. The boot has not used the tables yet. TUNE comes next: it lowers each saved tuning level to fit its item's curve (item_tuning_curve_ids, item_tuning_stat_bonus_curves), runs CALCREVISE when G[0x767b] is set, and raises item_inventory_counts to the party's items, so it corrects the save against an edit made here as it does against an append's. The tables lie above the saved prefix (0x6241b): a load zeroes them, the prologue builds them again, and control reaches here again while the load restores.",
+      "at": [
+        {
+          "fingerprint": "sha256:00ec969c7f369f28943b0c7272c7a0b58bf145e5993e5d39e62a3d80498407fa",
+          "site": 384
+        }
+      ]
+    },
+    {
       "name": "himegari.boot.data_ready",
       "script": "INIT2.BIN",
-      "description": "INIT2's exit, once per run at boot. Every data table is built: the base *INIT scripts, each mounted append's $n$AUTORUN and its $n$*INIT layers (op 0x143), and TUNE's derived item data after them. The tables lie above the saved prefix (0x6241b), so no load replaces them: an edit made here lasts the whole run.",
+      "description": "INIT2's exit. Every data table is built: the base *INIT scripts, each mounted append's $n$AUTORUN and its $n$*INIT layers (op 0x143), and TUNE has corrected the saved tuning levels and inventory counts against them (himegari.boot.data_layered). An edit made here comes after that correction. The tables lie above the saved prefix (0x6241b): a load zeroes them, the prologue builds them again, and control reaches here again while the load restores.",
       "at": [
         {
           "fingerprint": "sha256:00ec969c7f369f28943b0c7272c7a0b58bf145e5993e5d39e62a3d80498407fa",

@@ -5,11 +5,22 @@ Stable site names for OMS fragments (`before site <name> { … }`; mod loader sp
 `docs/superpowers/specs/2026-11-03-mod-loader-design.md`). Each point lists its site per script revision;
 a fragment compiles only against a revision its point lists.
 
+## `kamidori.boot.data_layered`
+
+Script: `INIT2.BIN`
+
+The instruction after op 0x143 (INIT2@0x20c). Every layer has written its data: the 28 base *INIT scripts, then each mounted append's $n$AUTORUN and its $n$*INIT layers. The boot has not used the tables yet. INIT2 goes on to fill each unset text colour setting from voice_setting_default_text_colors, to rebuild the field when a save made on a floor is loaded (G[0x428c]: the stage loaders, then SETMAPTEX, whose READICON reads unit_graphic_asset_ids and item_costume_graphic_asset_ids), and to set up the studio's ornaments. None of it writes a record table, so that work reads an edit made here. The tables lie above the saved prefix (0xfd40f): a load zeroes them, the prologue builds them again, and control reaches here again while the load restores.
+
+| Revision | Site |
+|---|---|
+| `sha256:5e4932184f30e6d35d9ee9b259f2987bd62e443479fa2d207fde2edfbac5a65d` | `0x20d` |
+| `sha256:a60b27687b52d51c06ecfb1371e3aea7393b45a21612bb3715992ef2970925f8` | `0x20d` |
+
 ## `kamidori.boot.data_ready`
 
 Script: `INIT2.BIN`
 
-INIT2's exit, once per run at boot. Every data table is built: the 28 base *INIT scripts, each mounted append's $n$AUTORUN and its $n$*INIT layers (op 0x143), and INIT2's own work after them. The tables lie above the saved prefix, so no load replaces them: an edit made here lasts the whole run.
+INIT2's exit. Every data table is built: the 28 base *INIT scripts, each mounted append's $n$AUTORUN and its $n$*INIT layers (op 0x143), and INIT2's own work after them, which reads the tables (kamidori.boot.data_layered). An edit made here comes after that work. The tables lie above the saved prefix (0xfd40f): a load zeroes them, the prologue builds them again, and control reaches here again while the load restores.
 
 | Revision | Site |
 |---|---|

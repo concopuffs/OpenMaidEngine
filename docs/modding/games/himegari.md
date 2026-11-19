@@ -87,7 +87,7 @@ Game names ([../lua.md](../lua.md), "Game names") come from `himegari-base`. A m
 `require("himegari-base").g.stage_turn_limit` or `.table("unit_current_levels")[unit]` without `vm`, and writes
 them once its `[lua] writes` lists them. The names are those of `../../global-reference.md`.
 
-`himegari-base` declares six game events ([../lua.md](../lua.md), "Game events"). The experience award is raised at
+`himegari-base` declares seven game events ([../lua.md](../lua.md), "Game events"). The experience award is raised at
 the experience point:
 
 | Event | Field | Type | Access | Cell |
@@ -99,20 +99,27 @@ the experience point:
 A subscriber needs no `vm`. `oms/examples/mods/example.double-exp-event` doubles every award with
 `event.amount = event.amount * 2`, and leaves the same state as the patch above.
 
-The other five follow the boot and each stage. Each is raised where INIT2 or FIELD has walked the chain the appends
+The other six follow the boot and each stage. Each is raised where INIT2 or FIELD has walked the chain the appends
 register their handlers in, so a handler runs after the base game's and every append's. Their fields are read-only:
 
 | Event | Raised | Fields |
 |---|---|---|
-| `himegari.data.ready` | `himegari.boot.data_ready` (INIT2): every data table is built, the appends' included | none |
+| `himegari.data.layered` | `himegari.boot.data_layered` (INIT2, before TUNE): every layer has written its tables, the appends' included, and the boot has not used them yet | none |
+| `himegari.data.ready` | `himegari.boot.data_ready` (INIT2's exit): every data table is built, and TUNE has corrected the save against them | none |
 | `himegari.stage.loaded` | `himegari.stage.after_loader` (FIELD): the stage's loaders have run | `stage` (`current_stage_id`) |
 | `himegari.stage.ready` | `himegari.stage.after_ready_handlers`: once per stage, at its start, with the units placed | `stage` |
 | `himegari.stage.round` | `himegari.stage.after_round_handlers`: each player turn after the first | `stage`, `turn` (`current_stage_turn`) |
 | `himegari.stage.close` | `himegari.stage.after_close_handlers_won` and `_lost`: the stage ends | `stage`, `result` (`stage_result`: 1 won, 2 lost), `turn` |
 
-- **The data tables are not saved** (they lie above the saved range, below). An edit at `data.ready` lasts the run. A
-  load builds the tables again and raises `data.ready` again while it restores (`maid.session.restoring` is true), so
-  the handler makes its edit again.
+- **Edit the boot's tables at `data.layered`.** An edit there lands where an append's edit lands, and TUNE then runs
+  over it as it runs over the appends'. TUNE lowers each saved tuning level to the last level its item's curve gives
+  a bonus for (`item_tuning_curve_ids`, `item_tuning_stat_bonus_curves`), and raises each `item_inventory_counts` cell
+  to the party's items. An edit at `data.ready` comes after that, so TUNE does not correct the save against it: a
+  saved tuning level could then lie past a curve the edit shortened. The correction TUNE makes against an edit is in
+  the save from then on, and stays when the mod is removed.
+- **The data tables are not saved** (they lie above the saved range, below). A load builds the tables again and
+  raises `data.layered` and `data.ready` again while it restores (`maid.session.restoring` is true), so the handler
+  makes its edit again.
 - **FIELD runs the loaders more than once a stage.** `field_map_continue_mode` is 0 at a stage's start: FIELD runs the
   loaders, places the units and walks the ready chain. Back from the camp screens (the deploy screen, for one), or at
   the load of a save made in the field, it is 2 or 3: FIELD runs the loaders again and raises `stage.loaded` again,

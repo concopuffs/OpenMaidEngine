@@ -2,10 +2,20 @@
 # names layout/globals.json exports.
 
 [[event]]
+name = "himegari.data.layered"
+point = "himegari.boot.data_layered"
+description = """
+At boot, once every layer has written its data tables (the base layer's, then each append's) and before the boot uses \
+them. An edit made here lands where an append's edit lands, and the boot's own work then runs over it as it runs over \
+the appends'. A handler that edits a table (a unit's stats, an item, a skill) changes it until the tables are built \
+again. The tables are not saved: a load builds them again and raises this again while it restores \
+(maid.session.restoring is true), so the handler makes its edit again."""
+
+[[event]]
 name = "himegari.data.ready"
 point = "himegari.boot.data_ready"
 description = """
-At boot, once every data table is built: the base layer's, each append's, and the boot's own work on them. A handler \
-that edits a table (a unit's stats, an item, a skill) changes it for the run. The tables are not saved: a load builds \
-them again and raises this again while it restores (maid.session.restoring is true), so the handler makes its edit \
-again."""
+At boot, once every data table is built and the boot's own work on them is done: TUNE has corrected the saved tuning \
+levels and inventory counts against the item data. An edit made here comes after that work, which does not see it: \
+himegari.data.layered comes before it. The tables are not saved: a load builds them again and raises this again while \
+it restores (maid.session.restoring is true), so the handler makes its edit again."""

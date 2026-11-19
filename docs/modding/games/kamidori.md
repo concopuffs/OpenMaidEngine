@@ -172,7 +172,7 @@ has 50 rows, which end where `unit_condition_remaining_turns` starts. The names 
 `character_levels` and `character_experience` are indexed by `current_character_id`, the unit's canonical
 character.
 
-`kamidori-base` declares six game events ([../lua.md](../lua.md), "Game events"). The experience award is raised at
+`kamidori-base` declares seven game events ([../lua.md](../lua.md), "Game events"). The experience award is raised at
 the experience point:
 
 | Event | Field | Type | Access | Cell |
@@ -187,21 +187,26 @@ A subscriber needs no `vm`. `oms/examples/mods/example.kamidori-double-exp-event
 character at the level cap, gains no experience. Weapon experience is awarded after the point and does not read the
 amount.
 
-The other five follow the boot and each floor. Each is raised where INIT2 or FIELD has walked the chains the appends
+The other six follow the boot and each floor. Each is raised where INIT2 or FIELD has walked the chains the appends
 register their handlers in (`../../kamidori-data-tables.md`, "Hook chains"), so a handler runs after the base game's
 and every append's. Each point lists both installs' scripts, which put it at the same site. Their fields are
 read-only:
 
 | Event | Raised | Fields |
 |---|---|---|
-| `kamidori.data.ready` | `kamidori.boot.data_ready` (INIT2): every data table is built, the appends' included | none |
+| `kamidori.data.layered` | `kamidori.boot.data_layered` (INIT2, after op `0x143`): every layer has written its tables, the appends' included, and the boot has not used them yet | none |
+| `kamidori.data.ready` | `kamidori.boot.data_ready` (INIT2's exit): every data table is built, and INIT2's own work on them is done | none |
 | `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run | `stage` (`current_stage_id`) |
 | `kamidori.stage.ready` | `kamidori.stage.after_ready_handlers`: once per floor, at its start, with the units placed | `stage` |
 | `kamidori.stage.round` | `kamidori.stage.after_round_handlers`: each player turn after the first | `stage`, `turn` (`current_stage_turn`) |
 | `kamidori.stage.close` | `kamidori.stage.after_close_handlers`: the floor ends | `stage`, `result` (`stage_result`: 1 won, 2 lost), `turn` |
 
-- **A load builds the data tables again** and raises `data.ready` again while it restores (`maid.session.restoring`
-  is true), so a handler that edits them makes its edit again.
+- **Edit the boot's tables at `data.layered`.** An edit there lands where an append's edit lands. INIT2's own work
+  after it writes no record table and reads the edited fields: at the load of a save made on a floor it rebuilds the
+  field, and SETMAPTEX and READICON read `unit_canonical_character_id`, `unit_graphic_asset_ids` and
+  `item_costume_graphic_asset_ids`. An edit at `data.ready` comes after that rebuild.
+- **A load builds the data tables again** and raises `data.layered` and `data.ready` again while it restores
+  (`maid.session.restoring` is true), so a handler that edits them makes its edit again.
 - **FIELD runs the layers more than once a floor.** At a floor's start (`field_map_continue_mode` 0) it runs them,
   places the units and walks the ready chain. When FIELD is entered again during the floor (at the load of a save made
   on it, for one) it runs them again and raises `stage.loaded` again, but places nothing and raises no `stage.ready`.

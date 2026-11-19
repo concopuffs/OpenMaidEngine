@@ -381,8 +381,8 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   - It changes the modes the user decided (spec §15.1).
   - Done when a short design note settles what the mode turns off, where its saves are shown, and how the launcher
     starts and waits for AGE, and the launcher builds it.
-- **A hook point survey for each game.** Each base mod raises six events: the experience award, `<game>.data.ready`
-  at boot, and the four stage events around FIELD's walks of the stage chains
+- **A hook point survey for each game.** Each base mod raises seven events: the experience award,
+  `<game>.data.layered` and `<game>.data.ready` at boot, and the four stage events around FIELD's walks of the stage chains
   (`superpowers/plans/2026-11-14-lua-scripting.md` §11). The appends register handlers in many more chains, each a
   place Eushully's own extensions hook: Himegari's class change, SCJUMP and information messages; Kamidori's 18 32-slot
   chains (`kamidori-data-tables.md`, "Hook chains"), among them the shop, costume sprites, CG substitution and the
