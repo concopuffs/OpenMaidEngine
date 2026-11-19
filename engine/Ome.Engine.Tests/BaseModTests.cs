@@ -75,13 +75,13 @@ public sealed class BaseModTests : IDisposable
             Assert.Equal(folder.Hash, shipped.Hash);
             // Each requires the library, which the engine ships too.
             Assert.Contains(shipped.Manifest.Requires, requirement => requirement.Id == "ome-records");
-            // Each accepts its game's record tables as data files, applied at the boot's data.layered (data patches
-            // spec §6.2), by the same handler.
+            // Each accepts its game's record tables as data files, applied at the boot's data.layered and at each
+            // stage's stage.loaded (data patches spec §6.2), by the same handlers.
             string game = shipped.Manifest.Profile!;
             Assert.Equal(ModManifest.DataOmpVersion, shipped.Manifest.OmpVersion);
             ModKind kind = Assert.Single(shipped.Manifest.Accepts);
             Assert.Equal($"{game}.tables", kind.Kind);
-            Assert.Equal([($"{game}.data.layered", "tables.lua:apply_boot")],
+            Assert.Equal([($"{game}.data.layered", "tables.lua:apply_boot"), ($"{game}.stage.loaded", "tables.lua:apply_stage")],
                          kind.At.Select(at => (at.Event, at.Handler.ToString())));
             Assert.Empty(shipped.Manifest.Data);
         }

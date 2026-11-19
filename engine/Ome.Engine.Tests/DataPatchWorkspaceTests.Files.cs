@@ -197,7 +197,7 @@ public sealed partial class DataPatchWorkspaceTests
         string first = swapped ? "test.data-b" : "test.data-a", second = swapped ? "test.data-a" : "test.data-b";
         string report = linked.Report.Render();
         Assert.Contains($"""
-              kind himegari.tables (himegari-base), at himegari.data.layered
+              kind himegari.tables (himegari-base), at himegari.data.layered and himegari.stage.loaded
                 {first} data/{first[^1..]}.toml: 1 value
                 {second} data/{second[^1..]}.toml: 1 value
                 unit.103.experience_reward: {first}, then {second} (shared path, in delivery order)

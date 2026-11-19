@@ -53,9 +53,10 @@ not identifiers such as `？？？？`, carry their id (`speaker_0x10`).
 
 ## Data edits
 
-A data file ([../data-files.md](../data-files.md)) changes the unit, item and skill tables with no Lua and no script.
-`himegari-base` accepts the kind `himegari.tables` and applies each file at `himegari.data.layered`, after every
-layer has written its tables and before TUNE reads them. This one raises the experience unit 103 gives; the comment
+A data file ([../data-files.md](../data-files.md)) changes the unit, item and skill tables, and each stage's
+enemies, with no Lua and no script. `himegari-base` accepts the kind `himegari.tables`. It applies each file's boot
+tables at `himegari.data.layered`, after every layer has written them and before TUNE reads them, and a stage's part
+at `himegari.stage.loaded`, each time FIELD has run the stage's loaders. This one raises the experience unit 103 gives; the comment
 gives the game's own value:
 
 ```toml
@@ -74,8 +75,25 @@ experience_reward = 40     # 30
   item's curve gives a bonus for (below, "Edit the boot's tables at `data.layered`"). A file that gives an item a
   shorter curve (`item.tuning_curve_ids`) lowers that item's saved levels, and they stay lowered when the mod is
   removed.
-- **The stage's enemies** are the `stage_enemy` table, which OMS names (`stage_enemy[3].unit_id`). A data file
-  cannot name it yet.
+- **A stage's enemies** are the `stage_enemy` table, which a file names through the stage: `stage.1.enemy.2` is
+  stage 1's enemy slot 2 (stage ids 1 to 999, of which STINIT writes 1 to 170; slots 0 to 29, and no stage gives
+  slot 0 a unit). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`, `max_level`,
+  `auto_level_scale_divisor`, the spawn (`spawn_tile_x` and `spawn_tile_y`, or `spawn_object_slot`), `faction_id`,
+  `difficulty_mask`, `first_clear_only`, `random_selection_weight`, and four rows whose columns have no names and are
+  given by number: `movement_routine_set_ids` and `battle_routine_set_ids` (columns 0 to 2), `required_story_flags`
+  (0 to 6) and `forbidden_story_flags` (0 to 4). None of them is saved. OMS names the slots of the stage being
+  played (`stage_enemy[2].unit_id`), as the loaders leave them. This file puts another unit in stage 1's slot 2:
+
+  ```toml
+  # data/stage1.toml
+  [stage.1.enemy.2]
+  unit_id = 810              # 200
+  ```
+
+- **The stage part holds through the stage.** FIELD runs the stage's loaders at its start, before it places the
+  units, and again each time it is entered again during the stage (below, "FIELD runs the loaders more than once a
+  stage"), and the part is applied after each run. So the edit changes what the stage places, and ADDEN, which places
+  a slot later when a stage's handler calls it, reads the edited slot too.
 - **Old names.** No table or field has been renamed yet. When one is, the old name keeps working until
   `himegari-base`'s next major version, and `diagnostics/lua.log` names each old name a file uses.
 
@@ -134,7 +152,7 @@ register their handlers in, so a handler runs after the base game's and every ap
 |---|---|---|
 | `himegari.data.layered` | `himegari.boot.data_layered` (INIT2, before TUNE): every layer has written its tables, the appends' included, and the boot has not used them yet | none |
 | `himegari.data.ready` | `himegari.boot.data_ready` (INIT2's exit): every data table is built, and TUNE has corrected the save against them | none |
-| `himegari.stage.loaded` | `himegari.stage.after_loader` (FIELD): the stage's loaders have run | `stage` (`current_stage_id`) |
+| `himegari.stage.loaded` | `himegari.stage.after_loader` (FIELD): the stage's loaders have run, and a data file's stage part is applied | `stage` (`current_stage_id`) |
 | `himegari.stage.ready` | `himegari.stage.after_ready_handlers`: once per stage, at its start, with the units placed | `stage` |
 | `himegari.stage.round` | `himegari.stage.after_round_handlers`: each player turn after the first | `stage`, `turn` (`current_stage_turn`) |
 | `himegari.stage.close` | `himegari.stage.after_close_handlers_won` and `_lost`: the stage ends | `stage`, `result` (`stage_result`: 1 won, 2 lost), `turn` |

@@ -77,10 +77,11 @@ priority = 0                   # optional; where the file comes among the event'
 
 ## The record tables: `<game>.tables`
 
-Each game's base mod accepts `<game>.tables`: edits to the game's record tables, which it applies at
-`<game>.data.layered`. That event comes once every layer has written the boot's tables (the base game's, then each
-append's) and before the boot's own work reads them, so an edit lands where an append's edit would. The game's guide
-lists its tables, the fields a file cannot set, and what the game does with an edit.
+Each game's base mod accepts `<game>.tables`: edits to the game's record tables. It applies the boot's tables at
+`<game>.data.layered`, which comes once every layer has written them (the base game's, then each append's) and
+before the boot's own work reads them, so an edit lands where an append's edit would. It applies a stage's part at
+`<game>.stage.loaded`, each time the stage's loaders have written its tables (below). The game's guide lists its
+tables, the fields a file cannot set, and what the game does with an edit.
 
 ```toml
 [unit.761]                   # a table, then a record id
@@ -89,9 +90,9 @@ experience_reward = 999      # a field with one value for each record
 drop_chance.drop_1 = 100
 ```
 
-- **The top level names a record table** of the game, and the keys below it are the table's fields, by the names the
-  global reference's "Tables" section gives. They are the names OMS uses: `unit[761].stats.max_hp` is
-  `unit.761.stats.max_hp`.
+- **The top level names a record table** of the game, or a scope (below), and the keys below it are the table's
+  fields, by the names the global reference's "Tables" section gives. They are the names OMS uses:
+  `unit[761].stats.max_hp` is `unit.761.stats.max_hp`.
 - **The record id is decimal,** with no sign and no leading zero, and inside the table.
 - **A field with a row takes its columns,** by name where the reference names the column, and by number only where it
   has none.
@@ -103,8 +104,24 @@ drop_chance.drop_1 = 100
 - **Every edit is an assignment.** A later file's value replaces an earlier one's, so the mod later in the load
   order wins.
 - **A field the save holds is refused,** by name: a load would bring the saved value back over the edit.
-- **A table that the boot does not build** (a stage's, which its loaders write when the stage starts) is refused for
-  now.
+- **A stage's table is named through its stage.** The stage's loaders write the enemy table afresh for each stage,
+  so a file gives each stage's slots under its id, and the table's short name, which the reference's "Scope stage"
+  lists:
+
+  ```toml
+  [stage.12.enemy.3]           # the scope, a stage id, the table's short name, then a slot
+  unit_id = 761
+  ```
+
+  The stage id is decimal, from 1 to 999; an id that no stage has is taken and never applied. The table's own name
+  at the top level (`stage_enemy.3`) is refused with this spelling. The base mod writes stage 12's part at
+  `<game>.stage.loaded` each time that event is raised for stage 12: at the stage's start, before the game places
+  the enemies, and each time the game runs the stage's loaders again during it, so the edit holds through the stage.
+  A boot's part and a stage's may share a file.
+- **A file with a part at an event this install does not raise is refused whole,** rather than applied in part. When
+  `<game>.stage.loaded` is not raised (a script revision its point does not name), a file with a stage part applies
+  nothing, and says why: `stage.12.enemy: stage_enemy is applied at <game>.stage.loaded, which this install does not
+  raise`. A file of the boot's tables alone is applied.
 - **A file with a problem applies nothing.** The base mod checks the whole file at its first delivery in a session,
   before it writes, and `diagnostics/lua.log` lists each problem by its path, the first on the first line:
 
@@ -117,7 +134,8 @@ drop_chance.drop_1 = 100
   deliveries in the session pass it over, with no second error. `--lua-errors halt` ends the run at the first such
   file.
 - **The tables are not saved.** A load builds them again and raises `<game>.data.layered` again while it restores,
-  and a return to title does the same, so the file is applied again each time. A save made with the mod and loaded
+  and a return to title does the same, so the file is applied again each time. A stage's table lies outside the save
+  too: a load of a save made on the stage runs its loaders again, and the stage part is applied again. A save made with the mod and loaded
   without it has the game's own values. What the game itself copies from an edited field into saved state stays in
   the save; the game's guide names such fields.
 - **An old name keeps working.** When the base mod renames a table or a field, a file may still use the old name
@@ -126,7 +144,8 @@ drop_chance.drop_1 = 100
   one cell by its old name and its current one is refused.
 - **A Lua handler on the same tables.** A hook on `<game>.data.layered` runs among the files, in load order. A hook on
   `<game>.data.ready` runs after every file, whatever the load order, because that event comes later in the boot. A
-  mod whose edits should take their place among the files by load order subscribes to `<game>.data.layered`.
+  mod whose edits should take their place among the files by load order subscribes to `<game>.data.layered`. A hook
+  on `<game>.stage.loaded` runs among the files' stage parts, in load order, in the same way.
 
 ## Defining a kind
 
@@ -206,7 +225,7 @@ The link report's Lua section lists each kind with its owner and its events, the
 values each holds, then each path that two files give a value at:
 
 ```text
-kind <game>.tables (<game>-base), at <game>.data.layered
+kind <game>.tables (<game>-base), at <game>.data.layered and <game>.stage.loaded
   example.tougher-slimes data/slimes.toml: 3 values
   example.hard-mode data/hard.toml: 212 values
   unit.12.experience_reward: example.tougher-slimes, then example.hard-mode (shared path, in delivery order)

@@ -20,11 +20,16 @@ id = "ome-records"
 version = ">=1, <2"
 
 # Data files of the game's record tables (data patches spec §6): a mod that requires this base mod ships them under
-# data/, and tables.lua checks and applies each, by the record map lua/generated/tables.lua.
+# data/, and tables.lua checks and applies each, by the record map lua/generated/tables.lua: the boot's tables at
+# kamidori.data.layered, and a stage's part each time its loaders have run.
 [[accepts]]
 kind = "kamidori.tables"
-description = "Edits to the game's record tables that the boot builds: units, items and skills."
+description = "Edits to the game's record tables: units, items and skills, which the boot builds, and each stage's enemies, which its loader writes."
 
 [[accepts.at]]
 event = "kamidori.data.layered"
 handler = "tables.lua:apply_boot"
+
+[[accepts.at]]
+event = "kamidori.stage.loaded"
+handler = "tables.lua:apply_stage"

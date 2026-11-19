@@ -1684,6 +1684,11 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.DoesNotContain(linked.Report.Lines, line => line.Message.Contains("not raised in this install", StringComparison.Ordinal));
         Assert.Equal([0x20d, 0x2cf], Offsets(linked, "INIT2"));
         Assert.Equal([0x527, 0xd58, 0x933d, 0xc785], Offsets(linked, "FIELD"));
+        // kamidori.stage.loaded is raised where INFO's third tab runs a floor's loaders again, too (data patches plan
+        // §5.2): one revision of INFO3 serves both installs.
+        Assert.Equal([0xd20], Offsets(linked, "INFO3"));
+        Assert.Equal(["kamidori.stage.after_loader", "kamidori.stage.after_info_reload"],
+                     linked.Lua.Stack.Event("kamidori.stage.loaded")!.Points);
     }
 
     [Fact]

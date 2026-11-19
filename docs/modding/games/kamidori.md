@@ -123,9 +123,10 @@ Speakers come from `unit_speaker_names` (`enum speaker` in `oms/kamidori/adv.oms
 
 ## Data edits
 
-A data file ([../data-files.md](../data-files.md)) changes the unit, item and skill tables with no Lua and no script.
-`kamidori-base` accepts the kind `kamidori.tables` and applies each file at `kamidori.data.layered`, after every
-layer has written its tables and before INIT2's own work reads them. This one changes the enemy unit 761
+A data file ([../data-files.md](../data-files.md)) changes the unit, item and skill tables, and each floor's
+enemies, with no Lua and no script. `kamidori-base` accepts the kind `kamidori.tables`. It applies each file's boot
+tables at `kamidori.data.layered`, after every layer has written them and before INIT2's own work reads them, and a
+stage's part at `kamidori.stage.loaded`, each time the floor's loaders have run. This one changes the enemy unit 761
 (緑プテテット), which appears in the first stage; the comments give the game's own values:
 
 ```toml
@@ -142,8 +143,21 @@ drop_chance.drop_1 = 100   # 30
 - **Saved fields are refused:** `item.inventory_count`, `item.growth_exp`, `item.growth_level`,
   `item.costume_enhancement_grid` and `item.costume_gem_sockets`. They lie below the saved prefix, so a load would
   bring the saved value back over the edit.
-- **`stage_enemy` is not edited by a file yet.** FIELD's loaders write it afresh for each floor, at
-  `kamidori.stage.loaded`, and the kind has no part for that event yet; a file that names it is refused.
+- **A floor's enemies** are the `stage_enemy` table, which a file names through the stage: `stage.51.enemy.3` is
+  stage 51's enemy slot 3 (stage ids 1 to 999, of which STINIT writes 1 to 968 and the appends up to 977; slots 0 to
+  29, of which FIELD places 1 to 29). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`,
+  `max_level`, `auto_level_scale_divisor`, the spawn (`spawn_tile_x` and `spawn_tile_y`, or `spawn_object_slot`),
+  `faction_id`, `difficulty_mask`, `first_visit_only`, `random_selection_weight`, and four rows whose columns have no
+  names and are given by number: `movement_routine_set_ids` and `battle_routine_set_ids` (columns 0 to 2),
+  `required_story_flags` (0 to 6) and `forbidden_story_flags` (0 to 4). None of them is saved.
+- **The stage part holds through the floor.** FIELD runs the floor's loaders at its start, before it places the
+  units, and again each time it is entered again during the floor; INFO's third tab, opened on the floor, runs them
+  again too (below, "FIELD runs the layers more than once a floor"). The part is applied after each run, so the edit
+  changes what the floor places, and the reinforcements a spawner sends later, which FIELD takes from the table
+  (`FIELD@0xa040`), follow it.
+- **The stage list and INFO show a floor as authored.** The stage list's preview (SELSTAGE) and INFO's third tab,
+  which lists each stage's enemies, run the loaders for what they show and raise no event, so they show a floor's own
+  enemies, not a file's edit.
 - **A character keeps a copy.** When a unit joins, UNITECH copies its `unit_base_stats` into the saved
   `character_stats` (`../../kamidori-data-tables.md`, "Runtime character state"). An edit to a unit's stats reaches
   a character who joins after the edit, and one who has already joined only where the game reads the definition
@@ -223,7 +237,7 @@ read-only:
 |---|---|---|
 | `kamidori.data.layered` | `kamidori.boot.data_layered` (INIT2, after op `0x143`): every layer has written its tables, the appends' included, and the boot has not used them yet | none |
 | `kamidori.data.ready` | `kamidori.boot.data_ready` (INIT2's exit): every data table is built, and INIT2's own work on them is done | none |
-| `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run | `stage` (`current_stage_id`) |
+| `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run; and `kamidori.stage.after_info_reload` (INFO3): INFO's third tab, opened on the floor, has run them again. A data file's stage part is applied there | `stage` (`current_stage_id`) |
 | `kamidori.stage.ready` | `kamidori.stage.after_ready_handlers`: once per floor, at its start, with the units placed | `stage` |
 | `kamidori.stage.round` | `kamidori.stage.after_round_handlers`: each player turn after the first | `stage`, `turn` (`current_stage_turn`) |
 | `kamidori.stage.close` | `kamidori.stage.after_close_handlers`: the floor ends | `stage`, `result` (`stage_result`: 1 won, 2 lost), `turn` |
@@ -240,6 +254,8 @@ read-only:
 - **FIELD runs the layers more than once a floor.** At a floor's start (`field_map_continue_mode` 0) it runs them,
   places the units and walks the ready chain. When FIELD is entered again during the floor (at the load of a save made
   on it, for one) it runs them again and raises `stage.loaded` again, but places nothing and raises no `stage.ready`.
+  INFO's third tab (FIELD's menu, then INFO) runs every stage's loaders for its list of enemies, then the floor's
+  again, and `stage.loaded` is raised after that second run (`kamidori.stage.after_info_reload`, `INFO3@0xd20`).
   A handler that rewrites the layers' tables makes the same change each time.
 - **`result`.** Withdrawing from a free floor (撤退, 探索を終了しますか？) closes it with 1, as winning does, and the
   floor's clear screen follows; forfeiting an arena match (試合を放棄しますか？) closes it with 2.

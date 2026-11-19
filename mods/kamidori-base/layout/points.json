@@ -64,6 +64,17 @@
       ]
     },
     {
+      "name": "kamidori.stage.after_info_reload",
+      "script": "INFO3.BIN",
+      "description": "INFO's third tab (INFO3, which FIELD opens from its menu) has run every stage's loaders for its list of enemies (INFO3@0xb88 to 0xc12), and then, on a floor (G[0x428c] set), put current_stage_id back and run that stage's loaders again (INFO3@0xcdc to 0xd1a): the floor's enemy slots, objects and rules hold the stage as authored, and the units on the field are where they were. Off a floor control does not reach here. current_stage_id is the floor's stage.",
+      "at": [
+        {
+          "fingerprint": "sha256:3b5e1175ed376da324d2a0e9080cd9831f549f6ec2cfe99a241e8043518d6bc5",
+          "site": 3360
+        }
+      ]
+    },
+    {
       "name": "kamidori.stage.after_ready_handlers",
       "script": "FIELD.BIN",
       "description": "The floor's enemies are placed and every layer's ready handler has run (stage_ready_handler_script_ids: STAGEREADY, then each append's).",
