@@ -77,15 +77,21 @@ public static class DataShapeCheck
         public int Count { get; private set; }
         public bool Over { get; private set; }
 
-        private void Problem(string reason)
+        /// <summary>Counts a problem and says whether its reason is wanted, which it is only for a problem that is
+        /// kept. Past the kept ones, and in oneOf's forms, where a failure only decides the form, a problem is counted
+        /// and nothing is built for it: a reason costs (the nearest names compare the key with every name), and a
+        /// document at the value bound can have a problem in each value.</summary>
+        private bool Keeps()
         {
             if (_silent > 0)
             {
                 _failedSilently = true;
-                return;
+                return false;
             }
-            if (Count++ < DataDocumentReader.ProblemsKept) Kept.Add((_path.ToArray(), reason));
+            return Count++ < DataDocumentReader.ProblemsKept;
         }
+
+        private void Keep(string reason) => Kept.Add((_path.ToArray(), reason));
 
         public void Value(DataShapeSchema schema, DataValue value)
         {
@@ -103,26 +109,26 @@ public static class DataShapeCheck
             }
             if (schema.Constant is { } constant)
             {
-                if (!constant) Problem("takes no value here");
+                if (!constant && Keeps()) Keep("takes no value here");
                 return;
             }
             if (schema.Types != DataShapeTypes.None && !Matches(schema.Types, value))
             {
-                Problem(schema.NotOffered ? description ?? "takes no value here"
-                                          : $"takes {TypesText(schema.Types)}, not {Describe(value)}");
+                if (Keeps())
+                    Keep(schema.NotOffered ? description ?? "takes no value here" : $"takes {TypesText(schema.Types)}, not {Describe(value)}");
                 return;
             }
-            if (schema.Enum is { } values && Scalar(value) is { } scalar && !values.Any(item => Same(item, scalar)))
-                Problem($"takes one of {string.Join(", ", values.Take(NamesShown).Select(Literal))}"
-                        + $"{(values.Count > NamesShown ? $" and {values.Count - NamesShown} more" : "")}, not {Describe(value)}");
+            if (schema.Enum is { } values && Scalar(value) is { } scalar && !values.Any(item => Same(item, scalar)) && Keeps())
+                Keep($"takes one of {string.Join(", ", values.Take(NamesShown).Select(Literal))}"
+                     + $"{(values.Count > NamesShown ? $" and {values.Count - NamesShown} more" : "")}, not {Describe(value)}");
             if (Number(value) is { } number
-                && (schema.Minimum is { } low && number < low || schema.Maximum is { } high && number > high))
-                Problem($"takes {Range(schema)}, not {Describe(value)}");
+                && (schema.Minimum is { } low && number < low || schema.Maximum is { } high && number > high) && Keeps())
+                Keep($"takes {Range(schema)}, not {Describe(value)}");
             if (schema.OneOf is { } forms)
             {
                 int passed = forms.Count(form => Passes(form, value));
-                if (passed == 0) Problem($"matches none of the {forms.Count} forms its shape gives here");
-                else if (passed > 1) Problem($"matches {passed} of the {forms.Count} forms its shape gives here, and oneOf takes one");
+                if (passed == 0 && Keeps()) Keep($"matches none of the {forms.Count} forms its shape gives here");
+                else if (passed > 1 && Keeps()) Keep($"matches {passed} of the {forms.Count} forms its shape gives here, and oneOf takes one");
             }
             if (value is DataTable table) Object(schema, table);
             else if (value is DataArray array && schema.Items is { } items)
@@ -159,10 +165,16 @@ public static class DataShapeCheck
                     Value(property, value);
                 else if (schema.DecimalKeys is { } range)
                 {
-                    if (DecimalProblem(key, range) is { } reason) Problem(reason);
+                    if (!InDecimal(key, range))
+                    {
+                        if (Keeps()) Keep(DecimalProblem(key, range));
+                    }
                     else if (schema.Additional is { } additional) Value(additional, value);
                 }
-                else if (schema.Additional is { Constant: false }) Problem(Unknown(schema, key));
+                else if (schema.Additional is { Constant: false })
+                {
+                    if (Keeps()) Keep(Unknown(schema, key));
+                }
                 else if (schema.Additional is { } additional) Value(additional, value);
                 _path.RemoveAt(_path.Count - 1);
                 if (Over) return;
@@ -250,17 +262,20 @@ public static class DataShapeCheck
         _ => item.ToString() ?? "",
     };
 
-    /// <summary>Why a key is not a whole number in decimal inside <paramref name="range"/>, or null.</summary>
-    private static string? DecimalProblem(string key, (long Minimum, long Maximum) range)
+    /// <summary>Whether a key is a whole number in decimal (digits, no sign, no leading zero but <c>0</c> itself) inside
+    /// <paramref name="range"/>.</summary>
+    private static bool InDecimal(string key, (long Minimum, long Maximum) range)
+        => key.Length > 0 && key.All(char.IsAsciiDigit) && (key == "0" || key[0] != '0') && key.Length <= 16
+           && long.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out long id)
+           && id >= range.Minimum && id <= range.Maximum;
+
+    /// <summary>Why a key that <see cref="InDecimal"/> refuses is not a whole number in decimal inside
+    /// <paramref name="range"/>.</summary>
+    private static string DecimalProblem(string key, (long Minimum, long Maximum) range)
     {
         string inRange = $"from {range.Minimum} to {range.Maximum}";
         bool digits = key.Length > 0 && key.All(char.IsAsciiDigit);
-        if (digits && (key == "0" || key[0] != '0'))
-        {
-            bool fits = key.Length <= 16 && long.TryParse(key, NumberStyles.None, CultureInfo.InvariantCulture, out long id)
-                        && id >= range.Minimum && id <= range.Maximum;
-            return fits ? null : $"a key here is a whole number {inRange}, not {key}";
-        }
+        if (digits && (key == "0" || key[0] != '0')) return $"a key here is a whole number {inRange}, not {key}";
         if (digits) return $"a key here is written without a leading zero: {key.TrimStart('0')}";
         if (key.Length > 2 && key[0] == '0' && key[1] is 'x' or 'X' && key[2..].All(char.IsAsciiHexDigit))
             return ulong.TryParse(key[2..], NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out ulong value)

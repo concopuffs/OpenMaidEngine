@@ -175,6 +175,31 @@ public sealed class DataShapeTests
     }
 
     [Fact]
+    public void PastTheFirstTwentyAProblemIsCountedAndOneOfsFormsCountNone()
+    {
+        // Thirty keys the record does not take and one value of the wrong kind: each is counted, and the first twenty
+        // are kept with their reasons (a reason is built only for a problem that is kept).
+        string many = "[unit.761]\n" + string.Concat(Enumerable.Range(0, 30).Select(k => $"experience_reward{k:D2} = 1\n"))
+                      + "name = 7\n";
+        DataShapeResult result = Check(Units, many);
+        Assert.Equal(31, result.ProblemCount);
+        Assert.Equal(20, result.Problems.Count);
+        Assert.Equal("data/a.toml:21: unit.761.experience_reward19: no such key; the nearest name here is experience_reward",
+                     result.Problems[^1].Describe(File));
+        Assert.All(result.Problems, problem => Assert.EndsWith("the nearest name here is experience_reward", problem.Text));
+
+        // A form of oneOf that fails on each of its keys counts nothing; the value that fits no form is one problem.
+        const string forms = """
+            { "type": "object", "properties": {
+                "pick": { "oneOf": [ { "type": "object", "additionalProperties": false }, { "type": "string" } ] } } }
+            """;
+        DataShapeResult picked = Check(forms, "pick = { a = 1, b = 2, c = 3 }\n");
+        Assert.Equal(1, picked.ProblemCount);
+        Assert.Equal(["data/a.toml:1: pick: matches none of the 2 forms its shape gives here"],
+                     picked.Problems.Select(problem => problem.Describe(File)));
+    }
+
+    [Fact]
     public void EnumOneOfItemsAndTheRangeAreChecked()
     {
         const string shape = """

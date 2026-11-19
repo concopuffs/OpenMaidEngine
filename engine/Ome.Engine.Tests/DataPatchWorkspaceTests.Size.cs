@@ -21,7 +21,8 @@ using Ome.Script.Abi;
 /// hold; the refused file is the bound file with every value of the wrong kind; and a file of 1,000 values, the size a
 /// balance mod writes, for what an ordinary file costs. Since milestone 3 the shipped base mod's shape refuses the
 /// refused file at the link, which is timed, and an owner without a shape (the base mod copied without it) meets it at
-/// the first delivery, where it is measured as before (plan §9.2). The measurement gives each file's
+/// the first delivery, where it is measured as before (plan §9.2); a file at the bound whose every key is unknown, the
+/// costliest problem the shape gives, is timed at the link too (§12.5). The measurement gives each file's
 /// instructions for each value, which the allowance must cover twice over, and the time the item file adds to a boot
 /// and to a load, against the plan's ceiling of 10 seconds. The budget test runs the bound files with the engine's
 /// own limits.
@@ -157,9 +158,26 @@ public sealed partial class DataPatchWorkspaceTests
         return mod;
     }
 
-    /// <summary>The refused file against the shipped base mod: its shape refuses every value at the link, the first 20
-    /// with their lines and the rest counted, and no delivery is planned. The time the link takes.</summary>
-    private TimeSpan RefusedAtTheLink(ModLinkBase linkBase, ModPackage refused)
+    /// <summary>A file at the value bound whose every key is one the unit record does not take (data patches plan
+    /// §12.5): 1,000 records of 400 keys of 30 characters. Its problem is the costliest the shape gives, since the
+    /// reason looks for the nearest names among the record's, and the check builds it only for the 20 it keeps.</summary>
+    private static string UnknownKeysFile()
+    {
+        var text = new StringBuilder();
+        for (int record = 0; record < 1000; record++)
+        {
+            text.Append("[unit.").Append(record.ToString(CultureInfo.InvariantCulture)).Append("]\n");
+            for (int key = 0; key < 400; key++)
+                text.Append("zz_unknown_field_name_").Append(record.ToString("D4", CultureInfo.InvariantCulture))
+                    .Append(key.ToString("D4", CultureInfo.InvariantCulture)).Append(" = 1\n");
+        }
+        return text.ToString();
+    }
+
+    /// <summary>A file at the value bound against the shipped base mod, whose shape refuses every value at the link:
+    /// the first 20 with their lines (the first starting <paramref name="first"/>) and the rest counted, and no delivery
+    /// is planned. The time the link takes.</summary>
+    private TimeSpan RefusedAtTheLink(ModLinkBase linkBase, ModPackage refused, string name, string first)
     {
         IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([refused], new ModLinkReport());
         _opened.AddRange(shipped);
@@ -170,8 +188,8 @@ public sealed partial class DataPatchWorkspaceTests
         var stops = linked.Report.Lines.Where(line => line.Stops).ToList();
         Assert.Equal(21, stops.Count);
         Assert.All(stops, line => Assert.Equal([refused.Id], line.Mods));
-        Assert.StartsWith("data/refused.toml:2: item.0.", stops[0].Message);
-        Assert.Equal($"data/refused.toml: and {ValueBound - 20} more problems", stops[^1].Message);
+        Assert.StartsWith($"data/{name}.toml:2: {first}", stops[0].Message);
+        Assert.Equal($"data/{name}.toml: and {ValueBound - 20} more problems", stops[^1].Message);
         Assert.Empty(linked.Lua.Stack.ContributionList);
         return watch.Elapsed;
     }
@@ -258,7 +276,7 @@ public sealed partial class DataPatchWorkspaceTests
             if (name == "refused")
             {
                 // Plan §9.2: the shipped base mod's shape refuses the file at the link, before any delivery; timed.
-                TimeSpan refusedLink = RefusedAtTheLink(linkBase, contributor);
+                TimeSpan refusedLink = RefusedAtTheLink(linkBase, contributor, name, "item.0.");
                 refusedLine = $"refused at the link in {refusedLink.TotalSeconds:F2} s; ";
                 Assert.True(refusedLink < Ceiling, refusedLine);
             }
@@ -302,6 +320,15 @@ public sealed partial class DataPatchWorkspaceTests
             }
             _output?.WriteLine(line);
         }
+
+        // Plan §12.5: every key unknown, at the value bound, is refused at the link as fast as the refused file; its
+        // reasons, the nearest names, are built for the 20 problems kept only.
+        ModPackage unknown = DataMod("kamidori", "test.size-unknown", "unknown.toml", UnknownKeysFile());
+        TimeSpan unknownLink = RefusedAtTheLink(linkBase, unknown, "unknown", "unit.0.zz_unknown_field_name_00000000: no such key");
+        string unknownLine = $"unknown: {ValueBound} values, every key unknown; refused at the link in {unknownLink.TotalSeconds:F2} s";
+        _output?.WriteLine(unknownLine);
+        Assert.True(unknownLink < Ceiling, unknownLine);
+
         Assert.Equal(4, perValue.Count);
         double largest = perValue.Values.Max();
         _output?.WriteLine($"largest {largest:F1} instructions a value; allowance {ModLimits.Default.DataInstructionsPerValue}");
