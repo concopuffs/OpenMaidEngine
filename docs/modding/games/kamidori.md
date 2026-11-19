@@ -146,8 +146,9 @@ drop_chance.drop_1 = 100   # 30
 - **The shape.** `kamidori-base` ships the kind's shape, `shapes/tables.schema.json`, generated from the same record
   map as the tables above ([../data-files.md](../data-files.md), "Shapes"). So the link, `omp check` and `omp build`
   refuse a table, field or column the reference does not name, a saved field, an id or a column out of range and a
-  value of the wrong kind, with the file's line, before the game starts. Text that code page 932 cannot encode
-  passes the shape; `kamidori-base` refuses it at the file's first delivery.
+  value of the wrong kind, with the file's line, before the game starts. `omp lua-stubs --game kamidori` writes a
+  copy, `kamidori.tables.schema.json`, and prints the `#:schema` line that points an editor at it. Text that code page
+  932 cannot encode passes the shape; `kamidori-base` refuses it at the file's first delivery.
 - **A floor's enemies** are the `stage_enemy` table, which a file names through the stage: `stage.51.enemy.3` is
   stage 51's enemy slot 3 (stage ids 1 to 999, of which STINIT writes 1 to 968 and the appends up to 977; slots 0 to
   29, of which FIELD reads 1 to 29). Its fields are the reference's: `unit_id` (0 for an empty slot), `min_level`,

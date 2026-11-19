@@ -342,4 +342,33 @@ public static class LuaStubs
         }
         return (bases, events, helpers);
     }
+
+    /// <summary>
+    /// Each accepted kind's shape (data patches plan §6.2), by kind: the owner's file under <c>shapes/</c>, which the
+    /// link has read, for each mod of <paramref name="packages"/> the stack mounted, and for the profile's shipped base
+    /// mod when <see cref="Inputs"/> added it to <paramref name="bases"/>. A copy, so that an editor outside the
+    /// repository can check a data file against it.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string> Shapes(ModLinkBase linkBase, ModLinkResult result,
+                                                             IReadOnlyList<Ome.Mods.Packages.ModPackage> packages,
+                                                             IReadOnlyList<BaseModLayout> bases)
+    {
+        var shapes = new SortedDictionary<string, string>(StringComparer.Ordinal);
+        void Take(Ome.Mods.Packages.ModPackage package)
+        {
+            foreach (var kind in package.Manifest.Accepts.Where(kind => kind.Shape != null))
+                if (package.Layout.Shapes.FirstOrDefault(file => file.Path == kind.Shape) is { } file)
+                    shapes[kind.Kind] = package.ReadText(file.File);
+        }
+        var mounted = result.Lua.Stack.Mods.Select(mod => mod.Id).ToHashSet(StringComparer.Ordinal);
+        foreach (var package in packages.Where(package => mounted.Contains(package.Id))) Take(package);
+        string profileBase = $"{linkBase.Profile}-base";
+        if (!mounted.Contains(profileBase) && bases.Any(layout => layout.ModId == profileBase)
+            && Ome.Mods.Packages.ShippedPackages.Open(profileBase) is { } shipped)
+            using (shipped) Take(shipped);
+        return shapes;
+    }
+
+    /// <summary>The file a kind's shape is written to: <c>&lt;kind&gt;.schema.json</c>.</summary>
+    public static string ShapeFileName(string kind) => kind + ".schema.json";
 }

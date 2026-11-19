@@ -74,8 +74,9 @@ experience_reward = 40     # 30
 - **The shape.** `himegari-base` ships the kind's shape, `shapes/tables.schema.json`, generated from the same record
   map as the tables above ([../data-files.md](../data-files.md), "Shapes"). So the link, `omp check` and `omp build`
   refuse a table, field or column the reference does not name, a saved field, an id or a column out of range and a
-  value of the wrong kind, with the file's line, before the game starts. Text that code page 932 cannot encode
-  passes the shape; `himegari-base` refuses it at the file's first delivery.
+  value of the wrong kind, with the file's line, before the game starts. `omp lua-stubs` writes a copy,
+  `himegari.tables.schema.json`, and prints the `#:schema` line that points an editor at it. Text that code page 932
+  cannot encode passes the shape; `himegari-base` refuses it at the file's first delivery.
 - **TUNE corrects the save against the edited items.** It lowers each saved tuning level to the last level its
   item's curve gives a bonus for (below, "Edit the boot's tables at `data.layered`"). A file that gives an item a
   shorter curve (`item.tuning_curve_ids`) lowers that item's saved levels, and they stay lowered when the mod is

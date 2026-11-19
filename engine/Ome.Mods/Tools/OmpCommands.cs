@@ -286,16 +286,23 @@ public static class OmpCommands
             var (bases, events, helpers) = Tools.LuaStubs.Inputs(linkBase, result);
             Directory.CreateDirectory(outputDirectory);
             var files = Tools.LuaStubs.Files(bases, events, helpers);
-            foreach (var (name, text) in files)
+            // Data patches plan §6.2: each accepted kind's shape beside the definitions, for an editor.
+            var shapes = Tools.LuaStubs.Shapes(linkBase, result, opened, bases);
+            foreach (var (name, text) in files.Concat(shapes.Select(pair => KeyValuePair.Create(Tools.LuaStubs.ShapeFileName(pair.Key), pair.Value))))
             {
                 File.WriteAllText(Path.Combine(outputDirectory, name), text.Replace("\r\n", "\n"), new System.Text.UTF8Encoding(false));
                 console.WriteLine($"  {name}");
             }
             string full = Path.GetFullPath(outputDirectory);
             console.WriteLine($"omp lua-stubs: {files.Count} files ({string.Join(", ", bases.Select(layout => layout.ModId))}"
-                              + $"{(bases.Count > 0 ? "; " : "")}{events.Count} events) -> {full}");
+                              + $"{(bases.Count > 0 ? "; " : "")}{events.Count} events)"
+                              + (shapes.Count == 0 ? "" : $" and the {(shapes.Count == 1 ? "shape" : "shapes")} of {string.Join(", ", shapes.Keys)}")
+                              + $" -> {full}");
             console.WriteLine($"omp lua-stubs: in your mod's .luarc.json, set \"runtime.version\": \"Lua 5.2\" and add "
                               + $"\"{full.Replace('\\', '/')}\" to \"workspace.library\"");
+            foreach (string kind in shapes.Keys)
+                console.WriteLine($"omp lua-stubs: to check a data file of {kind} in an editor that reads JSON Schema, make its "
+                                  + $"first line #:schema {new Uri(Path.Combine(full, Tools.LuaStubs.ShapeFileName(kind))).AbsoluteUri}");
             return 0;
         }
         finally

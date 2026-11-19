@@ -262,6 +262,14 @@ checks TOML against JSON Schema can read the same file:
   handler checks the rest at the first delivery, and everything when its kind has no shape. `<game>.tables` checks
   three such things there: text the save's code page cannot encode, one cell named twice through an old name, and a
   part at an event this install does not raise (above).
+- **In an editor.** `omp lua-stubs --output DIR` ([cli.md](cli.md)) copies each accepted kind's shape into `DIR` as
+  `<kind>.schema.json`, the game's `<game>.tables` included, and prints a line to put first in a data file of the
+  kind: `#:schema file:///C:/path/to/DIR/<game>.tables.schema.json`. An editor that checks TOML against JSON Schema
+  (Taplo, and the editor extensions built on it) then marks a misspelt key, a key the format does not offer, and a
+  value out of range or of the wrong kind as you type. It does not read `x-ome-decimal-keys`, so it takes any key
+  where a record id, a stage, a slot or an unnamed column goes (`unit.0x2f9`, `unit.1000`, `stage.1.enemy.30`), and
+  its messages are its own (`1 is not of type "null"` for a saved field). The link refuses those keys, and its
+  messages give the reason and the spelling to use, so run `omp check` before you ship.
 - **Work.** A check applies at most 64 schemas for each value of a file, and 100,000 more. A shape like the base mods'
   applies four to six, so only a shape built to cost time reaches the bound, which is its owner's error.
 

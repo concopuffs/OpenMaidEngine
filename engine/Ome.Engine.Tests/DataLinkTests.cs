@@ -5,6 +5,7 @@ using Ome.Engine.Sys4;
 using Ome.Mods.Launch;
 using Ome.Mods.Linking;
 using Ome.Mods.Packages;
+using Ome.Mods.Tools;
 using Ome.Script.Abi;
 using Ome.Script.Patch;
 using Ome.Scripting.Lua;
@@ -493,6 +494,19 @@ public sealed class DataLinkTests : IDisposable
         ModReportLine line = Stop(result, "the shape takes more than 100,064 steps on test.a data/a.toml");
         Assert.Equal(["test.owner"], line.Mods);
         Assert.Empty(result.Lua.Stack.ContributionList);
+    }
+
+    [Fact]
+    public void OmpLuaStubsCopiesEachKindsShapeAsItsOwnerShipsIt()
+    {
+        // Plan §6.2: the shapes of the kinds the stack accepts; the profile's base mod's is added only beside its
+        // definitions (ModLuaLinkTests), so none here.
+        ModLinkResult result = Link(ShapedOwner(), Contributor("test.a", "names = [\"x\"]\n"));
+        Assert.True(result.Succeeded, result.Report.Render());
+        IReadOnlyDictionary<string, string> shapes = LuaStubs.Shapes(Base(), result, _opened, []);
+        Assert.Equal(["test.lists"], shapes.Keys);
+        Assert.Equal(ListsShape, shapes["test.lists"]);
+        Assert.Equal("test.lists.schema.json", LuaStubs.ShapeFileName("test.lists"));
     }
 
     // ------------------------------------------------------------------------------------------- the cache

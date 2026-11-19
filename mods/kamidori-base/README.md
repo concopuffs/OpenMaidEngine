@@ -30,7 +30,7 @@ enabled mod requires it. A Lua mod reads and writes the game's cells by name thr
   `tools/base_mod_build.py --build`, and named by the manifest's `[[accepts]] shape`. The link checks each data file
   of `kamidori.tables` against it before any code runs; what it cannot say (text code page 932 cannot encode, one
   cell named twice through an old name, a part at an event this install does not raise) `lua/tables.lua` checks at
-  the file's first delivery. Do not edit it.
+  the file's first delivery. Do not edit it. `omp lua-stubs` writes a copy for an editor.
 - `layout/exports.txt` is the list of exported names, checked in: the globals, then the record tables
   (`table NAME`) and their fields (`field TABLE.FIELD`), then the scopes (`scope NAME`) and their tables' short
   names (`scope NAME.SHORT`). A name in it stays exported, as a global's name or one of its `aliases`, a table's

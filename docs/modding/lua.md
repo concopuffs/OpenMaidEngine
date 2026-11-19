@@ -772,7 +772,9 @@ starts the file anew. Two mods on one award, one dividing the amount and one dou
   writable;
 - `<base mod id>.lua`: what `require("<base mod id>")` gives, with every scalar's name in `g` and every table's in
   `table(name)`, aliases too, and its helpers with the annotations its `lua/init.lua` gives them. One is written for
-  the game's base mod even when no mod mounts it.
+  the game's base mod even when no mod mounts it;
+- `<kind>.schema.json`: each accepted kind's shape, for data files rather than Lua ([data-files.md](data-files.md),
+  "Shapes"), with the `#:schema` line that points a data file at it.
 
 Point the editor at the folder in your mod's `.luarc.json`; the command prints the line to add:
 

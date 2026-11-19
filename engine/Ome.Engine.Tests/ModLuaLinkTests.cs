@@ -1145,7 +1145,7 @@ public sealed class ModLuaLinkTests : IDisposable
         string output = Path.Combine(_root, "stubs");
         var console = new StringWriter();
         Assert.True(OmpCommands.LuaStubs(SyntheticBase(), null, [], output, console) == 0, console.ToString());
-        Assert.Equal(["events.lua", "himegari-base.lua", "maid.lua"],
+        Assert.Equal(["events.lua", "himegari-base.lua", "himegari.tables.schema.json", "maid.lua"],
                      Directory.GetFiles(output).Select(Path.GetFileName).Order(StringComparer.Ordinal));
         string names = File.ReadAllText(Path.Combine(output, "himegari-base.lua"));
         Assert.StartsWith("---@meta himegari-base\n", names);
@@ -1156,14 +1156,21 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.EndsWith("function M.give_item(item, count) end\n\nreturn M\n", names);
         Assert.DoesNotContain("\r", names);
         Assert.Contains("---@class himegari.experience.award\n", File.ReadAllText(Path.Combine(output, "events.lua")));
-        Assert.Contains("omp lua-stubs: 3 files (himegari-base; 1 events)", console.ToString());
+        Assert.Contains("omp lua-stubs: 3 files (himegari-base; 1 events) and the shape of himegari.tables", console.ToString());
         Assert.Contains("\"workspace.library\"", console.ToString());
+        // Data patches plan §6.2: the shipped base mod's shape, as the package holds it, and the line for a data file.
+        using (ModPackage shipped = ShippedPackages.Open("himegari-base")!)
+            Assert.Equal(shipped.ReadText(Assert.Single(shipped.Layout.Shapes).File),
+                         File.ReadAllText(Path.Combine(output, "himegari.tables.schema.json")));
+        Assert.Contains("omp lua-stubs: to check a data file of himegari.tables in an editor that reads JSON Schema, make its "
+                        + $"first line #:schema {new Uri(Path.Combine(Path.GetFullPath(output), "himegari.tables.schema.json")).AbsoluteUri}",
+                        console.ToString());
 
         // A stack's own base mod and events come first; the profile's is added beside them.
         string withStack = Path.Combine(_root, "stubs-stack");
         console = new StringWriter();
         Assert.True(OmpCommands.LuaStubs(SyntheticBase(), null, [EventBase().Location], withStack, console) == 0, console.ToString());
-        Assert.Equal(["events.lua", "himegari-base.lua", "maid.lua", "test-base.lua"],
+        Assert.Equal(["events.lua", "himegari-base.lua", "himegari.tables.schema.json", "maid.lua", "test-base.lua"],
                      Directory.GetFiles(withStack).Select(Path.GetFileName).Order(StringComparer.Ordinal));
         string events = File.ReadAllText(Path.Combine(withStack, "events.lua"));
         Assert.Contains("---@class test.award\n", events);
