@@ -4,8 +4,9 @@
 A base mod is the per-game package that names the game's cells for Lua mods. Its layout comes from the repository
 alone, so no game content is read:
 
-  vm-map/globals[-<game>].toml      every named global: its bank, address, shape, columns and aliases; and the
-                                    record tables ([[table]]), with what builds each
+  vm-map/globals[-<game>].toml      every named global: its bank, address, shape, columns and aliases; the
+                                    record tables ([[table]]), with what builds each; and the scopes that key
+                                    some of them ([[scope]])
   vm-map/patch-points-<game>.toml   the named patch points, copied so an exported build carries them
   mods/<game>-base/manifest.toml    the base mod's version; its major version is the version of its API
   engine/Ome.Engine/Profiles/<game>.json   each bank's saved prefix (persistence.bankDimensions), which says which
@@ -17,15 +18,18 @@ For each profile with a base mod (a hand-written mods/<game>-base/manifest.toml)
   layout/points.json    the patch points, in the form of build/games/<game>/patch-points.json
   layout/exports.txt    the names the base mod exports: its API, checked in, so a review sees a name change: the
                         globals, then the record tables (`table NAME`) and their fields (`field TABLE.FIELD`), each
-                        old name as `OLD = NAME`
+                        old name as `OLD = NAME`, then the scopes (`scope NAME`) and their tables' short names
+                        (`scope NAME.SHORT`)
   lua/generated/tables.lua   the record map (data patches spec §6.3): each record table's record count and what
                         builds it, and for each field its global, kind, row width, named columns and whether a save
-                        holds it, for the base mod's tables.lua; and the old names of tables and fields
+                        holds it, for the base mod's tables.lua; the old names of tables and fields; and each scope's
+                        ids and its tables by short name (spec §6.2)
 
 The rename rule (spec §9.1): a name the checked-in exports.txt lists stays exported, as a global's name or as one of
 its `aliases`, until the base mod's major version is raised. A rename that does neither is refused. A record table's
 name and its fields' names follow the same rule, kept as a table's `aliases` or in its `[table.field_aliases]`
-(data patches plan §9.1).
+(data patches plan §9.1). A scope and its tables' short names have no old-name form: one that leaves needs a raised
+major version.
 
   --build   write the layouts; refuses a change the rename rule forbids
   --check   exit nonzero if a layout is stale or the rename rule is broken (the core validation gate)
@@ -253,8 +257,10 @@ def _lua_key(name: str) -> str:
     return name if LUA_NAME.fullmatch(name) and name not in LUA_KEYWORDS else f"[{json.dumps(name)}]"
 
 
-def render_record_map(profile_id: str, tables: list[dict], source: str, manifest: str) -> str:
-    """The record map as a Lua module, one field to a line, so a registry change is a one-line diff."""
+def render_record_map(profile_id: str, tables: list[dict], source: str, manifest: str,
+                      scopes: list[dict] = ()) -> str:
+    """The record map as a Lua module, one field to a line, so a registry change is a one-line diff. `scopes` follows
+    `tables` when the registry has a scope: each scope's ids and its tables by short name."""
     def names_line(indent: str, key: str, names: dict[str, str]) -> str:
         return (f"{indent}{key} = {{ " + ", ".join(f"{_lua_key(old)} = {json.dumps(names[old])}" for old in sorted(names))
                 + " },")
@@ -276,7 +282,8 @@ def render_record_map(profile_id: str, tables: list[dict], source: str, manifest
              "-- record count and the part of the game that builds it (the registry's built_by), and for each field its",
              "-- global, its kind, a row's width and named columns (from 0), and state = true where the field's array",
              "-- lies in its bank's saved prefix, so that a load brings the saved value back. old_fields and old_tables",
-             "-- give each old name of a field or a table its current one.",
+             "-- give each old name of a field or a table its current one. scopes gives each scope's ids (first to",
+             "-- last) and its tables by short name, which a document reaches as scope.<id>.<short name>.",
              "return {",
              f"    format = {RECORD_MAP_FORMAT},",
              "    tables = {"]
@@ -291,6 +298,14 @@ def render_record_map(profile_id: str, tables: list[dict], source: str, manifest
             lines.append(names_line("            ", "old_fields", table["old_fields"]))
         lines += ["        },"]
     lines += ["    },"]
+    if scopes:
+        lines.append("    scopes = {")
+        for scope in sorted(scopes, key=lambda scope: scope["name"]):
+            short_names = ", ".join(f"{_lua_key(short)} = {json.dumps(scope['tables'][short])}"
+                                    for short in sorted(scope["tables"]))
+            lines.append(f"        {_lua_key(scope['name'])} = {{ first = {scope['first']}, last = {scope['last']}, "
+                         f"tables = {{ {short_names} }} }},")
+        lines.append("    },")
     old_tables = {alias: table["name"] for table in tables for alias in table.get("aliases", [])}
     if old_tables:
         lines.append(names_line("    ", "old_tables", old_tables))
@@ -298,12 +313,13 @@ def render_record_map(profile_id: str, tables: list[dict], source: str, manifest
     return "\n".join(lines) + "\n"
 
 
-TABLE_PREFIX, FIELD_PREFIX = "table ", "field "
+TABLE_PREFIX, FIELD_PREFIX, SCOPE_PREFIX = "table ", "field ", "scope "
 
 
-def exported_names(values: list[dict], tables: list[dict] = ()) -> dict[str, str | None]:
+def exported_names(values: list[dict], tables: list[dict] = (), scopes: list[dict] = ()) -> dict[str, str | None]:
     """Each exported name: None for a global's own name, the global's name for an alias. A record table is
-    `table NAME` and its field `field TABLE.FIELD` (data patches plan §9.1), an old one with its current name."""
+    `table NAME` and its field `field TABLE.FIELD` (data patches plan §9.1), an old one with its current name. A scope
+    is `scope NAME`, and each table's short name under it `scope NAME.SHORT` (data patches spec §6.2)."""
     names: dict[str, str | None] = {}
     for value in values:
         names[value["name"]] = None
@@ -318,17 +334,23 @@ def exported_names(values: list[dict], tables: list[dict] = ()) -> dict[str, str
             names[f"{FIELD_PREFIX}{name}.{field}"] = None
         for old, current in (table.get("field_aliases") or {}).items():
             names[f"{FIELD_PREFIX}{name}.{old}"] = f"{name}.{current}"
+    for scope in scopes:
+        names[SCOPE_PREFIX + scope["name"]] = None
+        for short in scope["tables"]:
+            names[f"{SCOPE_PREFIX}{scope['name']}.{short}"] = None
     return names
 
 
 def render_exports(profile_id: str, major: int, names: dict[str, str | None], source: str) -> str:
     lines = [f"# DO NOT EDIT -- generated from {source} by tools/base_mod_build.py --build",
              f"# The names {base_mod_id(profile_id)} {major} exports (Lua scripting spec §9.1): its globals, then its",
-             "# record tables and their fields (data patches plan §9.1). Each stays until the major version changes:",
-             "# a renamed global, table or field keeps its old name, listed as OLD = NAME.",
+             "# record tables and their fields (data patches plan §9.1), then its scopes and their tables' short names",
+             "# (data patches spec §6.2). Each stays until the major version changes: a renamed global, table or field",
+             "# keeps its old name, listed as OLD = NAME.",
              f"major = {major}"]
     def group(name: str) -> int:
-        return 1 if name.startswith(TABLE_PREFIX) else 2 if name.startswith(FIELD_PREFIX) else 0
+        return (1 if name.startswith(TABLE_PREFIX) else 2 if name.startswith(FIELD_PREFIX)
+                else 3 if name.startswith(SCOPE_PREFIX) else 0)
     for name in sorted(names, key=lambda name: (group(name), name)):
         lines.append(name if names[name] is None else f"{name} = {names[name]}")
     return "\n".join(lines) + "\n"
@@ -378,7 +400,14 @@ def rename_errors(profile_id: str, released: tuple[int | None, set[str]] | None,
     dropped = released_names - names.keys()
     errors = []
     for name in sorted(dropped):
-        if name.startswith(FIELD_PREFIX):
+        if name.startswith(SCOPE_PREFIX):
+            scope, _, short = name[len(SCOPE_PREFIX):].partition(".")
+            if short and SCOPE_PREFIX + scope in dropped:
+                continue  # A dropped scope's error stands for its short names.
+            what = f"the short name '{scope}.{short}'" if short else f"the scope '{scope}'"
+            errors.append(f"{base_mod_id(profile_id)} {major} exports {what}, which the registry no longer has: a "
+                          f"scope and its short names have no old-name form, so raise the base mod's major version")
+        elif name.startswith(FIELD_PREFIX):
             table, _, field = name[len(FIELD_PREFIX):].partition(".")
             # A dropped table's error stands for its fields.
             if (f"{FIELD_PREFIX}{current_table.get(table, table)}.{field}" in names
@@ -418,7 +447,8 @@ def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
     values, shape_errors = layout_globals(list(curated.values()), source)
     errors += shape_errors
     tables = globals_build.load_tables(registry)
-    table_errors = globals_build.lint_tables(tables, curated)
+    scopes = globals_build.load_scopes(registry)
+    table_errors = globals_build.lint_tables(tables, curated) + globals_build.lint_scopes(scopes, tables, curated)
     errors += [f"{source}: {message}" for message in table_errors]
     prefixes, prefix_error = saved_prefixes(manifest) if tables else (None, None)
     if prefix_error:
@@ -429,7 +459,7 @@ def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
         errors += map_errors
     points, point_errors = render_points(profile_id, points_registry)
     errors += point_errors
-    names = exported_names(values, tables if not table_errors else [])
+    names = exported_names(values, tables if not table_errors else [], scopes if not table_errors else [])
     exports = root / "layout" / "exports.txt"
     released = parse_exports(exports.read_text(encoding="utf-8")) if exports.is_file() else None
     errors += rename_errors(profile_id, released, major, names)
@@ -437,7 +467,8 @@ def generate(profile_id: str, mods: Path = MODS, registry: Path | None = None,
              root / "layout" / "points.json": points,
              exports: render_exports(profile_id, major, names, source),
              root / "lua" / "generated" / "tables.lua": render_record_map(profile_id, record_map, source,
-                                                                          _shown(manifest))}
+                                                                          _shown(manifest),
+                                                                          scopes if not table_errors else [])}
     return files, errors
 
 

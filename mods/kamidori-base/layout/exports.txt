@@ -1,7 +1,8 @@
 # DO NOT EDIT -- generated from vm-map/globals-kamidori.toml by tools/base_mod_build.py --build
 # The names kamidori-base 1 exports (Lua scripting spec §9.1): its globals, then its
-# record tables and their fields (data patches plan §9.1). Each stays until the major version changes:
-# a renamed global, table or field keeps its old name, listed as OLD = NAME.
+# record tables and their fields (data patches plan §9.1), then its scopes and their tables' short names
+# (data patches spec §6.2). Each stays until the major version changes: a renamed global, table or field
+# keeps its old name, listed as OLD = NAME.
 major = 1
 adv_substituted_image_resource
 affinity_damage_percent_by_level
@@ -778,3 +779,5 @@ field unit.unused_0x2bd024
 field unit.voice
 field unit.voice_family_unit_id
 field unit.voice_setting_slot
+scope stage
+scope stage.enemy

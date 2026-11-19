@@ -408,6 +408,66 @@ def test_old_names_rename_rule():
         check(not errors, f"a field dropped with a raised major version passes ({errors})")
 
 
+# A scope (data patches spec §6.2): the table foe, keyed by stage as enemy, ids 1 to 99.
+SCOPED = HEROES + entry("0x300", "foe_units", "int[3]") + entry("0x310", "foe_routines", "int[3][2]") + '''
+[[table]]
+name = "foe"
+records = 3
+built_by = "stage"
+
+[table.fields]
+unit = "foe_units"
+routines = "foe_routines"
+
+[[scope]]
+name = "stage"
+first = 1
+last = 99
+
+[scope.tables]
+enemy = "foe"
+'''
+
+
+def test_scopes():
+    with tempfile.TemporaryDirectory() as directory:
+        mods, source = workspace(Path(directory), SCOPED)
+        files, errors = generate(mods, source)
+        check(not errors, f"a registry with a scope generates ({errors})")
+        lines = record_map(files).splitlines()
+        at = lines.index("    scopes = {")
+        check(lines[at - 1] == "    }," and lines[at + 1:at + 3]
+              == ['        stage = { first = 1, last = 99, tables = { enemy = "foe" } },', "    },"],
+              f"the record map gives each scope its ids and its tables by short name, after the tables ({lines[at:]})")
+        check('                routines = { global = "foe_routines", kind = "integer", width = 2 },' in lines,
+              "a scoped table's fields are mapped as any table's")
+        exports = exports_of(files)
+        check(exports[-2:] == ["scope stage", "scope stage.enemy"],
+              f"the scope and its short names close exports.txt ({exports[-3:]})")
+        with tempfile.TemporaryDirectory() as other:
+            plain_mods, plain_source = workspace(Path(other), HEROES)
+            plain, _ = generate(plain_mods, plain_source)
+            check("scopes =" not in record_map(plain), "a map without a scope has no scopes list")
+        write(files)
+        # The short name renamed in the same major version is refused, and so is the scope; a raised one allows both.
+        source.write_text(SCOPED.replace("enemy = \"foe\"", "foe = \"foe\""), encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(len(errors) == 1 and "exports the short name 'stage.enemy', which the registry no longer has" in errors[0]
+              and "raise the base mod's major version" in errors[0], f"a short name that leaves is refused ({errors})")
+        source.write_text(SCOPED.replace('name = "stage"', 'name = "level"'), encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(len(errors) == 1 and "exports the scope 'stage'" in errors[0],
+              f"a scope that leaves is refused, and its error stands for its short names ({errors})")
+        (mods / "test-base" / "manifest.toml").write_text('version = "2.0.0"\n', encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(not errors, f"a raised major version lets a scope go ({errors})")
+        # The registry's scope errors block the build.
+        source.write_text(SCOPED.replace('enemy = "foe"', 'enemy = "ghost"'), encoding="utf-8")
+        _, errors = generate(mods, source)
+        check(any("scope 'stage': enemy names 'ghost', which is no table of the registry" in error for error in errors),
+              f"a scope's lint error blocks the build ({errors})")
+
+
 def main():
     test_shapes()
     test_layout()
@@ -420,6 +480,7 @@ def main():
     test_old_names()
     test_old_names_lint()
     test_old_names_rename_rule()
+    test_scopes()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

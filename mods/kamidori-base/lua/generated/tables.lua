@@ -3,7 +3,8 @@
 -- record count and the part of the game that builds it (the registry's built_by), and for each field its
 -- global, its kind, a row's width and named columns (from 0), and state = true where the field's array
 -- lies in its bank's saved prefix, so that a load brings the saved value back. old_fields and old_tables
--- give each old name of a field or a table its current one.
+-- give each old name of a field or a table its current one. scopes gives each scope's ids (first to
+-- last) and its tables by short name, which a document reaches as scope.<id>.<short name>.
 return {
     format = 1,
     tables = {
@@ -170,5 +171,8 @@ return {
                 voice_setting_slot = { global = "unit_voice_setting_slot", kind = "integer" },
             },
         },
+    },
+    scopes = {
+        stage = { first = 1, last = 999, tables = { enemy = "stage_enemy" } },
     },
 }
