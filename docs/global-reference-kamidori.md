@@ -162,7 +162,7 @@ SKINIT skill records keyed by skill id.
 
 Built by: `stage`.
 
-The current stage's enemy placements, keyed by placement slot: STINIT2 writes them and FIELD spawns from them.
+The current stage's enemy slots. STINIT, then each append's $n$STINIT, the stage loaders FIELD calls (FIELD@0x50c), zero all 30 slots of each array and write the stage's. FIELD places slots 1 to 29 at a floor's start (FIELD@0xa9d) and spawns from them later in the floor (reinforcements, FIELD@0xa040); ADDEN and CHANGEEN read them too, and SETEN copies a slot's routines into its unit. SELSTAGE, ORGANIZE, INFO3, ARENA and INIT2 at a load run the loaders as well. A data file reaches it through the stage scope.
 
 | field | global | address | type |
 |---|---|---|---|
@@ -177,6 +177,20 @@ The current stage's enemy placements, keyed by placement slot: STINIT2 writes th
 | min_level | stage_enemy_min_level | `0x140a4a` | `int[30]` |
 | max_level | stage_enemy_max_level | `0x140a68` | `int[30]` |
 | auto_level_scale_divisor | stage_enemy_auto_level_scale_divisor | `0x140a86` | `int[30]` |
+| movement_routine_set_ids | stage_enemy_movement_routine_set_ids | `0x140aa4` | `int[30][3]` |
+| battle_routine_set_ids | stage_enemy_battle_routine_set_ids | `0x140afe` | `int[30][3]` |
+| required_story_flags | stage_enemy_required_story_flags | `0x140b58` | `int[30][7]` |
+| forbidden_story_flags | stage_enemy_forbidden_story_flags | `0x140c2a` | `int[30][5]` |
+
+### Scope stage
+
+Ids 1 to 999. A data file reaches each table below as `stage.<id>.<name>.<record>` and not by its own name (data patches spec §6.2).
+
+A stage, by current_stage_id. STINIT's stages are 1 to 968 and the appends' reach 977, and the per-stage arrays hold 1,000 (stage_display_names). kamidori-base applies a scoped table at kamidori.stage.loaded, whose stage is the id.
+
+| name | table |
+|---|---|
+| enemy | stage_enemy |
 
 ## choice-output
 

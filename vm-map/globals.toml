@@ -5146,3 +5146,35 @@ resource_deltas = "skill_resource_deltas"
 proc_chance_percent = "skill_proc_chance_percent"
 battle_animation_id = "skill_battle_animation_id"
 handler_script_id = "skill_handler_script_id"
+
+[[table]]
+name = "stage_enemy"
+records = 30
+built_by = "stage"
+usage = "The current stage's enemy slots. STINIT, the stage loader FIELD calls (FIELD@0x200), zeroes all 30 slots of each array and writes the stage's (no stage gives slot 0 a unit). FIELD places the slots at the stage's start (FIELD@0x7f4), ADDEN places one later when a stage's handler calls it (current_stage_enemy_spawn_slot), and SETEN copies a slot's routines into its entity. A data file reaches it through the stage scope."
+
+[table.fields]
+spawn_tile_x = "stage_enemy_spawn_tile_x"
+spawn_tile_y = "stage_enemy_spawn_tile_y"
+spawn_object_slot = "stage_enemy_spawn_object_slot"
+faction_id = "stage_enemy_faction_id"
+difficulty_mask = "stage_enemy_difficulty_mask"
+first_clear_only = "stage_enemy_first_clear_only"
+random_selection_weight = "stage_enemy_random_selection_weight"
+unit_id = "stage_enemy_unit_id"
+min_level = "stage_enemy_min_level"
+max_level = "stage_enemy_max_level"
+auto_level_scale_divisor = "stage_enemy_auto_level_scale_divisor"
+movement_routine_set_ids = "stage_enemy_movement_routine_set_ids"
+battle_routine_set_ids = "stage_enemy_battle_routine_set_ids"
+required_story_flags = "stage_enemy_required_story_flags"
+forbidden_story_flags = "stage_enemy_forbidden_story_flags"
+
+[[scope]]
+name = "stage"
+first = 1
+last = 999
+usage = "A stage, by current_stage_id. STINIT's stages are 1 to 170, and the per-stage arrays hold 1,000 (stage_loader_script_ids). himegari-base applies a scoped table at himegari.stage.loaded, whose stage is the id."
+
+[scope.tables]
+enemy = "stage_enemy"

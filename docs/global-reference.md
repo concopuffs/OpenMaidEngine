@@ -117,6 +117,40 @@ SKINIT skill records keyed by skill id, with the per-skill acquisition state.
 | battle_animation_id | skill_battle_animation_id | `0xaaa1e` | `int[300]` |
 | handler_script_id | skill_handler_script_id | `0xaab4a` | `int[300]` |
 
+### stage_enemy[30]
+
+Built by: `stage`.
+
+The current stage's enemy slots. STINIT, the stage loader FIELD calls (FIELD@0x200), zeroes all 30 slots of each array and writes the stage's (no stage gives slot 0 a unit). FIELD places the slots at the stage's start (FIELD@0x7f4), ADDEN places one later when a stage's handler calls it (current_stage_enemy_spawn_slot), and SETEN copies a slot's routines into its entity. A data file reaches it through the stage scope.
+
+| field | global | address | type |
+|---|---|---|---|
+| spawn_tile_x | stage_enemy_spawn_tile_x | `0xe773f` | `int[30]` |
+| spawn_tile_y | stage_enemy_spawn_tile_y | `0xe775d` | `int[30]` |
+| spawn_object_slot | stage_enemy_spawn_object_slot | `0xe777b` | `int[30]` |
+| faction_id | stage_enemy_faction_id | `0xe7799` | `int[30]` |
+| difficulty_mask | stage_enemy_difficulty_mask | `0xe77b7` | `int[30]` |
+| first_clear_only | stage_enemy_first_clear_only | `0xe77d5` | `int[30]` |
+| random_selection_weight | stage_enemy_random_selection_weight | `0xe77f3` | `int[30]` |
+| unit_id | stage_enemy_unit_id | `0xe7811` | `int[30]` |
+| min_level | stage_enemy_min_level | `0xe782f` | `int[30]` |
+| max_level | stage_enemy_max_level | `0xe784d` | `int[30]` |
+| auto_level_scale_divisor | stage_enemy_auto_level_scale_divisor | `0xe786b` | `int[30]` |
+| movement_routine_set_ids | stage_enemy_movement_routine_set_ids | `0xe7889` | `int[30][3]` |
+| battle_routine_set_ids | stage_enemy_battle_routine_set_ids | `0xe78e3` | `int[30][3]` |
+| required_story_flags | stage_enemy_required_story_flags | `0xe793d` | `int[30][7]` |
+| forbidden_story_flags | stage_enemy_forbidden_story_flags | `0xe7a0f` | `int[30][5]` |
+
+### Scope stage
+
+Ids 1 to 999. A data file reaches each table below as `stage.<id>.<name>.<record>` and not by its own name (data patches spec §6.2).
+
+A stage, by current_stage_id. STINIT's stages are 1 to 170, and the per-stage arrays hold 1,000 (stage_loader_script_ids). himegari-base applies a scoped table at himegari.stage.loaded, whose stage is the id.
+
+| name | table |
+|---|---|
+| enemy | stage_enemy |
+
 ## choice-output
 
 | address | name | conf | source | usage |

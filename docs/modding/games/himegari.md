@@ -74,7 +74,8 @@ experience_reward = 40     # 30
   item's curve gives a bonus for (below, "Edit the boot's tables at `data.layered`"). A file that gives an item a
   shorter curve (`item.tuning_curve_ids`) lowers that item's saved levels, and they stay lowered when the mod is
   removed.
-- **The stage's enemies** (`stage_enemy_*`) have no record table yet, so a file cannot name them.
+- **The stage's enemies** are the `stage_enemy` table, which OMS names (`stage_enemy[3].unit_id`). A data file
+  cannot name it yet.
 - **Old names.** No table or field has been renamed yet. When one is, the old name keeps working until
   `himegari-base`'s next major version, and `diagnostics/lua.log` names each old name a file uses.
 

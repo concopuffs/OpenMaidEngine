@@ -720,12 +720,16 @@ field skill.short_description
 field skill.sort_key
 field skill.upgrade_family_id
 field stage_enemy.auto_level_scale_divisor
+field stage_enemy.battle_routine_set_ids
 field stage_enemy.difficulty_mask
 field stage_enemy.faction_id
 field stage_enemy.first_visit_only
+field stage_enemy.forbidden_story_flags
 field stage_enemy.max_level
 field stage_enemy.min_level
+field stage_enemy.movement_routine_set_ids
 field stage_enemy.random_selection_weight
+field stage_enemy.required_story_flags
 field stage_enemy.spawn_object_slot
 field stage_enemy.spawn_tile_x
 field stage_enemy.spawn_tile_y

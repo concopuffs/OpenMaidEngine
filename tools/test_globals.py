@@ -245,6 +245,43 @@ def test_tables_lint():
         entries, _ = G.load_toml(toml)
         check(G.lint_tables(G.load_tables(toml), entries) == [], f"{toml.name} tables lint clean")
 
+def test_scopes_lint():
+    base = {"category": "data-table", "source": "inference", "confidence": "med"}
+    entries = {("G", 0x10): {**base, "_addr": 0x10, "name": "foe_units", "type": "int[4]"},
+               ("G", 0x20): {**base, "_addr": 0x20, "name": "hero_levels", "type": "int[4]"}}
+    tables = [{"name": "foe", "records": 4, "built_by": "stage", "fields": {"unit": "foe_units"}},
+              {"name": "hero", "records": 4, "built_by": "boot", "aliases": ["heroes"], "fields": {"level": "hero_levels"}}]
+    good = [{"name": "stage", "first": 1, "last": 999, "tables": {"enemy": "foe"}}]
+    check(G.lint_scopes(good, tables, entries) == [], "a scope over a table of the registry lints clean")
+    bad = [{"name": "Stage", "first": 1, "last": 2, "tables": {"enemy": "foe"}},
+           {"name": "hero", "first": 1, "last": 2, "tables": {"a": "hero"}},
+           {"name": "heroes", "first": 1, "last": 2, "tables": {"b": "hero"}},
+           {"name": "foe_units", "first": 0, "last": 0, "tables": {"Enemy": "foe"}},
+           {"name": "upside", "first": 3, "last": 2, "tables": {"c": "nope"}},
+           {"name": "upside", "first": True, "last": 2},
+           {"name": "empty", "first": 0, "last": 1, "tables": {}}]
+    errors = G.lint_scopes(bad, tables, entries)
+    for needle in ("'Stage': name must be", "'hero': also names a table", "'heroes': also an alias of a table",
+                   "'foe_units': also names a global", "short name 'Enemy' must be", "c names 'nope', which is no table",
+                   "'upside': first and last must be", "'upside': defined twice", "'empty': needs a [scope.tables] map",
+                   "table hero is named by scope 'hero' already"):
+        check(any(needle in e for e in errors), f"lint_scopes flags {needle!r} ({errors})")
+    for toml in sorted(Path(G.TOML_DEFAULT).parent.glob("globals*.toml")):
+        entries, _ = G.load_toml(toml)
+        scopes = G.load_scopes(toml)
+        check(G.lint_scopes(scopes, G.load_tables(toml), entries) == [], f"{toml.name} scopes lint clean")
+        check([(s["name"], s["first"], s["last"], s["tables"]) for s in scopes]
+              == [("stage", 1, 999, {"enemy": "stage_enemy"})], f"{toml.name} keys stage_enemy by stage, ids 1 to 999")
+    registry = paths.VM_MAP / "globals.toml"
+    merged = G.merge(G.load_toml(registry)[0], {})
+    tables, scopes = G.load_tables(registry), G.load_scopes(registry)
+    reference = G.emit_reference_md(merged, tables, scopes)
+    check("### Scope stage" in reference and "| enemy | stage_enemy |" in reference
+          and "Ids 1 to 999." in reference, "the reference shows a scope, its ids and its tables")
+    out = __import__("json").loads(G.emit_json(merged, {}, tables, scopes))
+    check([(s["name"], s["first"], s["last"], s["tables"]) for s in out["scopes"]]
+          == [("stage", 1, 999, {"enemy": "stage_enemy"})], "the JSON lists the scopes")
+
 def test_adv_layer_surface_slot_evidence():
     scene = sys4load.load(paths.scripts()["SC0000.BIN"])
     expected = {
@@ -775,6 +812,7 @@ if __name__ == "__main__":
     test_lint_catches_bad_vocab()
     test_lint_warns_on_overlapping_arrays()
     test_tables_lint()
+    test_scopes_lint()
     test_adv_layer_surface_slot_evidence()
     test_selected_movement_route_grid_evidence()
     test_battle_triggered_passive_skill_flags_evidence()

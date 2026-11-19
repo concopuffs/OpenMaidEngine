@@ -440,6 +440,7 @@ usable_action_max_range
 usable_action_min_range
 table item
 table skill
+table stage_enemy
 table unit
 field item.attack_element
 field item.category
@@ -475,6 +476,21 @@ field skill.proc_chance_percent
 field skill.resource_deltas
 field skill.sort_key
 field skill.status_levels
+field stage_enemy.auto_level_scale_divisor
+field stage_enemy.battle_routine_set_ids
+field stage_enemy.difficulty_mask
+field stage_enemy.faction_id
+field stage_enemy.first_clear_only
+field stage_enemy.forbidden_story_flags
+field stage_enemy.max_level
+field stage_enemy.min_level
+field stage_enemy.movement_routine_set_ids
+field stage_enemy.random_selection_weight
+field stage_enemy.required_story_flags
+field stage_enemy.spawn_object_slot
+field stage_enemy.spawn_tile_x
+field stage_enemy.spawn_tile_y
+field stage_enemy.unit_id
 field unit.auto_level_scale_divisor
 field unit.battle_cutin_asset_ids
 field unit.battle_portrait_asset_ids

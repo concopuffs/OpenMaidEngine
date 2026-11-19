@@ -13,7 +13,8 @@ A registry may also declare `[[table]]` entries: Open Maid Script tables (record
 arrays, design spec §5.3), emitted to the JSON's `tables` list and the reference doc. A global's `aliases` keep the
 names it had before a rename, which a base mod still exports (tools/base_mod_build.py; Lua scripting spec §9.1). So do
 a table's `aliases` and its `[table.field_aliases]` (old name = current field), which a data file may still write
-(data patches plan §9.1).
+(data patches plan §9.1). A `[[scope]]` entry keys tables by a scope of the game, such as a stage (data patches spec
+§6.2): its ids' range and, in `[scope.tables]`, each table's short name under it; the JSON lists them as `scopes`.
 See docs/superpowers/specs/2026-07-07-globals-registry-and-story-flags-design.md."""
 from __future__ import annotations
 import os, re, sys, json, math, argparse, collections, tomllib
@@ -152,6 +153,59 @@ def load_tables(path) -> list[dict]:
     the parallel arrays that hold one kind of record; a field maps to a curated global by name."""
     data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
     return [dict(t) for t in data.get("table", [])]
+
+
+def load_scopes(path) -> list[dict]:
+    """The registry's `[[scope]]` entries, in order (data patches spec §6.2): a scope of the game that keys some of
+    its record tables, such as a stage, with its ids' range and its tables' short names."""
+    data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
+    return [dict(s) for s in data.get("scope", [])]
+
+
+def lint_scopes(scopes: list[dict], tables: list[dict], entries: dict) -> list[str]:
+    """Errors: a scope name that is not a lowercase identifier, a repeated scope, and a scope named like a table, a
+    table's alias or a global (a data file's top level names either); `first` and `last` that are not whole numbers
+    with 0 <= first <= last; a `[scope.tables]` map that is missing or empty, a short name that is not a lowercase
+    identifier, one that names no table of the registry, and a table under two scopes."""
+    errors: list[str] = []
+    globals_by_name = {e["name"] for e in entries.values() if e.get("name")}
+    table_names = {t.get("name") for t in tables if isinstance(t.get("name"), str)}
+    aliases = {alias for t in tables for alias in (t.get("aliases") or []) if isinstance(alias, str)}
+    seen: set[str] = set()
+    owner: dict[str, str] = {}
+    for s in scopes:
+        name = s.get("name")
+        tag = f"scope {name!r}"
+        if not isinstance(name, str) or not IDENTIFIER.fullmatch(name):
+            errors.append(f"{tag}: name must be a lowercase identifier")
+            continue
+        if name in seen:
+            errors.append(f"{tag}: defined twice")
+        seen.add(name)
+        if name in table_names:
+            errors.append(f"{tag}: also names a table")
+        elif name in aliases:
+            errors.append(f"{tag}: also an alias of a table")
+        if name in globals_by_name:
+            errors.append(f"{tag}: also names a global")
+        first, last = s.get("first"), s.get("last")
+        if not all(isinstance(v, int) and not isinstance(v, bool) for v in (first, last)) or not 0 <= first <= last:
+            errors.append(f"{tag}: first and last must be whole numbers with 0 <= first <= last, the range of its ids")
+        short_names = s.get("tables")
+        if not isinstance(short_names, dict) or not short_names:
+            errors.append(f"{tag}: needs a [scope.tables] map, each short name to a table")
+            continue
+        for short, table in short_names.items():
+            if not IDENTIFIER.fullmatch(short):
+                errors.append(f"{tag}: short name {short!r} must be a lowercase identifier")
+            if not isinstance(table, str) or table not in table_names:
+                errors.append(f"{tag}: {short} names {table!r}, which is no table of the registry")
+            elif table in owner:
+                errors.append(f"{tag}: table {table} is named by scope {owner[table]!r} already; a table has one "
+                              f"scope and one short name")
+            else:
+                owner[table] = name
+    return errors
 
 
 def lint_tables(tables: list[dict], entries: dict) -> list[str]:
@@ -351,10 +405,10 @@ def merge(curated: dict, auto: dict) -> Registry:
     return out
 
 
-def emit_json(merged: Registry, meta: dict, tables: list[dict] = ()) -> str:
+def emit_json(merged: Registry, meta: dict, tables: list[dict] = (), scopes: list[dict] = ()) -> str:
     """`globals` is the legacy address-keyed view (the integer bank wins where a string global shares its
     address); `cells` keys every entry by bank and address (`G:0x0`, `GS:0x0`); `tables` lists the OMS
-    tables in declaration order."""
+    tables in declaration order, and `scopes` the scopes that key some of them."""
     ordered = sorted(merged.items(), key=lambda item: (item[0][1], item[0][0] != "G"))
     legacy: dict[str, dict] = {}
     for _, e in ordered:
@@ -362,8 +416,14 @@ def emit_json(merged: Registry, meta: dict, tables: list[dict] = ()) -> str:
     out = {"meta": {**GEN_JSON_META, **meta},
            "globals": legacy,
            "cells": {cell_key(bank, addr): e for (bank, addr), e in sorted(merged.items())},
-           "tables": [table_json(t) for t in tables]}
+           "tables": [table_json(t) for t in tables],
+           "scopes": [scope_json(s) for s in scopes]}
     return json.dumps(out, ensure_ascii=False, indent=2) + "\n"
+
+
+def scope_json(s: dict) -> dict:
+    return {"name": s["name"], "first": s["first"], "last": s["last"], "usage": s.get("usage", ""),
+            "tables": dict(s["tables"])}
 
 
 def table_json(t: dict) -> dict:
@@ -377,7 +437,7 @@ def table_json(t: dict) -> dict:
     return out
 
 
-def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
+def emit_reference_md(merged: Registry, tables: list[dict] = (), scopes: list[dict] = ()) -> str:
     source = f"vm-map/{TOML_DEFAULT.name}"
     L = [f"<!-- DO NOT EDIT -- generated from {source} by tools/globals_build.py --build -->",
          f"# Global Variable Reference — {paths.CONTEXT.profile_id} (generated)", "",
@@ -403,6 +463,16 @@ def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
                 address = e["address"] if e["bank"] == "G" else f"{e['bank']} {e['address']}"
                 shown = field + (f" (formerly {', '.join(old_fields[field])})" if old_fields.get(field) else "")
                 L.append(f"| {shown} | {global_name} | `{address}` | `{e['type']}` |")
+            L.append("")
+        for s in scopes:
+            L += [f"### Scope {s['name']}", "",
+                  f"Ids {s['first']} to {s['last']}. A data file reaches each table below as "
+                  f"`{s['name']}.<id>.<name>.<record>` and not by its own name (data patches spec §6.2).", ""]
+            if s.get("usage"):
+                L += [s["usage"], ""]
+            L += ["| name | table |", "|---|---|"]
+            for short, table in s["tables"].items():
+                L.append(f"| {short} | {table} |")
             L.append("")
     by_cat = collections.defaultdict(list)
     for key, e in merged.items():
@@ -430,20 +500,23 @@ def emit_reference_md(merged: Registry, tables: list[dict] = ()) -> str:
     return "\n".join(L).rstrip("\n") + "\n"
 
 
-def _linted_merge(tp: Path, auto_map: Path) -> tuple[Registry, dict, list[dict]] | None:
-    """Lint the registry against itself and the auto map, then merge; None (errors printed) when it does not lint."""
+def _linted_merge(tp: Path, auto_map: Path) -> tuple[Registry, dict, list[dict], list[dict]] | None:
+    """Lint the registry against itself and the auto map, then merge: the globals, the meta, the tables and the
+    scopes. None (errors printed) when it does not lint."""
     curated, meta = load_toml(tp)
     auto = load_auto(auto_map)
     all_addrs = curated.addresses() | {int(a, 16) for a in auto.get("globals", {})}
     errors, warnings = lint(curated, all_addrs)
     tables = load_tables(tp)
+    scopes = load_scopes(tp)
     errors += lint_tables(tables, curated)
+    errors += lint_scopes(scopes, tables, curated)
     errors += lint_aliases(curated)
     for m in warnings: print("warn:", m)
     if errors:
         for m in errors: print("error:", m)
         return None
-    return merge(curated, auto), meta, tables
+    return merge(curated, auto), meta, tables, scopes
 
 
 def _shown(path: Path) -> str:
@@ -460,8 +533,8 @@ def check(tp: Path, auto_map: Path = AUTO_MAP, reference_doc: Path = REFERENCE_D
     prepared = _linted_merge(tp, auto_map)
     if prepared is None:
         return 1
-    merged, _, tables = prepared
-    expected = emit_reference_md(merged, tables)
+    merged, _, tables, scopes = prepared
+    expected = emit_reference_md(merged, tables, scopes)
     current = reference_doc.read_text(encoding="utf-8") if reference_doc.is_file() else None
     if current != expected:
         print(f"stale: {_shown(reference_doc)}; run globals_build.py "
@@ -479,10 +552,10 @@ def build_json(tp: Path, auto_map: Path = AUTO_MAP, output: Path | None = None) 
     prepared = _linted_merge(tp, auto_map)
     if prepared is None:
         return 1
-    merged, meta, tables = prepared
+    merged, meta, tables, scopes = prepared
     output = output or paths.BUILD / "globals.json"
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(emit_json(merged, meta, tables), encoding="utf-8", newline="\n")
+    output.write_text(emit_json(merged, meta, tables, scopes), encoding="utf-8", newline="\n")
     without_map = "" if Path(auto_map).is_file() else f" (no auto map at {_shown(Path(auto_map))}: curated globals only)"
     print(f"build-json: {len(merged)} globals, {len(tables)} tables -> {_shown(output)}{without_map}")
     return 0
@@ -492,10 +565,11 @@ def build(tp: Path, auto_map: Path = AUTO_MAP) -> int:
     prepared = _linted_merge(tp, auto_map)
     if prepared is None:
         return 1
-    merged, meta, tables = prepared
+    merged, meta, tables, scopes = prepared
     paths.BUILD.mkdir(parents=True, exist_ok=True)
-    (paths.BUILD / "globals.json").write_text(emit_json(merged, meta, tables), encoding="utf-8", newline="\n")
-    REFERENCE_DOC.write_text(emit_reference_md(merged, tables), encoding="utf-8", newline="\n")
+    (paths.BUILD / "globals.json").write_text(emit_json(merged, meta, tables, scopes), encoding="utf-8",
+                                               newline="\n")
+    REFERENCE_DOC.write_text(emit_reference_md(merged, tables, scopes), encoding="utf-8", newline="\n")
     print(f"build: {len(merged)} globals, {len(tables)} tables -> "
           f"{(paths.BUILD / 'globals.json').relative_to(paths.REPO)}, {REFERENCE_DOC.relative_to(paths.REPO)}")
     return 0
@@ -519,6 +593,7 @@ def main(argv=None):
         entries, _ = load_toml(tp)
         errors, warnings = lint(entries, entries.addresses())
         errors += lint_tables(load_tables(tp), entries)
+        errors += lint_scopes(load_scopes(tp), load_tables(tp), entries)
         errors += lint_aliases(entries)
         for m in warnings: print("warn:", m)
         for m in errors: print("error:", m)
