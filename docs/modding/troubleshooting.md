@@ -452,26 +452,28 @@ require it"**: add `[[requires]] id = "X"` ([data-files.md](data-files.md)).
 
 **"data/FILE.toml:N: …" or "data/FILE.toml: PATH: …".** The file does not read, or holds something a data file
 cannot: a syntax error, a key given twice or an array of tables another table interrupts (with the line), an integer
-past 2^53, a date or a time, `inf` or `nan`, a key with a character that does not print (a control or format character, U+2028 or U+2029), or more than a bound allows
-([data-files.md](data-files.md), "The file"). The first 20 problems are listed and the rest counted. **"… holds more
-than 400,000 values, counting each table and array as one …"**: an empty table or array counts too, so split the file,
-or drop the empty tables it does not need.
+past 2^53, a date or a time, `inf` or `nan`, a key with a character that does not print (a control or format
+character, U+2028 or U+2029), or more than a bound allows ([data-files.md](data-files.md), "The file"). The first 20
+problems are listed and the rest counted. **"… holds more than 400,000 values, counting each table and array as one
+…"**: an empty table or array counts too, so split the file, or drop the empty tables it does not need.
 
 **"data/FILE.toml:N: PATH: no such key; the nearest name here is NAME", and the other errors with a line and a
 path.** The file does not match its kind's shape, and the link stops before any code runs
 ([data-files.md](data-files.md), "Shapes"). A misspelt key or one cut short lists the nearest names, or the names
-there when none is close; a key the format does not offer gives the reason (`unit.761.drop_chance.0: column 0 is
-named: write drop_1`, a saved field, a scoped table's own name); a key that should be a whole number says how
-(`unit.0x2f9: a key here is written in decimal: 761`, `stage.0: a key here is a whole number from 1 to 999, not
+there when none is close; a key the format does not offer gives the reason (`unit.12.stats.0: column 0 is named:
+write <column>`, a saved field, a scoped table's own name); a key that should be a whole number says how
+(`unit.0xc: a key here is written in decimal: 12`, `stage.0: a key here is a whole number from <first> to <last>, not
 0`); and a value of the wrong kind or out of range says what the cell takes (`names[2]: takes a string, not 2`), and
-where a table goes what to write there (`unit.762.stats: takes a table, not an array (unit.stats: unit_base_stats,
-a row of 14 columns by name; write stats.<column> = ...)`). Fix the line it names. An editor finds most of these as
+where a table goes what to write there (`unit.12.stats: takes a table, not an array (unit.stats: <global>, a row of
+<N> columns by name; write stats.<column> = ...)`). The ids, names and numbers here are placeholders: the game's
+guide (`games/<game>.md`) has its own. Fix the line it names. An editor finds most of these as
 you type with the shape `omp lua-stubs` writes.
 
 **"accepts[N] K: shapes/FILE: …".** The owner's shape is broken: not JSON, a `$ref` that names no definition, or a
 keyword outside the subset. **"… the shape takes more than N steps on MOD FILE …, so it cannot be checked"**: the
-owner's shape costs too much to check. Both are the owner's errors, and the kind's files are not delivered; tell its
-author.
+owner's shape costs too much to check. The limit grows with the file's size, its tables and arrays counted, so a
+file inside the bounds does not reach it with a shape like the base mods'. Both are the owner's errors, and the
+kind's files are not delivered; tell its author.
 
 **"'data/FILE.toml' is not named by a [[data]] entry", "data[N].file: the package has no data/FILE.toml".** Every file
 under `data/` is named by one entry, and every entry names a file the package has.

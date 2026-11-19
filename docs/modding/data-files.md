@@ -87,25 +87,26 @@ Each game's base mod accepts `<game>.tables`: edits to the game's record tables.
 `<game>.data.layered`, which comes once every layer has written them (the base game's, then each append's) and
 before the boot's own work reads them, so an edit lands where an append's edit would. It applies a stage's part at
 `<game>.stage.loaded`, each time the stage's loaders have written its tables (below). The game's guide lists its
-tables, the fields a file cannot set, and what the game does with an edit.
+tables, the fields a file cannot set, and what the game does with an edit. In the examples here, as at the top, the
+ids are placeholders, and a message's names and numbers are a game's: the game's guide has real ones.
 
 ```toml
-[unit.761]                   # a table, then a record id
+[unit.12]                    # a table, then a record id
 stats.max_hp = 150           # one column of a field with a row for each record, by its name
 experience_reward = 999      # a field with one value for each record
-drop_chance.drop_1 = 100
 ```
 
 - **The top level names a record table** of the game, or a scope (below), and the keys below it are the table's
   fields, by the names the global reference's "Tables" section gives. They are the names OMS uses:
-  `unit[761].stats.max_hp` is `unit.761.stats.max_hp`.
+  `unit[12].stats.max_hp` is `unit.12.stats.max_hp`.
 - **The record id is decimal,** with no sign and no leading zero, and inside the table.
 - **A field with a row takes its columns,** by name where the reference names the column, and by number only where it
   has none.
-- **Each cell has one spelling.** A hexadecimal id (`unit.0x2f9`), a named column given by its number
-  (`drop_chance.0`) and an array for a whole row are refused with the spelling to use:
-  `unit.762.stats: takes a table, not an array (unit.stats: unit_base_stats, a row of 14 columns by name; write
-  stats.<column> = ...)`. So two files that set one cell share a path in the report.
+- **Each cell has one spelling.** A hexadecimal id (`unit.0xc`), a named column given by its number
+  (`stats.0`) and an array for a whole row are refused with the spelling to use:
+  `unit.12.stats: takes a table, not an array (unit.stats: <global>, a row of <N> columns by name; write
+  stats.<column> = ...)`, which names the field's global and its width. So two files that set one cell share a path
+  in the report.
 - **A value follows its cell:** a whole number from -2147483648 to 4294967295, a float, or a string that the save's
   code page (932) can encode.
 - **Every edit is an assignment.** A later file's value replaces an earlier one's, so the mod later in the load
@@ -117,7 +118,7 @@ drop_chance.drop_1 = 100
 
   ```toml
   [stage.12.enemy.3]           # the scope, a stage id, the table's short name, then a slot
-  unit_id = 761
+  unit_id = 40
   ```
 
   The stage id is decimal, from 1 to 999; an id that no stage has is taken and never applied. The table's own name
@@ -132,11 +133,11 @@ drop_chance.drop_1 = 100
 - **Most mistakes stop the link.** The base mod ships the kind's shape (below, "Shapes"), so a table, field or
   column it does not have, a saved field, an id out of range, a hexadecimal id and a value of the wrong kind are link
   errors, with the file's line, in `omp check` and before the game starts. The check does not look under a key it
-  refuses, so a mistake inside `[unit.0x2f9]` shows once the id is written in decimal:
+  refuses, so a mistake inside `[unit.0xc]` shows once the id is written in decimal:
 
   ```text
-  error: [example.a] data/a.toml:3: unit.0x2f9: a key here is written in decimal: 761
-  error: [example.a] data/a.toml:7: unit.761.experiance_reward: no such key; the nearest name here is experience_reward
+  error: [example.a] data/a.toml:3: unit.0xc: a key here is written in decimal: 12
+  error: [example.a] data/a.toml:7: unit.12.experiance_reward: no such key; the nearest name here is experience_reward
   ```
 
 - **A file with a problem the shape cannot say applies nothing.** The base mod checks the whole file at its first
@@ -144,11 +145,11 @@ drop_chance.drop_1 = 100
   first line:
 
   ```text
-  example.a data/a.toml: 1 problem, so nothing of it is applied: unit.761.display_name: a string cell holds text the save can encode (code page 932); U+00E9 is not in it
+  example.a data/a.toml: 1 problem, so nothing of it is applied: unit.12.display_name: a string cell holds text the save can encode (code page 932); U+00E9 is not in it
   ```
 
   The notice and the halt reason show that first line after the file's name, so they name the first problem's path
-  too: `Lua: example.a data/a.toml failed: 1 problem, so nothing of it is applied: unit.761.display_name: …`. The
+  too: `Lua: example.a data/a.toml failed: 1 problem, so nothing of it is applied: unit.12.display_name: …`. The
   file's later deliveries in the session pass it over, with no second error. `--lua-errors halt` ends the run at the
   first such file.
 - **The tables are not saved.** A load builds them again and raises `<game>.data.layered` again while it restores,
@@ -278,12 +279,12 @@ checks TOML against JSON Schema can read the same file:
   kind: `#:schema file:///C:/path/to/DIR/<game>.tables.schema.json`. An editor that checks TOML against JSON Schema
   (Taplo, and the editor extensions built on it) then marks a misspelt key, a key the format does not offer, and a
   value out of range or of the wrong kind as you type. It does not read `x-ome-decimal-keys`, so it takes any key
-  where a record id, a stage, a slot or an unnamed column goes (`unit.0x2f9`, `unit.1000`, `stage.1.enemy.30`), and
+  where a record id, a stage, a slot or an unnamed column goes (`unit.0xc`, `unit.1000`, `stage.1.enemy.30`), and
   its messages are its own (`1 is not of type "null"` for a saved field). The link refuses those keys, and its
   messages give the reason and the spelling to use, so run `omp check` before you ship.
 - **Work.** A check applies at most 64 schemas for each value of a file, each table and array counting one, and
-  100,000 more. A shape like the base mods' applies four to six, so only a shape built to cost time reaches the bound,
-  which is its owner's error.
+  100,000 more. A shape like the base mods' applies four to six to each, so no file inside the bounds reaches the
+  limit with it, empty tables included; only a shape built to cost time does, and the error is its owner's.
 
 ## What the link checks
 
@@ -351,14 +352,15 @@ kind <game>.tables (<game>-base), at <game>.data.layered and <game>.stage.loaded
   its file and the owner's handler, then where it ran:
 
   ```text
-  … error example.a: data/a.toml (<game>-base tables.lua:apply_boot) failed at <game>.data.layered at INIT2.BIN@0x20d: …
+  … error example.a: data/a.toml (<game>-base tables.lua:apply_boot) failed at <game>.data.layered at <script>@<offset>: …
   ```
 
   The game goes on, with a notice. Three failures of one file in a row, at whichever of the kind's events, switch
   that file off for the session ("Lua: example.a data/a.toml failed 3 times in a row and is not applied again this
   session"). The owner's handler goes on with the other files. `--lua-errors halt` ends the run at the first failure
-  instead. What a delivery wrote before its error stays, unless the owner checks the whole document before it writes;
-  `<game>.tables` does.
+  instead. What a delivery wrote before its error stays. `<game>.tables` checks the whole document before it writes,
+  so a file with a problem the check finds writes nothing; a delivery stopped after its first write, by its budget or
+  the Lua memory limit, keeps what it wrote until the tables are built again.
 - **A mod is on or off as a whole.** A contributor that is off for the session (its own Lua failed, or a mod it
   requires is off) has no deliveries, and a contributor with no Lua is off when a Lua mod it requires is off. When the
   owner is off, so is every mod that requires it. The notice of a mod that is off ends with the files it leaves
@@ -372,7 +374,7 @@ With `--lua-trace` ([lua.md](lua.md), "The link report and the trace"), a delive
 is the contributor, with `file` and the kind's `owner`, and `handler` is the owner's.
 
 ```json
-{"mod":"example.a","file":"data/a.toml","owner":"<game>-base","handler":"tables.lua:apply_boot","hook":"<game>.data.layered","kind":"event","at":"INIT2.BIN@0x20d","ms":0.162,"instructions":0,"budget":1000750,"result":"ok","writes":[…]}
+{"mod":"example.a","file":"data/a.toml","owner":"<game>-base","handler":"tables.lua:apply_boot","hook":"<game>.data.layered","kind":"event","at":"<script>@<offset>","ms":0.162,"instructions":0,"budget":1000750,"result":"ok","writes":[…]}
 ```
 
 - **A write is the contributor's,** with `through` naming the owner, as a base mod's helper's write names the base
