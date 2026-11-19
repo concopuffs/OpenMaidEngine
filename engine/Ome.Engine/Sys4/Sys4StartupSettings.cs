@@ -128,33 +128,36 @@ public sealed class Sys4StartupSettings
         => int.TryParse(GetValueOrDefault(key)?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,
                out int value) ? value : fallback;
 
-    internal static Sys4StartupSettings ParseTrailer(byte[] blob, ref int offset, string source)
+    /// <summary>The catalog's trailer: the VM metadata, the settings pairs and, since AGE 4.38D, the font list
+    /// (docs/sys4-format-notes.md, "SYS4INI trailer"). Anything after the last block the reader knows is refused, so
+    /// no game runs past bytes nobody has reversed.</summary>
+    internal static Sys4StartupSettings ParseTrailer(
+        byte[] blob, ref int offset, string source, out IReadOnlyList<Sys4CatalogFont> fonts)
     {
-        Sys4StartupSettings settings = ReadTrailer(blob, ref offset, source, out bool emptyBlock);
+        Sys4StartupSettings settings = ReadSettings(blob, ref offset, source);
+        fonts = offset == blob.Length ? [] : ReadFonts(blob, ref offset, source);
         if (offset != blob.Length)
-            throw new InvalidDataException(emptyBlock
-                ? $"{source}: zero-length settings block has trailing data"
-                : $"{source}: settings block has {blob.Length - offset} trailing bytes");
+            throw new InvalidDataException($"{source}: the catalog trailer has {blob.Length - offset} trailing bytes");
         return settings;
     }
 
     /// <summary>
     /// As <see cref="ParseTrailer"/>, for a first look at an install the engine has no profile for
-    /// (<see cref="InstallIntake"/>): bytes after the settings pairs come back in <paramref name="unread"/> instead of
-    /// being refused. A trailer that does not parse at all gives no settings, all of it unread, and the reason in
-    /// <paramref name="problem"/>. A game is never run from this reading.
+    /// (<see cref="InstallIntake"/>): bytes the reader does not know come back in <paramref name="unread"/> instead of
+    /// being refused, with the reason in <paramref name="problem"/>. Settings that do not parse leave all of the
+    /// trailer unread; a font list that does not parse leaves itself and what follows it. A game is never run from
+    /// this reading.
     /// </summary>
     internal static Sys4StartupSettings ParseTrailerLeniently(
-        byte[] blob, ref int offset, string source, out byte[] unread, out string? problem)
+        byte[] blob, ref int offset, string source, out IReadOnlyList<Sys4CatalogFont> fonts, out byte[] unread,
+        out string? problem)
     {
         int start = offset;
+        fonts = [];
+        Sys4StartupSettings settings;
         try
         {
-            Sys4StartupSettings settings = ReadTrailer(blob, ref offset, source, out _);
-            unread = blob.AsSpan(offset).ToArray();
-            problem = unread.Length == 0 ? null : $"{unread.Length} bytes follow the settings pairs";
-            offset = blob.Length;
-            return settings;
+            settings = ReadSettings(blob, ref offset, source);
         }
         catch (InvalidDataException error)
         {
@@ -163,13 +166,32 @@ public sealed class Sys4StartupSettings
             offset = blob.Length;
             return Empty;
         }
+
+        int afterSettings = offset;
+        problem = null;
+        if (offset != blob.Length)
+        {
+            try
+            {
+                fonts = ReadFonts(blob, ref offset, source);
+                if (offset != blob.Length) problem = $"{blob.Length - offset} bytes follow the font list";
+            }
+            catch (InvalidDataException error)
+            {
+                fonts = [];
+                offset = afterSettings;
+                problem = $"{blob.Length - offset} bytes follow the settings pairs and are no font list ({error.Message})";
+            }
+        }
+        unread = blob.AsSpan(offset).ToArray();
+        offset = blob.Length;
+        return settings;
     }
 
-    /// <summary>Reads the trailer's known blocks and leaves <paramref name="offset"/> after the last one.
-    /// <paramref name="emptyBlock"/> tells that the settings block had no strings.</summary>
-    private static Sys4StartupSettings ReadTrailer(byte[] blob, ref int offset, string source, out bool emptyBlock)
+    /// <summary>Reads the VM metadata and the settings pairs, and leaves <paramref name="offset"/> after them. A
+    /// catalog may end before either (an append catalog's has neither).</summary>
+    private static Sys4StartupSettings ReadSettings(byte[] blob, ref int offset, string source)
     {
-        emptyBlock = false;
         if (offset == blob.Length) return Empty;
 
         uint vmMetadataBytes = ReadU32(blob, ref offset, source, "VM metadata length");
@@ -180,11 +202,7 @@ public sealed class Sys4StartupSettings
         if (offset == blob.Length) return Empty;
 
         uint stringBytes = ReadU32(blob, ref offset, source, "settings string length");
-        if (stringBytes == 0)
-        {
-            emptyBlock = true;
-            return Empty;
-        }
+        if (stringBytes == 0) return Empty;
         if (offset > blob.Length - 4)
             throw new InvalidDataException($"{source}: settings pair count is truncated");
         if (stringBytes > blob.Length - offset - 4)
@@ -210,6 +228,32 @@ public sealed class Sys4StartupSettings
         return new Sys4StartupSettings(pairs);
     }
 
+    /// <summary>
+    /// Reads the font list that follows the settings pairs since AGE 4.38D (engine_load_sys4ini_catalog@0x414290 of
+    /// 創刻のアテリアル's build): a byte count, then records of a catalog file id and a NUL-terminated face name until
+    /// that many bytes are read. A count below 1 means no fonts, as native reads it.
+    /// </summary>
+    private static IReadOnlyList<Sys4CatalogFont> ReadFonts(byte[] blob, ref int offset, string source)
+    {
+        int listBytes = unchecked((int)ReadU32(blob, ref offset, source, "font list length"));
+        if (listBytes < 1) return [];
+        if (listBytes > blob.Length - offset)
+            throw new InvalidDataException(
+                $"{source}: font list length {listBytes} exceeds {blob.Length - offset} remaining bytes");
+
+        int end = offset + listBytes;
+        var fonts = new List<Sys4CatalogFont>();
+        while (offset < end)
+        {
+            if (offset > end - 4)
+                throw new InvalidDataException($"{source}: font record {fonts.Count} is truncated");
+            int fileId = unchecked((int)ReadU32(blob, ref offset, source, $"font {fonts.Count} file id"));
+            string faceName = ReadCString(blob, ref offset, end, source, $"font {fonts.Count} face name");
+            fonts.Add(new Sys4CatalogFont(fileId, faceName));
+        }
+        return fonts;
+    }
+
     private static uint ReadU32(byte[] blob, ref int offset, string source, string field)
     {
         if (offset > blob.Length - 4)
@@ -233,6 +277,10 @@ public sealed class Sys4StartupSettings
         return value;
     }
 }
+
+/// <summary>A font file a game ships in its catalog and the face it provides: one record of the trailer's font list
+/// (AGE 4.38D). <see cref="FileId"/> is the catalog's raw index of the font file.</summary>
+public sealed record Sys4CatalogFont(int FileId, string FaceName);
 
 /// <summary>The validated per-game logical canvas selected before presentation allocation.</summary>
 public readonly record struct Sys4LogicalCanvas(int Width, int Height)

@@ -18,6 +18,10 @@ public sealed record IntakeAppend(string File, int Selector, int Entries, string
 
 public sealed record IntakeSetting(string Key, string Value);
 
+/// <summary>A font the game ships in its catalog (<see cref="Sys4CatalogFont"/>), with the catalog file its id
+/// names, or an empty name when the id names none.</summary>
+public sealed record IntakeFont(int FileId, string File, string FaceName);
+
 /// <summary>An install the intake compared with: a supported game's, or one the caller named.</summary>
 public sealed record IntakeComparedInstall(string Name, string Root, string CatalogRevision, string Title);
 
@@ -56,6 +60,7 @@ public sealed record InstallIntakeReport
     public IReadOnlyDictionary<string, int> FileTypes { get; init; } = new Dictionary<string, int>();
     public IReadOnlyList<IntakeAppend> Appends { get; init; } = [];
     public IReadOnlyList<IntakeSetting> Settings { get; init; } = [];
+    public IReadOnlyList<IntakeFont> Fonts { get; init; } = [];
     /// <summary>What the catalog's trailer holds that the reader does not know, or null.</summary>
     public string? TrailerProblem { get; init; }
     public string UnreadTrailerHex { get; init; } = "";
@@ -76,6 +81,10 @@ public sealed record InstallIntakeReport
     public IReadOnlyList<IntakeScriptFailure> Failures { get; init; } = [];
     public IReadOnlyList<string> UnknownOperandTypes { get; init; } = [];
     public IReadOnlyDictionary<string, long> OpcodeOccurrences { get; init; } = new Dictionary<string, long>();
+    /// <summary>For every opcode, one operand-type histogram per operand position: <c>catalog-scan</c>'s census,
+    /// which <c>tools/operand_access.py</c> reads from this report while the game has no opcode table to scan with.</summary>
+    public IReadOnlyDictionary<string, IReadOnlyList<IReadOnlyDictionary<string, long>>> OperandTypeOccurrences { get; init; }
+        = new Dictionary<string, IReadOnlyList<IReadOnlyDictionary<string, long>>>();
     public IReadOnlyList<IntakeOpcode> WithoutHandler { get; init; } = [];
     public IReadOnlyList<IntakeProfileDelta> NotUsedByProfile { get; init; } = [];
     public IReadOnlyList<string> UsedByNoProfile { get; init; } = [];
@@ -227,6 +236,9 @@ public static class InstallIntake
             FileTypes = fileTypes,
             Appends = appends,
             Settings = settings,
+            Fonts = catalog == null ? []
+                : catalog.Fonts.Select(font => new IntakeFont(
+                    font.FileId, catalog.ResolveRaw(font.FileId)?.Name ?? "", font.FaceName)).ToArray(),
             TrailerProblem = trailerProblem,
             UnreadTrailerHex = Convert.ToHexString(unread).ToLowerInvariant(),
             UnreadTrailerText = Printable(unread),
@@ -245,6 +257,11 @@ public static class InstallIntake
             Failures = census.Failures,
             UnknownOperandTypes = unknownTypes,
             OpcodeOccurrences = census.Occurrences.ToDictionary(pair => Hex(pair.Key), pair => pair.Value),
+            OperandTypeOccurrences = census.OperandPositions.ToDictionary(
+                pair => Hex(pair.Key),
+                pair => (IReadOnlyList<IReadOnlyDictionary<string, long>>)pair.Value
+                    .Select(position => (IReadOnlyDictionary<string, long>)position.ToDictionary(
+                        type => Hex(type.Key), type => type.Value)).ToArray()),
             WithoutHandler = census.WithoutHandler
                 .OrderByDescending(pair => census.Occurrences[pair.Key]).ThenBy(pair => pair.Key)
                 .Select(pair => new IntakeOpcode(
@@ -267,6 +284,7 @@ public static class InstallIntake
         SortedDictionary<string, int> Revisions,
         SortedDictionary<int, long> Occurrences,
         SortedSet<int> OperandTypes,
+        SortedDictionary<int, SortedDictionary<int, long>[]> OperandPositions,
         SortedDictionary<int, Dictionary<string, long>> WithoutHandler,
         List<IntakeScriptFailure> Failures);
 
@@ -298,6 +316,7 @@ public static class InstallIntake
         var revisions = new SortedDictionary<string, int>(StringComparer.Ordinal);
         var occurrences = new SortedDictionary<int, long>();
         var operandTypes = new SortedSet<int>();
+        var operandPositions = new SortedDictionary<int, SortedDictionary<int, long>[]>();
         var withoutHandler = new SortedDictionary<int, Dictionary<string, long>>();
         var handled = new Dictionary<int, bool>();
         var failures = new List<IntakeScriptFailure>();
@@ -316,7 +335,15 @@ public static class InstallIntake
                 {
                     int opcode = instruction.Opcode;
                     occurrences[opcode] = occurrences.GetValueOrDefault(opcode) + 1;
-                    foreach (Operand operand in instruction.Args) operandTypes.Add(operand.Type);
+                    if (!operandPositions.TryGetValue(opcode, out SortedDictionary<int, long>[]? positions))
+                        operandPositions[opcode] = positions = Enumerable.Range(0, instruction.Args.Count)
+                            .Select(_ => new SortedDictionary<int, long>()).ToArray();
+                    for (int k = 0; k < instruction.Args.Count; k++)
+                    {
+                        int type = instruction.Args[k].Type;
+                        operandTypes.Add(type);
+                        positions[k][type] = positions[k].GetValueOrDefault(type) + 1;
+                    }
                     if (!handled.TryGetValue(opcode, out bool has)) handled[opcode] = has = hasHandler(opcode);
                     if (has) continue;
                     if (!withoutHandler.TryGetValue(opcode, out Dictionary<string, long>? sites))
@@ -330,7 +357,8 @@ public static class InstallIntake
                 failures.Add(new IntakeScriptFailure(name, error.Message));
             }
         }
-        return new ScriptCensus(count, baseCount, instructions, revisions, occurrences, operandTypes, withoutHandler, failures);
+        return new ScriptCensus(count, baseCount, instructions, revisions, occurrences, operandTypes, operandPositions,
+                                withoutHandler, failures);
     }
 
     private static SortedDictionary<string, int> FileTypes(Sys4AssetCatalog catalog)

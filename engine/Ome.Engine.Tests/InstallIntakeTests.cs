@@ -13,11 +13,16 @@ using Ome.Engine.Vm;
 public sealed class InstallIntakeTests : IDisposable
 {
     private const string Revision = "S4IC499 ", Title = "Synthetic Third", ScriptAbi = "SYS4499";
-    /// <summary>An opcode of the catalog that no handler binds (IndexBoundsTests keeps the handler table honest; the
-    /// test asserts the premise), and one the port runs.</summary>
-    private const int Unhandled = 0x2d5, Handled = 0x5;
+    /// <summary>An opcode of the catalog that no handler binds, and one the port runs. The first test asserts both
+    /// premises, so a handler for the first one fails it plainly.</summary>
+    private const int Handled = 0x5;
 
     private static readonly OpcodeTable Catalog = OpcodeTableJson.LoadEmbedded();
+
+    /// <summary>The first opcode of the catalog that takes operands, has no handler and is in no game's scripts.</summary>
+    private static readonly int Unhandled = Catalog.Entries.Select(definition => definition.Opcode).Order()
+        .First(opcode => Catalog.Argc(opcode) > 0 && !VirtualMachine.Implements(Catalog, opcode)
+                         && Catalog.Observations.Values.All(observation => !observation.Opcodes.Contains(opcode)));
     private static readonly HashSet<int> OperandTypes = [0x0, 0x2, 0x3];
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), "ome-intake-" + Guid.NewGuid().ToString("N"));
@@ -46,18 +51,22 @@ public sealed class InstallIntakeTests : IDisposable
         => InstallIntake.Run(install, Catalog, opcode => VirtualMachine.Implements(Catalog, opcode), OperandTypes,
                              GameProfileRegistry.BuiltIn, compare);
 
+    /// <summary>The font list of AGE 4.38D's catalogs: one record, file 1 as the face "AGE Extend".</summary>
+    private static readonly byte[] FontList = [0x0f, 0, 0, 0, 1, 0, 0, 0, .. "AGE Extend\0"u8];
+
     /// <summary>A catalog whose trailer goes on after the settings pairs, as a later catalog revision's does.</summary>
-    private static byte[] CatalogWithUnknownBlock(byte[] unknown, IReadOnlyList<string> files,
-                                                  params (string Key, string Value)[] pairs)
-        => SyntheticCatalog.Wrap([.. SyntheticCatalog.Expanded(pairs, includeTrailer: true, files), .. unknown], Revision, Title);
+    private static byte[] CatalogWithTrailer(byte[] afterSettings, IReadOnlyList<string> files,
+                                             params (string Key, string Value)[] pairs)
+        => SyntheticCatalog.Wrap([.. SyntheticCatalog.Expanded(pairs, includeTrailer: true, files), .. afterSettings], Revision, Title);
 
     [Fact]
     public void AnInstallWithNoProfileIsReadWholeAndWhatIsNewIsListed()
     {
         Assert.False(VirtualMachine.Implements(Catalog, Unhandled));
         Assert.True(VirtualMachine.Implements(Catalog, Handled));
-        byte[] unknown = [0x0f, 0, 0, 0, 0x25, 0, 0, 0, .. "AGE Extend\0"u8];
-        byte[] catalog = CatalogWithUnknownBlock(unknown, ["A.BIN", "FONT.TTF", "PIC.AGF"], ("SCREENX", "1024"), ("NEWKEY", "1"));
+        byte[] unknown = [0x04, 0, 0, 0, .. "NEW\0"u8];
+        byte[] catalog = CatalogWithTrailer([.. FontList, .. unknown], ["A.BIN", "FONT.TTF", "PIC.AGF"],
+                                            ("SCREENX", "1024"), ("NEWKEY", "1"));
         string install = Install("third", catalog,
             ("A.BIN", Script(Instruction(Handled), Instruction(Unhandled), Instruction(Unhandled))), ("AGE.EXE", [1, 2, 3]));
         string other = Install("known", SyntheticCatalog.Build(["B.BIN", "PIC.AGF"], [("SCREENX", "800")], "S4IC422 ", "Known"));
@@ -71,8 +80,9 @@ public sealed class InstallIntakeTests : IDisposable
         Assert.Equal(("AGE.EXE", 3L), (report.Executable!.Name, report.Executable.Size));
         Assert.Null(report.CatalogProblem);
         Assert.Equal((3, 0), (report.Entries, report.Placeholders));
-        Assert.Equal("19 bytes follow the settings pairs", report.TrailerProblem);
-        Assert.Equal((Convert.ToHexString(unknown).ToLowerInvariant(), "....%...AGE Extend."),
+        Assert.Equal(new IntakeFont(1, "FONT.TTF", "AGE Extend"), Assert.Single(report.Fonts));
+        Assert.Equal("8 bytes follow the font list", report.TrailerProblem);
+        Assert.Equal((Convert.ToHexString(unknown).ToLowerInvariant(), "....NEW."),
                      (report.UnreadTrailerHex, report.UnreadTrailerText));
         Assert.Equal(new[] { "SCREENX", "NEWKEY" }, report.Settings.Select(setting => setting.Key));
 
@@ -84,9 +94,9 @@ public sealed class InstallIntakeTests : IDisposable
         Assert.Equal(new Dictionary<string, int> { [ScriptAbi] = 1 }, report.ScriptRevisions);
         Assert.Empty(report.Failures);
         IntakeOpcode missing = Assert.Single(report.WithoutHandler);
-        Assert.Equal(("0x2d5", 2L, 1), (missing.Opcode, missing.Occurrences, missing.ScriptCount));
+        Assert.Equal(($"0x{Unhandled:x}", 2L, 1), (missing.Opcode, missing.Occurrences, missing.ScriptCount));
         Assert.Equal(new IntakeScriptCount("A.BIN", 2), Assert.Single(missing.TopScripts));
-        Assert.Contains("0x2d5", report.UsedByNoProfile);
+        Assert.Contains($"0x{Unhandled:x}", report.UsedByNoProfile);
         Assert.All(report.Checks, check => Assert.True(check.Passed, check.Detail));
         Assert.True(report.SameGeneration);
     }
@@ -139,9 +149,16 @@ public sealed class InstallIntakeTests : IDisposable
     [Trait("Profile", "kamidori")]
     public void InstalledKamidoriReadsAsItsObservationRecordsIt() => AssertInstalled("kamidori");
 
+    /// <summary>A game still being added: its scripts use opcodes the port has no handler for yet, and the intake
+    /// lists them.</summary>
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "arterial")]
+    public void InstalledArterialReadsAsItsObservationRecordsIt() => AssertInstalled("arterial", complete: false);
+
     /// <summary>A supported game's install: the intake names its profile, finds nothing new, and counts what the
     /// registry's observation counts (vm-map/opcodes.toml), though it decodes with the whole catalog.</summary>
-    private static void AssertInstalled(string game)
+    private static void AssertInstalled(string game, bool complete = true)
     {
         string install = Paths.GameInstall(game);
         Assert.True(File.Exists(Path.Combine(install, "SYS4INI.BIN")), $"{game} install not found at {install}");
@@ -155,7 +172,8 @@ public sealed class InstallIntakeTests : IDisposable
         Assert.Null(report.CatalogProblem);
         Assert.Null(report.TrailerProblem);
         Assert.Empty(report.Failures);
-        Assert.Empty(report.WithoutHandler);
+        if (complete) Assert.Empty(report.WithoutHandler);
+        else Assert.NotEmpty(report.WithoutHandler);
         Assert.Equal((observation.ScriptCount, observation.InstructionCount), (report.Scripts, report.Instructions));
         Assert.Equal(observation.Opcodes.Order().Select(opcode => $"0x{opcode:x}"), report.OpcodeOccurrences.Keys);
         Assert.Equal(GameProfileRegistry.BuiltIn.Find(game)!.Persistence.BankDimensions.ToArray(), report.SavedPrefix);

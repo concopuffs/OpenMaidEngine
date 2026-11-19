@@ -114,6 +114,8 @@ internal static class IntakeCommand
             if (report.TrailerProblem != null)
                 Console.WriteLine($"  catalog trailer: {report.TrailerProblem}: {report.UnreadTrailerHex} "
                                   + $"\"{report.UnreadTrailerText}\"");
+            if (report.Fonts.Count > 0)
+                Console.WriteLine($"  fonts the catalog ships: {List(report.Fonts.Select(font => $"{font.FaceName} ({font.File}, file {font.FileId})"))}");
             Console.WriteLine($"  banks: saved prefix [{string.Join(", ", report.SavedPrefix)}], "
                               + $"full [{string.Join(", ", report.BankSizes)}]");
             Console.WriteLine($"  compared with: {List(report.ComparedWith.Select(other => $"{other.Name} ({other.CatalogRevision})"))}");

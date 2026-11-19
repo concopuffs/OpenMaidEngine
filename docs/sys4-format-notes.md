@@ -102,6 +102,36 @@ Himegari's in `DEPENDMOVIESOUND` (`2`), `SCREENX`/`SCREENY` (`1024`/`576`), `SAV
 (`Copyright (c) Eushully 2011`), `SAVEVERSION` (`320`), `RCVERSION` (`29`), `VERREGPOS`
 (`41810510-3CE0-425B-BE07-B9793731737F`) and `REGKEY` (`1098974480`).
 
+創刻のアテリアル's trailer (`S4IC438`) has 49 pairs: Kamidori's 44 in the same order, four `JUSTIFYCHAR` pairs
+(`、`, `。`, `」`, `）`) after the `VALIDFONTCHECKER` pairs, and `SAVEWINPOS` (`1`) after `RUBYSHIFTMODE`. Its
+`SAVEVERSION` is `320`, as Kamidori's, and its canvas is `1024` by `576`. What the two new keys do is not read
+(`backlog.md`, "Onboard 創刻のアテリアル").
+
+#### The font list (AGE 4.38D) — CONFIRMED (2026-11-19)
+
+Since AGE 4.38D the stream goes on after the settings pairs with a list of the fonts the game ships in its catalog:
+
+```text
+font_list_bytes:i32                          below 1: no list
+repeated { file_id:u32, face_name:cstring }  until font_list_bytes bytes are read
+```
+
+A record is `4 + strlen + 1` bytes. `file_id` is the catalog's raw index of the font file, and `face_name` the face
+it provides. 創刻のアテリアル has one record, 15 bytes: file 37, which is its `AGE-EXTEND.TTF`, as `AGE Extend`.
+Native `engine_load_sys4ini_catalog@0x414290` (4.38D) pushes each id to a `vector<int>` at `ctx+0x774f8` and each
+name to a `vector<std::string>` whose begin is `ctx+0x77508`; for a count below 1 it pushes the single id 0 and no
+name. It steps over a settings count below 1 the same way, so the list can follow a settings block without
+strings. A catalog of an older revision ends at its settings pairs, and the loader then reads the zero-filled
+bytes past the stream as an empty list.
+
+`Sys4AssetCatalog.Fonts` holds the records (`Sys4CatalogFont`). The reader takes a list only when bytes remain
+after the settings pairs, and refuses any byte after the list, as it refuses any block it does not know. The port
+does not load or use these fonts yet. `Ome.Cli intake` alone reads past an unknown block, and reports its bytes.
+
+The same loader also shows that the 0x90-byte "VM metadata" is not skipped natively: after its byte count, when
+that is 1 or more, two sub-blocks are each read by `0x476920`. Neither is read yet (see the header section below),
+and the port still steps over the block by its count.
+
 These lists are the canonical serialized-data inventory. Native consumers, compiled fallbacks, settings
 that are inert under the selected renderer, and current port coverage are cataloged in
 `engine-re.md` under "SYS4INI startup-settings catalog."

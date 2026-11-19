@@ -45,11 +45,14 @@ public sealed class Sys4AssetCatalog
     /// store's archive root.</summary>
     public string? ArchiveDirectory { get; private set; }
     public Sys4StartupSettings StartupSettings { get; }
+    /// <summary>The font files the game ships in its catalog, with the face each provides (the trailer's font list,
+    /// AGE 4.38D). Empty for a catalog without the list.</summary>
+    public IReadOnlyList<Sys4CatalogFont> Fonts { get; }
     public Sys4LogicalCanvas LogicalCanvas { get; }
 
     private Sys4AssetCatalog(string magic, string title, int packId,
                              List<string> archives, List<AssetEntry> rawSlots,
-                             Sys4StartupSettings startupSettings)
+                             Sys4StartupSettings startupSettings, IReadOnlyList<Sys4CatalogFont> fonts)
     {
         Magic = magic;
         Title = title;
@@ -60,6 +63,7 @@ public sealed class Sys4AssetCatalog
         _byName = Files.ToDictionary(r => r.Name, StringComparer.OrdinalIgnoreCase);
         _sceneRanges = BuildSceneRanges(Files);
         StartupSettings = startupSettings;
+        Fonts = fonts;
         LogicalCanvas = Sys4LogicalCanvas.FromSettings(startupSettings);
     }
 
@@ -170,10 +174,12 @@ public sealed class Sys4AssetCatalog
 
         string magic = ReadCString(data.AsSpan(0, Math.Min(8, data.Length)));
         string title = ReadCString(data.AsSpan(8, Math.Min(256, data.Length - 8)));
+        IReadOnlyList<Sys4CatalogFont> fonts = [];
         Sys4StartupSettings startupSettings = !isBase ? Sys4StartupSettings.Empty
-            : lenient ? Sys4StartupSettings.ParseTrailerLeniently(blob, ref p, name, out unreadTrailer, out trailerProblem)
-            : Sys4StartupSettings.ParseTrailer(blob, ref p, name);
-        return new Sys4AssetCatalog(magic, title, packId, archives, slots, startupSettings);
+            : lenient ? Sys4StartupSettings.ParseTrailerLeniently(
+                blob, ref p, name, out fonts, out unreadTrailer, out trailerProblem)
+            : Sys4StartupSettings.ParseTrailer(blob, ref p, name, out fonts);
+        return new Sys4AssetCatalog(magic, title, packId, archives, slots, startupSettings, fonts);
     }
 
     /// <summary>Mount an append catalog by its native header selector. A later mount of the same
