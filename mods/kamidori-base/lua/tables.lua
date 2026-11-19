@@ -11,7 +11,9 @@ local applier = records.applier {
     table = maid.names.table,
     labels = { "boot", "stage" },
     -- The event each label is applied at: a document with a part at an event this install does not raise is refused
-    -- whole, rather than applied in part (spec §6.2).
+    -- whole, rather than applied in part (spec §6.2). The manifest may bind apply_stage at other stage events too,
+    -- such as a screen that shows a stage without playing it: one of those that this install does not raise costs
+    -- only its own deliveries, and refuses nothing.
     events = { boot = "kamidori.data.layered", stage = "kamidori.stage.loaded" },
     -- A file that names a table or a field by an old name gets one line for each old name in lua.log.
     log = maid.log.warn,
@@ -22,7 +24,8 @@ function apply_boot(event, contribution)
     return applier:apply(contribution, { built_by = "boot" })
 end
 
---- At kamidori.stage.loaded: a contribution's part for the stage whose loaders have just run, each time they run.
+--- At kamidori.stage.loaded, and at each other stage event the manifest binds it to: a contribution's part for the
+--- stage whose loaders have just run, each time they run.
 function apply_stage(event, contribution)
     return applier:apply(contribution, { built_by = "stage", scope = { stage = event.stage } })
 end

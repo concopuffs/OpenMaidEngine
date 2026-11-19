@@ -1,6 +1,7 @@
-# Port only (scenarios/port/): data patches, the stage list's preview on Kamidori (plan §11). The stage list
-# (SELSTAGE) runs the loaders of the stage under its cursor for its preview, and kamidori.stage.loaded is raised after
-# them (kamidori.stage.after_list_preview, SELSTAGE@0x1408), so example.kamidori-stage-enemies's part for that stage
+# Port only (scenarios/port/): data patches, the stage list's preview on Kamidori (plan §11 and §12.6). The stage list
+# (SELSTAGE) runs the loaders of the stage under its cursor for its preview, and kamidori.stage.previewed is raised
+# after them (kamidori.stage.after_list_preview, SELSTAGE@0x1408), not kamidori.stage.loaded, as the stage is not
+# being played; kamidori-base applies a stage part at both, so example.kamidori-stage-enemies's part for that stage
 # is applied there: with the cursor on ◆開けた涼風西湖畔◆ (stage 51) slot 1 holds 緑プテテット (761) in place of
 # ハルピュア (331), and on 蒼月の南湖畔 (stage 52) slot 3 holds 赤プテテット (762) in place of バギル (631), with
 # stage 51's part nowhere in it. Before each move a console step marks slots 1 and 3 with 12345, so the values read
@@ -9,7 +10,7 @@
 # to 蒼月の南湖畔 (the sandbox k1clean of the main checkout holds it, with saves made on the clean install while
 # native AGE and the port were compared; the repository does not ship it). Cells by number (the console has no names): current_stage_id 0x378b, stage_enemy_unit_id from
 # 0x140a2c. Run on a new sandbox seeded with k1clean, with --lua-trace, whose diagnostics/lua-trace.jsonl then has
-# the deliveries at SELSTAGE.BIN@0x1408:
+# the deliveries at SELSTAGE.BIN@0x1408, each with the hook kamidori.stage.previewed:
 #   py -3.11 -X utf8 tools/drive.py --game kamidori port start --sandbox dp-kamidori-stage-list --seed port:k1clean --mod oms/examples/mods/example.kamidori-stage-enemies --port-arg=--lua-trace
 #   py -3.11 -X utf8 tools/drive.py --game kamidori port run tools/drive/scenarios/port/kamidori-stage-enemies-list.steps
 

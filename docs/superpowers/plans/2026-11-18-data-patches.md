@@ -1356,7 +1356,7 @@ review's.
 - **Decisions.** Our own table check, not a Tomlyn upgrade, since no release fixes it; the interrupted array refused,
   against TOML 1.0, since the model would drop its tables; the size counts the tables a header or a dotted key makes
   on the way, so `[unit.12]` with one key is three; the allowance and the bound kept, as measured above.
-  `kamidori.stage.loaded` is as it was.
+  `kamidori.stage.loaded` is as it was (until the follow-up's item 5, below).
 - **The closing checks** (ran, at `b7ea11c6` with this section, its backlog items and `PROJECT-STRUCTURE.md`'s line
   uncommitted): `tools/validate.py --level core`, 56 gates passed, with 2,879 engine core tests and 86 launcher
   tests; the data and base mod test classes (`RepeatedTomlKeyTests`, `DataDocumentTests`, `DataLinkTests`,
@@ -1458,3 +1458,40 @@ the stage list's own event and the decision on Tomlyn's faults.
 - **A Lua mod's memory (item 4).** Neither the backlog nor the Lua spec's future work (§16) recorded that nothing
   bounds it; spec §15 and `lua.md` state it as a limit. The backlog has it now, with the evidence and a possible
   bound.
+- **The stage list raises an event of its own (item 5; the owner's decision, 2026-11-19).** §11.5 gave
+  `kamidori.stage.loaded` a third point at the list's preview. The owner decided that the preview is not a played
+  stage and has its own event, which supersedes that choice:
+  - `kamidori.stage.loaded` is back at `kamidori.stage.after_loader` and `kamidori.stage.after_info_reload`. INFO3
+    stays: its point is the floor's loaders run again while the floor is played. The new `kamidori.stage.previewed`
+    is at `kamidori.stage.after_list_preview` (the point keeps its name), with the field `stage`; its description
+    says what the list does and that the stage is not being played. `kamidori.tables` takes its stage part at both,
+    by `tables.lua:apply_stage`. Himegari has no such screen, and its events are unchanged.
+  - **When `stage.previewed` is not raised.** `ome-records`' `events` map keeps `stage = kamidori.stage.loaded`, so a
+    document with a stage part is refused whole where `stage.loaded` is not raised, since its part would reach only a
+    preview. Where only `stage.previewed` is not raised (an install whose SELSTAGE the point does not name), nothing
+    is refused: the part is applied where the stage is played, and the preview lists the stage's own enemies. The
+    report says so as it does for any event of a kind that is not raised: the kind's line (`at kamidori.data.layered
+    and kamidori.stage.loaded; not raised in this install: kamidori.stage.previewed`), the kind's note and the
+    event's note (ran: `WhereTheStageListDoesNotRaisePreviewedTheReportSaysSoAndAStagePartIsAppliedWhereTheStageIsPlayed`,
+    with another SELSTAGE revision). Both `tables.lua` files say this in the same words, so gate 11's one-text check
+    holds, and Himegari's changes in those comments only. Gate 11's declared events are now Himegari's for both,
+    and Kamidori's `stage.previewed` after them. The report's kind line joins three events as `a, b and c`.
+  - **Not changed, against the request's list:** the generated layout and `exports.txt`. They list the globals, the
+    record tables, their fields and the scopes, and no event; the patch point keeps its name, so `points.json` is the
+    same, and `base_mod_build.py --build` wrote nothing. The base mod's version stays 1.1.0. The editor definitions
+    are not checked in: `omp lua-stubs` writes them from the declared events, and its `events.lua` for Kamidori has
+    `kamidori.stage.previewed` with its description and point (ran: 8 events).
+  - **Tests (ran).** `ModLuaLinkTests` pins `stage.loaded`'s two points, `stage.previewed`'s one and the SELSTAGE
+    site's point on both installs; `BaseModTests` and gate 11 have the third `at`;
+    `DataPatchWorkspaceTests.TheStageListsPreviewRaisesStagePreviewedWhereAStagePartIsAppliedAndNoStageLoadedHandlerRuns`
+    runs SELSTAGE headless from a booted session, opened on stage 51's labyrinth with only that stage available, on
+    both installs: slot 1 is 331 with no mod and 761 with a stage part, a Lua mod hooked on both events logs only
+    `kamidori.stage.previewed 51`, and the part's delivery is traced at `SELSTAGE.BIN@0x1408` under that event. The
+    refusal test for an install without `stage.loaded` has Kamidori's kind line at `data.layered` and
+    `stage.previewed`.
+  - **Driven:** `tools/drive/scenarios/port/kamidori-stage-enemies-list.steps` on a new sandbox
+    `dp-kamidori-stage-previewed`, seeded from the main checkout's `k1clean` (read only), with
+    `example.kamidori-stage-enemies` and `--lua-trace`: every step passed (stage 51 slot 1 761, stage 52 slots 1 and
+    3 401 and 762, stage 51 again 761), the trace has four deliveries at `SELSTAGE.BIN@0x1408`, each under
+    `kamidori.stage.previewed`, and none under `stage.loaded`, and the shot's 出現モンスターリスト reads
+    緑プテテット with the cursor on stage 51.

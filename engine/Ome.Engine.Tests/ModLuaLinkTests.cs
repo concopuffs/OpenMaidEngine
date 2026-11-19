@@ -1618,7 +1618,10 @@ public sealed class ModLuaLinkTests : IDisposable
 
     // ------------------------------------------------------------------------------- the boot and stage events
 
-    private static readonly string[] StageEvents = ["stage.loaded", "stage.ready", "stage.round", "stage.close"];
+    /// <summary>The base mod's stage events: Kamidori's stage list raises one of its own (data patches plan §12.6).</summary>
+    private static string[] StageEvents(string profile)
+        => profile == "kamidori" ? ["stage.loaded", "stage.previewed", "stage.ready", "stage.round", "stage.close"]
+                                 : ["stage.loaded", "stage.ready", "stage.round", "stage.close"];
 
     /// <summary>A mod of <paramref name="profile"/> that subscribes to its base mod's boot and stage events, with the
     /// base mods it requires: on_layered and on_ready log the class-change chain's second slot, which only the append
@@ -1628,7 +1631,7 @@ public sealed class ModLuaLinkTests : IDisposable
         string hooks = $"[[requires]]\nid = \"{profile}-base\"\nversion = \">=1.1, <2\"\n"
                        + $"[[hooks]]\nevent = \"{profile}.data.layered\"\nhandler = \"hooks.lua:on_layered\"\n"
                        + $"[[hooks]]\nevent = \"{profile}.data.ready\"\nhandler = \"hooks.lua:on_ready\"\n"
-                       + string.Concat(StageEvents.Select(name
+                       + string.Concat(StageEvents(profile).Select(name
                            => $"[[hooks]]\nevent = \"{profile}.{name}\"\nhandler = \"hooks.lua:on_stage\"\n"));
         ModPackage user = Mod("stage-user", hooks, Hooks($$"""
             local function chain(e)
@@ -1694,11 +1697,16 @@ public sealed class ModLuaLinkTests : IDisposable
         // kamidori.stage.loaded is raised where INFO's third tab runs a floor's loaders again, too (data patches plan
         // §5.2): one revision of INFO3 serves both installs.
         Assert.Equal([0xd20], Offsets(linked, "INFO3"));
-        // And where the stage list runs the loaders of the stage under its cursor for its preview (plan §11): the two
-        // installs' SELSTAGE revisions have the loop at the same offsets.
-        Assert.Equal([0x1408], Offsets(linked, "SELSTAGE"));
-        Assert.Equal(["kamidori.stage.after_loader", "kamidori.stage.after_info_reload", "kamidori.stage.after_list_preview"],
+        Assert.Equal(["kamidori.stage.after_loader", "kamidori.stage.after_info_reload"],
                      linked.Lua.Stack.Event("kamidori.stage.loaded")!.Points);
+        // The stage list runs the loaders of the stage under its cursor for its preview (plan §11), and raises
+        // kamidori.stage.previewed there, not stage.loaded (plan §12.6, the owner's decision of 2026-11-19): the two
+        // installs' SELSTAGE revisions have the loop at the same offsets.
+        var preview = Assert.Single(linked.Lua.Plan.Sites["SELSTAGE"]);
+        Assert.Equal((0x1408, "kamidori.stage.after_list_preview"), (preview.Offset, preview.Point));
+        GameEvent previewed = linked.Lua.Stack.Event("kamidori.stage.previewed")!;
+        Assert.Equal(["kamidori.stage.after_list_preview"], previewed.Points);
+        Assert.Equal(["stage"], previewed.Fields.Select(field => field.Name));
     }
 
     [Fact]

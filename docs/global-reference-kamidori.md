@@ -186,7 +186,7 @@ The current stage's enemy slots. STINIT, then each append's $n$STINIT, the stage
 
 Ids 1 to 999. A data file reaches each table below as `stage.<id>.<name>.<record>` and not by its own name (data patches spec §6.2).
 
-A stage, by current_stage_id. STINIT's stages are 1 to 968 and the appends' reach 977, and the per-stage arrays hold 1,000 (stage_display_names). kamidori-base applies a scoped table at kamidori.stage.loaded, whose stage is the id.
+A stage, by current_stage_id. STINIT's stages are 1 to 968 and the appends' reach 977, and the per-stage arrays hold 1,000 (stage_display_names). kamidori-base applies a scoped table at kamidori.stage.loaded and kamidori.stage.previewed, whose stage is the id.
 
 | name | table |
 |---|---|

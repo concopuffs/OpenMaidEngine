@@ -622,7 +622,9 @@ public static class ModLuaLinker
     {
         foreach (AcceptedKind kind in kinds.Values.OrderBy(kind => kind.Kind.Kind, StringComparer.Ordinal))
         {
-            string at = string.Join(" and ", kind.Raised.Select(pair => pair.At.Event));
+            // "a and b", "a, b and c".
+            var events = kind.Raised.Select(pair => pair.At.Event).ToList();
+            string at = events.Count < 2 ? string.Concat(events) : string.Join(", ", events[..^1]) + " and " + events[^1];
             string unraised = kind.Unraised.Count == 0 ? ""
                 : $"; not raised in this install: {string.Join(", ", kind.Unraised.Select(pair => pair.At.Event))}";
             // Delivery order: the entry's priority, then the contributor's load order, then manifest order.

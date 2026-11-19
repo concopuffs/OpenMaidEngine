@@ -126,7 +126,8 @@ Speakers come from `unit_speaker_names` (`enum speaker` in `oms/kamidori/adv.oms
 A data file ([../data-files.md](../data-files.md)) changes the unit, item and skill tables, and each floor's
 enemies, with no Lua and no script. `kamidori-base` accepts the kind `kamidori.tables`. It applies each file's boot
 tables at `kamidori.data.layered`, after every layer has written them and before INIT2's own work reads them, and a
-stage's part at `kamidori.stage.loaded`, each time the floor's loaders have run. This one changes the enemy unit 761
+stage's part each time the floor's loaders have run: at `kamidori.stage.loaded` for the floor being played, and at
+`kamidori.stage.previewed` for the stage list's preview. This one changes the enemy unit 761
 (緑プテテット), which appears in the first stage; the comments give the game's own values:
 
 ```toml
@@ -178,9 +179,11 @@ drop_chance.drop_1 = 100   # 30
   follow it. A save made on the floor keeps the units placed (`battle_unit_unit_ids`): loaded without the mod, the
   table is the floor's own again, and a unit the edit placed is still on the field.
 - **The stage list's preview shows the edit.** The stage list (SELSTAGE) runs the loaders of the stage under its
-  cursor for its preview, which lists the enemies whose gates pass, and `stage.loaded` is raised after them, so the
-  preview shows a file's edit. That stage is not being played: nothing is placed, and the list runs them again each
-  time the cursor moves onto another stage.
+  cursor for its preview, which lists the enemies whose gates pass, and `stage.previewed` is raised after them, so
+  the preview shows a file's edit. That stage is not being played: nothing is placed, and the list runs them again
+  each time the cursor moves onto another stage. On an install whose SELSTAGE the point does not name,
+  `stage.previewed` is not raised: the report says so in a note, the part is still applied where the floor is played,
+  and the preview lists the floor's own enemies.
 - **INFO's 獲得地点 view reads no enemy.** To find the floors whose dig points yield an item, it runs every stage's
   loaders and reads the stages' objects, which no data file edits; it raises no event for those stages. Off a floor
   (INFO opened from the town or the workshop) it raises no event at all and leaves `current_stage_id` at 1000.
@@ -302,16 +305,17 @@ A subscriber needs no `vm`. `oms/examples/mods/example.kamidori-double-exp-event
 character at the level cap, gains no experience. Weapon experience is awarded after the point and does not read the
 amount.
 
-The other six follow the boot and each floor. Each is raised where INIT2 or FIELD has walked the chains the appends
-register their handlers in (`../../kamidori-data-tables.md`, "Hook chains"), so a handler runs after the base game's
-and every append's. Each point lists both installs' scripts, which put it at the same site. Their fields are
-read-only:
+The other seven follow the boot, each floor and the stage list. Each is raised where INIT2, FIELD, INFO3 or SELSTAGE
+has walked the chains the appends register their handlers in (`../../kamidori-data-tables.md`, "Hook chains"), so a
+handler runs after the base game's and every append's. Each point lists both installs' scripts, which put it at the
+same site. Their fields are read-only:
 
 | Event | Raised | Fields |
 |---|---|---|
 | `kamidori.data.layered` | `kamidori.boot.data_layered` (INIT2, after op `0x143`): every layer has written its tables, the appends' included, and the boot has not used them yet | none |
 | `kamidori.data.ready` | `kamidori.boot.data_ready` (INIT2's exit): every data table is built, and INIT2's own work on them is done | none |
-| `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run; `kamidori.stage.after_info_reload` (INFO3): INFO's third tab, アイテム情報, has run them again for its 獲得地点 view on the floor; and `kamidori.stage.after_list_preview` (SELSTAGE): the stage list has run them for its preview of the stage under its cursor, which is not being played. A data file's stage part is applied there | `stage` (`current_stage_id`) |
+| `kamidori.stage.loaded` | `kamidori.stage.after_loader` (FIELD): every layer's MPINIT and STINIT have run; `kamidori.stage.after_info_reload` (INFO3): INFO's third tab, アイテム情報, has run them again for its 獲得地点 view on the floor. A data file's stage part is applied there | `stage` (`current_stage_id`) |
+| `kamidori.stage.previewed` | `kamidori.stage.after_list_preview` (SELSTAGE): the stage list has run every layer's MPINIT and STINIT for its preview of the stage under its cursor, which is not being played. A data file's stage part is applied there too | `stage` |
 | `kamidori.stage.ready` | `kamidori.stage.after_ready_handlers`: once per floor, at its start, with the units placed | `stage` |
 | `kamidori.stage.round` | `kamidori.stage.after_round_handlers`: each player turn after the first | `stage`, `turn` (`current_stage_turn`) |
 | `kamidori.stage.close` | `kamidori.stage.after_close_handlers`: the floor ends | `stage`, `result` (`stage_result`: 1 won, 2 lost), `turn` |
@@ -332,11 +336,13 @@ read-only:
   opened for an item, to find the floors whose dig points yield it, then the floor's again, and `stage.loaded` is
   raised after that second run (`kamidori.stage.after_info_reload`, `INFO3@0xd20`). A handler that rewrites the
   layers' tables makes the same change each time.
-- **The stage list raises `stage.loaded` for a stage that is not being played.** For its preview it runs the loaders
-  of the stage under its cursor (`SELSTAGE@0x13d0` to `0x1405`), when it opens, each time the pointer moves onto
-  another stage's panel or a key moves the cursor, and when the party screen comes back to it without setting out;
-  `stage.loaded` is raised after each run (`kamidori.stage.after_list_preview`, `SELSTAGE@0x1408`), and `stage` is
-  the stage under the cursor. Work that belongs once to a played floor goes to `stage.ready`.
+- **The stage list raises `stage.previewed`, not `stage.loaded`.** For its preview it runs the loaders of the stage
+  under its cursor (`SELSTAGE@0x13d0` to `0x1405`), when it opens, each time the pointer moves onto another stage's
+  panel or a key moves the cursor, and when the party screen comes back to it without setting out; `stage.previewed`
+  is raised after each run (`kamidori.stage.after_list_preview`, `SELSTAGE@0x1408`), and `stage` is the stage under
+  the cursor. That stage is not being played, so a handler on `stage.loaded` does not run there. A handler that
+  rewrites the stage's enemy slots and should change the preview too subscribes to both events, as `kamidori-base`
+  does for data files. Work that belongs once to a played floor goes to `stage.ready`.
 - **`result`.** Withdrawing from a free floor (撤退, 探索を終了しますか？) closes it with 1, as winning does, and the
   floor's clear screen follows; forfeiting an arena match (試合を放棄しますか？) closes it with 2.
 
@@ -364,7 +370,7 @@ read-only:
 | `oms/examples/mods/example.kamidori-prologue-line` | a patch against the translated opening |
 | `oms/examples/kamidori-gate6/` | a boot-time data edit and a script called by packed id |
 | `oms/examples/mods/example.kamidori-double-exp-event` | a Lua subscriber of `kamidori.experience.award`, without `vm` |
-| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake no shape can say (a unit name code page 932 cannot encode), which the link takes and the boot reports; `tools/drive/scenarios/port/kamidori-stage-enemies*.steps` drive both through the stage list's preview, INFO's 獲得地点 view, a floor save and its load with the mod and without |
+| `oms/examples/mods/example.kamidori-stage-enemies` | a data file that edits two floors' enemy slots, applied at `kamidori.stage.loaded` and `kamidori.stage.previewed`; `example.kamidori-stage-enemies-mistake` is its twin with a mistake no shape can say (a unit name code page 932 cannot encode), which the link takes and the boot reports; `tools/drive/scenarios/port/kamidori-stage-enemies*.steps` drive both through the stage list's preview, INFO's 獲得地点 view, a floor save and its load with the mod and without |
 | `oms/examples/mods/example.kamidori-unit-stats` | a data file that raises ウィル's maximum HP, which reaches only a character who joins after it; `tools/drive/scenarios/port/kamidori-unit-stats.steps` loads a save with it |
 
 The Kamidori scenarios start from saves in the clean install's story: one in ウィルの工房 (the workshop) when

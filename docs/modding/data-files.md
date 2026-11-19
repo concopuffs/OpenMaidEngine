@@ -125,11 +125,13 @@ experience_reward = 999      # a field with one value for each record
   at the top level (`stage_enemy.3`) is refused with this spelling. The base mod writes stage 12's part at
   `<game>.stage.loaded` each time that event is raised for stage 12: at the stage's start, before the game places
   the enemies, and each time the game runs the stage's loaders again during it, so the edit holds through the stage.
-  A boot's part and a stage's may share a file.
+  A game's base mod may write the part at another event too, where a screen runs a stage's loaders to show the stage
+  without playing it; the game's guide names such events. A boot's part and a stage's may share a file.
 - **A file with a part at an event this install does not raise is refused whole,** rather than applied in part. When
   `<game>.stage.loaded` is not raised (a script revision its point does not name), a file with a stage part applies
   nothing, and says why: `stage.12.enemy: stage_enemy is applied at <game>.stage.loaded, which this install does not
-  raise`. A file of the boot's tables alone is applied.
+  raise`. A file of the boot's tables alone is applied. An event that only shows a stage refuses nothing when it is
+  not raised: the part is applied where the stage is played, and the screen shows the stage's own values.
 - **Most mistakes stop the link.** The base mod ships the kind's shape (below, "Shapes"), so a table, field or
   column it does not have, a saved field, an id out of range, a hexadecimal id and a value of the wrong kind are link
   errors, with the file's line, in `omp check` and before the game starts. The check does not look under a key it

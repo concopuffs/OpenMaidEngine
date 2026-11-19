@@ -993,7 +993,8 @@ when a handler clears `0x2c81`.
 
 The registry names the three stage chains (`stage_ready_handler_script_ids`, `stage_close_handler_script_ids`,
 `stage_round_handler_script_ids`), and `kamidori-base` raises `kamidori.stage.ready`, `.close` and `.round` after FIELD
-walks them, and `kamidori.stage.loaded` after the MPINIT and STINIT layers (`modding/games/kamidori.md`).
+walks them, `kamidori.stage.loaded` after the MPINIT and STINIT layers of a played stage, and
+`kamidori.stage.previewed` after the stage list's run of them for its preview (`modding/games/kamidori.md`).
 
 ### Quests (QUINIT)
 

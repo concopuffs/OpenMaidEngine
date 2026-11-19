@@ -21,8 +21,9 @@ version = ">=1, <2"
 
 # Data files of the game's record tables (data patches spec §6): a mod that requires this base mod ships them under
 # data/, and tables.lua checks and applies each, by the record map lua/generated/tables.lua: the boot's tables at
-# kamidori.data.layered, and a stage's part each time its loaders have run. The link checks each file against
-# shapes/tables.schema.json first, which base_mod_build.py generates from the same record map (spec §7).
+# kamidori.data.layered, and a stage's part each time its loaders have run, for the stage being played
+# (kamidori.stage.loaded) and for the stage list's preview (kamidori.stage.previewed). The link checks each file
+# against shapes/tables.schema.json first, which base_mod_build.py generates from the same record map (spec §7).
 [[accepts]]
 kind = "kamidori.tables"
 description = "Edits to the game's record tables: units, items and skills, which the boot builds, and each stage's enemies, which its loader writes."
@@ -34,4 +35,8 @@ handler = "tables.lua:apply_boot"
 
 [[accepts.at]]
 event = "kamidori.stage.loaded"
+handler = "tables.lua:apply_stage"
+
+[[accepts.at]]
+event = "kamidori.stage.previewed"
 handler = "tables.lua:apply_stage"

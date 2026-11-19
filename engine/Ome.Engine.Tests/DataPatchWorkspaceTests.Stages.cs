@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Ome.Engine.Hosting;
 using Ome.Engine.Modding;
 using Ome.Engine.Natives;
@@ -194,16 +195,16 @@ public sealed partial class DataPatchWorkspaceTests
         Assert.DoesNotContain(unit, PlacedEnemies(profile, booted));
     }
 
-    /// <summary><paramref name="game"/>'s link base with another FIELD revision, whose bytes no point names, so the
-    /// stage events are not raised in this install.</summary>
-    private static ModLinkBase WithoutStageEvents(GateGame game)
+    /// <summary><paramref name="game"/>'s link base with another revision of <paramref name="script"/>, whose bytes no
+    /// point names, so the events at its points are not raised in this install: FIELD's, the stage events.</summary>
+    private static ModLinkBase WithAnotherRevision(GateGame game, string script = "FIELD.BIN")
     {
         Func<string, byte[]?> read = game.Base.ReadScript;
         return game.Base with
         {
             ReadScript = name =>
             {
-                if (read(name) is not { } bytes || !name.Equals("FIELD.BIN", StringComparison.OrdinalIgnoreCase)) return read(name);
+                if (read(name) is not { } bytes || !name.Equals(script, StringComparison.OrdinalIgnoreCase)) return read(name);
                 byte[] other = (byte[])bytes.Clone();
                 other[^1] ^= 1;
                 return other;
@@ -219,11 +220,13 @@ public sealed partial class DataPatchWorkspaceTests
     {
         GateGame game = Game(profile);
         GameSession plain = game.Boot(null);
-        ModLinkResult linked = LinkedInOrder(WithoutStageEvents(game),
+        ModLinkResult linked = LinkedInOrder(WithAnotherRevision(game),
             DataMod(profile, "test.both", "both.toml", $"[unit.{game.Unit}]\nstats.max_hp = 150\n\n[stage.1.enemy.2]\nunit_id = 810\n"),
             DataMod(profile, "test.boot", "boot.toml", $"[unit.{game.Unit}]\nexperience_reward = 999\n"));
         string report = linked.Report.Render();
-        Assert.Contains($"kind {profile}.tables ({profile}-base), at {profile}.data.layered; not raised in this install: "
+        // Kamidori's stage list raises its own event, at SELSTAGE, which this FIELD does not change.
+        string raised = profile == "kamidori" ? "kamidori.data.layered and kamidori.stage.previewed" : $"{profile}.data.layered";
+        Assert.Contains($"kind {profile}.tables ({profile}-base), at {raised}; not raised in this install: "
                         + $"{profile}.stage.loaded", report, StringComparison.Ordinal);
 
         Scripting native = Native(linked, LuaErrorPolicy.Continue);
@@ -236,5 +239,118 @@ public sealed partial class DataPatchWorkspaceTests
                           + $"{game.Layered}: test.both data/both.toml: 1 problem, so nothing of it is applied: "
                           + $"stage.1.enemy: stage_enemy is applied at {profile}.stage.loaded, which this install does "
                           + "not raise\nstack traceback:", logged);
+    }
+
+    // ------------------------------------------------------------------------------------- Kamidori's stage list
+
+    /// <summary>A Lua mod of Kamidori that logs each <c>stage.loaded</c> and <c>stage.previewed</c> it is told of, by
+    /// the event and its stage.</summary>
+    private ModPackage StageLogger()
+    {
+        string folder = Path.Combine(_root, "test.stage-logger");
+        Directory.CreateDirectory(Path.Combine(folder, "lua"));
+        File.WriteAllText(Path.Combine(folder, "manifest.toml"), """
+            omp = 3
+            id = "test.stage-logger"
+            name = "test.stage-logger"
+            version = "1.0.0"
+
+            [game]
+            profile = "kamidori"
+            target = "extended"
+
+            [lua]
+            api = 1
+
+            [[requires]]
+            id = "kamidori-base"
+            version = ">=1.1, <2"
+
+            [[hooks]]
+            event = "kamidori.stage.loaded"
+            handler = "logger.lua:on_stage"
+
+            [[hooks]]
+            event = "kamidori.stage.previewed"
+            handler = "logger.lua:on_stage"
+            """);
+        File.WriteAllText(Path.Combine(folder, "lua", "logger.lua"), """
+            function on_stage(e) maid.log.info(e.event .. " " .. e.stage) end
+            """);
+        ModPackage mod = ModPackage.Open(folder);
+        _opened.Add(mod);
+        return mod;
+    }
+
+    /// <summary>Kamidori's INIT2, then SELSTAGE as the world map opens it on <paramref name="stage"/>'s labyrinth,
+    /// headless, each run with a scripting native of its own from <paramref name="linked"/>, or with no mod. The list
+    /// holds the stages of the labyrinth that are available (<c>SELSTAGE@0x439</c>), and only
+    /// <paramref name="stage"/> is marked so: the preview it opens with (<c>SELSTAGE@0x4d</c>) runs that stage's
+    /// loaders. Then the list waits for input, so the run ends at the step limit.</summary>
+    private GameSession AtStageList(GateGame game, ModLinkResult? linked, int stage, out Scripting? native)
+    {
+        const string Profile = "kamidori";
+        GameSession session = game.Boot(linked is null ? null : Native(linked, LuaErrorPolicy.Halt));
+        int labyrinth = (int)session.Globals.GetValueOrDefault(Cell(Profile, "stage_labyrinth_ids", stage));
+        Assert.True(labyrinth > 0);
+        session.Seed(Cell(Profile, "current_labyrinth_id", 0), labyrinth);
+        session.Seed(Cell(Profile, "world_area_kinds", labyrinth), 1);           // a labyrinth: the list of its stages
+        session.Seed(Cell(Profile, "stage_availability_flags", stage), 3);
+        native = linked is null ? null : Native(linked, LuaErrorPolicy.Halt);
+        SceneResult list = session.RunScene(game.Scripts.RequireByName("SELSTAGE.BIN"), game.Table, new HeadlessWaits(),
+                                            provider: game.Scripts, build: game.Build, scripting: native);
+        Assert.Equal("STEP-LIMIT", list.Halt);
+        Assert.Equal(stage, session.Globals.GetValueOrDefault(Cell(Profile, "current_stage_id", 0)));
+        return session;
+    }
+
+    [Theory]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheStageListsPreviewRaisesStagePreviewedWhereAStagePartIsAppliedAndNoStageLoadedHandlerRuns(bool translated)
+    {
+        // Plan §12.6, the owner's decision of 2026-11-19: the stage list's preview is not a played stage, so it raises
+        // an event of its own, kamidori.stage.previewed, where kamidori-base applies a stage part too.
+        GateGame game = StageGame("kamidori", translated);
+        int slot = Cell("kamidori", "stage_enemy_unit_id", 1);
+        GameSession plain = AtStageList(game, null, 51, out _);
+        Assert.Equal(331, plain.Globals.GetValueOrDefault(slot));                 // ハルピュア
+
+        ModLinkResult linked = LinkedInOrder(game.Base,
+            DataMod("kamidori", "test.stage", "stage.toml", "[stage.51.enemy.1]\nunit_id = 761\n"), StageLogger());
+        GameSession edited = AtStageList(game, linked, 51, out Scripting? native);
+        Assert.Equal(761, edited.Globals.GetValueOrDefault(slot));                // 緑プテテット, in the preview
+        // The handler on stage.previewed ran, at the preview's point; the one on stage.loaded did not.
+        Assert.Equal(["kamidori.stage.previewed 51"], Logged(native!, "test.stage-logger"));
+        JsonElement delivery = Delivery(native!, "stage");
+        Assert.Equal(("kamidori.stage.previewed", "SELSTAGE.BIN@0x1408", "ok"),
+                     (delivery.GetProperty("hook").GetString(), delivery.GetProperty("at").GetString(),
+                      delivery.GetProperty("result").GetString()));
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "kamidori")]
+    public void WhereTheStageListDoesNotRaisePreviewedTheReportSaysSoAndAStagePartIsAppliedWhereTheStageIsPlayed()
+    {
+        // An install whose SELSTAGE the point does not name: kamidori.stage.previewed is not raised, which the report
+        // gives as it gives any unraised event of a kind. The part is not refused: it applies where the stage is
+        // played, and the preview lists the stage's own enemies.
+        GateGame game = Game("kamidori");
+        ModLinkResult linked = LinkedInOrder(WithAnotherRevision(game, "SELSTAGE.BIN"),
+            DataMod("kamidori", "test.stage", "stage.toml", "[stage.51.enemy.2]\nunit_id = 810\n"));
+        Assert.Contains("kind kamidori.tables (kamidori-base), at kamidori.data.layered and kamidori.stage.loaded; "
+                        + "not raised in this install: kamidori.stage.previewed", linked.Report.Render(), StringComparison.Ordinal);
+        Assert.Contains(linked.Report.Lines, line => line.Class == ModReportClass.Note && line.Message.StartsWith(
+            "kind kamidori.tables (kamidori-base): kamidori.stage.previewed is not raised in this install, so its data files "
+            + "are not delivered there, and each delivery lists it in contribution.unraised: ", StringComparison.Ordinal));
+        Assert.Contains(linked.Report.Lines, line => line.Class == ModReportClass.Note && line.Message.StartsWith(
+            "events/stage.toml: kamidori.stage.previewed: not raised in this install, so a mod that subscribes to it does "
+            + "not link: ", StringComparison.Ordinal));
+
+        GameSession edited = AtStageStart(game, linked, 51);
+        Assert.Equal(810, edited.Globals.GetValueOrDefault(Cell("kamidori", "stage_enemy_unit_id", 2)));
     }
 }

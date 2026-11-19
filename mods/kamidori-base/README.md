@@ -13,14 +13,15 @@ enabled mod requires it. A Lua mod reads and writes the game's cells by name thr
   `kamidori.data.ready`, once the boot's own work on them is done) and `stage.toml` (`kamidori.stage.loaded`,
   `.ready`, `.round` and `.close`, around FIELD's walks of the stage chains the appends register their handlers in;
   `kamidori.stage.loaded` is raised too where INFO's third tab, アイテム情報, runs a floor's loaders again for its
-  獲得地点 view, and where the stage list runs the loaders of the stage under its cursor for its preview).
+  獲得地点 view; and `kamidori.stage.previewed`, where the stage list runs the loaders of the stage under its cursor
+  for its preview, a stage that is not being played).
 - `lua/init.lua` is hand-written: the helpers the base mod returns to a mod that requires it, each changing the game
   through one of its own scripts (`give_item` through ADDITEM). `[lua] calls` in the manifest lists those scripts.
 - `lua/tables.lua` is hand-written: the handlers of the `kamidori.tables` format (data patches spec §6,
   `docs/superpowers/specs/2026-11-17-data-patches-design.md`), which the manifest's `[[accepts]]` declares.
   `apply_boot`, bound at `kamidori.data.layered`, checks a data file's document against the record map and writes its
-  boot tables, and `apply_stage`, bound at `kamidori.stage.loaded`, writes its part for the stage whose loaders have
-  run (`stage.<id>.enemy`), both through `ome-records`, the library the manifest requires. The modder's guide to the
+  boot tables, and `apply_stage`, bound at `kamidori.stage.loaded` and `kamidori.stage.previewed`, writes its part for
+  the stage whose loaders have run (`stage.<id>.enemy`), both through `ome-records`, the library the manifest requires. The modder's guide to the
   format is `docs/modding/data-files.md`.
 - `lua/generated/tables.lua` is the record map, generated with `layout/` by `tools/base_mod_build.py --build` from
   the registry's `[[table]]` and `[[scope]]` entries and the profile's saved prefix, with the old names of tables

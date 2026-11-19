@@ -3,18 +3,32 @@
 
 [[event]]
 name = "kamidori.stage.loaded"
-point = ["kamidori.stage.after_loader", "kamidori.stage.after_info_reload", "kamidori.stage.after_list_preview"]
+point = ["kamidori.stage.after_loader", "kamidori.stage.after_info_reload"]
 description = """
-The stage's loaders have run (the base's and each append's). At the stage's start nothing is placed yet, and a \
-handler that rewrites the stage's enemy or object slots changes what the stage places. FIELD runs the loaders, and \
-raises this, again each time it is entered again during the stage (back from the camp screens, or a load of a save \
-made in the field), and INFO's third tab (アイテム情報) runs every stage's loaders for its 獲得地点 view and, on a \
-floor, that floor's again, and raises this there: the loaders write their tables afresh and nothing new is placed, \
-so a handler makes the same change each time. The floor reads the enemy table again later, for its \
-reinforcements. The stage list raises this too, for a stage that is not being played: it runs the loaders of the \
-stage under its cursor for its preview, when it opens, each time the cursor moves onto another stage and when the \
-party screen comes back to it, and stage is that stage. Work that belongs once to a played stage goes to \
-kamidori.stage.ready."""
+The loaders of the stage being played have run (the base's and each append's). At the stage's start nothing is \
+placed yet, and a handler that rewrites the stage's enemy or object slots changes what the stage places. FIELD runs \
+the loaders, and raises this, again each time it is entered again during the stage (back from the camp screens, or a \
+load of a save made in the field), and INFO's third tab (アイテム情報) runs every stage's loaders for its 獲得地点 \
+view and, on a floor, that floor's again, and raises this there: the loaders write their tables afresh and nothing \
+new is placed, so a handler makes the same change each time. The floor reads the enemy table again later, for its \
+reinforcements. The stage list's preview of a stage raises kamidori.stage.previewed instead. Work that belongs once \
+to a played stage goes to kamidori.stage.ready."""
+
+[[event.field]]
+name = "stage"
+at = "current_stage_id"
+type = "int"
+
+[[event]]
+name = "kamidori.stage.previewed"
+point = "kamidori.stage.after_list_preview"
+description = """
+The stage list (the world map's choice of a floor) has run the loaders of the stage under its cursor (the base's and \
+each append's) for its preview, which lists the enemies whose gates pass. The list does this when it opens, each \
+time the cursor moves onto another stage, and when the party screen comes back to it without setting out. The stage \
+is not being played: nothing is placed, and the loaders write the tables afresh each time, so a handler that \
+rewrites the stage's enemy slots changes what the preview lists and makes the same change each time. A handler that \
+changes what the stage places when it is played subscribes to kamidori.stage.loaded too."""
 
 [[event.field]]
 name = "stage"

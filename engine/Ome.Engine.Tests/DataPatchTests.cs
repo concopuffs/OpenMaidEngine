@@ -579,7 +579,9 @@ public sealed partial class DataPatchTests : IDisposable
     [Fact]
     public void BothBaseModsAcceptTheirTablesAtTheSameEventsByTheSameHandlersButForTheGamesName()
     {
-        // Spec §12, gate 11: the format is one design, which each base mod declares over its own game.
+        // Spec §12, gate 11: the format is one design, which each base mod declares over its own game. Kamidori's
+        // stage list has an event of its own, where its base mod applies the stage part by the same handler (plan
+        // §12.6, the owner's decision of 2026-11-19); Himegari has no such screen.
         var declared = Games.Select(game =>
         {
             using ModPackage baseMod = ShippedPackages.Open($"{game}-base")!;
@@ -588,10 +590,11 @@ public sealed partial class DataPatchTests : IDisposable
                                                             string.Join(", ", kind.At.Select(at => $"{at.Event.Replace(game, "<game>")} {at.Handler}"))))
                                    .ToList();
         }).ToList();
-        Assert.Equal([("<game>.tables", "Edits to the game's record tables: units, items and skills, which the boot builds, and "
-                                        + "each stage's enemies, which its loader writes.",
-                       "<game>.data.layered tables.lua:apply_boot, <game>.stage.loaded tables.lua:apply_stage")], declared[0]);
-        Assert.Equal(declared[0], declared[1]);
+        const string Description = "Edits to the game's record tables: units, items and skills, which the boot builds, and "
+                                   + "each stage's enemies, which its loader writes.";
+        const string Shared = "<game>.data.layered tables.lua:apply_boot, <game>.stage.loaded tables.lua:apply_stage";
+        Assert.Equal([("<game>.tables", Description, Shared)], declared[0]);
+        Assert.Equal([("<game>.tables", Description, Shared + ", <game>.stage.previewed tables.lua:apply_stage")], declared[1]);
     }
 
     [Fact]
