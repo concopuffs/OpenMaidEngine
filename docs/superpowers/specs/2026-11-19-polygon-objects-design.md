@@ -1,7 +1,8 @@
 # Polygon objects — design
 
-**Status: proposed 2026-11-19, not yet accepted.** Written while bringing 創刻のアテリアル to P2
-(`docs/adding-a-game.md`, step 6), from a reading of its AGE 4.38D image.
+**Status: accepted 2026-11-19** (the user: "Design is fine"). How the title's 3D scene is handled for P2 (§4) is
+still the user's to decide. Written while bringing 創刻のアテリアル to P2 (`docs/adding-a-game.md`, step 6), from a
+reading of its AGE 4.38D image.
 
 ## 1. Purpose
 
@@ -122,13 +123,35 @@ until it does, as it declines what it cannot draw today. `reference-diff` holds 
 
 ## 4. What this leaves out
 
-**The title's 3D scene.** Ops `0x324` to `0x32f` are a separate module: mesh slots loaded from the catalog's two
-`.X` files (`0x329`, `0x32a`, `0x32b`), a camera and a light colour (`0x32c`, `0x32d`), mesh instances with a
-position, a rotation, a colour and a scale (`0x32e`, `0x32f`), and an effect that takes over the walk between two
-handles (`0x324`, `0x325`, `0x327`; `0x326` and `0x328` feed it). The title's falling leaves are this. It needs a
-mesh loader and a 3D pass, which is a design of its own. For P2 the proposal is handlers that keep the state the
-scripts set and draw nothing, with the missing leaves listed in the backlog as a fidelity gap, and the 3D pass
-designed after P2. The title, its menu and Game Start do not depend on it.
+**The title's 3D scene.** Ops `0x324` to `0x32f` are a separate module. Its workers were read on 2026-11-19, after
+this design was proposed, and the first version of this paragraph had two of them wrong (it took the lights for
+mesh instances). Each function carries its reading in the Ghidra image.
+
+- **Meshes:** 1,000 mesh slots, each a Direct3D `.X` file loaded with its materials (`0x329` loads, `0x32a` and
+  `0x32b` release).
+- **Camera and lights:** a look-at view (`0x32c`), an ambient colour (`0x32d`), and Direct3D lights with a type,
+  a position, a direction, a colour and a range (`0x32e` sets one, `0x32f` disables one).
+- **Three effect objects** the display draws during the frame walk, when the walk reaches two handles that op
+  `0x325` names: the mesh particles, which op `0x328` builds from a list of mesh slots, and two others that ops
+  `0x326` and `0x327` build. Op `0x324` releases all three.
+
+The title's drifting white feathers are the mesh particles, built from `LEAF0.X` and `LEAF1.X`. The engine moves
+them; the script only builds the object. Native screenshots taken seconds apart show them in different places. In
+the game only TITLE.BIN and DEBUG.BIN use the group, at 23 sites; GAMESTART and CALLBACK_LOAD call the two
+releases, and only DEBUG.BIN builds the two other effects. What the mesh particles do each frame, what the two
+other effects draw and how the `.X` files are encoded were not read.
+
+Two ways to handle it:
+
+- **State only.** The twelve handlers keep what the scripts set and draw nothing. The title shows everything but
+  the feathers, and the gap is listed in the backlog.
+- **Drawn.** The port reads the `.X` files, reproduces the mesh particles' motion from the native object, and
+  draws them. The polygon item of §3 can carry them: the graphics native transforms and lights each mesh on the
+  engine thread and emits triangles, so neither renderer needs a 3D pass. It is a design of its own, and its
+  frames cannot be compared with native's pixel for pixel, since the motion runs on the clock.
+
+The proposal for P2 is state only, with the drawn version after P2. The title, its menu and Game Start do not
+depend on the feathers.
 
 **Float references.** The scripts pass local float references (operand type `0xd`) at 584 places, among them op
 `0x320`'s arrays. It is VM work, not graphics work, and it is done (2026-11-19; `engine-re.md`, "Float cells as

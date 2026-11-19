@@ -604,13 +604,15 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     Ops `0x320` to `0x323` are AGE 4.38D's polygon objects: retained objects of vertices with a colour each, a
     colour that multiplies them, a timed fade of that colour, up to two textures and four blends, drawn in handle
     order with the other retained objects. They are read in full but for five points, and
-    `superpowers/specs/2026-11-19-polygon-objects-design.md` (proposed) is the design for them in the graphics
-    native and the two renderers.
+    `superpowers/specs/2026-11-19-polygon-objects-design.md` (accepted 2026-11-19) is the design for them in the
+    graphics native and the two renderers.
 
     Ops `0x324` to `0x32f` are a separate module, the title's 3D scene: mesh slots loaded from the two `.X` files,
-    a camera, a light colour, mesh instances, and an effect that takes over the walk between two handles. Its
-    handlers are read, its workers are not. The design proposes handlers that keep its state and draw nothing for
-    P2, with the title's falling leaves then listed here as a fidelity gap.
+    a camera, an ambient colour, Direct3D lights, and three effect objects drawn during the frame walk, one of them
+    the mesh particles that are the title's drifting white feathers. Only TITLE.BIN and DEBUG.BIN use it (23
+    sites). Its workers are read but for the particles' motion, the two effects only DEBUG.BIN builds and the
+    `.X` encoding (the design's §4). Whether P2 keeps its state and draws nothing, or draws the feathers, is the
+    user's to decide.
   - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
     the two settings keys, the two file types and the font), then step 6, the boot: the polygon objects once their
     design is accepted, then the title's opcodes.
