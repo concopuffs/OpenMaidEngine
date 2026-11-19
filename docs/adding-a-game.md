@@ -166,6 +166,9 @@ Each differing row gets one disposition (layering spec §7.2, §7.3, §7.7):
 - **real**: a registry fact (an operand contract), a handler variant, or a rule named for the behaviour and set in
   the build's definition.
 
+To read a row, decompile its functions from both images into two files (`tools/ghidra/DecompileToFile.java`) and
+compare them with `tools/decomp_pair_diff.py`, which masks each build's addresses and offsets.
+
 Read a low-scored row too when its fact is a compare or a bit test in the handler itself. Kamidori's op `0x215`
 difference scored 4 and broke an event picture.
 

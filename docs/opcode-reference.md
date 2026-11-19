@@ -334,6 +334,8 @@ Port status (2026-11-03): the text native (TextManager) seeds the delay from SYS
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1ce`; scope=Himegari SYS4422. Ghidra op_0x1ce_set_adv_wait_indicator_enabled@0x41f8c0 writes enabled to ctx+0x5f734. A nonzero value sets run bit 0x40000000, resets ctx+0x5f72c to frame zero, and starts the ctx+0x5f64c elapsed timer. Zero erases the indicator through adv_text_publish_wait_indicator_frame@0x453120 using ctx+0x6da84 and frame -2 when necessary, then clears the run bit. The corpus uses 0x1ce(0) on modal/menu entry, including HISTORY.BIN@0x3.
 
+4.38D's handler differs from 4.33G's in one fact, the graphics manager's polygon dirty flag (+0xb58c) that the erase helper 0x494440 sets; the port decides what to present from its own state, so one handler serves both builds (docs/engine-re.md, 'Kamidori against Arterial, triaged').
+
 ### 0x1d0 `step-text-history` (step-text-history, argc 3)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`, `SYS4438`
@@ -1072,7 +1074,7 @@ This is character count rather than .NET UTF-16 length or raw CP932 byte length.
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2c7`; scope=SYS4438 handler; Kamidori's 4.33G has an opcode at this number that the name port paired at 0.36 similarity and that was not read. op_0x2c7_byte_substring@0x42fe10 reads the string (operand 2), the start (3) and the count (4). When the start, compared unsigned, is below the byte length and the count is above 0, it walks the bytes before the start: if the last one is the first byte of a double-byte character (0x81 to 0x9f, or 0xe0 up, and not itself a second byte), it traces 「関数：SBSubstr 警告：文字列が全角文字の途中から切り出されるため、先頭バイトを切り捨てました。」, moves the start one byte on and takes one from the count. It walks to start + count the same way: if that last byte is the first of a double-byte character, it traces 「…切り出した文字列が全角文字の途中で終了するため、最終バイトを切り捨てました。」 and takes one from the count. Then it writes substr(start, count) to operand 1; otherwise it writes the empty string.
 
-The port matches (Cp932Text.ByteSubstring) and reports each of native's two traces as a warning. 創刻のアテリアル has 14 sites.
+The port matches (Cp932Text.ByteSubstring) and reports each of native's two traces as a warning. 創刻のアテリアル has 14 sites. 4.33G's handler at this number is another function: std::string's assign(source, start, count) through std_string_substr@0x425190, plain bytes with no double-byte care, and a start past the string's end throws. The port runs 4.38D's on every build; no script of Kamidori has a site (docs/engine-re.md, 'Kamidori against Arterial, triaged').
 
 ### 0x2c8 `cp932-substring` (cp932-substring, argc 4)
 - **observed by:** himegari (SYS4422)

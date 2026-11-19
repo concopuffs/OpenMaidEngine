@@ -64,6 +64,7 @@ CORE_TESTS = (
     "test_launcher_icon_build.py",
     "test_paths.py",
     "test_revision_diff.py",
+    "test_decomp_pair_diff.py",
     "test_sys4load.py",
     "frida/test_dump_engine.py",
     "frida/test_map_imports.py",

@@ -564,8 +564,25 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The catalog's font list** was the block the reader refused: file 37, `AGE-EXTEND.TTF`, as the face
     `AGE Extend` (`sys4-format-notes.md`, "The font list"). The port reads the list and does not load the font.
     4.38D's text code names `AGE Extend` and `@AGE Extend` (the revision diff's helper `0x4522c0=0x456800`).
-  - **Settings keys no other game has:** `JUSTIFYCHAR` (four values: `、`, `。`, `」`, `）`) and `SAVEWINPOS`.
-    Neither has a consumer in the port, and neither is read natively yet.
+  - **The revision diff against 4.33G is triaged (2026-11-19):** every one of its 36 opcode rows and 11 helper
+    rows has a disposition (`engine-re.md`, "Kamidori against Arterial, triaged"). What it found real and the port
+    lacks, each done when the port does what that section says native does and a test or a scenario holds it:
+    - **`JUSTIFYCHAR`.** 4.38D keeps on its line the characters the catalog lists (`、`, `。`, `」`, `）` here),
+      where 4.33G keeps a fixed three. The port keeps the fixed three on every build
+      (`AdvRetainedTextContract.PreventsHorizontalWrapBefore`), so a `）` at a line's end wraps.
+    - **`SAVEWINPOS`.** With it set (1 here) native opens its window where it was left, and keeps the position in
+      the registry. The port opens its window where the platform puts it. The port must not write the registry;
+      where it keeps the position is to decide (`OME.INI` holds the port's own options).
+    - **Four more `SYS4REG.INI` keys:** `display` `MultiSample`, and `message` `AutoMessagePitch0`,
+      `AutoMessagePitch1`, `AutoMessageOption`. The build's `SettingsRules` binds 4.33G's keys, so the port's file
+      lacks them and drops them from a file native wrote.
+    - **A load clears the polygons**, and a save holds none. The port's load does not clear them (its saves are
+      off for this game).
+    - **Op `0x2c7` on 4.33G** is a plain byte substring; the port runs 4.38D's `SBSubstr` on every build. No script
+      of Kamidori has a site.
+    - **Three points left unread:** whether 4.33G draws a surface through a sprite with the alpha test on (4.38D
+      turns it off), what draws into surface `0x27` (4.38D treats that target as the back buffer), and the two
+      glyph string drawers past the `AGE Extend` range (see "Glyph edges differ" below).
   - **File types no other game has:** two `.X` files (`LEAF0.X`, `LEAF1.X`) and the `.TTF`, among 21,349 entries
     in six archives and four appends.
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
@@ -621,8 +638,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     differs at the pages:
     - **「――」 is drawn as other glyphs.** SC0000's first page reads 「――重苦しい風が吹く。」 on native and
       「✓冂重苦しい風が吹く。」 on the port. The catalog's font, `AGE-EXTEND.TTF` (face `AGE Extend`), is not
-      loaded, and 4.38D's text code names that face. Done when the port draws the characters native draws with it,
-      from a reading of where 4.38D selects the face.
+      loaded. 4.38D draws the Shift-JIS codes `0xF040` to `0xF9FC` with that face and joins consecutive `0xF042`
+      and `0xF043` dashes by copying surface rectangles (`engine-re.md`, "Kamidori against Arterial, triaged").
+      Done when the port draws those characters as native does.
     - **Glyph edges differ.** On page 4 the same text sits in the same place with the same ruby, and 3,061 pixels
       of the line differ by more than 8 of 255: the port's glyphs are a little lighter. Not looked into;
       `text_geometry_compare.py` is the tool.
@@ -653,9 +671,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The title's 3D scene keeps its state and draws nothing (the user's decision, 2026-11-19).** Ops `0x324` to
     `0x32f`: the handlers keep what the scripts set (`Graphics.Scene3D.cs`). What that leaves undrawn is its own
     item, "The title's 3D leaves are not drawn", under Engine fidelity.
-  - **Next, by the plan:** step 4, the triage (the 36 differing opcodes and 11 differing helpers against 4.33G,
-    the two settings keys and the font, which page 1 already shows), then step 7: the 20 opcodes, the build's
-    rules and the saves.
+  - **Next, by the plan:** step 7. The triage's real differences above and the two text points, the 20 opcodes,
+    the build's rules in `EngineBuilds.cs`, the shell compared with the game's `AGERC.DLL`, and the saves.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

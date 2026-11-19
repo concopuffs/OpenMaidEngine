@@ -124,6 +124,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       global-var map builder
     │   ├── native_scratch.py (+ test_native_scratch.py)  gate-6 scratch install (hard-linked archives) + pristine check
     │   ├── revision_diff.py                    compare two engine builds' native code opcode by opcode (+ test_revision_diff.py)
+    │   ├── decomp_pair_diff.py                 compare two builds' decompiled functions pair by pair, build numbers masked (+ test_decomp_pair_diff.py)
     │   ├── drive.py, drive_core.py (+ test_drive_core.py)  game driver for native AGE and the port: one step
     │   │                                       language, input, screenshots, VM position, sandboxed saves
     │   ├── drive_native.py, drive_port.py      the two targets: Frida daemon for AGE; launcher for the port's

@@ -280,7 +280,104 @@ to 6), the noise class the report flags. Kamidori–Arterial's largest differenc
   screen-mode switch;
 - vertex-buffer render paths (`CalcDiffuse`, `RenderPolygon`, `CopyScene`) under `0x20c`, `0x222` and `0x21d`;
 - `message:AutoMessage*` settings in op `0x72`;
-- op `0x2c7`'s substring, which now writes a string operand and warns when it cuts a full-width character.
+- op `0x2c7`'s substring, which keeps double-byte characters whole and warns when it moves an end.
+
+### Kamidori against Arterial, triaged (2026-11-19)
+
+Every one of the report's 36 differing opcodes and 11 differing helpers has a disposition (`adding-a-game.md`,
+step 4). Each pair was decompiled from both images (`tools/ghidra/DecompileToFile.java`) and compared line by line
+with the build's own addresses and context offsets masked. Addresses are written 4.33G's first, then 4.38D's.
+
+| Cause | Rows | Disposition |
+|---|---|---|
+| Polygon objects | ops `0x20c`, `0x222`, `0x21d`, `0x1f7` | real, built: the two present workers merge the polygon map, and the clone and erase workers carry a handle's polygon (`superpowers/specs/2026-11-19-polygon-objects-design.md`) |
+| The polygon dirty flag | ops `0x1ce`, `0x20a` (their one fact is the manager's `+0xb58c`, set by the erase helper `0x4843c0`=`0x494440`) | the same in practice: the port decides what to present from its own state |
+| A load clears the polygons | ops `0xab`, `0x190`, `0x19f`, `0x1a1` (the save reader `0x40faa0`=`0x40fe90`) | real: "Saves" below |
+| Text | ops `0x6e`, `0x196`, `0x82`, `0x1d1`, `0x71`, `0x75`, `0x197`, `0x1a5`, `0x9`; helpers `0x4522c0`=`0x456800`, `0x460250`=`0x46b1d0`, `0x45e4e0`=`0x4692f0`, `0x452020`=`0x4562e0`, `0x451270`=`0x454ab0` | real: "Text" below |
+| Text, in opcodes the port has no handler for | ops `0x7d`, `0x221`, `0x2be` | not modelled: no script of a profiled game uses them; they share the text helpers above |
+| Auto's pitch | op `0x72` | real: "Auto pitch" below |
+| The window's position | op `0x2cf` (the mode switch `0x4130f0`=`0x4135a0`) | real: "Settings" below |
+| The substring | op `0x2c7` | real: 4.33G's handler is `std::string`'s `assign(source, start, count)`, plain bytes with no double-byte care, and a start past the end throws; 4.38D's is `SBSubstr`. Kamidori's scripts have no site, and the port runs 4.38D's on every build (`backlog.md`) |
+| Catalog file handles | ops `0x1f8`, `0x1fa`, `0x210`, `0x23d` (each gains a call to `0x452350`, which closes a file handle the loader keeps) | not modelled: the port's catalog reader owns its files |
+| Direct3D device loss | helper `0x477a00`=`0x485200`, by its callees `0x4789b0`=`0x4861d0` (lost) and `0x4832b0`=`0x491cb0` (reset) | not modelled: the effect array at the manager's `+0xb570` has five entries where 4.33G's has four, and a reset ends in a new call, `0x486260` |
+| Display scaling | helper `0x47dac0`=`0x48c6d0` (`gfx_draw_surface_through_sprite`) | not modelled, with two points unread ("Unread" below) |
+| The same code, compiled differently | ops `0x2`, `0xae` (names only), `0x15`, `0x216` (one index expression), `0x70` (`adv_text_layout_define` is the same line for line), `0x85` (the erase loop became a library call), `0x258` (its body moved into `0x417540` unchanged); helpers `0x40ab90`=`0x40aa90`, `0x483cd0`=`0x492940` (one string paired differently), `0x40e6b0`=`0x40ea70`, `0x40b680`=`0x40b900` (the save folder helper: 4.38D's image does not resolve its imports, so the decompiler ends the function early) | noise |
+
+**Text.** 4.38D's text code is 4.33G's with these changes. The first two are visible on 創刻のアテリアル's first
+page; the port has neither yet (`backlog.md`, the game's item).
+
+- **The characters that may pass the right edge come from the catalog.** 4.33G's
+  `adv_text_append_horizontal_glyph_records@0x45b710` keeps `、`, `。` and `」` on the line they overflow by
+  comparing the glyph's bytes with `81 41`, `81 42` and `81 76`. 4.38D's (`@0x466000`) calls
+  `text_is_justify_character@0x457950` instead, which compares the glyph's bytes, as a string, with each entry
+  of a list at the text manager's `+0x3964c`. `engine_initialize@0x416c00` fills that list from the settings
+  object, which holds one entry per `JUSTIFYCHAR` pair of the catalog trailer
+  (`sys4ini_import_settings_trailer@0x480cc0` appends each pair's value). There is no default: a catalog without the
+  key keeps no character on the line. 創刻のアテリアル's four are `、`, `。`, `」` and `）`. The second layout
+  builder, `0x465500`, makes the same call.
+- **The face `AGE Extend`.** `text_rebuild_primary_font_resources@0x456800` creates four more fonts beside the
+  primary one: `AGE Extend` and `@AGE Extend`, each at the primary size and again at the display's scale
+  (`+0x3963c`, `+0x39644`, `+0x39640`, `+0x39648`). `text_draw_glyph_string_plain@0x4692f0` and
+  `text_draw_glyph_string_effect@0x46b1d0` draw a character whose Shift-JIS code is `0xF040` to `0xF9FC` with that
+  face (glyph cache font id `0x101`), and after a `0xF042` or `0xF043` they copy surface rectangles
+  (`gfx_copy_surface_rect@0x48d2f0`) so that consecutive dashes join. The catalog ships the face as
+  `AGE-EXTEND.TTF`. `text_set_font_face@0x42ec40` (ops `0x82` and `0x1a5`) reports a face missing from the
+  catalog's font list as a script error, except this one.
+- **A segment record carries its style.** The record a layout keeps per drawn run grew from `0x30` to `0x74`
+  bytes: `adv_text_append_segment_record@0x459d50` (4.33G `0x454e90`) stores the face, size, colours and effect
+  with the rectangle and the text, where 4.33G stored them once in the layout. The port's records have carried a
+  style since Himegari (`AdvTextRedrawRecord.Style`), so its redraw and History need no change for this.
+- **The ruby font.** `text_set_ruby_font_size@0x417910` (op `0x197`) also writes the size into each of the ten
+  layouts, and `text_rebuild_ruby_font_resources@0x456fa0` (4.33G `0x44ef10`) calibrates the ruby font as it does
+  the primary one while the aspect mode (`+0x313d0`) is on, and creates a display-scaled copy of the second ruby
+  font (`+0x35604`). 4.33G creates the ruby font from its `LOGFONT` as it stands.
+- `scene_context_init_reset@0x40c660` (op `0x9`) zeroes two more fields: `ctx+0x77518`, op `0x2e9`'s count, and
+  `ctx+0x773a4`, which no function read so far writes.
+
+**Auto pitch.** `op_0x72_wait_for_input@0x41de50` adds a per-character delay to Auto's wait from three new
+settings (`backlog.md`, "Auto's per-character delay is not applied", has the formula).
+
+**Settings.** 4.38D registers nine settings 4.33G does not:
+
+| Setting | Default | Stored | What it does |
+|---|---|---|---|
+| `display:MultiSample` | 0 | `SYS4REG.INI`, after `VirtualFullScreenType` | Direct3D multisampling; the port's renderer has its own |
+| `message:AutoMessagePitch0`, `message:AutoMessagePitch1`, `message:AutoMessageOption` | 0 | `SYS4REG.INI`, after `AutoMessageTime1`, in that order | Auto's per-character delay |
+| `set:SaveWinPos` | 0 | the catalog's `SAVEWINPOS` | keeps the window's position |
+| `set:WinPosLeft`, `set:WinPosTop` | 0 | the registry (below) | the kept position |
+| `set:HWheelKeyUp`, `set:HWheelKeyDown` | -1 | the catalog's `HWHEELKEYUP` and `HWHEELKEYDOWN` | a key the horizontal wheel sends (`age_main_window_proc`); 創刻のアテリアル's catalog has neither key, so the wheel sends none |
+
+A `SYS4REG.INI` that native 4.38D wrote has exactly 4.33G's keys and these four, in the places named (read from
+the driver's sandbox, 2026-11-19).
+
+With `set:SaveWinPos` set, `engine_create_main_window@0x4a07c0` opens the window at `set:WinPosLeft` and
+`set:WinPosTop` instead of `CW_USEDEFAULT`; `display_toggle_screen_mode_and_menu_bar@0x4135a0` stores the window's
+position in the two settings when it leaves windowed mode and places the window there when it returns; and the
+settings writer `engine_settings_save@0x47d1d0`, when the setting is 1, first opens
+`HKCU\Software\<set:RegRootPath>\<set:RegSubKey>`, then writes `SYS4REG.INI`. The registry holds the position:
+after native runs on this machine the key `HKCU\Software\Eushully\創刻のアテリアル` has the DWORD values
+`WinPosLeft` and `WinPosTop`, and the file has neither. The code between the key's opening and the file's writing
+is not decompiled: 4.38D's image does not resolve its imports, and the decompiler stops at the first registry call.
+
+**Saves.** The sections a numbered save holds are 4.33G's. `context_state_serialize` (`0x40d1e0`=`0x40d5a0`)
+differs in six lines, all names and offsets, and the reader copies each section with 4.33G's size expressions
+(`n × 0x41c + 0x450`, `n × 0x41c + 0x900`, `n × 0x414 + 0x8f8`, `n × 0x414 + 0x5718`); the context around them
+grew by 21,660 bytes. One thing is new: after it releases the surfaces,
+`save_data_deserialize_and_begin_restore@0x40fe90` calls `gfx_polygon_map_clear@0x40a760` on the manager's
+polygon map (`ctx+0x4ed2c`) when `set:CreateObject` has bit 1. So a load leaves no polygon, and a save holds
+none. No 4.38D save has been read yet.
+
+**Unread.** Three points the triage did not settle; each is listed in the game's backlog item:
+
+- `gfx_draw_surface_through_sprite@0x48c6d0` now sets render state 15 (`D3DRS_ALPHATESTENABLE`) to 0 before it
+  draws. Whether 4.33G draws with the alpha test on was not read. With it on, a texel of alpha 0 is not written
+  even in a blend that ignores alpha.
+- The same function treats a draw whose target is surface `0x27` as it treats one to the back buffer: the
+  display's matrix applies and the text scale's inverse does not. What uses surface `0x27` as a target was not
+  read.
+- The two glyph string drawers are 564 and 379 lines against 4.33G's 220 and 150. Past the `AGE Extend` range and
+  the dash join their differences were not read, and `text_calibrate_mode1_glyph_font` (`0x451270`=`0x454ab0`) was
+  compared only as far as its reference-face test. The port's glyph edges differ from native's on this game.
 
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 
