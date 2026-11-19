@@ -4,9 +4,8 @@
 **Spec:** `docs/superpowers/specs/2026-11-17-data-patches-design.md` (cited as "spec §n"); the Lua scripting design
 (`docs/superpowers/specs/2026-11-10-lua-scripting-design.md`) is cited as "Lua §n". The spec stays the design's home.
 This plan keeps what each milestone checks and builds, and what that settles for the later ones.
-**Status:** written before milestone 0 was built; §4 was expanded before milestone 1. M0 and M1 are planned in detail
-(§3, §4), M2 and M3 in outline (§5, §6). §8 keeps what M0 found, §9 what changed since the spec was accepted, and §10
-what M1 found.
+**Status:** written before milestone 0 was built; §4, §5 and §6 were expanded before milestones 1, 2 and 3. §8 keeps
+what M0 found, §9 what changed since the spec was accepted, §10 what M1 found and §11 what M2 found.
 **Branch:** `feature/data-patches`, off `develop` at `8970fbe6`.
 
 Paths are relative to `age-reimpl/`.
@@ -578,13 +577,89 @@ In commit order; each commit builds and passes.
 10. **Closeout.** The backlog's data-patches line, §11, `docs/tools-reference.md` and `docs/PROJECT-STRUCTURE.md`, the
     NativeAOT publish, and the full checks.
 
-## 6. Milestone 3: shapes (outline)
+## 6. Milestone 3: shapes
 
-- The JSON Schema subset of spec §7, its checker in `Ome.Mods`, the line from a second parse.
-- `base_mod_build.py` writes `shapes/tables.schema.json` from the record map, with state fields marked as not
-  offered; `omp check` and `omp build` refuse a file that fails. Gate 12.
-- **The generated shape takes the old names too** (§9): a table's and a field's old names are allowed where the
-  current ones are, so that a file which the applier takes also passes its shape.
+Expanded from the outline on 2026-11-19, before M3's code. Spec §7 is the design; this section settles what it leaves
+to the plan and splits the work into tasks.
+
+### 6.1 What the code says for M3
+
+"Ran" and "read" as in §1.
+
+- **The manifest refuses a shape** (read): `ManifestReader.ReadKind` turns `shape` into "shape checks come with data
+  patches milestone 3" (§4.2), and `DataPackageTests` pins it. `shapes/` is outside the package layout, so a file there
+  is a note (`ModLayout.Classify`'s default).
+- **The line has its parse already** (read). `DataDocumentReader.Read` runs Tomlyn's validating syntax parse before
+  the model (M1's review, §10.4), for a syntax error and a repeated key, and drops the tree after the read. That parse
+  is spec §7's "second parse": its spans give a key's line, so the shape check needs no third one.
+- **`omp check` and `omp build` both link** (read: `OmpCommands.Check`, `.Build`). A link error refuses both, and
+  `omp build` prints "does not link" and writes no package. So a shape error at the link is enough for gate 12.
+- **The link cache** (read): its key holds `Ome.Mods`' module version id (`ModLinkBase.ForInstall`'s stamp), so an
+  engine built with the checker never mounts a link the checker has not seen. The cache needs no new key.
+- **The record maps** (read): no table or field has an old name in either registry; no field is a float; the string
+  fields are all in boot tables; both `stage_enemy` tables are integers only. Old names, floats and a scoped string
+  are therefore tested on a synthetic registry and map, as M1 tested old names (§9.1).
+- **The tests that deliver a mistake through a shipped base mod** (read). Once the base mods have a shape, the link
+  refuses most of these files before any delivery: `DataPatchWorkspaceTests.Files`' gate 7 cases (all but the two
+  strings CP932 cannot encode) and its halt test; `.Size`'s refused file (every value of the wrong kind); `.Stages`'
+  mistake twins (a scoped table named at the top level). The unraised-event case (`.Stages`) and the CP932 strings are
+  what a shape cannot say, and stay at the delivery. `DataPatchTests` hands the applier Lua tables through the console,
+  with no link, so it keeps proving the owner's own check.
+- **Taplo** (ran: `@taplo/cli` 0.7.0, which is taplo 0.9.0, installed from npm into the scratchpad, never into the
+  repository; `taplo lint --schema file:///… -` over standard input, since a path argument found no files on this
+  machine). With a draft-07 probe shape it reports a key that `additionalProperties: false` refuses, a value above
+  `maximum`, and any value given where the schema is `type: "null"` ("3 is not of type null"); it takes `5.0` where
+  `type: "integer"` is asked; it passes over a keyword it does not know (`x-ome-decimal-keys`), so `[unit.0x2f9]`
+  passes in the editor; and it reads a first-line comment `#:schema file:///…` as the document's shape.
+
+### 6.2 What the plan settles for M3
+
+| Question | Settled |
+|---|---|
+| The subset (spec §7) | The keywords of spec §7 with draft-07 meanings: `type` (one name or a list), `properties`, `additionalProperties` (a schema or a boolean), `items` (one schema), `enum` (strings, numbers and booleans), `minimum` and `maximum` (inclusive), `oneOf`, `description`, and `$ref`. Two more structural keys, at the top only: `$schema` (a string), and `definitions`, the one place a `$ref` points into (`#/definitions/NAME`): "`$ref` inside the file" needs a place for what it names, and draft-07 calls it that (§9.2). A `$ref` takes a `description` beside it and nothing else. And our own keyword, below. Anything else, anywhere, is the owner's link error |
+| Our keyword for decimal keys | **`x-ome-decimal-keys: { minimum = A, maximum = B }`** on an object's schema, with whole numbers `0 <= A <= B <= 2^53`. A key that `properties` does not name must then be a whole number written in decimal (digits, no sign, no leading zero but `0` itself) from A to B, and its value is checked against `additionalProperties`, which must not be `false` there. The `x-` prefix keeps it clear of JSON Schema's own names, and an editor passes over it: the shape still gives every record's fields under `additionalProperties`, which an editor checks (spec §7) |
+| How the subset marks a field as not offered | **`{ "type": "null", "description": WHY }`.** TOML has no null, so the schema takes no value, in the checker and in an editor. The checker's error for a value there is the description, after the path: `item.5.inventory_count: item.inventory_count is saved state: a load brings the saved value back, so a file does not set it`. The generated shape uses it for each state field (so the error says "saved state" and does not call the field unknown), for a scoped table's own name at the top level ("stage_enemy is reached through its scope: write stage.<id>.enemy"), and for a named column's number ("column 1 is named: write physical"). A key marked so is never one of the nearest names |
+| The generated shape (`shapes/tables.schema.json`) | From the record map, by `base_mod_build.py`. **The top**: one property for each table at the top level, one for each scope, and the not-offered name of each scoped table; `additionalProperties: false`. **A table's records**: an object with `x-ome-decimal-keys` 0 to `records - 1`, whose `additionalProperties` is the record. **A record**: each field by name, `additionalProperties: false`. **A value**: an integer field is `type: integer` from -2^31 to 2^32 - 1 (`CellRules.Integer`'s range, the applier's), a float field `type: number`, a string field `type: string`. **A row**: an object; with no named column, `x-ome-decimal-keys` 0 to `width - 1` and the column's value under `additionalProperties`; with named columns, each name, each unnamed column by its number as a name, and each named column's number marked not offered, with `additionalProperties: false`. **A scope**: an object with `x-ome-decimal-keys` `first` to `last`, whose part names each short name with its table's records, `additionalProperties: false`. **Descriptions** name what each object is ("unit: records by id, 0 to 999") and the global each field writes, for an editor's hover. Records, records' tables and scope parts are `definitions`, named `records.<table>`, `record.<table>` and `scope.<scope>`. The keys are written sorted, with two-space indents, so a registry change is a small diff |
+| Old names in the shape (§9.1) | A table's old name is a property of the top with the same `$ref` as its current name, and a field's old name a property of the record with the same schema as its current one; each description says "an old name of unit.max_hp; write max_hp". So a file the applier takes passes its shape. A file that names one cell twice, by an old name and the current one, passes the shape, and the owner refuses it |
+| What only the owner checks | A string that CP932 cannot encode (`maid.text_fits`); one cell named twice through an old name; a part applied at an event this install does not raise (`unraised`); and everything, for an owner without a shape. The guides list them |
+| The nearest names | For a key that an object's schema refuses, the names its `properties` offers (not those marked not offered), ranked by edit distance (optimal string alignment, case counted), then in ordinal order: the first three whose distance is at most a third of the longer name, and at least 2. With none that near, the error lists the names there, up to eight in ordinal order and how many more. A decimal key the schema takes is not a name, and the error for a key that should be one gives the range: `unit.0x2f9: a key here is a whole number in decimal from 0 to 999, not 0x2f9` |
+| Where the line comes from | **The syntax tree of `DataDocumentReader`'s validating parse** (§6.1), which the read result now keeps until the link's shape check is done. Only a document with a problem is walked for lines: one walk of its tree, which gives each problem the line of the deepest key on its path that the file writes, as a key-value, a dotted key, an inline table's key or a table header (`[unit.761]` for `unit.761.statz` when `statz` is not written in that header's table). Paths are printed as the reader prints them: keys joined by dots, a key that is not bare quoted as TOML quotes it, an array's element by its index from 1 |
+| The error | A link error of the contributor, as the reader's are: `data/x.toml:LINE: PATH: REASON`, the report naming the mod. The first 20 problems and a count, as the reader keeps them. A file that fails its shape is not delivered, so nothing of it is applied, and the report names it once for each problem |
+| A broken shape | The owner's link error, naming `shapes/FILE`, the JSON pointer of the place and the reason: not JSON, a keyword outside the subset, a keyword's value of the wrong kind, a `$ref` that leaves the file or names no definition, a `$ref` chain that comes back to itself without reaching an object or a value, a decimal range out of order, or a file past its bounds. Its kind is then broken, as for the kind's other errors (§4.2): its contributors are not delivered, and their entries add no line of their own |
+| A shape's bounds | At most 4 MiB, nested at most 64 deep, and a check's work bounded: the checker counts each schema it applies to a value and gives up past 64 a value of the document, plus 100,000, as the owner's error "the shape takes more than N steps on data/x.toml". A shape written as the generated one applies four to six schemas to a value, so only a shape built to cost time reaches the bound (`oneOf` over `oneOf`s) |
+| The layout and the manifest | `shapes/` from format version 4, as `data/`: files under it are `*.json`, at a path with forward slashes and no empty, `.` or `..` part, each at most 4 MiB; every file there is named by at least one `[[accepts]] shape`, or is an error (it would do nothing); a package without `[game]` holds none. `[[accepts]] shape` is a path under `shapes/` by the same rule, and the file must be there |
+| The code | `Ome.Mods/Data/`: `DataShape` reads a shape (System.Text.Json's `JsonDocument`, no reflection, so NativeAOT takes it) into a tree of checked schemas, resolving each `$ref` once; `DataShapeCheck` walks a document against it; `DataLines` finds the lines. `ModLayout` gains `Shapes`, `ModKind` gains `Shape`, and the linker reads each kind's shape in step 1 and checks each document in step 2 (spec §5.4), after the reader. No mod code runs |
+| Gate 8's error half, once a shape exists | **Both paths stay proven** (§9.2). A mistake in a stage part that a shape can say (the twins' scoped table at the top level) now fails the link: `omp check` refuses it, with the file, the line and the path, on both games (a test and a run of the CLI). The shipped twins carry instead a mistake no shape can say beside their stage part: a unit's name with a letter CP932 cannot encode (`é`). The boot refuses the whole file at its first delivery, and the floor is entered with its own enemies, which is driven again on both games. Spec §12's "every shipped example passes its kind's shape" then holds for the twins too |
+| The Workspace tests that deliver a mistake | Each case a shape can say asserts the link's error (the file, its line, the path and the shape's reason) and that no delivery is planned; the CP932 cases and the unraised event stay deliveries, and the halt test takes a CP932 string. The size test's refused file fails its shape at the link, and the check is timed for gate 10; the owner's check of a refused file at the value bound, measured in §10.1, is what an owner without a shape still meets |
+| The drift tests | On both games, without the game (core): a console chunk reads the base mod's record map, and from it the test builds documents that set every offered field and column of the last record of each table and of the last id of each scope, one for each state field, and the gate 7 mistakes as TOML files. Each goes to the shape and to the applier, which must agree: both take the first, both refuse the others at the same path with "saved state" for a state field, except the cases only the owner checks, which the shape takes and the applier refuses |
+| An editor's copy of a shape | **`omp lua-stubs` writes each accepted kind's shape too,** as `<kind>.schema.json` beside its definitions, for the stack with the profile's base mod as it describes it, and prints the `#:schema` line that points a data file at it. The engine ships the base mods inside itself, so without this a modder outside the repository has no file for an editor (spec §7). It is a copy of the owner's file, which the link has checked |
+
+### 6.3 Tasks
+
+In commit order; each commit builds and passes.
+
+1. **The plan** (this section, and §9.2).
+2. **The checker.** `DataShape`, `DataShapeCheck` and `DataLines` in `Ome.Mods/Data/`, and `DataDocumentReader`'s result
+   keeping its tree. `DataShapeTests` (core): each keyword of the subset, `x-ome-decimal-keys` and its messages, the
+   not-offered mark, `$ref` and its chains, `oneOf`, the nearest names, the lines of a key-value, a dotted key, an
+   inline table, a header and an array of tables, the bounds, and each broken shape's message.
+3. **The manifest, the layout and the link.** `[[accepts]] shape`, `shapes/`, step 1's read of the shape and step 2's
+   check; `DataPackageTests` (the refusal goes, the layout's rules come), `DataLinkTests` (a contributor's error with
+   its line and nearest names, a broken shape as the owner's error that stops its kind, a document that passes, and no
+   mod code run by then).
+4. **The generated shapes.** `base_mod_build.py` writes `shapes/tables.schema.json` under `--build` and `--check`; both
+   base manifests name it; `tools/test_base_mod_build.py` on a synthetic registry (old names, a float, a string, state,
+   each kind of row, a scope). The drift tests and gate 12's tests (`omp check` and `omp build` over a contributor
+   folder against the shipped base mods, with a synthetic link base), and a test that links every data example of
+   `oms/examples/mods/` and finds it passes its shape.
+5. **The examples and the Workspace tests.** The twins' new mistake, their scenarios' headers, the README; the
+   Workspace tests of §6.2; gate 8's error half driven again on both games.
+6. **`omp lua-stubs`' shapes,** with `LuaStubsTests`.
+7. **The documents** (B3): `docs/modding/data-files.md`, each game's guide page, both base mods' READMEs,
+   `docs/modding/cli.md` for `lua-stubs`, `docs/tools-reference.md`, `docs/PROJECT-STRUCTURE.md`, and the generated
+   pages through their tools. The backlog's "declarative data patches" line goes in the closing commit.
+8. **Closeout** (B4): Taplo by hand over each example and a mistake, §12 with the thirteen gates and their proofs, and
+   the full checks.
 
 ## 7. Questions and risks
 
@@ -698,6 +773,24 @@ spelling for each cell, except an old name kept after a rename.
 
 **Where it is built:** §4.2 (the formats) and §4.4, task 6. No registry renames a table or a field today, so the
 tests use a synthetic registry and a synthetic record map.
+
+### 9.2 What M3's plan changes (2026-11-19)
+
+Taken by this plan (§6.2), not by the user; each is reported to the parent session, and the user may reverse it.
+
+- **The subset has two structural keys more:** `$schema` and `definitions`, at the top of a shape only. Spec §7 lists
+  `$ref` inside the file and no place for what it names; draft-07, which editors read, calls that place
+  `definitions`.
+- **Gate 8's error half** (spec §12) said "a mistake in a stage part is reported at boot". With a shape, a mistake in a
+  stage part that the shape can say fails the link instead, and is proven through `omp check` on both games. The
+  owner's check at the first delivery is proven, and driven, with a file whose stage part is right and whose other
+  part holds what no shape can say: the shipped twins name a unit with `é`, and nothing of the file is applied, its
+  stage part included.
+- **Gate 10's refused file** fails its shape at the link, where its check is timed. The owner's check of a refused
+  file at the value bound (§10.1) is no longer reached through a shipped base mod; it is what an owner without a shape
+  meets, inside the same budget.
+- **`omp lua-stubs` writes the shapes** of the kinds it describes. Spec §7 has editors check a data file from the
+  owner's shape, and the engine ships the base mods inside itself, so a modder needs a command that writes one out.
 
 ## 10. What M1 found
 
