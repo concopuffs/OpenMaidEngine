@@ -12,7 +12,7 @@ using Xunit;
 /// <summary>
 /// AGE 4.38D's 3D scene, ops 0x324 to 0x32f (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4), which
 /// 創刻のアテリアル's title builds its drifting leaves with: these hold the state the handlers keep to what native keeps.
-/// The leaves themselves, their motion and their drawing are Scene3DLeavesTests'.
+/// The effects themselves, their motion and their drawing are Scene3DLeavesTests' and Scene3DRainAndSnowTests'.
 /// </summary>
 public class Scene3DOpsTests
 {
@@ -84,7 +84,7 @@ public class Scene3DOpsTests
 
         Scene3DState scene = vm.Graphics.Scene3D;
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal((null, null, null), (scene.Leaf, scene.Snow, scene.FirstEffectElements));
+        Assert.Equal((null, null, null), ((object?)scene.Leaf, (object?)scene.Snow, (object?)scene.Rain));
         Assert.Equal((10L, 20L), scene.EffectHandles);          // op 0x324 leaves the handles
         Assert.Equal([5], scene.Meshes.Keys);
         Assert.NotNull(scene.Lights[2]);
@@ -118,17 +118,64 @@ public class Scene3DOpsTests
         Assert.Contains(waits.Warnings, warning => warning.Contains("テクスチャが作成されていません． TEXTURE=40"));
     }
 
+    // A VM over the given graphics native that runs op 0x326 with the operands given, after publishing a texture to
+    // slot 40.
+    private static (VirtualMachine Vm, RecordingWaits Waits) RunSnow(Graphics graphics, params Operand[] operands)
+    {
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4438");
+        var ops = new List<(int, Operand[])> { (Snow, operands), (Exit, []) };
+        var waits = new RecordingWaits();
+        var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "SNOW.BIN", ops, []), table, waits,
+                                    graphics: graphics);
+        graphics.PublishSurfacePixels(40, GraphicsTestSupport.Image(2, 2, (_, _) => [255, 255, 255, 255]));
+        vm.Run();
+        return (vm, waits);
+    }
+
     [Fact]
     public void TheSnowEffectTakesASlotThatHoldsATexture()
     {
-        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4438");
-        var ops = new List<(int, Operand[])> { (Snow, [I(2), I(40), F(0.5f), I(1)]), (Exit, []) };
-        var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "SNOW.BIN", ops, []), table, new RecordingWaits());
-        vm.Graphics.PublishSurfacePixels(40, GraphicsTestSupport.Image(2, 2, (_, _) => [255, 255, 255, 255]));
+        // As DEBUG.BIN runs it, the speed an immediate: native's float accessor converts the integer.
+        var (vm, _) = RunSnow(Graphics.Headless(), I(2), I(40), I(1), I(1));
 
-        vm.Run();
+        Assert.Equal("exit", vm.HaltReason);
+        Scene3DSnowEffect snow = vm.Graphics.Scene3D.Snow!;
+        Assert.Equal((2L, 40, 1f, 1L, true), (snow.Count, snow.TextureSlot, snow.Speed, snow.Option, snow.Fades));
+        Assert.Equal(2, snow.Flakes.Count);
+        Assert.Equal(8L, vm.Graphics.GameRandom.Draws);          // four draws a flake
+    }
 
-        Assert.Equal(new Scene3DSnowEffect(2, 40, 0.5f, 1), vm.Graphics.Scene3D.Snow);
+    [Fact]
+    public void WithAPixelShaderLevelOfZeroNoSnowIsBuiltAndNothingIsSaid()
+    {
+        var graphics = new Graphics(null, new FrameClock(), new Sys4LogicalCanvas(0, 0)) { PixelShaderLevel = 0 };
+        // Slot 41 holds no texture: native does not get as far as tracing it.
+        var (vm, waits) = RunSnow(graphics, I(2), I(41), F(0.5f), I(1));
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Null(vm.Graphics.Scene3D.Snow);
+        Assert.Empty(waits.Warnings);
+        Assert.Equal(0L, graphics.GameRandom.Draws);
+    }
+
+    [Theory]
+    [InlineData(-1, 2)]       // the default: what the device offers, which the port takes as 2
+    [InlineData(0, 0)]
+    [InlineData(1, 1)]
+    [InlineData(2, 2)]
+    [InlineData(3, 2)]        // out of range: as -1
+    [InlineData(-5, 2)]
+    public void DisplayPixelShaderGivesTheLevel(int setting, int level)
+        => Assert.Equal(level, Graphics.PixelShaderLevelFor(setting));
+
+    [Fact]
+    public void TooManyFlakesOrDropsHalt()
+    {
+        var (snow, _) = RunSnow(Graphics.Headless(), I(1 << 21), I(40), F(1), I(1));
+        Assert.Equal($"set-3d-effect-snow-flakes-too-many:{1 << 21}", snow.HaltReason);
+
+        var (rain, _) = Run((FirstEffect, [I(1 << 21)]));
+        Assert.Equal($"set-3d-effect-rain-drops-too-many:{1 << 21}", rain.HaltReason);
     }
 
     [Fact]

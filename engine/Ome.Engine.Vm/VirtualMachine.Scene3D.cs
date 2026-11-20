@@ -4,9 +4,9 @@ using Ome.Engine.Natives;
 namespace Ome.Engine.Vm;
 
 // AGE 4.38D's 3D scene, ops 0x324 to 0x32f (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4): mesh
-// slots, a camera, lights, and the display's three effects. Each handler reads its operands as native's does and
-// calls the graphics native, which keeps the state and draws the leaf effect in the frame lowering
-// (docs/superpowers/specs/2026-11-20-title-leaves-design.md).
+// slots, a camera, lights, and the display's three effects, the rain, the snow and the leaves. Each handler reads its
+// operands as native's does and calls the graphics native, which keeps the state and draws the effects in the frame
+// lowering (docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, "The 3D scene").
 public sealed partial class VirtualMachine
 {
     // 0x324: release the display's three effects
@@ -23,23 +23,36 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
-    // 0x326 (id)(surface slot)(float)(integer): Set3DEffectSnow. Native indexes the surface table with the slot
-    // unchecked, and traces a slot that holds no texture.
+    // 0x326 (flakes)(surface slot)(speed, a float)(fade): Set3DEffectSnow. Native indexes the surface table with the
+    // slot unchecked, and traces a slot that holds no texture; the worker builds the effect with that many flakes.
     private StepResult OpSet3DEffectSnow(Instruction ins, int pc)
     {
         var a = ins.Args;
+        int flakes = unchecked((int)Read(a[0]));
         long slot = Read(a[1]);
         if (SurfaceSlotRefused(ins, slot) is { } refused) return refused;
-        if (!_graphics.SetSnowEffect(Read(a[0]), (int)slot, ReadFloat(a[2]), Read(a[3])))
+        if (flakes > MaxScriptRunLength)
+        {
+            HaltReason ??= $"set-3d-effect-snow-flakes-too-many:{flakes}";
+            return StepResult.Halt;
+        }
+        if (!_graphics.SetSnowEffect(flakes, (int)slot, ReadFloat(a[2]), Read(a[3])))
             _waits.ReportWarning($"{At(ins)}: surface slot {slot} holds no texture; skipped, as AGE skips it with the "
                                  + $"trace 「関数：Set3DEffectSnow エラー：テクスチャが作成されていません． TEXTURE={slot}」");
         return StepResult.Next;
     }
 
-    // 0x327 (element count): build the display's first effect
-    private StepResult OpSet3DEffectSlot0(Instruction ins, int pc)
+    // 0x327 (drops): build the display's first effect, the rain, with that many drops
+    private StepResult OpSet3DEffectRain(Instruction ins, int pc)
     {
-        _graphics.SetFirstEffect(unchecked((int)Read(ins.Args[0]))); return StepResult.Next;
+        int drops = unchecked((int)Read(ins.Args[0]));
+        if (drops > MaxScriptRunLength)
+        {
+            HaltReason ??= $"set-3d-effect-rain-drops-too-many:{drops}";
+            return StepResult.Halt;
+        }
+        _graphics.SetRainEffect(drops);
+        return StepResult.Next;
     }
 
     // 0x328 (leaves)(mesh slots)(slot count): Set3DEffectLeaf. The handler copies slot-count integer cells from the

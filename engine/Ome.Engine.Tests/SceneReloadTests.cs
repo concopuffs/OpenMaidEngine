@@ -59,9 +59,9 @@ public class SceneReloadTests
         ],
         [typeof(ScriptMemory)] =
         [
-            // A queue lives for the run; the driver's deterministic random draws are the run's, the Lua mods' too
-            // (Lua scripting spec §5.6: a session's rebuild does not restart a mod's stream).
-            "_queues", "_deterministicRandomSeed", "_deterministicRandomSites", "_deterministicRandomDraws",
+            // The driver's deterministic random draws are the run's, the Lua mods' too (Lua scripting spec §5.6: a
+            // session's rebuild does not restart a mod's stream).
+            "_deterministicRandomSeed", "_deterministicRandomSites", "_deterministicRandomDraws",
             "_deterministicRandomMods",
             // The scripting native's watched cells, which the link's plan decides (Lua scripting spec §7.3).
             "_watched",
@@ -92,9 +92,10 @@ public class SceneReloadTests
             // AGE 4.38D's 3D scene (mesh slots, camera, lights, the display's effects): native's scene reset touches
             // none of it, and the scripts release what they built (Graphics.Scene3D.cs).
             "_scene3D",
-            // The leaves' 60 Hz clock, which the display keeps and the step reads after every frame walk; the lowering's
-            // scratch arrays; and the skipped-light report, once a run (Graphics.Scene3DLowering.cs).
-            "_sceneEffectsLastMs", "_leafClip", "_leafLight", "_skippedLightReported",
+            // The effects' 60 Hz clock, which the display keeps and the step reads after every frame walk; the lowering's
+            // scratch arrays and the viewport each walk sets before it draws; and the skipped-light report, once a run
+            // (Graphics.Scene3DLowering.cs).
+            "_sceneEffectsLastMs", "_leafClip", "_leafLight", "_effectViewport", "_skippedLightReported",
             // Parts set after construction, and tracing.
             "_movies", "_listeners", "TraceOps", "OpTrace",
         ],

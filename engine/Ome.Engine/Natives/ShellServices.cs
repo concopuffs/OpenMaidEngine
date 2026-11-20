@@ -77,6 +77,7 @@ public sealed partial class ShellServices
         // Engine thread: the callback scripts native's launch queue would hold.
         public bool SettingCallbackPending;   // CALLBACK_SETTING.BIN: a menu toggle, the 設定 OK, a mode-2 click cancel
         public bool WindowCallbackPending;    // CALLBACK_WINDOW.BIN: a screen-mode switch
+        public bool DeviceSetupPending;       // a screen-mode switch sets the Direct3D device up again
         // EngineCtx +0xa0d10 (op 0x142): AGERC queries this through IAGEService to gray its native settings/save menu
         // actions while CONFIG owns the scripted settings screen.
         public int SystemMenuActionsEnabled = 1;
@@ -171,10 +172,21 @@ public sealed partial class ShellServices
         List<ShellMenuRequest>? taken = null;
         while (_scene.Requests.TryDequeue(out Queued queued))
         {
-            if (queued.Kind == QueuedKind.ScreenModeSwitched) _scene.WindowCallbackPending = true;
+            if (queued.Kind == QueuedKind.ScreenModeSwitched)
+                _scene.WindowCallbackPending = _scene.DeviceSetupPending = true;
             else (taken ??= []).Add(queued.Request);
         }
         return taken ?? (IReadOnlyList<ShellMenuRequest>)[];
+    }
+
+    /// <summary>Engine thread: whether a screen-mode switch was taken since the last call. Native's switch sets the
+    /// Direct3D device up again (display_toggle_screen_mode_and_menu_bar calls gfx_setup_3d_transforms_and_lights@0x486260),
+    /// which hands the 3D effects the camera's view (Graphics.SetUpDeviceTransforms).</summary>
+    public bool TakeDeviceSetup()
+    {
+        bool pending = _scene.DeviceSetupPending;
+        _scene.DeviceSetupPending = false;
+        return pending;
     }
 
     /// <summary>Queue CALLBACK_SETTING.BIN (engine thread): after a menu command, or set:CancelMesSkipOnClick 2's

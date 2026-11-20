@@ -436,7 +436,9 @@ public sealed partial class GfxState
     /// @0x407640, SYS4433 @0x4079b0) runs it every tick of that wait:
     /// <list type="number">
     /// <item>While op 0x238's window runs the wait holds. The first poll seeds its start; it ends once
-    /// <paramref name="nowMs"/> passes start + duration, or when forced.</item>
+    /// <paramref name="nowMs"/> passes start + duration, or when forced. Every poll of a window, its last too, marks
+    /// the scene dirty (native +0xb58c, 4.38D 0x407a27), so the tick renders each frame of the window even when no
+    /// object changes: DEBUG.BIN's 10 s window is what moves its 3D effects, which step only after a render.</item>
     /// <item>Otherwise the wait holds while finite presentation runs (<see cref="HasActiveTimedPresentation"/>).
     /// When nothing runs and service-flags bit 16 is set, the flags word clears to 0.</item>
     /// </list>
@@ -445,6 +447,7 @@ public sealed partial class GfxState
     {
         if (AnimClockDurationTicks != 0)
         {
+            MarkRetainedMutation();
             if (_animClockStartMs < 0) _animClockStartMs = nowMs;
             if (nowMs - _animClockStartMs <= AnimClockDurationTicks) return true;
             _animClockStartMs = -1;

@@ -73,6 +73,21 @@ public class ShellServicesTests
     }
 
     [Fact]
+    public void AScreenModeSwitchSetsTheDeviceUpOnceAndAMenuToggleDoesNot()
+    {
+        var shell = ShellServices.Headless();
+        shell.RequestMessageSkipToggle();
+        shell.TakeMenuRequests();
+        Assert.False(shell.TakeDeviceSetup());
+
+        Assert.True(shell.SwitchScreenMode(windowed: false, "the test"));
+        Assert.False(shell.TakeDeviceSetup());       // the engine thread has not taken the switch yet
+        shell.TakeMenuRequests();
+        Assert.True(shell.TakeDeviceSetup());
+        Assert.False(shell.TakeDeviceSetup());
+    }
+
+    [Fact]
     public void ASceneResetDropsRequestsAndCallbacksRestoresTheSystemMenuAndCancelsDialogs()
     {
         var shell = ShellServices.Headless();

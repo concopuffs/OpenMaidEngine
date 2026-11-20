@@ -721,6 +721,83 @@ Not modelled: the object's move in mode 3 while `+0x548` is zero (`backlog.md`, 
 chained record's move at publication (the port raises ruby in its layout,
 `RubyRule.RaiseByEffectInMode3`), the aspect-off branch, and the layout publisher's extra record.
 
+### The 3D scene: the rain and the snow (2026-11-20)
+
+AGE 4.38D's display keeps three effects: the rain at `+0x408` (op `0x327`), the snow at `+0x40c` (op `0x326`,
+`Set3DEffectSnow`) and the leaves at `+0x410` (op `0x328`; `superpowers/specs/2026-11-20-title-leaves-design.md`).
+The title builds only the leaves. DEBUG.BIN, the debug menu's システム (reached through the example mod
+`example.arterial-debug-menu`), builds all three: a white 128 by 128 texture in slot `0x2d`, ambient `0x606060`, a
+directional light `0xcc9966`, the camera at (0, 4, -8), 100 leaves of meshes `0x523a` and `0x523b`, 100 flakes of
+slot `0x2d` at speed 1 with the fade on, and 100 drops. Ten seconds later it releases them.
+
+**Where they are drawn.** The frame render (`gfx_render_frame@0x49ab00`) and a range present
+(`gfx_present_object_range@0x49adf0`) call `display_scene_effects_at_handle@0x44f7a0` at each object and polygon
+they reach, hidden ones too. It draws the rain's rings once the handle reaches op `0x325`'s first handle, and the
+rain's streaks, the snow and the leaves once it reaches the second. At its end the frame render calls it with -1,
+which draws every group still pending; a range present calls it with first + count, which leaves a group whose
+handle is past the range undrawn. Drawn flags at `+0x4e0` keep each group to once a walk. It turns depth testing and
+writing off and the alpha blend on (source alpha, inverse source alpha), but not lighting, which device setup turned
+on. Both walks draw into the selected render target. Then `display_scene_effects_step_60hz@0x44f6f0` steps the
+rain, the snow and the leaves once per 1/60 s tick since the last walk, at most 100. The port's
+`SceneEffectWalk` (`Graphics.Scene3DLowering.cs`) does the same in the screen's frame, in a range present and in a
+render target's publication, where the target is the viewport.
+
+DEBUG.BIN shows why the render target matters: its first lines select surface 1, present a frame into it and draw
+it as the background. Native's frame holds the title's leaves where they were, so they stay in the background,
+still and dimmed, once DEBUG's own effects replace the title's.
+
+**The view.** The display hands the effects its projection (`+0x418`), view (`+0x458`) and world (`+0x498`) only at
+device setup (`gfx_setup_3d_transforms_and_lights@0x486260`: the start, a screen-mode switch, a device reset), and
+`gfx_create_device_objects@0x4907f0` sets the view to the identity first. Op `0x32c` sets only the device's view. So
+the rain and the leaves, drawn with the device's transforms, see the camera, and the snow, drawn with its own
+copies, sees the identity until the screen mode is switched. The port keeps the copy as `Scene3DState.EffectView`,
+which `ShellServices.TakeDeviceSetup` updates when a screen-mode switch is taken.
+
+**The rain** (`rain_effect_construct@0x47abc0`, drops of 0x70 bytes). A drop is born
+(`rain_drop_respawn@0x47a5d0`) from thirteen draws of the game's `rand`, each `rand() % 100 / 100.0` (unit) or that
+less 0.5, rounded to a float (centred): position (centred · 20, unit · 10, centred · 20); velocity (unit · 0.05,
+(-0.2 - -0.1) · unit + -0.1, unit · 0.05); acceleration the same three kinds again, each rounded to a float and times
+0.01f; rotation (0, 0, 0.1) plus 0.01 · unit each; scale 0.1 · unit + 1. Each step (`rain_drop_step@0x47a730`) adds
+the velocity to the position and the acceleration to the velocity. Below y = 0 the drop ripples: age 0, a life of
+(int)(unit · 5 + 15) steps (one draw), y = 0.01, scale and rotation 0. A ripple grows by 0.01 a step and, past its
+life, the drop is born again at y = 10.
+
+`rain_drop_draw@0x47a800` draws a falling drop as the line from (0, 0.5, 0) to (0, -0.5, 0) and a ripple as
+sixteen lines round the unit circle in y = 0, through scale · yaw-pitch-roll · translation. It sets FVF `0x42`
+(position and colour, 16 bytes) but strides 28 bytes, the position followed by four floats of 1.0, so the colour
+Direct3D reads is `0x3f800000`. That colour is unused: lighting is on, the diffuse source is the material, and with
+no normal only the ambient term is left, the global ambient times the material's (1, 1, 1). The alpha is the
+material's: (float)sin((float)((10 - y) · π / 10)) · 0.5 for a streak, (life - age) / life for a ring. Under DEBUG's
+`0x606060` the rain is faint. With the ambient set to `0xffffff` by a scratch patch, native and the port both show
+white one-pixel streaks and rings of the same length and spread.
+
+**The snow** (`snow_effect_construct@0x49bfa0`, flakes of 0x7c bytes). `gfx_set_3d_effect_snow@0x417640` builds
+nothing when the pixel-shader level (manager `+0xb62c`) is 0. `gfx_create_device_objects` sets it from
+`display:PixelShader` when that is 0 to 2, otherwise from the caps (pixel shader 2.0 or later 2, 1.0 or later 1,
+else 0); the port reads the setting, and takes 2 for any other value. The worker builds the D3DX effect of resource
+202 once (`+0xb580`); its technique `Snow` computes `mul(pos, Proj)` and `tex2D · Color`. A flake is born
+(`snow_flake_construct@0x49bec0`) from four draws: x = -unit · speed · 20, y = unit · 5, z = centred · 20, size =
+0.03 · unit + 0.03. Each step (`snow_flake_step@0x49ba70`) moves y by speed · -0.01 and x by the opposite. Below
+y = 0 the flake is placed again with three draws: x and z centred · 20, y = 5, and a new size.
+
+`snow_effect_draw@0x49bdb0` places each flake's centre through world · view (`snow_flake_place@0x49baf0`). It sorts
+the flakes with the C runtime's `qsort` and `snow_flake_compare_depth@0x49bbe0`, which returns ftol(ceil(d) +
+floor(d)) for d = b.z - a.z: farthest first, and the array keeps the new order. It draws each flake
+(`snow_flake_draw@0x49bc30`) as a square of the texture, its size either side of the centre in view space, with
+`Color` = (1, 1, 1, α): α = sin((float)((5 - y) · π / 5)) with the fade on, else 1. The port sorts with `MsvcQsort`
+(`Natives/Scene3DRandom.cs`), the VS2010 algorithm, so equal keys end in native's order.
+
+**Read with it.** `ID3DXSprite::Begin` (`d3dx_sprite_begin@0x4fb83f`) turns lighting off, but AGE begins with flag
+`0x10` alone, so `End` restores it. Native's leaf effect keeps pointers to the meshes it was given. DEBUG's
+`load-mesh` replaces slots 0 and 1 and relies on op `0x328` replacing the title's leaves right after. A scratch
+patch that removed that op left native idle in the effect wait, drawing nothing, while the port, whose effects hold
+their meshes, went on.
+
+**Not modelled.** The port draws a line as a parallelogram a pixel across (`LowerLine`), so the pixel where two of
+a ring's lines meet may be covered twice. Native runs the effects' arithmetic in Direct3D's single-precision x87
+mode, the port in .NET's floats and doubles (`backlog.md`). Point and spot lights, a screen transition's source and
+a movie mask's capture draw no effect (`backlog.md`, "The 3D scene's other cases are not drawn").
+
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 
 This image is the English fan translation's 4.33F build (see "Kamidori engine builds" above), and the addresses
@@ -7363,13 +7440,15 @@ Op `0x60` (`op_0x60_handler@0x426970`) writes `rand() % bound`. `_rand@0x550fe4`
   (`0x4119d1`);
 - screen transitions (`FUN_00440530`), the save encoder and the catalog parse;
 - in AGE 4.38D, the leaf effect of op `0x328`: fourteen draws a leaf at its birth and two a leaf at each 1/60 s step
-  (`superpowers/specs/2026-11-20-title-leaves-design.md` §2).
+  (`superpowers/specs/2026-11-20-title-leaves-design.md` §2); the rain of op `0x327`: thirteen a drop at its birth and
+  one when it lands; and the snow of op `0x326`: four a flake at its birth and three when it is placed again ("The 3D
+  scene: the rain and the snow").
 
 A native run's draws therefore depend on when it started and what ran before. The port models the generator once
 (`Ome.Engine/Hosting/CrtRandom.cs`, seeded from the tick count) and gives the same one to op `0x60`, Lua's
-`math.random` and the leaf effect, so the leaves advance op `0x60`'s stream as native's do; the main tick, the
+`math.random` and the three effects, so they advance op `0x60`'s stream as native's do; the main tick, the
 transitions, the save encoder and the catalog parse are not modelled, so the two sequences still differ. Under
-`rand-seed`, op `0x60` and Lua leave that generator for their per-site streams, and the leaves alone draw from it.
+`rand-seed`, op `0x60` and Lua leave that generator for their per-site streams, and the effects alone draw from it.
 Kamidori's enemy scripts (MVRTN, RTN_M0xx, STAGEROUND, STAGEREADY, SETEN, ADDEN) and battle
 scripts (BTL, CALCDMG, COMMITBTL) use op `0x60`, as do FIELD, ROOM, TOWN, USEITEM and ALCHEMY. From the first enemy
 phase on, native and the port place enemies differently, and the same click can lead

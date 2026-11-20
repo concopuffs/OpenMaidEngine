@@ -410,6 +410,26 @@ public class ForegroundTransitionTests
     }
 
     [Fact]
+    public void EachPollOfAnAnimClockWindowMakesTheFrameDue()
+    {
+        // Native's poll sets the manager's dirty word while the window runs (4.38D 0x407a27), so the tick renders every
+        // frame of it: DEBUG.BIN's leaves and snow, which step only after a render, move through its 10 s window.
+        var gfx = new GfxState();
+        gfx.SetAnimClock(700);
+        gfx.ConsumePresentationReasons(0);
+
+        foreach (long now in new long[] { 1000, 1016, 1700, 1701 })
+        {
+            gfx.PollEffectService(now);
+            Assert.Equal(GfxPresentationReason.RetainedMutation,
+                         gfx.ConsumePresentationReasons(now) & GfxPresentationReason.RetainedMutation);
+        }
+        // The window has ended: a poll no longer makes the frame due.
+        gfx.PollEffectService(1800);
+        Assert.Equal(GfxPresentationReason.None, gfx.ConsumePresentationReasons(1800));
+    }
+
+    [Fact]
     public void FastForwardForceEndsTheAnimClockWindow()
     {
         var gfx = new GfxState();

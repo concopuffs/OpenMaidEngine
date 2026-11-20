@@ -157,7 +157,7 @@ public class Scene3DLeavesTests
         private readonly CrtRandom _random = new(seed);
         public int Raw() => _random.Next();
         public float Unit() => (float)(_random.Next() % 100 / 100.0);
-        public double Centered() => Unit() - 0.5;
+        public float Centered() => (float)(Unit() - 0.5);
     }
 
     [Fact]
@@ -172,11 +172,12 @@ public class Scene3DLeavesTests
         var draws = new Draws(7);
         foreach (Scene3DLeaf leaf in graphics.Scene3D.Leaf!.Leaves)
         {
-            float x = (float)(draws.Centered() * 10), y = (float)(draws.Unit() * 5), z = (float)(draws.Centered() * 10);
+            float x = (float)((double)draws.Centered() * 10), y = (float)(draws.Unit() * 5);
+            float z = (float)((double)draws.Centered() * 10);
             Assert.Equal(new Vector3(x, y, z), leaf.Position);
-            float vx = (float)(draws.Centered() * 0.01f);
+            float vx = (float)((double)draws.Centered() * 0.01f);
             float vy = (float)((-0.02f - (double)-0.01f) * draws.Unit() + -0.01f);
-            float vz = (float)(draws.Centered() * 0.01f);
+            float vz = (float)((double)draws.Centered() * 0.01f);
             Assert.Equal(new Vector3(vx, vy, vz), leaf.Velocity);
             Assert.InRange(vy, -0.02f, -0.01f);
             for (int axis = 0; axis < 3; axis++)

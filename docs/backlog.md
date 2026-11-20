@@ -129,18 +129,14 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
-- **The 3D scene's other effects and cases are not drawn (AGE 4.38D).** Left out of the title's leaves by the user's
-  word on 2026-11-20 ("fine to leave out today but we should make sure we backlog it";
-  `superpowers/specs/2026-11-20-title-leaves-design.md` §4 and §7). Two groups:
-  - **What DEBUG.BIN builds**, testable by running it: the snow effect (`Set3DEffectSnow`, op `0x326`, from a
-    surface's texture) and the display's first effect (op `0x327`). Neither is read (the manager's `+0xb62c`, which
-    gates the snow, among them); the port keeps their state only (`Graphics.Scene3D.cs`).
-  - **What no shipped script reaches**, for an OMS test script later: a point light or a spotlight on the leaves
-    (op `0x32e` types 1 and 2); leaves in op `0x222`'s range present, which native draws when the range's walk
-    reaches the handle (`gfx_present_object_range@0x49adf0`, its drawn flag `+0x4e0`); and leaves during a screen
-    transition's source walk.
-  Done when each is drawn as native draws it and a run shows it: DEBUG.BIN for the first group, an OMS script for the
-  second.
+- **The 3D scene's other cases are not drawn (AGE 4.38D).** Left out of the title's leaves by the user's word on
+  2026-11-20 ("fine to leave out today but we should make sure we backlog it";
+  `superpowers/specs/2026-11-20-title-leaves-design.md` §4 and §7). The rain and the snow DEBUG.BIN builds, and the
+  effects in a range present and in a render target's frame, are drawn since (`engine-re.md`, "The 3D scene"). What
+  no shipped script reaches is left, for an OMS test script: a point light or a spotlight on the leaves (op `0x32e`
+  types 1 and 2), and the effects in a screen transition's source walk and in a movie mask's capture
+  (`Graphics.CaptureObjectRange`), whose native walks were not read. Done when each is drawn as native draws it and
+  an OMS script shows it on both.
 - **The range wipe `0x24f` is drawn as a crossfade, and no pattern reveal is compared with native.** Two parts:
   - The type-2 range wipe `0x24f` (Kamidori's story-portrait helper in ten scripts; `engine-re.md`, "Patterned
     retained-range transition opcode `0x24f`") keeps its mode, thickness, timing and blocking, but goes through
@@ -634,7 +630,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     the four ways the port differs from native where no retail script goes). One thing is open:
     - **x87 precision.** The port computes in double and stores a float. Whether native runs scripts with the
       x87's precision lowered (Direct3D can lower it) is not checked; it could change a result by one unit in the
-      last place only when an operand is an integer too large for a float.
+      last place only when an operand is an integer too large for a float. The same holds for the 3D effects'
+      motion, which native computes on the x87 and the port in floats and doubles (`engine-re.md`, "The 3D scene:
+      the rain and the snow").
   - **Op `0x252` is implemented (2026-11-19):** `set-present-clear`, which makes a present clear its render target
     first (`engine-re.md`, the Arterial paragraph; `GfxLifecycleOpsTests`). Not compared with native: the port
     clears where op `0x20e` would, and no frame of the two was put side by side.
@@ -696,8 +694,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
 
   - **The title's 3D scene draws its leaves (2026-11-20).** Ops `0x324` to `0x32f`: the handlers keep what the
     scripts set (`Graphics.Scene3D.cs`), and the frame lowering draws the leaf effect from it
-    (`superpowers/specs/2026-11-20-title-leaves-design.md`). What it leaves undrawn is its own item, "The 3D scene's
-    other effects and cases are not drawn", under Engine fidelity.
+    (`superpowers/specs/2026-11-20-title-leaves-design.md`), and the rain and the snow of DEBUG.BIN since
+    (`engine-re.md`, "The 3D scene"). What it leaves undrawn is its own item, "The 3D scene's other cases are not
+    drawn", under Engine fidelity.
   - **The script level, M1, is reached (2026-11-20, by the user's word that it comes next).** All 693 scripts
     round-trip byte for byte at the core and the idiomatic level, and the canonical rebuild, the idiomatic rebuild
     and the patch probe each run the 271 scenes equivalent to the originals. `oms/arterial/adv.oms` lifts 15,641

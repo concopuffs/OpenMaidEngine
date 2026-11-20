@@ -54,7 +54,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
 
     /// <summary>Apply the shell native's queued menu commands on the VM thread, then queue CALLBACK_SETTING.BIN (each
     /// AGERC toggle command, and the 設定 dialog's OK, launches it after the service calls). A screen-mode switch has
-    /// the native queue CALLBACK_WINDOW.BIN instead.</summary>
+    /// the native queue CALLBACK_WINDOW.BIN instead, and sets the device up again.</summary>
     private void ApplyMenuToggles()
     {
         if (!_shell.HasMenuRequests) return;
@@ -69,6 +69,7 @@ public sealed partial class VirtualMachine : IVmMenuServices
             }
             _shell.RequestSettingCallback();
         }
+        if (_shell.TakeDeviceSetup()) _graphics.SetUpDeviceTransforms();
     }
 
     /// <summary>adv_toggle_auto_mode (SkipAndAuto.ToggleAutoMessageFromMenu). Enabling Auto with the skip service

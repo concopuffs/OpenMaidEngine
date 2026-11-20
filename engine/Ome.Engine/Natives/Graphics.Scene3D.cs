@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Numerics;
 using Ome.Engine.Sys4;
 
 namespace Ome.Engine.Natives;
@@ -12,16 +13,12 @@ public readonly record struct Scene3DMesh(long ResourceId, string Name, XMesh? G
 public readonly record struct Scene3DLight(int Type, (float X, float Y, float Z) Position,
                                            (float X, float Y, float Z) Direction, uint DiffuseArgb, float Range);
 
-/// <summary>The snow effect op 0x326 builds (native's Set3DEffectSnow): its id, the surface slot whose texture it
-/// draws with, and its two other operands, a float and an integer, whose meaning is not read.</summary>
-public sealed record Scene3DSnowEffect(long Id, int TextureSlot, float Value, long Option);
-
 /// <summary>
 /// AGE 4.38D's 3D scene as the scripts set it (ops 0x324 to 0x32f): mesh slots, a camera, an ambient colour, lights,
-/// and the display's three effect objects with the two handles the frame walk draws them at. 創刻のアテリアル's title
-/// builds its drifting leaves with it, which the frame lowering draws (Graphics.Scene3DLowering.cs;
-/// docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow and the first effect keep their state only
-/// (docs/backlog.md, "The 3D scene's other effects and cases are not drawn").
+/// and the display's three effect objects (the rain, the snow and the leaves) with the two handles the frame walk draws
+/// them at. 創刻のアテリアル's title builds its drifting leaves with it, and DEBUG.BIN all three; the frame lowering
+/// draws them (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md for the leaves,
+/// docs/engine-re.md, "The 3D scene", for the other two).
 /// </summary>
 /// <remarks>Native keeps all of it across a scene reset: only the opcodes, the manager's constructor and a lost device
 /// touch the mesh slots, the lights and the camera, and only op 0x324 and the display's destructor release the
@@ -47,10 +44,19 @@ public sealed class Scene3DState
     /// <summary>Op 0x325's two handles: the frame walk starts the first effect when it reaches the first, and draws
     /// the effects when it reaches the second.</summary>
     public (long First, long Second) EffectHandles { get; internal set; }
-    /// <summary>Op 0x327's effect, the display's first: its element count. What it draws is not read.</summary>
-    public long? FirstEffectElements { get; internal set; }
+    /// <summary>Op 0x327's effect, the display's first (+0x408).</summary>
+    public Scene3DRainEffect? Rain { get; internal set; }
+    /// <summary>Op 0x326's effect, the display's second (+0x40c).</summary>
     public Scene3DSnowEffect? Snow { get; internal set; }
+    /// <summary>Op 0x328's effect, the display's third (+0x410).</summary>
     public Scene3DLeafEffect? Leaf { get; internal set; }
+    /// <summary>
+    /// The view the display last handed its effects (+0x458). Native copies it from the manager's view (+0xa3a8) only
+    /// when it sets the Direct3D device up (gfx_setup_3d_transforms_and_lights@0x486260): at the start, when the view
+    /// is the identity, and on a screen-mode switch or a reset device, when it is op 0x32c's camera. Op 0x32c sets only
+    /// the device's view. The snow projects with this one; the rain and the leaves are drawn with the device's.
+    /// </summary>
+    public Matrix4x4 EffectView { get; internal set; } = Matrix4x4.Identity;
 
     internal void SetMesh(int slot, Scene3DMesh mesh) => _meshes[slot] = mesh;
     internal bool RemoveMesh(int slot) => _meshes.Remove(slot);
@@ -129,23 +135,44 @@ public sealed partial class Graphics
     /// <summary>Op 0x324: release the display's three effect objects. The two handles stay.</summary>
     public void ReleaseEffects()
     {
-        _scene3D.FirstEffectElements = null;
+        _scene3D.Rain = null;
         _scene3D.Snow = null;
         _scene3D.Leaf = null;
     }
 
-    /// <summary>Op 0x327: build the display's first effect, with <paramref name="elements"/> elements, in place of
-    /// the one it had.</summary>
-    public void SetFirstEffect(long elements) => _scene3D.FirstEffectElements = elements;
+    /// <summary>gfx_setup_3d_transforms_and_lights@0x486260, as a screen-mode switch runs it: the display hands its
+    /// effects the projection, the camera's view and the world again (<see cref="Scene3DState.EffectView"/>).</summary>
+    public void SetUpDeviceTransforms() => _scene3D.EffectView = View();
 
-    /// <summary>Op 0x326 (Set3DEffectSnow): build the snow effect from a surface slot's texture, in place of the one
-    /// the display had. False when the slot holds no texture: native traces it and leaves the effect as it was.
-    /// Native builds it only when the manager's +0xb62c is above 0, which is not read; the port takes it as so.
+    /// <summary>
+    /// The pixel shader level native keeps at manager +0xb62c (gfx_create_device_objects@0x4907f0, at device creation):
+    /// display:PixelShader when it is 0, 1 or 2, otherwise what the device offers (2 for pixel shader 2.0 or above, 1
+    /// for 1.x, 0 below). The port's renderers take the device as 2. Op 0x326 is the only reader here: native builds the
+    /// snow only above 0.
     /// </summary>
-    public bool SetSnowEffect(long id, int textureSlot, float value, long option)
+    public int PixelShaderLevel { get; init; } = 2;
+
+    /// <summary>The level a display:PixelShader setting gives the port.</summary>
+    public static int PixelShaderLevelFor(int setting) => setting is >= 0 and <= 2 ? setting : 2;
+
+    /// <summary>Op 0x327: build the display's first effect, the rain, with <paramref name="drops"/> drops, in place of
+    /// the one it had. Its drops draw from the game's generator.</summary>
+    public void SetRainEffect(long drops)
     {
+        _scene3D.Rain = new Scene3DRainEffect(drops, GameRandom);
+        _timeline?.Event("rain-effect", new() { ["drops"] = drops });
+    }
+
+    /// <summary>Op 0x326 (Set3DEffectSnow): build the snow effect with <paramref name="flakes"/> flakes of a surface
+    /// slot's texture, in place of the one the display had. Its flakes draw from the game's generator. Native acts only
+    /// when the pixel shader level is above 0 (<see cref="PixelShaderLevel"/>), and says nothing otherwise. False when
+    /// the slot holds no texture: native traces it and leaves the effect as it was.</summary>
+    public bool SetSnowEffect(long flakes, int textureSlot, float speed, long option)
+    {
+        if (PixelShaderLevel <= 0) return true;
         if (!_surfaceImages.ContainsKey(textureSlot) && !_surfaceResources.ContainsKey(textureSlot)) return false;
-        _scene3D.Snow = new Scene3DSnowEffect(id, textureSlot, value, option);
+        _scene3D.Snow = new Scene3DSnowEffect(flakes, textureSlot, speed, option, GameRandom);
+        _timeline?.Event("snow-effect", new() { ["flakes"] = flakes, ["texture"] = textureSlot });
         return true;
     }
 

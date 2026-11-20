@@ -90,9 +90,9 @@ public sealed class Scene3DLeafEffect
                                    (float)(vz * Drift));
         float yaw = StartingAngle(Unit(random)), pitch = StartingAngle(Unit(random)), roll = StartingAngle(Unit(random));
         double turnYaw = Centered(random), turnPitch = Centered(random), turnRoll = Centered(random);
-        var angularVelocity = new Vector3((float)(AngularSpeed * (double)(float)turnYaw),
-                                          (float)(AngularSpeed * (double)(float)turnPitch),
-                                          (float)(AngularSpeed * (double)(float)turnRoll));
+        var angularVelocity = new Vector3((float)(AngularSpeed * turnYaw),
+                                          (float)(AngularSpeed * turnPitch),
+                                          (float)(AngularSpeed * turnRoll));
         float scale = (float)(((double)ScaleLargest - ScaleSmallest) * Unit(random) + ScaleSmallest);
         int mesh = random.Next() % Meshes.Count;
         return new Scene3DLeaf(position, velocity, new Vector3(yaw, pitch, roll), angularVelocity, scale, mesh);
@@ -106,9 +106,7 @@ public sealed class Scene3DLeafEffect
         return (float)(whole * (double)Spin);
     }
 
-    /// <summary>rand_unit_percent@0x471990: (rand() % 100) / 100, kept as a float.</summary>
-    private static float Unit(CrtRandom random) => (float)(random.Next() % 100 / 100.0);
+    private static float Unit(CrtRandom random) => Scene3DRandom.Unit(random);
 
-    /// <summary>rand_centered@0x4719c0: the unit draw less 0.5.</summary>
-    private static double Centered(CrtRandom random) => Unit(random) - 0.5;
+    private static float Centered(CrtRandom random) => Scene3DRandom.Centered(random);
 }

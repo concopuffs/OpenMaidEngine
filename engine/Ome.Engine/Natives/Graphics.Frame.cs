@@ -101,7 +101,9 @@ public sealed partial class Graphics
             }
             frame.ScreenTransition = screen;
         }
-        else LowerObjects(_frameObjects, frame.Items, perf, decisions, sceneEffects: true);
+        else
+            LowerObjects(_frameObjects, frame.Items, perf, decisions, sceneEffects: true,
+                         walkEnd: WalkEnd(_scene.BackbufferRange.First, _scene.BackbufferRange.Count));
         // Native draws the 3D effects in the walk, then steps them (display_scene_effects_step_60hz@0x44f6f0).
         StepSceneEffects(nowMs);
         perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocated);
@@ -112,15 +114,14 @@ public sealed partial class Graphics
     // The objects in z-order (ascending handle). Native scale and translation channels are already sampled; an
     // object's opacity comes only from its blend and colour. The decision strings exist only for --gfx-log and the
     // timeline: DEBUGMAP visits about a thousand objects per frame, so they are formatted only when asked for.
-    // A walk with sceneEffects draws the leaves where native's frame walk does (display_scene_effects_at_handle@0x44f7a0):
-    // before the first object or polygon whose handle is at or past op 0x325's second handle, or after the last. A
-    // screen transition's source walk and op 0x222's range presents draw none (docs/backlog.md, "The 3D scene's other
-    // effects and cases are not drawn").
+    // A walk with sceneEffects draws the 3D effects where native's walk does (SceneEffectWalk), ending with walkEnd: a
+    // range present's first handle plus its count, or every object's. A screen transition's source walk draws none
+    // (docs/backlog.md, "The 3D scene's other cases are not drawn").
     private void LowerObjects(IReadOnlyList<RenderObject> visible, List<FrameItem> items,
-                              PerformanceFrameLog? perf, Dictionary<long, string>? decisions, bool sceneEffects = false)
+                              PerformanceFrameLog? perf, Dictionary<long, string>? decisions, bool sceneEffects = false,
+                              long walkEnd = long.MaxValue)
     {
-        bool leavesPending = sceneEffects && HasLeavesToDraw;
-        long leavesHandle = _scene3D.EffectHandles.Second;
+        var effects = new SceneEffectWalk(this, sceneEffects, _screenWidth, _screenHeight);
         long started = perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long allocated = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         _blurSources.Collect(visible);
@@ -130,11 +131,7 @@ public sealed partial class Graphics
         for (int index = 0; index < visible.Count; index++)
         {
             RenderObject v = visible[index];
-            if (leavesPending && v.Handle >= leavesHandle)
-            {
-                LowerLeaves(items);
-                leavesPending = false;
-            }
+            effects.At(v.Handle, items);
             perf?.RecordObject(v.TimeVarying);
             if (v.Polygon is { } polygon)
             {
@@ -282,7 +279,7 @@ public sealed partial class Graphics
             if (decisions != null) decisions[v.Handle] = $"z{z} {outcome}";
             z++;
         }
-        if (leavesPending) LowerLeaves(items);
+        effects.End(walkEnd, items);
     }
 
     // Native type-0 surface commands first leave range A in normal z-order, then alpha-composite range B into the
@@ -438,17 +435,20 @@ public sealed partial class Graphics
 
     // A published range draws its objects plainly: each object in the range as its texture or its fill, with no
     // effects (a transition or blur on an object in the range is the backbuffer's) and fills sized to the
-    // destination. An object whose source rectangle starts off its texture, or misses it, draws nothing. Returns how
-    // many objects drew.
+    // destination. An object whose source rectangle starts off its texture, or misses it, draws nothing. With
+    // sceneEffects the 3D effects are drawn in the walk, as native's frame render and range present draw them into the
+    // render target, at its size (SceneEffectWalk). Returns how many objects drew.
     private int LowerPublishedRange(IReadOnlyList<RenderObject> visible, long firstHandle, long count,
-                                    int width, int height, List<FrameItem> items)
+                                    int width, int height, List<FrameItem> items, bool sceneEffects)
     {
         if (count <= 0) return 0;
+        var effects = new SceneEffectWalk(this, sceneEffects, width, height);
         int lowered = 0;
         for (int index = 0; index < visible.Count; index++)
         {
             RenderObject item = visible[index];
             if (item.Handle < firstHandle || item.Handle - firstHandle >= count) continue;
+            effects.At(item.Handle, items);
             if (item.Polygon is { } polygon)
             {
                 if (LowerPolygon(polygon, 1f, items)) lowered++;
@@ -478,19 +478,23 @@ public sealed partial class Graphics
             items.Add(TextureItem(item, texture.Value, rawSlot, matrix, opacity, item.Blend));
             lowered++;
         }
+        effects.End(WalkEnd(firstHandle, count), items);
         return lowered;
     }
 
     /// <summary>Draw the objects of <paramref name="visible"/> whose handles fall in the range into
-    /// <paramref name="destination"/>, as a render-target publication does: lowered plainly (no effects, fills sized to
-    /// the destination) and drawn by the reference renderer's rules. Returns how many objects drew.</summary>
-    public int DrawObjectRange(RgbaImage destination, IReadOnlyList<RenderObject> visible, long firstHandle, long count)
+    /// <paramref name="destination"/>, as a render-target publication does: lowered plainly (no object effects, fills
+    /// sized to the destination) and drawn by the reference renderer's rules. With <paramref name="sceneEffects"/> the 3D
+    /// effects are drawn where the walk reaches their handles. Returns how many objects drew.</summary>
+    public int DrawObjectRange(RgbaImage destination, IReadOnlyList<RenderObject> visible, long firstHandle, long count,
+                               bool sceneEffects = false)
     {
         if (destination.Width <= 0 || destination.Height <= 0
             || destination.Pixels.Length != checked(destination.Width * destination.Height * 4))
             return 0;
         var items = new List<FrameItem>();
-        int lowered = LowerPublishedRange(visible, firstHandle, count, destination.Width, destination.Height, items);
+        int lowered = LowerPublishedRange(visible, firstHandle, count, destination.Width, destination.Height, items,
+                                          sceneEffects);
         ReferenceRenderer.DrawItems(destination, items);
         return lowered;
     }

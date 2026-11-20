@@ -300,7 +300,7 @@ public sealed partial class VirtualMachine
             ["release-3d-effects"] = static (vm, ins, pc) => vm.OpRelease3DEffects(ins, pc),
             ["set-3d-effect-handles"] = static (vm, ins, pc) => vm.OpSet3DEffectHandles(ins, pc),
             ["set-3d-effect-snow"] = static (vm, ins, pc) => vm.OpSet3DEffectSnow(ins, pc),
-            ["set-3d-effect-slot0"] = static (vm, ins, pc) => vm.OpSet3DEffectSlot0(ins, pc),
+            ["set-3d-effect-rain"] = static (vm, ins, pc) => vm.OpSet3DEffectRain(ins, pc),
             ["set-3d-effect-leaf"] = static (vm, ins, pc) => vm.OpSet3DEffectLeaf(ins, pc),
             ["load-mesh"] = static (vm, ins, pc) => vm.OpLoadMesh(ins, pc),
             ["release-mesh"] = static (vm, ins, pc) => vm.OpReleaseMesh(ins, pc),

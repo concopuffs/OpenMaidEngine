@@ -3347,7 +3347,7 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x132_reset_int_queue@0x4217d0 fetches queue_id, rejects values above 10, invokes the existing object's virtual destructor, allocates 0x1c bytes, and calls int_queue_construct@0x4074c0. The constructor allocates 0x100 dwords, sets capacity and growth quantum to 0x100, and zeros the read/end/high-water indices. scene_context_init_reset@0x40b560 constructs exactly ten queue pointers at EngineCtx+0x55130 before the ten stack pointers at +0x55158, so admitted queue id 10 aliases stack slot 0. The only corpus sites are ATSEEK@0x32 and MVSEEK@0x145, both using id 0 before their flood fills."
-details = "Implemented as native's ten queues. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity. Id 10, which the handler's test lets through onto stack slot 0, halts the run; ids above 10 are traced as ResetQの引数が不正です． and skipped, as native traces them (2026-11-17; docs/engine-re.md, 'Indices outside their tables')."
+details = "Implemented as native's ten queues, which the engine's start and every scene reset build empty (scene_context_init_reset: SYS4422 0x40b689, 4.38D 0x40c962), so a queue no script has reset is an empty one. Reset replaces the selected queue with an empty FIFO pre-sized to the native 0x100-dword initial capacity. Id 10, which the handler's test lets through onto stack slot 0, halts the run; ids above 10 are traced as ResetQの引数が不正です． and skipped, as native traces them (2026-11-17; docs/engine-re.md, 'Indices outside their tables')."
 
 [[opcode.semantics.args]]
 i = 1
@@ -3373,7 +3373,7 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = "Ghidra /v2: op_0x133_enqueue_int@0x4218d0 validates queue_id 0..10, fetches value, and calls int_queue_enqueue@0x408930 on ctx's selected queue. The helper appends at end_index, compacts unread entries when read_index is nonzero, or grows capacity by the 0x100-dword quantum. All four corpus sites are in ATSEEK/MVSEEK and enqueue coordinates packed as (x << 16) + y."
-details = "Implemented with signed 32-bit value normalization into the selected FIFO. Id 10 halts and ids above 10 are traced (AddQ) and skipped, as for op 0x132; a queue never reset halts. Every shipped use resets queue 0 before enqueueing."
+details = "Implemented with signed 32-bit value normalization into the selected FIFO. Id 10 halts and ids above 10 are traced (AddQ) and skipped, as for op 0x132. A queue no script has reset is the empty one the scene reset built: Arterial's VISEEK enqueues into queue 0 without resetting it, and a map reached before any battle's MVSEEK relies on that."
 
 [[opcode.semantics.args]]
 i = 1
@@ -14036,8 +14036,8 @@ abi_source = "kelebek"
 [opcode.semantics]
 name = "release-3d-effects"
 category = "draw"
-summary = "() — release the display's three 3D effect objects: the first effect, the snow and the leaves."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+summary = "() — release the display's three 3D effect objects: the rain, the snow and the leaves."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14057,8 +14057,8 @@ abi_source = "kelebek"
 [opcode.semantics]
 name = "set-3d-effect-handles"
 category = "draw"
-summary = "(first)(second) — the two handles at which the frame walk draws the 3D effects."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+summary = "(first)(second) — the two handles at which the frame walk draws the 3D effects: the rain's rings at the first, the rain's streaks, the snow and the leaves at the second."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14066,18 +14066,18 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = [
-  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x325_set_scene_effect_handles@0x4252a0 stores operand 1 at the display's +0x4d8 and operand 2 at +0x4dc. display_scene_effects_at_handle@0x44f7a0, which the frame walk calls with each handle it reaches and with -1 at its end, starts the first effect once the walk reaches the first handle and draws the three effects once it reaches the second. TITLE@0x647 gives 2 and 2." },
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x325_set_scene_effect_handles@0x4252a0 stores operand 1 at the display's +0x4d8 and operand 2 at +0x4dc. display_scene_effects_at_handle@0x44f7a0, which the frame walk calls with each handle it reaches and with -1 at its end, draws the rain's rings once the walk reaches the first handle and the rain's streaks, the snow and the leaves once it reaches the second (read 2026-11-20). TITLE@0x647 gives 2 and 2, DEBUG@0x33e 2 and 4." },
 ]
 
 [[opcode.semantics.args]]
 i = 1
-role = "handle at which the first effect starts"
+role = "handle at which the rain's rings are drawn"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
-role = "handle at which the effects are drawn"
+role = "handle at which the rain's streaks, the snow and the leaves are drawn"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -14090,8 +14090,8 @@ abi_source = "kelebek"
 [opcode.semantics]
 name = "set-3d-effect-snow"
 category = "draw"
-summary = "(id)(surface_slot)(value)(option) — native's Set3DEffectSnow: build the display's snow effect from a surface slot's texture."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+summary = "(flakes)(surface_slot)(speed)(fade) — native's Set3DEffectSnow: build the display's snow effect, that many flakes of a surface slot's texture falling at a speed, fading in below the top when fade is nonzero. Nothing at all at a pixel-shader level of 0."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14099,31 +14099,31 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = [
-  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x326_set_3d_effect_snow@0x4252f0 reads operands 2 and 4 as integers and 3 as a float and calls gfx_set_3d_effect_snow@0x417640, which acts only when the manager's +0xb62c is above 0, traces 「関数：Set3DEffectSnow エラー：テクスチャが作成されていません． TEXTURE=%d」 for a slot with no texture, and otherwise builds the effect object at the display's +0x40c (0xe4 bytes) in place of the one there. What the effect draws, the two other operands and +0xb62c were not read. Only DEBUG.BIN uses it." },
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x326_set_3d_effect_snow@0x4252f0 reads operands 2 and 4 as integers and 3 as a float and calls gfx_set_3d_effect_snow@0x417640, which acts only when the manager's +0xb62c is above 0, traces 「関数：Set3DEffectSnow エラー：テクスチャが作成されていません． TEXTURE=%d」 for a slot with no texture, and otherwise builds the effect object at the display's +0x40c (0xe4 bytes) in place of the one there, with the D3DX effect of resource 202 it builds once (+0xb580). +0xb62c is the pixel-shader level gfx_create_device_objects@0x4907f0 sets: display:PixelShader when it is 0 to 2, otherwise from the device caps. Read 2026-11-20 (snow_effect_construct@0x49bfa0 to snow_flake_draw@0x49bc30): each flake is born from four rand draws and steps 60 times a second, x and y by speed times 0.01; the draw sorts the flakes farthest first with qsort and draws each a square of the texture facing the viewer, through the display's view as it was at device setup. Only DEBUG.BIN uses it: 100 flakes, slot 0x2d, speed 1, fade on." },
 ]
 
 [[opcode.semantics.args]]
 i = 1
-role = "effect id"
+role = "flake count"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
-role = "surface slot whose texture the effect draws with"
+role = "surface slot whose texture the flakes draw with"
 observed_types = ["imm"]
 access = ["read"]
 unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
-role = "a float, not read"
+role = "fall speed, a float: each 1/60 s step moves a flake by speed times 0.01"
 observed_types = ["imm"]
 access = ["read-float"]
 
 [[opcode.semantics.args]]
 i = 4
-role = "an integer, not read"
+role = "fade: nonzero fades each flake in below the top"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -14134,10 +14134,10 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "set-3d-effect-slot0"
+name = "set-3d-effect-rain"
 category = "draw"
-summary = "(count) — build the display's first 3D effect object, with count elements. What it draws is not read."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+summary = "(drops) — build the display's rain effect: that many drops fall as one-pixel streaks and, where they land, ripple as rings, in the ambient light's colour."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14145,12 +14145,12 @@ source = "investigation"
 confidence = "high"
 depends_on = []
 evidence = [
-  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x327_create_scene_effect_a@0x425350 calls 0x44f430, which deletes the object at the display's +0x408 and builds a new one (0x29c bytes, constructor 0x47abc0) that allocates operand 1 elements of 0x70 bytes. Only DEBUG.BIN uses it." },
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x327_set_3d_effect_rain@0x425350 calls display_build_rain_effect@0x44f430, which deletes the object at the display's +0x408 and builds a new one (0x29c bytes, rain_effect_construct@0x47abc0) of operand 1 drops of 0x70 bytes. Read 2026-11-20 (rain_drop_respawn@0x47a5d0, rain_drop_step@0x47a730, rain_drop_draw@0x47a800): a drop is born from thirteen rand draws and falls, faster each 1/60 s step, until it lands and ripples for 15 to 19 steps (one draw), then is born again at the top; a streak is a line, a ring sixteen, lit by the ambient light alone with the material's alpha. The native name was not found. Only DEBUG.BIN uses it, with 100 drops." },
 ]
 
 [[opcode.semantics.args]]
 i = 1
-role = "element count"
+role = "drop count"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -14203,7 +14203,7 @@ abi_source = "kelebek"
 name = "load-mesh"
 category = "draw"
 summary = "(file_id)(mesh_slot) — load a catalog file as a Direct3D .X mesh into one of 1,000 mesh slots."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls", "jumps"]
@@ -14237,7 +14237,7 @@ abi_source = "kelebek"
 name = "release-mesh"
 category = "draw"
 summary = "(mesh_slot) — release a mesh slot."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14264,7 +14264,7 @@ abi_source = "kelebek"
 name = "release-all-meshes"
 category = "draw"
 summary = "() — release all 1,000 mesh slots."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14285,7 +14285,7 @@ abi_source = "kelebek"
 name = "set-camera-look-at"
 category = "draw"
 summary = "(eye_x)(eye_y)(eye_z)(target_x)(target_y)(target_z) — the 3D scene's camera: a left-handed look-at view with the y axis up."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14342,7 +14342,7 @@ abi_source = "kelebek"
 name = "set-ambient-light"
 category = "draw"
 summary = "(alpha)(rgb) — the 3D scene's ambient light colour. An alpha above 0xff is 0xff."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14375,7 +14375,7 @@ abi_source = "kelebek"
 name = "set-light"
 category = "draw"
 summary = "(index)(type)(x)(y)(z)(direction_x)(direction_y)(direction_z)(alpha)(rgb)(range) — set one of ten Direct3D lights and enable it."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -14463,7 +14463,7 @@ abi_source = "kelebek"
 name = "disable-light"
 category = "draw"
 summary = "(index) — disable a light."
-details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn')."
+details = "The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the rain, the snow and the leaves with it where native's frame render and range present draw them, on the screen or into a render target (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md; docs/engine-re.md, 'The 3D scene'). Point and spot lights, a screen transition's source and a movie mask's capture keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other cases are not drawn')."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
