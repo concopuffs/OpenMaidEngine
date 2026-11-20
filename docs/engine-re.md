@@ -746,6 +746,69 @@ Not modelled: the object's move in mode 3 while `+0x548` is zero (`backlog.md`, 
 chained record's move at publication (the port raises ruby in its layout,
 `RubyRule.RaiseByEffectInMode3`), the aspect-off branch, and the layout publisher's extra record.
 
+### Polygon objects: winding, depth, texture size and the render targets (2026-11-20)
+
+The polygon objects design (`superpowers/specs/2026-11-19-polygon-objects-design.md`, §2) left five points unread.
+They were read in the 4.38D image, and the depth and winding points also probed on native AGE: a scratch patch at
+DEBUG.BIN's polygon test (site `0x19f`, where `example.arterial-polygon-blends` patches) made flat quads at chosen
+depths and windings, and two sprite objects above them.
+
+**Saves** are settled in "Saves" above: a load clears the polygon map, and a save holds none.
+
+**Winding.** The engine never sets `D3DRS_CULLMODE`: of every `SetRenderState` call in the image, only the static
+D3DX sprite's `Begin` sets it, and its state block puts it back at `End`. So Direct3D's default, `D3DCULL_CCW`,
+culls a triangle wound counter-clockwise on screen. A strip's odd triangles count their first two corners swapped, so
+a strip that is clockwise to start with is drawn whole. On native, a quad given top-left, bottom-left, top-right,
+bottom-right (a strip) and one given top-left, bottom-left, bottom-right, top-right (a fan) are not drawn. Every
+polygon DEBUG.BIN makes is clockwise.
+
+**Depth.** The frame walk runs with the depth test on, and with Direct3D's defaults for the rest: depth writes on
+and the test `LESSEQUAL`. Only the 3D effects and one quad draw (`gfx_draw_quad_depth_off@0x48cf10`) turn both off
+around their draw. The depth buffer is cleared, to 1.0
+with the colour (`d3d_clear_render_target_black@0x4852c0`), only by op `0x20e`, by a frame render when op `0x252`'s
+bit 0 is set, and on a few engine paths (device setup, the screenshot below, the transition pre-pass). So depth carries
+from one frame to the next. What native drew:
+
+- quads at z 0, 0.5 and 1 are drawn, and quads at z -0.5 and 1.5 are not: depth is clipped to 0..1;
+- a quad at z 0.5 drawn after one at z 0 is hidden where they overlap, and one at z 0.75 after one at z 0.25 too; a
+  quad at z 0.25 after one at z 0.5 covers it;
+- a quad at z 0.5 is drawn over the background's sprites, and a sprite drawn after a quad at z 0 or 0.5 covers it: the
+  sprites, drawn through `ID3DXSprite` with `D3DXSPRITE_ALPHABLEND`, neither block a polygon nor are blocked by one.
+
+Every polygon the game's scripts make has z 0 (each z cell is written only with `0.0`: ANIMEDRAW, ATTACK, DRAWFIELD,
+DRAWMAP, SELBLOCK, DEBUG, and `GF[0xc]`–`GF[0xf]` in INIT2 and CALLBACK_LOAD), and a test of 0 against a depth of 0
+or more always passes. The test matters only to a mod.
+
+**A texture larger than its image.** A surface's texture is made by `D3DXCreateTexture` at the image's size
+(`gfx_surface_texture_create@0x477490`), which then reads back the size the device gave (`GetLevelDesc`, kept at the
+surface's `+0x430`, `+0x434`) beside the image's (`+0x410`, `+0x414`). A device that cannot make textures of any size
+gives a larger one, and the polygon's u and v are not scaled for it (`gfx_draw_polygon_primitive@0x4895b0` binds the
+texture as it is). On a device that can, as on any of today's, u = 1 is the image's edge: DEBUG.BIN's cards, 260 by
+363 (`CD002AA.AGF`) and 40 by 55 (`CD002AB.AGF`), are drawn whole in their quads.
+
+**Positions and render targets.** A polygon's vertex buffer holds window pixels: each kept position times the
+display's scale (`+0x4e0`, `+0x4e4`, or 1 when `+0x488` is set) plus its origin (`0x484b00`), less 0.5
+(`gfx_polygon_calc_vertex_pos@0x48b880`). `gfx_render_polygon@0x496d10` draws it as it is into the back buffer and
+into surface `0x26`. Into any other surface it writes canvas positions in for the draw, less 0.5, and puts the buffer
+back after; into surface `0x27` the positions are scaled by the display's scale without the origin. The two surfaces
+are the engine's own, and no script selects either (the scripts select -1, 1, 2 and `0xe`):
+
+- `0x26` is the frame's surface when display `+0x48c` is 1: the frame render, a range present and a direct draw
+  select it in place of the back buffer.
+- `0x27` is made by the screenshot (`gfx_save_screen_bmp@0x49b400`, which F1 and 表示画面を保存 reach through
+  `engine_save_screenshot_bmp@0x4081c0`). With display `+0x48c` at 1 it saves surface `0x26`. With a multisampled
+  back buffer (display `+0x4e8` above 0) it makes surface `0x27` at the back buffer's size, clears it, renders the frame
+  into it, saves it and releases it. Otherwise it reads the back buffer.
+
+The port draws every target in canvas units and scales the finished frame, so it needs no rewrite, and its
+screenshot is the canvas.
+
+**The port** (`GfxState.LowerPolygon`, `PolygonObjectsTests`) culls a counter-clockwise triangle as Direct3D does and
+cuts each triangle at depths 0 and 1. A vertex's w is 1, so z runs linearly across the screen and the cut is exact.
+Both renderers then draw what is left. With the probe patch, the port's frame and native's agree in each quad's
+presence and colour. They differ where two quads overlap: the port has no depth test, and draws the later polygon
+over the earlier one (`backlog.md`, "Polygons are not depth-tested").
+
 ### The 3D scene: the rain and the snow (2026-11-20)
 
 AGE 4.38D's display keeps three effects: the rain at `+0x408` (op `0x327`), the snow at `+0x40c` (op `0x326`,

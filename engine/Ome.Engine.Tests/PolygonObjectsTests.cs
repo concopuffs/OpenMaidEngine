@@ -286,6 +286,64 @@ public class PolygonObjectsTests
         Assert.Equal(0x40ff8040u, geometry.Vertices[2].Argb);
     }
 
+    // The lowered triangles of one polygon, as op 0x320 gives it.
+    private static FramePolygonVertex[] Lowered(GfxState.PolygonVertex[] vertices, long flags = 0)
+    {
+        var gfx = new GfxState();
+        gfx.CreatePolygon(5, vertices, flags);
+        return Assert.Single(gfx.SnapshotVisibleObjects(0)).Polygon!.Value.Geometry.Vertices;
+    }
+
+    [Fact]
+    public void ATriangleWoundCounterClockwiseOnScreenIsCulledAsDirect3DsDefaultCullsIt()
+    {
+        // Native drew these on 2026-11-20 (engine-re.md, "Polygon objects: winding, depth, ..."): the strip top-left, top-right, bottom-left,
+        // bottom-right is whole, since a strip's odd triangle counts its first two corners swapped.
+        Assert.Equal(6, Lowered(Square(0, 0, 4, 4, 0xffffffff)).Length);
+        // The same square from top-left, bottom-left, top-right, bottom-right is wound the other way: nothing.
+        GfxState.PolygonVertex[] mirrored =
+        [
+            new(0, 0, 0, 0xffffffff, 0, 0), new(0, 4, 0, 0xffffffff, 0, 1),
+            new(4, 0, 0, 0xffffffff, 1, 0), new(4, 4, 0, 0xffffffff, 1, 1),
+        ];
+        Assert.Empty(Lowered(mirrored));
+        // A fan top-left, bottom-left, bottom-right, top-right likewise; the other way round it is whole.
+        GfxState.PolygonVertex[] fan = [mirrored[0], mirrored[1], mirrored[3], mirrored[2]];
+        Assert.Empty(Lowered(fan, flags: 1));
+        Assert.Equal(6, Lowered([.. fan.Reverse()], flags: 1).Length);
+        // One triangle of a strip may face away while the other is drawn.
+        GfxState.PolygonVertex[] bent =
+        [
+            new(0, 0, 0, 0xffffffff, 0, 0), new(4, 0, 0, 0xffffffff, 1, 0),
+            new(0, 4, 0, 0xffffffff, 0, 1), new(-4, 0, 0, 0xffffffff, 1, 1),
+        ];
+        Assert.Equal([(0f, 0f), (4f, 0f), (0f, 4f)], Lowered(bent).Select(vertex => (vertex.X, vertex.Y)));
+    }
+
+    [Fact]
+    public void OnlyWhatLiesAtDepthsZeroToOneIsDrawn()
+    {
+        static GfxState.PolygonVertex[] At(float z0, float z1) =>
+        [
+            new(0, 0, z0, 0xff000000, 0, 0), new(8, 0, z1, 0xffffffff, 1, 0),
+            new(0, 4, z0, 0xff000000, 0, 1), new(8, 4, z1, 0xffffffff, 1, 1),
+        ];
+
+        // Native drew z 0, 0.5 and 1, and not 1.5 or -0.5.
+        Assert.Equal(6, Lowered(At(0, 0)).Length);
+        Assert.Equal(6, Lowered(At(1, 1)).Length);
+        Assert.Empty(Lowered(At(1.5f, 1.5f)));
+        Assert.Empty(Lowered(At(-0.5f, -0.5f)));
+
+        // A z that runs from 0.5 to 1.5 across the square is cut where it reaches 1, halfway: x 4, with the colour, the
+        // texture coordinates and the depth taken in proportion.
+        FramePolygonVertex[] cut = Lowered(At(0.5f, 1.5f));
+        Assert.Equal(4f, cut.Max(vertex => vertex.X));
+        Assert.Equal(0f, cut.Min(vertex => vertex.X));
+        FramePolygonVertex edge = cut.First(vertex => vertex.X == 4f);
+        Assert.Equal((0.5f, 0xff808080u), (edge.U, edge.Argb));
+    }
+
     [Fact]
     public void TwoTrianglesThatShareAnEdgeDrawEachPixelOnce()
     {

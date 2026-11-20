@@ -251,6 +251,13 @@ public sealed partial class GfxState
     // The polygon's triangles for a frame. A strip's triangle i is vertices i, i + 1, i + 2 and a fan's is 0, i + 1,
     // i + 2; fewer than three vertices draw nothing. Built again only when the vertices, the colour shown or the blend
     // mode changed.
+    //
+    // Direct3D's defaults decide two things the engine never sets (read and probed on native 2026-11-20; engine-re.md,
+    // "Polygon objects: winding, depth, texture size and the render targets"): a triangle wound counter-clockwise on
+    // screen is culled (D3DCULL_CCW; a strip's odd triangles count their first two corners swapped), and only what
+    // lies at depths 0 to 1 is drawn. A vertex's w is 1, so its z runs linearly across the screen and the triangle is
+    // cut at those depths exactly. Native also tests each polygon's depth against the polygons before it; the port does
+    // not, and draws a later polygon over an earlier one (backlog.md, "Polygons are not depth-tested").
     private static FramePolygonGeometry LowerPolygon(GfxPolygon polygon)
     {
         if (polygon.Geometry is { } lowered && polygon.GeometryColor == polygon.ShownColor
@@ -258,12 +265,15 @@ public sealed partial class GfxState
             return lowered;
         PolygonVertex[] source = polygon.Vertices;
         int triangles = System.Math.Max(0, source.Length - 2);
-        var vertices = new FramePolygonVertex[triangles * 3];
+        var vertices = new List<FramePolygonVertex>(triangles * 3);
         for (int triangle = 0; triangle < triangles; triangle++)
         {
-            vertices[triangle * 3] = Lower(source[polygon.Fan ? 0 : triangle]);
-            vertices[triangle * 3 + 1] = Lower(source[triangle + 1]);
-            vertices[triangle * 3 + 2] = Lower(source[triangle + 2]);
+            PolygonVertex a = source[polygon.Fan ? 0 : triangle], b = source[triangle + 1], c = source[triangle + 2];
+            float cross = (b.X - a.X) * (c.Y - a.Y) - (b.Y - a.Y) * (c.X - a.X);
+            if (!polygon.Fan && (triangle & 1) == 1) cross = -cross;
+            // On a screen whose y runs down, a positive cross product is a clockwise winding.
+            if (cross <= 0) continue;
+            ClipToDepthRange([a, b, c], vertices, Lower);
         }
         FramePolygonBlend blend = polygon.BlendMode switch
         {
@@ -272,13 +282,59 @@ public sealed partial class GfxState
             3 => FramePolygonBlend.Subtractive,
             _ => FramePolygonBlend.Alpha,
         };
-        polygon.Geometry = new FramePolygonGeometry(vertices, blend);
+        polygon.Geometry = new FramePolygonGeometry(vertices.ToArray(), blend);
         polygon.GeometryColor = polygon.ShownColor;
         polygon.GeometryBlendMode = polygon.BlendMode;
         return polygon.Geometry;
 
         FramePolygonVertex Lower(PolygonVertex vertex)
             => new(vertex.X, vertex.Y, ModulatePolygonColor(vertex.Argb, polygon.ShownColor), vertex.U, vertex.V);
+    }
+
+    // The part of a triangle at depths 0 to 1, as triangles fanned from its first corner: none when it lies wholly
+    // outside, the triangle itself when wholly inside. A corner the cut makes takes each attribute in proportion.
+    private static void ClipToDepthRange(PolygonVertex[] corners, List<FramePolygonVertex> output,
+                                         Func<PolygonVertex, FramePolygonVertex> lower)
+    {
+        if (corners.All(corner => corner.Z is >= 0f and <= 1f))
+        {
+            foreach (PolygonVertex corner in corners) output.Add(lower(corner));
+            return;
+        }
+        List<PolygonVertex> kept = Cut(Cut([.. corners], z => z), z => 1f - z);
+        for (int index = 1; index + 1 < kept.Count; index++)
+        {
+            output.Add(lower(kept[0]));
+            output.Add(lower(kept[index]));
+            output.Add(lower(kept[index + 1]));
+        }
+
+        // Keeps the side where inside(z) >= 0 (Sutherland and Hodgman).
+        static List<PolygonVertex> Cut(List<PolygonVertex> polygon, Func<float, float> inside)
+        {
+            var result = new List<PolygonVertex>(polygon.Count + 1);
+            for (int index = 0; index < polygon.Count; index++)
+            {
+                PolygonVertex from = polygon[index], to = polygon[(index + 1) % polygon.Count];
+                float d0 = inside(from.Z), d1 = inside(to.Z);
+                if (d0 >= 0) result.Add(from);
+                if ((d0 >= 0) != (d1 >= 0)) result.Add(Between(from, to, d0 / (d0 - d1)));
+            }
+            return result;
+        }
+
+        static PolygonVertex Between(PolygonVertex from, PolygonVertex to, float t)
+        {
+            uint argb = 0;
+            for (int shift = 24; shift >= 0; shift -= 8)
+            {
+                float channel = ((from.Argb >> shift) & 0xff) * (1 - t) + ((to.Argb >> shift) & 0xff) * t;
+                argb |= (uint)System.Math.Clamp((int)MathF.Round(channel), 0, 255) << shift;
+            }
+            return new PolygonVertex(from.X + (to.X - from.X) * t, from.Y + (to.Y - from.Y) * t,
+                                     from.Z + (to.Z - from.Z) * t, argb,
+                                     from.U + (to.U - from.U) * t, from.V + (to.V - from.V) * t);
+        }
     }
 
     // The polygon of a handle in a snapshot, in its turn of the walk: gfx_render_frame draws one that is built, after

@@ -681,8 +681,13 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - **A polygon in a blur's source range is drawn unblurred.** `Graphics.LowerObjects` draws it in its place and
       `LowerBlurRange` skips it; native's pre-pass draws a range's polygons into the blur's surface. No use of one
       is known.
-    - **Five points of native's are not read** (the design's §2): saves, the depth test, culling by winding, a
-      texture larger than its image, and the position rewrite for two render targets.
+    - **Polygons are not depth-tested.** Native's frame walk tests a polygon's depth against the polygons drawn before
+      it (`LESSEQUAL`, writes on), and the depth carries from frame to frame until op `0x20e`, op `0x252`'s bit 0 or an
+      engine path clears it; sprites take no part (`engine-re.md`, "Polygon objects: winding, depth, texture size and
+      the render targets", which also has the culling and the depth clip the port does). The port draws a later
+      polygon over an earlier one whatever their depths. Every polygon of the game's scripts has z 0, which the test
+      always passes, so only a mod sees it. Done when both renderers keep a depth buffer for polygons, cleared where
+      native clears it, and the probe that section describes draws as native does.
 
   - **The title's 3D scene draws its leaves (2026-11-20).** Ops `0x324` to `0x32f`: the handlers keep what the
     scripts set (`Graphics.Scene3D.cs`), and the frame lowering draws the leaf effect from it
