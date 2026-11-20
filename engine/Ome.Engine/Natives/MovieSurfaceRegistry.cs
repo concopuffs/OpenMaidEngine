@@ -56,10 +56,32 @@ internal sealed class MovieSurfaceRegistry
         return true;
     }
 
+    /// <summary>Mark a playback complete and keep it bound: op 0x20f's cancelled modal movie, which the wrapper's
+    /// surface release stops. A movie that reaches its end is <see cref="End"/>ed instead.</summary>
     public bool Complete(long playbackId)
     {
         return _byPlayback.ContainsKey(playbackId) && _completed.Add(playbackId);
     }
+
+    /// <summary>The playback reached its end: native's tick detaches the movie and frees its object, so the surface
+    /// is an ordinary texture again, holding what the movie drew last (4.38D engine_main_tick@0x41223c). Unbinds it and
+    /// gives that image: the newest frame, or the surface's contents when no frame came.</summary>
+    public bool End(long playbackId, out MovieSurfaceBinding binding, out RgbaImage? lastShown)
+    {
+        lastShown = null;
+        if (!_byPlayback.TryGetValue(playbackId, out binding)) return false;
+        if (_frames.TryGetValue(playbackId, out var frame)
+            || _contentsBeforeFirstFrame.TryGetValue(playbackId, out frame))
+            lastShown = frame.Image;
+        RemoveBinding(binding);
+        return true;
+    }
+
+    /// <summary>Whether native clears a movie's surface when the movie ends: the tick fills the whole surface with 0
+    /// unless the flags' low two bits are 2 (4.38D engine_main_tick@0x412248, 4.33G 0x411e18, 4.24J 0x411be2).
+    /// Himegari's chapter movie (flags 2) and op 0x24d's mask (6) keep their last picture; Kamidori's effect movies
+    /// (0) and the logos' modal movies (4, 0x20004) leave a transparent surface.</summary>
+    public static bool ClearsSurfaceAtEnd(long movieFlags) => (movieFlags & 3) != 2;
 
     public bool IsActive(int surfaceSlot)
     {
@@ -81,10 +103,10 @@ internal sealed class MovieSurfaceRegistry
     /// surface_movie_is_playing@0x405150 (SYS4433 0x404ec0, 4.38D 0x404eb0) answers for each movie object the tick
     /// scans: the movie's flags word has bit 2 set and bit 0 clear. The answer lasts the object's lifetime, from the
     /// play op, its start still pending, to the tick that sees the movie at its end: without the loop flag that tick
-    /// detaches the movie and frees the object (4.38D engine_main_tick@0x41223c), so a completed playback holds
-    /// nothing. Op 0x24d's mask movie has flags 6, so Arterial SC0000's transitions wait for their movie; the other
-    /// shipped movies pass 0 (Kamidori) or 2 (Himegari's SC0000, which sets the anim clock to the movie's length
-    /// itself) and play on while the script continues.</summary>
+    /// detaches the movie and frees the object (4.38D engine_main_tick@0x41223c; <see cref="End"/>), so a playback at
+    /// its end holds nothing, nor does a cancelled modal one. Op 0x24d's mask movie has flags 6, so Arterial SC0000's
+    /// transitions wait for their movie; the other shipped surface movies pass 0 (Kamidori) or 2 (Himegari's SC0000,
+    /// which sets the anim clock to the movie's length itself) and play on while the script continues.</summary>
     public bool HoldsServiceWait
     {
         get

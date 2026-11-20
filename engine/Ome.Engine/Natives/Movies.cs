@@ -176,8 +176,9 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
                       initialPositionMs: 0, startDelayMs: 0, presentationDurationMs: null, mask: null,
                       out _, out playbackId);
 
-    /// <summary>The playback has completed, or its modal wait was cancelled, which the script cannot tell apart; the
-    /// wrapper's following surface release stops the decoder.</summary>
+    /// <summary>The modal wait was cancelled, which the script cannot tell from the movie's end; the wrapper's following
+    /// surface release stops the decoder. A movie that reaches its end has already been unbound
+    /// (<see cref="MovieSurfaceRegistry.End"/>), so this does nothing for it.</summary>
     public void MarkCompleted(long playbackId) => _surfaces.Complete(playbackId);
 
     private bool StartMovie(AssetEntry asset, long resourceId, int surfaceSlot, long movieFlags,
@@ -263,14 +264,37 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
             _graphics.RequestPresentation();
     }
 
-    // The playback reached its end, its watchdog fired, or it could not start.
+    // The playback reached its end, its watchdog fired, or it could not start. Native's tick then detaches the movie,
+    // which leaves the surface's texture with what it drew last, fills the whole surface with 0 unless the flags' low
+    // two bits are 2, and frees the movie object (4.38D engine_main_tick@0x41223c, 4.33G 0x411e0c, 4.24J 0x411bd6):
+    // the surface is an ordinary one again, which ops draw into and release as any other.
     private void Complete(long playbackId)
     {
         MaskPlayback? mask = RemoveMask(playbackId);
         if (mask != null) PublishMaskTerminal(mask);
-        if (!_surfaces.Complete(playbackId)) return;
-        _timeline?.Event("movie-complete", new() { ["playback"] = playbackId });
+        if (!_surfaces.End(playbackId, out MovieSurfaceBinding binding, out RgbaImage? lastShown)) return;
+        int slot = binding.SurfaceSlot;
+        if (mask != null) ForgetMaskSurface(slot, playbackId);
+        else if (lastShown != null) _graphics.PublishSurfacePixels(slot, lastShown, updateSize: false);
+        bool cleared = MovieSurfaceRegistry.ClearsSurfaceAtEnd(binding.MovieFlags) && ClearSurface(slot);
+        RequestStop(playbackId);
+        _graphics.RequestPresentation();
+        _timeline?.Event("movie-complete", new()
+        {
+            ["playback"] = playbackId, ["surface"] = slot, ["cleared"] = cleared,
+        });
         _wake();
+    }
+
+    // gfx_fill_surface_rect_worker(slot, the whole surface, 0, 0): every pixel transparent black.
+    private bool ClearSurface(int slot)
+    {
+        int width, height;
+        if (_graphics.SurfacePixels(slot) is { } pixels) (width, height) = (pixels.Width, pixels.Height);
+        else if (_graphics.TryGetSurfaceSize(slot, out var size)) (width, height) = size;
+        else return false;
+        _graphics.FillSurfaceRect(new SurfaceRectFill(slot, 0, 0, width, height, 0, 0));
+        return true;
     }
 
     private static byte[] CreateFilledMask(int width, int height, byte fill)

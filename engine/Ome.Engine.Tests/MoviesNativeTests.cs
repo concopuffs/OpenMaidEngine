@@ -56,8 +56,11 @@ public class MoviesNativeTests
 
         Assert.Equal(0, movies.PlayToSurface("BTL", 0x2be3, 9, 0, 0));
 
+        // It ends as one that played: unbound, and with flags 0 its surface is cleared.
         Assert.False(movies.IsSurfaceActive(9));
-        Assert.Equal([1L], movies.CompletedPlaybackIds());
+        Assert.Empty(movies.SurfaceDiagnostics());
+        Assert.Empty(movies.CompletedPlaybackIds());
+        Assert.All(graphics.SurfacePixels(9)!.Pixels, value => Assert.Equal(0, value));
     }
 
     [Fact]
@@ -105,12 +108,41 @@ public class MoviesNativeTests
         rig.ServiceFrame();
 
         Assert.False(rig.Movies.IsSurfaceActive(9));
-        Assert.Equal([1L], rig.Movies.CompletedPlaybackIds());
         Assert.Equal(2, rig.Wakes);   // the frame service hands the completion over, and the completion wakes the waits
-        // A completed movie stays bound until its surface is released, and holds the effect wait no more: native's tick
-        // frees a movie object at its end (Arterial SC0000's mask transitions wait for exactly their movie).
+        // Native's tick frees a movie object at its end: the surface is unbound and the movie holds the effect wait no
+        // more (Arterial SC0000's mask transitions wait for exactly their movie). The next frame service stops the
+        // decoder.
+        Assert.Empty(rig.Movies.SurfaceDiagnostics());
         Assert.False(rig.Movies.HoldsServiceWait);
         Assert.False(decoder.Disposed);
+        rig.ServiceFrame();
+        Assert.True(decoder.Disposed);
+    }
+
+    [Theory]
+    [InlineData(0L, true)]         // Kamidori's ADDEXP, SHOWGROW and BTL movies
+    [InlineData(0x20004L, true)]   // the logos' modal movies
+    [InlineData(2L, false)]        // Himegari's chapter movie
+    [InlineData(6L, false)]        // op 0x24d's mask movie
+    public void AMovieAtItsEndLeavesItsSurfaceClearedUnlessItsFlagsLowBitsAre2(long flags, bool cleared)
+    {
+        // engine_main_tick@0x41223c (4.38D; 4.33G and 4.24J alike): the detach leaves the texture with the last frame,
+        // and the tick fills the whole surface with 0 unless (flags & 3) == 2, then frees the movie object.
+        var decoder = new FakeMovieDecoder { StopTimeMs = 1000, Frame = Frame(0x40) };
+        MovieRig rig = RigWithSurface(decoder: _ => decoder);
+        rig.Movies.PlayToSurface("BTL", 0x2be3, 9, flags, 0);
+        rig.ServiceFrame();
+        Assert.True(rig.Movies.SurfaceDiagnostics().Single().HasFrame);
+
+        decoder.IsCompleted = true;
+        rig.ServiceFrame();
+
+        Assert.Empty(rig.Movies.SurfaceDiagnostics());
+        SurfaceTexture shown = Assert.IsType<SurfaceTexture>(rig.Graphics.ResolveSurfaceTexture(9, 0x2be3));
+        Assert.Equal(cleared ? new byte[] { 0, 0, 0, 0 } : new byte[] { 0, 0x40, 0, 255 }, shown.Image.Pixels);
+        // The surface is an ordinary one now: a fill reaches what it shows.
+        rig.Graphics.FillSurfaceRect(new SurfaceRectFill(9, 0, 0, 1, 1, 255, 0x0000ff));
+        Assert.Equal(new byte[] { 0, 0, 0xff, 255 }, rig.Graphics.ResolveSurfaceTexture(9, 0x2be3)!.Value.Image.Pixels);
     }
 
     [Fact]

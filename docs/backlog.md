@@ -94,6 +94,11 @@ it; git history keeps the record.
     event, and 蒼月の南湖畔 turns 1-5: the SC0500 and SC2000 openings, the SC5500 stage events, enemy-phase
     counters with level-ups, attacks, healing support, and money and healing cards, 2026-11-10.
 
+  Since 2026-11-20 the port clears a movie's surface at the movie's end as native does (`engine-re.md`, "Movie
+  flags decide the effect wait", "The end of a movie"). Look at the next level-up on both targets: ADDEXP's banner
+  is a flags-0 movie, which native's tick clears when it ends while SHOWGROW still runs; before the change the port
+  showed its last frame until the script erased it.
+
   Saves on both targets compare by decoded payload (`Ome.Cli save-diff`, `tools-reference.md`). Clock
   samples, gfx start stamps and save-history globals are expected to differ (`engine-re.md`, "Op 0x216 reads past
   the live surface table" and "Finished channels reset their targets"). Done when the story has been driven to its
@@ -124,15 +129,6 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
-- **A movie's end does not clear its surface.** At a movie's end without the loop flag, native's tick detaches the
-  movie, frees it and, unless `(flags & 3) == 2`, fills the whole surface with 0 (4.38D `engine_main_tick@0x41223c`;
-  `engine-re.md`, "Movie flags decide the effect wait", the correction of 2026-11-20). The port keeps the movie's
-  last frame on the surface until the surface is released. Flags 2 (Himegari's chapter movie) and 6 (op `0x24d`'s
-  mask) keep their surface natively too, so only movies with flags 0 differ: Kamidori's ADDEXP, SHOWGROW and BTL
-  effect movies, whose last frame the port shows until the script releases the surface and native shows nothing.
-  Found on `feature/arterial` while fixing the mask movie's hold, and owed before that branch merges. Done when the
-  port clears the surface at the end where native does, and a Kamidori level-up or battle movie's end is compared
-  with native's.
 - **The title's 3D leaves are not drawn (創刻のアテリアル).** Owed by the user's word on 2026-11-19: "state only is
   fine as long as we keep in mind we need to finish that functionality at some point". Native's title shows white
   leaves drifting over it (native screenshots a few seconds apart show them moved); the port's shows everything

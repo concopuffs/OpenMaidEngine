@@ -6936,7 +6936,7 @@ page 18 reveals its 35 glyphs in two runs around the furigana かがりび.
    does not ask DirectShow: it answers `((+0x424 ? +0x430 : +0x440) & 5) == 4`, and both words hold the movie op's
    `movie_flags` operand (`movie_play_configure@0x4625e0` stores `+0x430`, `movie_start_modal_playback@0x463280`
    stores `+0x440`). So only flags with bit 2 set and bit 0 clear hold the wait, and they hold it for the movie object's
-   lifetime, past the last frame until its surface is released (see "Movie flags decide the effect wait", below).
+   lifetime, which ends when the tick sees the movie at its end (see "Movie flags decide the effect wait", below).
 5. Either way it calls `Sleep(0)`.
 
 A tick takes about 0.17 ms here (5457 polls in an 890 ms wait), so the wait ends on the first tick after its last
@@ -7041,8 +7041,32 @@ whole surface, 0, 0) unless `(+0x440 & 3) == 2`, and deletes the object and clea
 Op `0x24d`'s mask movie has flags 6, so the hold mattered for the first time with 創刻のアテリアル: SC0000's first
 movie-mask transition (`SC0000@0x2b21`, `MVE001A.MPG`, 2,033 ms) left its `0x21c` waiting for good, at
 `SC0000@0xcb37`, about fourteen pages into a new game. `HoldsServiceWait` now skips a completed playback, and the
-transition ends when its movie does (`MoviesNativeTests.AMaskMovieEndsItsTransitionWhenTheMovieEnds`). The port
-still does not clear the surface at a movie's end (backlog, "A movie's end does not clear its surface").
+transition ends when its movie does (`MoviesNativeTests.AMaskMovieEndsItsTransitionWhenTheMovieEnds`).
+
+*The end of a movie (2026-11-20).* The three builds end a movie with the same code: 4.24J at `0x411bd6`, 4.33G at
+`0x411e0c`, 4.38D at `0x41223c`. The start (4.38D `FUN_00474f20`, 4.24J `movie_start_modal_playback@0x463280`, which
+starts every movie, not only the modal one) stores the op's flags in `+0x440` and their bit 0 in `+0x43c`; a delayed
+start keeps them in `+0x430` with `+0x424` set until its delay runs out. Op `0x20f`'s modal movie lives in the same
+array and starts the same way, so its end is the same. At the end the detach leaves the texture holding the last
+frame, and the clear `gfx_fill_surface_rect_worker` (slot, the whole surface, 0, 0) makes every pixel transparent
+black. The flags the scripts pass (counted over the three games' scripts):
+
+| Flags | Where | At the end |
+|---|---|---|
+| 0 | Kamidori's ADDEXP level-up banner, SHOWGROW, BTL, FIELD, ARRANGE, ENHANCE and FELLOW; Himegari's BTL, FIELD, CHMENU and USEMAGIC; Arterial's battle scripts (ATTACK, COUPANIME, TALENT and the rest, 211 sites) | cleared |
+| 4, `0x20004` | the modal LOGO and OP movies (Himegari 4; Kamidori and Arterial `0x20004`) | cleared, then the script erases and releases at once |
+| 2 | Himegari's SC0000 chapter movie (through `G[402620]`), the load callbacks' restarts (from saved state) | kept |
+| 6 | op `0x24d`'s mask movie | kept |
+
+No script passes bit 0 as a constant, so no shipped movie loops; the port has no loop. **Port:** `Movies.Complete`
+does what the tick does (`MovieSurfaceRegistry.End`): the movie's newest frame, or the surface's contents when none
+came, becomes the surface's own pixels, `ClearsSurfaceAtEnd` clears them unless `(flags & 3) == 2`, the binding goes
+and the next frame service stops the decoder. The surface is then an ordinary one, which a fill or a draw reaches
+(`MoviesNativeTests.AMovieAtItsEndLeavesItsSurfaceClearedUnlessItsFlagsLowBitsAre2`). Before, the port showed the last
+frame until the script released the surface: ADDEXP's banner stayed through SHOWGROW. A cancelled modal movie keeps
+its binding until the wrapper's release, as before; native's cancel was not read. Not compared with native on a
+screen: no drive reached a level-up after the change. The sweep found Kamidori's level-ups at parity before it
+(2026-11-10), so the banner's last frame probably shows nothing under its blend; the sweep looks at the next one.
 
 #### A surface release deletes its movie (2026-11-07)
 
