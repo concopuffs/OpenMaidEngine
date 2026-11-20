@@ -1,0 +1,75 @@
+# Port only (scenarios/port/): the GPU renderer against the reference renderer on screens past the title that hold
+# polygon items (docs/superpowers/specs/2026-11-19-polygon-objects-design.md, acceptance 4), reached through the
+# developers' debug menu (example.arterial-debug-menu; docs/modding/games/arterial.md, "The debug menu"). Each
+# comparison's result counts the frame's polygons, the textured ones, the ones with two textures and each blend.
+#
+# 1. システム: DEBUG.BIN's polygon test, which example.arterial-polygon-blends gives the replace and subtractive blends
+#    and a second texture (no script of the game draws them), then its rain, snow and leaves. It returns to the title.
+# 2. カードバトル（ＰＧ用）: BTLINFO, then the battle field, whose cards DRAWFIELD draws as textured polygons.
+# 3. A win by the turn limit (arterial-debug-events.steps says how), RESULT, and back to the title.
+# 4. 全体マップ: the whole map after its tutorial and receipts, and with the cursor on the SHOP point, whose highlight
+#    ALLMAP draws as a textured additive polygon.
+#
+# Every comparison fails past 16 pixels over the tolerance: a moving polygon's edge may round to the other side of a
+# pixel or two in each renderer (DEBUG's falling feathers do), while a renderer at fault differs in thousands.
+# The reference renderer slows each frame, so the menus are reached by plain waits after `reference-diff on`.
+# Run on a fresh sandbox:
+#   py -3.11 -X utf8 tools/drive.py --game arterial port start --mod oms/examples/mods/example.arterial-debug-menu --mod oms/examples/mods/example.arterial-polygon-blends
+#   py -3.11 -X utf8 tools/drive.py --game arterial port run tools/drive/scenarios/port/arterial-debug-reference-diff.steps
+#   py -3.11 -X utf8 tools/drive.py --game arterial port stop
+
+rand-seed 7
+wait 5
+click adv.next                                   # skips the logo
+wait-state script=TITLE timeout=90
+wait 6
+click title.quit                                 # the debug menu
+wait-state waiting=menu timeout=20
+click 440 478                                    # システム: DEBUG.BIN
+wait 6
+reference-diff on
+wait 2
+expect top=DEBUG@0x23d                           # the polygon test waits for a click
+reference-diff arterial-debug-polygons max-over=16
+click 512 300
+wait 6
+reference-diff arterial-debug-effects max-over=16
+wait-state top=TITLE@0x8f1 timeout=60            # DEBUG ends: the title's menu
+wait 4
+click title.quit
+wait 4
+click 440 329                                    # カードバトル（ＰＧ用）
+wait 10
+reference-diff arterial-debug-btlinfo max-over=16
+click 826 242                                    # BTLINFO's battle start
+wait 8
+reference-diff arterial-debug-field max-over=16
+lua maid.vm.g[0x46910a] = 1 maid.vm.g[0x46910c] = 1 return 0
+click 68 548                                     # Auto Battle
+speed 8
+wait 40
+speed 1
+wait-state script=RESULT click=adv.next every=3 timeout=90
+wait 3
+reference-diff arterial-debug-result max-over=16
+click 880 515                                    # 決定
+wait-state script=TITLE timeout=90
+wait 8
+click title.quit
+wait 4
+click 440 270                                    # 全体マップ
+wait 10
+click 580 485                                    # the tutorial's Next
+wait 3
+click 580 485
+wait 3
+point map.middle 512 300
+wait-state at=ALLMAP@0x17f2 click=map.middle every=2 timeout=60   # the receipts
+wait 2
+reference-diff arterial-debug-map max-over=16
+move 551 140
+wait 1.5
+move 551 147                                     # the SHOP point
+wait 2
+lua local point = maid.vm.g[0x43f5f6] assert(point == 27, point) return point
+reference-diff arterial-debug-map-hover max-over=16

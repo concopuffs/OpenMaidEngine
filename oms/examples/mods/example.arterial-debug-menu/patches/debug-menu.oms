@@ -1,0 +1,57 @@
+oms 1
+// 創刻のアテリアル's title builds a debug menu (デバッグメニュー: the ADV part, the whole map, three card battles,
+// three ADV debugs and システム) right after its Quit calls QUIT.BIN, which always ends the game, so no run reaches it.
+// Deleting the call makes Quit open the menu instead.
+//
+// Each entry then sets the game mode (G[0x0]: 1 ADV, 2 the whole map, 3 a battle) and jumps to the code at 0x574,
+// which since Arterial Force Blade starts that mode: GAMESTART.BIN sets the mode back to 1 and the scene to SC0810.
+// Returning there instead lets the mode each entry set take effect.
+patch "TITLE.BIN" fingerprint "sha256:e8e694790e6f6ff160a21c6f1ffedcb56158f9f17480a05e9f9a27761588a02e"
+
+replace site 0x2e3 {
+}
+
+// ADVパート: the scene picker
+replace site 0x4bf {
+    return
+}
+
+// 全体マップ: DEBUGAM, then the whole map
+replace site 0x4ca {
+    return
+}
+
+// カードバトル: DEBUGBTL2, then a battle
+replace site 0x4df {
+    return
+}
+
+// カードバトル（ＰＧ用）: DEBUGBTL
+replace site 0x4f4 {
+    return
+}
+
+// カードバトル（ＰＧ用２）: DEBUGBTL3
+replace site 0x509 {
+    return
+}
+
+// ＡＤＶデバッグ: the scene DEBUGADV
+replace site 0x52a {
+    return
+}
+
+// ＡＤＶデバッグ２: DEBUGADV2
+replace site 0x548 {
+    return
+}
+
+// ＡＤＶデバッグ３: DEBUGADV3
+replace site 0x566 {
+    return
+}
+
+// システム: DEBUG.BIN, then back to the title
+replace site 0x571 {
+    return
+}

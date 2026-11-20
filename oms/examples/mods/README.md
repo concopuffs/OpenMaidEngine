@@ -34,6 +34,17 @@ ran the same scenarios on native AGE.
   renames 龍司's third name, the one his name plate shows in the opening, at `arterial.data.layered`.
   `tools/drive/scenarios/port/arterial-character-name.steps` plays a new game to his first line, SC0000's 24th
   page, and checks the cell at the title. It targets `extended`, so it runs in the port only.
+- `example.arterial-debug-menu` opens the developers' debug menu, which Arterial's title builds but never shows,
+  from the title's Quit (`docs/modding/games/arterial.md`, "The debug menu"). It targets `native`; the exported
+  `TITLE.BIN` opens the same menu on native AGE.
+- `example.arterial-event-log` logs every event `arterial-base` raises, with its fields, and keeps the list for the
+  driver's `lua` step; `example.arterial-area-point` is a data file whose area part moves area 1's 出現地点.
+  `tools/drive/scenarios/port/arterial-debug-events.steps` runs the three: a debug battle won to its RESULT (the
+  battle and experience events), then the whole map (the area events, and the moved point).
+- `example.arterial-polygon-blends` patches `DEBUG.BIN`, which the debug menu's システム runs, before its polygon
+  test waits: one polygon takes a second texture, one the replace blend and one the subtractive blend, which no
+  script of the game uses. It targets `native`. `tools/drive/scenarios/port/arterial-debug-reference-diff.steps`
+  starts with it and the debug menu, and compares the GPU renderer with the reference there.
 
 - `example.double-exp-lua` (Lua scripting gate 4) is the Lua version of the Himegari guide's experience patch: a
   handler on `himegari.experience.after_calculation` doubles `L[0x1]`. `ModLuaLinkTests` links it and runs

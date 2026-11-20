@@ -670,11 +670,11 @@ STEPS = {
     "language": _spec(1, 1, "", "language TAG                  choose the port's language in its options panel (OME "
                       "section) and commit it as 決定 does: menus, game text and language assets switch at once, and "
                       "OME.INI keeps it (port)", "language"),
-    "reference-diff": _spec(1, 1, "tolerance",
-                            "reference-diff on|NAME [tolerance=N]  on: the reference renderer draws every frame too; "
-                            "NAME: compare the screen with its drawing of the same frame (run settled), counting "
-                            "pixels with a channel more than N (default 3) apart; writes shots/NAME-gpu.png, "
-                            "-reference.png, -diff.png (port)", "reference-diff"),
+    "reference-diff": _spec(1, 1, "tolerance max-over",
+                            "reference-diff on|NAME [tolerance=N] [max-over=M]  on: the reference renderer draws every "
+                            "frame too; NAME: compare the screen with its drawing of the same frame (run settled), "
+                            "counting pixels with a channel more than N (default 3) apart, and fail when more than M "
+                            "are; writes shots/NAME-gpu.png, -reference.png, -diff.png (port)", "reference-diff"),
     "lua": _spec(1, 1, "mod timeout",
                  "lua [mod=ID] CODE             run a Lua chunk on the engine thread and report what it returns (the "
                  "rest of the line is the chunk, so no comment may follow it); mod=ID runs it in that mod's "
@@ -792,6 +792,10 @@ def _validate(step: Step) -> None:
             raise DriveError("reference-diff takes on or a plain file name (letters, digits, . _ -)")
         if "tolerance" in step.options and not step.options["tolerance"].isdigit():
             raise DriveError("reference-diff tolerance is a whole number of levels per channel")
+        if "max-over" in step.options and not step.options["max-over"].isdigit():
+            raise DriveError("reference-diff max-over is a whole number of pixels")
+        if step.args[0] == "on" and step.options:
+            raise DriveError("reference-diff on takes no options: they belong to a comparison")
     elif step.name == "wait":
         try:
             float(step.args[0])
@@ -1169,6 +1173,10 @@ class Executor:
             path = (self.shots / step.args[0]).resolve()
             result = self.client.call("reference-diff", path=str(path),
                                       tolerance=int(options.get("tolerance", 3)))
+            if "max-over" in options and int(result.get("over", 0)) > int(options["max-over"]):
+                raise DriveError(f"reference-diff {step.args[0]}: {result.get('over')} pixels over the tolerance, "
+                                 f"more than max-over={options['max-over']} (max={result.get('max')}, "
+                                 f"bbox={result.get('bbox')}; {result.get('path')}-diff.png)")
             return {**result, "location": self.location()}
         elif step.name == "lua":
             timeout = float(options.get("timeout", 30))
@@ -1215,7 +1223,8 @@ def describe(result: dict[str, Any]) -> str:
     details = []
     for key in ("error", "path", "location", "settled", "pokes", "seconds", "answered", "exit_code",
                 "cursor_moved_to", "label", "checked", "seed", "previous_seed", "draws", "option", "value",
-                "section", "language", "previous", "armed", "renderer", "items", "transformed", "over", "max", "mean", "bbox",
+                "section", "language", "previous", "armed", "renderer", "items", "transformed", "polygons",
+                "polygon_textured", "polygon_two_textures", "polygon_blends", "over", "max", "mean", "bbox",
                 "result"):
         if key in result and result[key] is not None:
             details.append(f"{key}={result[key]}")

@@ -1,0 +1,9 @@
+omp = 1
+id = "example.arterial-polygon-blends"
+name = "Polygon blends (Arterial)"
+version = "1.0.0"
+description = "Gives DEBUG.BIN's polygon test the polygon draws no script of the game uses: a second texture, and the replace and subtractive blends."
+
+[game]
+profile = "arterial"
+target = "native"

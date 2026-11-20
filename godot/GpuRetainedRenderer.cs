@@ -51,8 +51,10 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         public required ArrayMesh Mesh;
         // The geometry the mesh was built from: a frame's geometry object is replaced when the polygon changes.
         public FramePolygonGeometry? Geometry;
-        public ShaderMaterial? TwoTextureMaterial;
-        public FramePolygonBlend TwoTextureBlend;
+        // A polygon a shader draws (the replace blend, or two textures) has a material of its own, which holds its
+        // textures, and the shader it was made with.
+        public ShaderMaterial? ShaderMaterial;
+        public Shader? MaterialShader;
     }
     private readonly ByteBudgetCache<(int AssetId, long ColorKey, long DynamicKey), CachedTexture> _textures =
         new(TextureBudgetBytes, (_, cached) => cached.Texture.Dispose());
@@ -61,9 +63,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
     private readonly CanvasItemMaterial _alphaMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Mix };
     private readonly CanvasItemMaterial _additiveMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Add };
     private readonly CanvasItemMaterial _subtractiveMaterial = new() { BlendMode = CanvasItemMaterial.BlendModeEnum.Sub };
-    private readonly ShaderMaterial _replaceMaterial;
-    private readonly Shader _replaceShader;
-    private readonly Dictionary<FramePolygonBlend, Shader> _twoTextureShaders = new();
+    private readonly Dictionary<(FramePolygonBlend Blend, bool TwoTextures), Shader> _polygonShaders = new();
     private readonly ImageTexture _whiteTexture;
     private readonly Shader _lerpShader;
     private readonly Shader _additiveLerpShader;
@@ -146,19 +146,20 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
 
         _lerpShader = new Shader { Code = LerpShaderCode("blend_mix") };
         _additiveLerpShader = new Shader { Code = LerpShaderCode("blend_add") };
-        _replaceShader = new Shader { Code = PolygonShaderCode("blend_disabled", twoTextures: false) };
-        _replaceMaterial = new ShaderMaterial { Shader = _replaceShader };
     }
 
     // A polygon's source colour, as the reference renderer has it (SoftwareAffineRasterizer.Polygons.cs): its texture
     // times the interpolated vertex colour, alpha included; with two textures the second goes over the first by its
-    // own alpha, colour and alpha alike, before that. COLOR arrives as the vertex colour times the item's opacity.
+    // own alpha, colour and alpha alike, before that. The textures are uniforms and the node draws none: a canvas
+    // item's COLOR in fragment() is already the vertex colour times the node's texture, so with the node's own texture
+    // the texture would count twice. The node's white leaves COLOR the vertex colour times the item's opacity.
     private static string PolygonShaderCode(string blendMode, bool twoTextures) => $$"""
         shader_type canvas_item;
         render_mode {{blendMode}}, unshaded;
+        uniform sampler2D ome_first : filter_linear, repeat_disable;
         {{(twoTextures ? "uniform sampler2D ome_second : filter_linear, repeat_disable;" : "")}}
         void fragment() {
-            vec4 source = texture(TEXTURE, UV);
+            vec4 source = texture(ome_first, UV);
             {{(twoTextures ? "vec4 second = texture(ome_second, UV); source = mix(source, second, second.a);" : "")}}
             COLOR = source * COLOR;
         }
@@ -275,16 +276,24 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
             polygon.Geometry = geometry;
         }
         MeshInstance2D node = polygon.Node;
-        // With no texture the canvas samples white, so the vertex colour alone is drawn.
-        node.Texture = first;
         node.Modulate = new Color(1, 1, 1, Math.Clamp(item.Opacity, 0, 1));
-        node.Material = second != null ? TwoTextureMaterial(polygon, geometry.Blend, second) : geometry.Blend switch
+        if (second != null || geometry.Blend == FramePolygonBlend.Replace)
         {
-            FramePolygonBlend.Additive => _additiveMaterial,
-            FramePolygonBlend.Replace => _replaceMaterial,
-            FramePolygonBlend.Subtractive => _subtractiveMaterial,
-            _ => _alphaMaterial,
-        };
+            // A shader draws it, with its textures as uniforms (PolygonShaderCode).
+            node.Texture = null;
+            node.Material = PolygonShaderMaterial(polygon, geometry.Blend, first ?? _whiteTexture, second);
+        }
+        else
+        {
+            // With no texture the canvas samples white, so the vertex colour alone is drawn.
+            node.Texture = first;
+            node.Material = geometry.Blend switch
+            {
+                FramePolygonBlend.Additive => _additiveMaterial,
+                FramePolygonBlend.Subtractive => _subtractiveMaterial,
+                _ => _alphaMaterial,
+            };
+        }
         node.Visible = true;
         _perf?.RecordGpuSpriteUpdate(PerformanceFrameLog.Timestamp() - started,
             PerformanceFrameLog.AllocatedBytes() - allocated);
@@ -314,22 +323,26 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         mesh.AddSurfaceFromArrays(Mesh.PrimitiveType.Triangles, arrays);
     }
 
-    // Two textures need the second as a shader parameter, so such a polygon has a material of its own.
-    private ShaderMaterial TwoTextureMaterial(PolygonNode polygon, FramePolygonBlend blend, Texture2D second)
+    // The textures are shader parameters, so a polygon a shader draws has a material of its own; the shaders are
+    // shared, one for each blend with one texture or two.
+    private ShaderMaterial PolygonShaderMaterial(PolygonNode polygon, FramePolygonBlend blend, Texture2D first,
+                                                 Texture2D? second)
     {
-        if (polygon.TwoTextureMaterial == null || polygon.TwoTextureBlend != blend)
+        var key = (blend, second != null);
+        if (!_polygonShaders.TryGetValue(key, out Shader? shader))
         {
-            if (!_twoTextureShaders.TryGetValue(blend, out Shader? shader))
-            {
-                shader = new Shader { Code = PolygonShaderCode(RenderMode(blend), twoTextures: true) };
-                _twoTextureShaders[blend] = shader;
-            }
-            polygon.TwoTextureMaterial?.Dispose();
-            polygon.TwoTextureMaterial = new ShaderMaterial { Shader = shader };
-            polygon.TwoTextureBlend = blend;
+            shader = new Shader { Code = PolygonShaderCode(RenderMode(blend), twoTextures: second != null) };
+            _polygonShaders[key] = shader;
         }
-        polygon.TwoTextureMaterial.SetShaderParameter("ome_second", second);
-        return polygon.TwoTextureMaterial;
+        if (polygon.ShaderMaterial == null || !ReferenceEquals(polygon.MaterialShader, shader))
+        {
+            polygon.ShaderMaterial?.Dispose();
+            polygon.ShaderMaterial = new ShaderMaterial { Shader = shader };
+            polygon.MaterialShader = shader;
+        }
+        polygon.ShaderMaterial.SetShaderParameter("ome_first", first);
+        if (second != null) polygon.ShaderMaterial.SetShaderParameter("ome_second", second);
+        return polygon.ShaderMaterial;
     }
 
     public FrameStats EndFrame()
@@ -512,7 +525,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
             if (polygon == null) continue;
             polygon.Node.Texture = null;
             polygon.Node.Material = null;
-            polygon.TwoTextureMaterial?.Dispose();
+            polygon.ShaderMaterial?.Dispose();
             polygon.Mesh.Dispose();
         }
         _polygons.Clear();
@@ -520,10 +533,8 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
         _alphaMaterial.Dispose();
         _additiveMaterial.Dispose();
         _subtractiveMaterial.Dispose();
-        _replaceMaterial.Dispose();
-        _replaceShader.Dispose();
-        foreach (Shader shader in _twoTextureShaders.Values) shader.Dispose();
-        _twoTextureShaders.Clear();
+        foreach (Shader shader in _polygonShaders.Values) shader.Dispose();
+        _polygonShaders.Clear();
         _lerpMaterials.Clear();
         _textures.Clear();
         _lerpShader.Dispose();

@@ -323,6 +323,15 @@ public partial class Main : Godot.Control
             ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
             StretchMode = TextureRect.StretchModeEnum.Scale,
             MouseFilter = MouseFilterEnum.Ignore,
+            // The canvas's colour alone, opaque: native presents its back buffer without its alpha, and a polygon's
+            // replace blend writes an alpha below 255 there (the GPU stage's window shows its colour alone too).
+            Material = new ShaderMaterial
+            {
+                Shader = new Shader
+                {
+                    Code = "shader_type canvas_item;\nrender_mode unshaded;\nvoid fragment() { COLOR.a = 1.0; }\n",
+                },
+            },
         };
         AddChild(_screenView);   // added first -> draws behind the text/status labels
         _screenView.SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);

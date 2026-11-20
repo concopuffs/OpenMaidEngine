@@ -677,12 +677,14 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       the same size and level.
   - **The polygon objects are in (2026-11-19):** ops `0x320` to `0x323`, 22,324 sites, with the reference
     renderer; the logo's frames and fade timing were compared with native
-    (`superpowers/specs/2026-11-19-polygon-objects-design.md` §7). Open:
-    - **Most of the GPU renderer's polygon paths are not compared with the reference.** It draws polygon items
-      since 2026-11-19, and `arterial-reference-diff.steps` compares the logo's untextured polygons under the alpha
-      blend. A textured polygon, the additive, replace and subtractive blends and a second texture have run on no
-      frame: the port reaches no screen that uses them. Done when a scenario compares each on a screen of the game,
-      which needs the boot past the title.
+    (`superpowers/specs/2026-11-19-polygon-objects-design.md` §7). Every polygon path of the GPU renderer is
+    compared with the reference since 2026-11-20: `tools/drive/scenarios/port/arterial-debug-reference-diff.steps`
+    fails past 16 pixels over the tolerance on DEBUG.BIN's polygon test and its effects, BTLINFO, the battle field,
+    RESULT and the whole map with its additive highlight. The scripts use the alpha and additive blends alone, so
+    `example.arterial-polygon-blends` gives that test a replace and a subtractive polygon and one with two textures.
+    Native AGE drew it, exported, equal to the reference renderer to one level; the GPU renderer counted a texture
+    twice under the replace blend and with two textures until then. Native shows its screen's colour without the
+    alpha the replace blend writes there, and the port's screen view does so too since. Open:
     - **A polygon in a blur's source range is drawn unblurred.** `Graphics.LowerObjects` draws it in its place and
       `LowerBlurRange` skips it; native's pre-pass draws a range's polygons into the blur's surface. No use of one
       is known.
@@ -737,7 +739,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       cells (`scene_played_flags`), the area in play and the point unit 1 stands on. Its seven contexts are
       not read, nor the story cells outside the played cells (`story_flags.py` lists 836 candidates), and
       `scjump_decode.py`, written for Himegari's `SCJUMP`, was not run on the game.
-    - **One table edit was run in the game**, in the port: M3's example (below). None on native AGE.
+    - **Two table edits were run in the game**, in the port: M3's boot edit and an area part (below). None on
+      native AGE.
   - **The base mod level, M3, is reached (2026-11-20).** `mods/arterial-base/` declares seven events at seven named
     points (`vm-map/patch-points-arterial.toml`): the boot's data layered and ready, an area loaded and its READY
     chain run, a battle's start and close, and one character's experience award, whose amount is an operand. It
@@ -746,9 +749,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     boot events and runs both helpers; `example.arterial-character-name` renames a name plate the opening shows, and
     `tools/drive/scenarios/port/arterial-character-name.steps` drives the port to it. Driving it found the port
     stuck in the opening's first movie-mask transition, now fixed (`engine-re.md`, "Movie flags decide the effect
-    wait", the correction of 2026-11-20). What M3 leaves open:
-    - **The area, battle and experience events were not raised in a run.** They bind, and no run has reached a map
-      or a battle. Done when the sweep's runs raise each, and an area part of a data file is applied in one.
+    wait", the correction of 2026-11-20). Every event has been raised in a run since, the area, battle and
+    experience events through the title's debug menu, and an area part applied
+    (`tools/drive/scenarios/port/arterial-debug-events.steps`). What M3 leaves open:
     - **Chains without an event:** `OPEN`, `SCJUMP`'s chain, `BGINIT`, `TUMES`, the item actions and the 奥義 and
       talent scripts, and RESULT's card experience. Done when a mod needs one and it is added, or never.
   - **Next, by the plan:** the sweep (P4).

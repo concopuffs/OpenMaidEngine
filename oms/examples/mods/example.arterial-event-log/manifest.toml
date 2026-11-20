@@ -1,0 +1,44 @@
+omp = 3
+id = "example.arterial-event-log"
+name = "Event log (Arterial)"
+version = "1.0.0"
+description = "Logs every event Arterial's base mod raises, with its fields, to diagnostics/lua.log and to a list the console reads."
+
+[game]
+profile = "arterial"
+target = "extended"
+
+[lua]
+api = 1
+
+[[requires]]
+id = "arterial-base"
+version = ">=1.0, <2"
+
+[[hooks]]
+event = "arterial.data.layered"
+handler = "event_log.lua:on_event"
+
+[[hooks]]
+event = "arterial.data.ready"
+handler = "event_log.lua:on_event"
+
+[[hooks]]
+event = "arterial.area.loaded"
+handler = "event_log.lua:on_event"
+
+[[hooks]]
+event = "arterial.area.ready"
+handler = "event_log.lua:on_event"
+
+[[hooks]]
+event = "arterial.battle.start"
+handler = "event_log.lua:on_event"
+
+[[hooks]]
+event = "arterial.battle.close"
+handler = "event_log.lua:on_event"
+
+[[hooks]]
+event = "arterial.experience.award"
+handler = "event_log.lua:on_event"

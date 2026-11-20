@@ -1,0 +1,17 @@
+omp = 4
+id = "example.arterial-area-point"
+name = "Area point (Arterial)"
+version = "1.0.0"
+description = "A data file with an area part: it moves area 1's 出現地点, where the party appears on the map, to the right."
+
+[game]
+profile = "arterial"
+target = "extended"
+
+[[requires]]
+id = "arterial-base"
+version = ">=1.0, <2"
+
+[[data]]
+kind = "arterial.tables"
+file = "area.toml"

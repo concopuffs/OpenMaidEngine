@@ -172,9 +172,9 @@ battle_rule[1].turn_limit = 0x14
   and never lowered), and a map unit's deck.
 - A fragment's write to a table is not saved, and it lasts until the game builds the tables again, at its next
   start at the latest. A data file's edit is made again at each boot and each load, while its mod is enabled.
-- **Run in the game:** the example's boot edit, in the port
-  (`tools/drive/scenarios/port/arterial-character-name.steps`). No area part has been applied in a run, and no
-  edit was run on native AGE (data files are port-only).
+- **Run in the game:** the example's boot edit (`tools/drive/scenarios/port/arterial-character-name.steps`) and
+  an area part (`example.arterial-area-point`, in `tools/drive/scenarios/port/arterial-debug-events.steps`), in
+  the port. No edit was run on native AGE (data files are port-only).
 
 ## Patch points and events
 
@@ -210,12 +210,47 @@ Its helpers change the game through its own scripts: `give_item(item, count)` ru
 what passes 99 out as money at the selling price, marks the item or the card obtained and records it in the
 shared collection, as the game's own gifts do, and puts back the cells it used. Each returns the new count.
 
-The boot events, the helpers and the data file's boot edit were run (`ModLuaLinkTests`, the scenario above). The
-area, battle and experience events bind on the install, and no run has reached a map or a battle yet.
+Every event has been raised in a run of the port: the boot events, the helpers and the data file's boot edit by
+`ModLuaLinkTests` and the scenario above, and the area, battle and experience events through the debug menu
+(below) by `tools/drive/scenarios/port/arterial-debug-events.steps`. A new game's own maps and battles were not
+reached yet.
 
 Other chains the appends hook have no event: `OPEN` (an area's opening, after the map is shown), `SCJUMP`'s
 chain (the scene dispatch), `BGINIT` (the scenes' pictures), `TUMES`, the item actions, and the 奥義 and the
 talents in battle (`docs/arterial-data-tables.md`, "How the data gets into memory").
+
+## The debug menu
+
+The title builds the developers' デバッグメニュー right after its Quit calls `QUIT.BIN`, which always ends the
+game, so no retail run reaches it. `oms/examples/mods/example.arterial-debug-menu` deletes that call, so Quit opens
+the menu, and returns from each entry instead of jumping to the code at `TITLE@0x574`, which since Arterial Force
+Blade starts a new game, so the mode the entry sets takes effect. It targets `native`: `omp export` gives a
+`TITLE.BIN` that opens the same menu on native AGE.
+
+| Entry | Point | What it runs |
+|---|---|---|
+| ADVパート | | a scene picker (`SC????.BIN`) |
+| 全体マップ | 440 270 | `DEBUGAM`, then the whole map: area 1 with the debug party |
+| カードバトル | 440 299 | `DEBUGBTL2`, then a battle |
+| カードバトル（ＰＧ用） | 440 329 | `DEBUGBTL`, then a battle |
+| カードバトル（ＰＧ用２） | 440 358 | `DEBUGBTL3`, then a battle |
+| ＡＤＶデバッグ | | `DEBUGAM`, then the scene `DEBUGADV` |
+| ＡＤＶデバッグ２, ３ | | the scenes `DEBUGADV2`, `DEBUGADV3` |
+| システム | 440 478 | `DEBUG.BIN`: a polygon test, waiting for a click, then the rain, the snow and the leaves for ten seconds, then the title |
+
+- The battles open on BTLINFO; its battle start is at (826, 242) and Auto Battle at (68, 548). The scenario
+  above wins one by setting the battle's turn-limit mode (`G[0x46910a]`) to 1, where passing the limit
+  (`G[0x46910c]`) is a win, and the limit to 1.
+- The debug party is at level 34, and RESULT draws a level as one glyph of a strip, at `x = 160 + level * 23`
+  (`RESULT@0x2658`): level 5 is `5`, and 34 is `Y`.
+- Run on both targets: the menu, the whole map (pixel for pixel alike), a PG battle's BTLINFO, and システム (its
+  polygon test pixel for pixel alike but for the leaves' phase; the effects alike with the ambient light raised
+  by a scratch patch, as `../../engine-re.md`, "The 3D scene: the rain and the snow", tells).
+- The scripts draw polygons with the alpha and additive blends alone. `oms/examples/mods/example.arterial-polygon-blends`
+  gives システム's polygon test a replace polygon, a subtractive one and one with two textures, so the renderers'
+  other paths draw on a frame of the game; exported with the debug menu, it draws on native AGE as in the port's
+  reference renderer. `tools/drive/scenarios/port/arterial-debug-reference-diff.steps` compares the GPU renderer
+  with the reference on that test, its effects, a battle and the whole map.
 
 ## Catalogs, scenes and saves
 
@@ -230,3 +265,7 @@ talents in battle (`docs/arterial-data-tables.md`, "How the data gets into memor
 |---|---|
 | `oms/examples/mods/example.arterial-prologue-line` | a line inserted before the opening scene's first page |
 | `oms/examples/mods/example.arterial-character-name` | a data file that renames 龍司's name plate at `arterial.data.layered`; `tools/drive/scenarios/port/arterial-character-name.steps` plays a new game to his first line with it |
+| `oms/examples/mods/example.arterial-area-point` | a data file with an area part: area 1's 出現地点 moves right, applied at `arterial.area.loaded` |
+| `oms/examples/mods/example.arterial-debug-menu` | the debug menu above, for both targets |
+| `oms/examples/mods/example.arterial-polygon-blends` | a patch of `DEBUG.BIN` that gives its polygon test the replace and subtractive blends and a second texture, for both targets |
+| `oms/examples/mods/example.arterial-event-log` | a Lua mod that logs every event of `arterial-base` with its fields; `tools/drive/scenarios/port/arterial-debug-events.steps` runs it with the two above |

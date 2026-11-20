@@ -1,0 +1,14 @@
+oms 1
+// DEBUG.BIN, the debug menu's システム (example.arterial-debug-menu opens it), starts with a polygon test: polygons 2
+// and 3 with the texture of surface 0x2c, polygon 4 with 0x2b's, polygon 5 coloured and polygon 6 a strip, all with the
+// alpha blend. The game's scripts pass op 0x322 only modes 0 and 1 and give no polygon two textures, so this patch
+// gives the test what they never draw, for comparing the port's renderers and native AGE
+// (tools/drive/scenarios/port/arterial-debug-reference-diff.steps).
+patch "DEBUG.BIN" fingerprint "sha256:b6695faf1ff461b7bca8a811425d0cb1459054861b225e3d0f1a9b5645c140bb"
+
+// Before polygon 5 is made, when 2, 3 and 4 have their textures.
+before site 0x19f {
+    set_polygon_texture(0x3, 0x1, 0x2b)      // polygon 3: 0x2b's texture over 0x2c's, by its alpha
+    set_polygon_color(0x2, 0x2, -1, -1)      // polygon 2: mode 2, replace
+    set_polygon_color(0x4, 0x3, -1, -1)      // polygon 4: mode 3, subtractive
+}

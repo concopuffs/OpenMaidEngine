@@ -94,7 +94,7 @@ public partial class Main : IFramePresenter
     /// <summary>
     /// The driver's <c>reference-diff</c>. With <paramref name="path"/> null, arm it: from the next frame on, the
     /// reference renderer draws every frame too. Otherwise compare the screen (the last frame drawn, as <c>shot</c>
-    /// captures it) with the reference's drawing of the same frame, over the black the window clears to: write
+    /// captures it) with the reference's drawing of the same frame, its colour as the screen view shows it: write
     /// PATH-gpu.png, PATH-reference.png and PATH-diff.png (each channel's difference times eight; red where one is over
     /// <paramref name="tolerance"/>) and report how many pixels differ by more than it, the largest and mean channel
     /// difference, and the box around the pixels over it. Run it settled: the screen and the reference then show the
@@ -128,11 +128,10 @@ public partial class Main : IFramePresenter
         for (int x = 0; x < width; x++)
         {
             int i = (y * width + x) * 4;
-            int alpha = drawn[i + 3];
             int worst = 0;
             for (int c = 0; c < 3; c++)
             {
-                int value = drawn[i + c] * alpha / 255;   // over the window's black
+                int value = drawn[i + c];   // opaque, as the screen view and native's present show it
                 reference[i + c] = (byte)value;
                 int delta = Math.Abs(value - shown[i + c]);
                 sum += delta;
@@ -153,12 +152,18 @@ public partial class Main : IFramePresenter
         SavePng(screen, full + "-gpu.png");
         SavePng(Image.CreateFromData(width, height, false, Image.Format.Rgba8, reference), full + "-reference.png");
         SavePng(Image.CreateFromData(width, height, false, Image.Format.Rgba8, difference), full + "-diff.png");
-        (int items, int transformed) = CountItems(_lastFrame);
+        FrameCounts counts = CountItems(_lastFrame);
         return new JsonObject
         {
             ["renderer"] = _lastFrameOnGpu ? "gpu" : "reference",
-            ["items"] = items,
-            ["transformed"] = transformed,
+            ["items"] = counts.Items,
+            ["transformed"] = counts.Transformed,
+            ["polygons"] = counts.Polygons,
+            ["polygon_textured"] = counts.Textured,
+            ["polygon_two_textures"] = counts.TwoTextures,
+            ["polygon_blends"] = string.Join(",", System.Linq.Enumerable.Select(
+                System.Linq.Enumerable.OrderBy(counts.Blends, pair => pair.Key),
+                pair => $"{pair.Key.ToString().ToLowerInvariant()}:{pair.Value}")),
             ["path"] = full,
             ["pixels"] = (long)width * height,
             ["tolerance"] = tolerance,
@@ -169,22 +174,33 @@ public partial class Main : IFramePresenter
         };
     }
 
-    // The frame's draws (a screen transition's source and target included), and how many of them are textures whose
-    // matrix is not a whole-pixel translation.
-    private static (int Items, int Transformed) CountItems(FrameDescription? frame)
+    private sealed record FrameCounts(int Items, int Transformed, int Polygons, int Textured, int TwoTextures,
+                                      System.Collections.Generic.Dictionary<FramePolygonBlend, int> Blends);
+
+    // The frame's draws (a screen transition's source and target included); how many of them are textures whose
+    // matrix is not a whole-pixel translation; and its polygon draws, the textured ones, the ones with a second
+    // texture and each blend's count, which say which of the GPU renderer's polygon paths a comparison covered.
+    private static FrameCounts CountItems(FrameDescription? frame)
     {
-        int items = 0, transformed = 0;
-        if (frame == null) return (0, 0);
-        foreach (var list in frame.ScreenTransition is { } screen
-                     ? new[] { frame.Items, screen.Source, screen.Target }
-                     : new[] { frame.Items })
-            foreach (FrameItem item in list)
-            {
-                items++;
-                if (item.Kind == FrameItemKind.Texture && !SoftwareAffineRasterizer.IsIntegerTranslation(item.Matrix))
-                    transformed++;   // the draws the GPU renderer filters, by its own rule
-            }
-        return (items, transformed);
+        int items = 0, transformed = 0, polygons = 0, textured = 0, twoTextures = 0;
+        var blends = new System.Collections.Generic.Dictionary<FramePolygonBlend, int>();
+        if (frame != null)
+            foreach (var list in frame.ScreenTransition is { } screen
+                         ? new[] { frame.Items, screen.Source, screen.Target }
+                         : new[] { frame.Items })
+                foreach (FrameItem item in list)
+                {
+                    items++;
+                    if (item.Kind == FrameItemKind.Texture && !SoftwareAffineRasterizer.IsIntegerTranslation(item.Matrix))
+                        transformed++;   // the draws the GPU renderer filters, by its own rule
+                    if (item.Kind != FrameItemKind.Polygon) continue;
+                    polygons++;
+                    if (item.Pixels != null) textured++;
+                    if (item.SecondTexture != null) twoTextures++;
+                    FramePolygonBlend blend = item.Polygon!.Blend;
+                    blends[blend] = (blends.TryGetValue(blend, out int seen) ? seen : 0) + 1;
+                }
+        return new FrameCounts(items, transformed, polygons, textured, twoTextures, blends);
     }
 
     private static void SavePng(Image image, string path)

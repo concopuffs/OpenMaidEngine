@@ -1,0 +1,4 @@
+# An area's part: arterial-base applies it at arterial.area.loaded, each time area 1's loaders (MPINIT, ROINIT,
+# UNINIT) have filled its tables. Point 1 is the area's 出現地点, where the party appears.
+[area.1.point.1]
+x = 600   # 512

@@ -671,6 +671,10 @@ def test_reference_diff_step():
     check(raises(core.parse_step, "reference-diff page tolerance=1.5", contains="whole number"),
           "a fractional tolerance is refused")
     check(raises(core.parse_step, "reference-diff", contains="takes 1..1"), "reference-diff needs on or a name")
+    check(raises(core.parse_step, "reference-diff page max-over=x", contains="whole number of pixels"),
+          "a bound that is not a count is refused")
+    check(raises(core.parse_step, "reference-diff on max-over=0", contains="takes no options"),
+          "on takes no comparison options")
 
     calls = []
     def answer(request):
@@ -679,9 +683,10 @@ def test_reference_diff_step():
             return {"ok": True, "result": {"frames": [{"script": "SC0000", "offset": 4}]}}
         if request.get("arm"):
             return {"ok": True, "result": {"armed": True}}
-        return {"ok": True, "result": {"renderer": "gpu", "over": 0, "max": 2, "mean": 0.01, "bbox": None,
+        over = 12 if Path(request["path"]).name == "edges" else 0
+        return {"ok": True, "result": {"renderer": "gpu", "over": over, "max": 2, "mean": 0.01, "bbox": None,
                                        "path": request["path"]}}
-    server = FakeServer(answer)
+    server = FakeServer(answer, connections=2)
     with tempfile.TemporaryDirectory() as directory:
         with core.Client(server.port, "secret") as client:
             executor = core.Executor(client, core.Profile(points={}), Path(directory))
@@ -695,6 +700,19 @@ def test_reference_diff_step():
     check(results[1]["renderer"] == "gpu" and results[1]["max"] == 2, "the comparison comes back")
     check("renderer=gpu" in core.describe(results[1]) and "max=2" in core.describe(results[1]),
           "describe shows the comparison")
+
+    with tempfile.TemporaryDirectory() as directory:
+        with core.Client(server.port, "secret") as client:
+            executor = core.Executor(client, core.Profile(points={}), Path(directory))
+            bounded = []
+            ok = executor.run(core.parse_steps(["reference-diff on", "reference-diff page max-over=0",
+                                                "reference-diff edges max-over=12",
+                                                "reference-diff edges max-over=11", "reference-diff page"]),
+                              bounded.append)
+    check(not ok and [result["ok"] for result in bounded] == [True, True, True, False],
+          "max-over fails a comparison with more pixels over the tolerance, and stops the run")
+    check("12 pixels over the tolerance, more than max-over=11" in bounded[3]["error"],
+          "the failure says how many pixels were over and the bound")
 
 
 def test_language_step():

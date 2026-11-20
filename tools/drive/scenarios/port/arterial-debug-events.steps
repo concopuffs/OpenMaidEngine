@@ -1,0 +1,51 @@
+# Port only (scenarios/port/): Arterial's base mod events and an area part, reached through the developers' debug
+# menu (example.arterial-debug-menu opens it from the title's Quit; docs/modding/games/arterial.md, "The debug menu").
+# example.arterial-event-log keeps every event arterial-base raises; example.arterial-area-point moves area 1's
+# 出現地点 (point 1) from x 512 to 600 at arterial.area.loaded.
+#
+# 1. カードバトル（ＰＧ用２） (DEBUGBTL3): party character 1 is set to level 5, below the cap, so RESULT applies an
+#    award; the battle's turn-limit mode (0x46910a) is set to 1, where passing the limit (0x46910c) is a win, and the
+#    limit to 1, so Auto Battle wins after one turn. RESULT raises arterial.battle.start, .close (result 1) and
+#    arterial.experience.award for character 1.
+# 2. 決定 returns to the title; 全体マップ (DEBUGAM) enters area 1, which raises arterial.area.loaded and .ready, and
+#    the area part has moved point 1 (the party stands right of the map's middle).
+#
+# Run on a fresh sandbox:
+#   py -3.11 -X utf8 tools/drive.py --game arterial port start --mod oms/examples/mods/example.arterial-debug-menu --mod oms/examples/mods/example.arterial-event-log --mod oms/examples/mods/example.arterial-area-point
+#   py -3.11 -X utf8 tools/drive.py --game arterial port run tools/drive/scenarios/port/arterial-debug-events.steps
+#   py -3.11 -X utf8 tools/drive.py --game arterial port stop
+
+rand-seed 7
+wait 5
+click adv.next                                   # skips the logo
+wait-state script=TITLE timeout=90
+wait 6
+click title.quit                                 # the debug menu
+wait-state waiting=menu timeout=20
+click 440 358                                    # カードバトル（ＰＧ用２）
+wait 8
+settle timeout=20
+lua maid.vm.g[0x3ba8 + 1] = 5 return maid.vm.g[0x3ba8 + 1]
+click 826 242                                    # BTLINFO's battle start
+wait 6
+settle timeout=15
+lua maid.vm.g[0x46910a] = 1 maid.vm.g[0x46910c] = 1 return 0
+click 68 548                                     # Auto Battle
+speed 8
+wait 40
+speed 1
+wait-state script=RESULT waiting=menu click=adv.next every=3 timeout=60
+settle timeout=10
+shot arterial-debug-result
+lua mod=example.arterial-event-log local s = table.concat(seen, "; ") assert(s:find("arterial.battle.start battle=0 rule=0 opponent=0; arterial.battle.close battle=0 result=1 opponent=0; arterial.experience.award character=1 amount=%d+ level=5$"), s) return s
+click 880 515                                    # 決定
+wait-state script=TITLE timeout=60
+wait 6
+click title.quit
+wait-state waiting=menu timeout=20
+click 440 270                                    # 全体マップ
+wait 8
+settle timeout=20
+shot arterial-debug-map
+lua mod=example.arterial-event-log local s = table.concat(seen, "; ") assert(s:find("arterial.area.loaded area=1; arterial.area.ready area=1$"), s) return s
+lua local x, y = maid.vm.g[0x331015 + 1], maid.vm.g[0x3310dd + 1] assert(x == 600 and y == 255, x .. "," .. y) return x, y
