@@ -149,15 +149,17 @@ public sealed class InstallIntakeTests : IDisposable
     [Trait("Profile", "kamidori")]
     public void InstalledKamidoriReadsAsItsObservationRecordsIt() => AssertInstalled("kamidori");
 
-    /// <summary>A game still being added: its scripts use opcodes the port has no handler for yet, and the intake
-    /// lists them.</summary>
+    /// <summary>Still below P3 (its saves are off), but every opcode its scripts use has a handler since
+    /// 2026-11-19.</summary>
     [Fact]
     [Trait("Category", "Workspace")]
     [Trait("Profile", "arterial")]
-    public void InstalledArterialReadsAsItsObservationRecordsIt() => AssertInstalled("arterial", complete: false);
+    public void InstalledArterialReadsAsItsObservationRecordsIt() => AssertInstalled("arterial");
 
-    /// <summary>A supported game's install: the intake names its profile, finds nothing new, and counts what the
-    /// registry's observation counts (vm-map/opcodes.toml), though it decodes with the whole catalog.</summary>
+    /// <summary>A game's install: the intake names its profile, finds nothing new, and counts what the registry's
+    /// observation counts (vm-map/opcodes.toml), though it decodes with the whole catalog. A game whose scripts still
+    /// use opcodes the port has no handler for passes <paramref name="complete"/> false: the intake must then list
+    /// some (docs/adding-a-game.md, step 3).</summary>
     private static void AssertInstalled(string game, bool complete = true)
     {
         string install = Paths.GameInstall(game);
