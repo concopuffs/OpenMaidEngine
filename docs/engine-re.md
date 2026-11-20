@@ -571,6 +571,38 @@ The port keeps the two captured frames as it does for the crossfade, and its ref
 `LegacyScreenTransitionTiming.MosaicAt` names and breaks it into blocks
 (`LegacyScreenTransitionComposite.Mosaic`). No frame of it has been compared with native's.
 
+### 4.38D's menu bar and 設定 dialog (2026-11-19)
+
+Read from native 創刻のアテリアル's windows while the driver ran it (the menu with `GetMenuString`, the dialog's
+controls by class, id and rectangle, each tab captured with `PrintWindow`). Against the bar and the dialog the
+other two games show ("Native menu bar" below) two things differ, both for Auto's per-character delay ("Auto
+pitch" above):
+
+- **The menu bar** has one more command: `ｵｰﾄﾒｯｾｰｼﾞの設定(&A)...`, id 40048, in 設定(&O) between
+  `ﾒｯｾｰｼﾞの設定(&M)...` (40044) and `ｻｳﾝﾄﾞ設定(&S)...` (40040). Every other item, id and order is the pruned bar
+  Himegari and Kamidori show, which the port's shell draws.
+- **設定 has five tabs**: ﾒｯｾｰｼﾞ, ｵｰﾄﾒｯｾｰｼﾞ, ｻｳﾝﾄﾞ, その他, 動作環境. The ﾒｯｾｰｼﾞ page keeps the speed, the window's
+  opacity and the two checks, and no longer has the two Auto delays. The ｵｰﾄﾒｯｾｰｼﾞ page has them, with what
+  4.38D adds:
+
+  | group | control | id | setting | trackbar position |
+  |---|---|---|---|---|
+  | 音声再生時 | 文字単位時間 | trackbar `0x414`, edit `0x3ee` | `message:AutoMessagePitch0` | value / 10, 0 to 100, shown as `0.37秒` |
+  | 音声再生時 | 基本時間 | trackbar `0x415`, edit `0x3ef` | `message:AutoMessageTime0` | value / 100, 0 to 100, shown as `0.9秒` |
+  | 音声再生時 | 音声終了まで待つ | check `0x3e8` | `message:AutoMessageOption` | checked is 0, unchecked is 1 |
+  | ﾃｷｽﾄのみ | 文字単位時間 | trackbar `0x416`, edit `0x3f0` | `message:AutoMessagePitch1` | value / 10 |
+  | ﾃｷｽﾄのみ | 基本時間 | trackbar `0x417`, edit `0x3f1` | `message:AutoMessageTime1` | value / 100 |
+
+  While 音声終了まで待つ is checked, the voice group's 文字単位時間 (its trackbar, its edit and its three labels) is
+  disabled: with the option 0 a voiced page waits for the voice and then the base time. Measured by setting the
+  controls, pressing OK and reading the `SYS4REG.INI` the exit wrote: positions 23, 9, 37 and 12 with the check
+  off gave `AutoMessagePitch0=230`, `AutoMessageTime0=900`, `AutoMessagePitch1=370`, `AutoMessageTime1=1200` and
+  `AutoMessageOption=1`.
+
+The pages are child dialogs beside the tab control `0x417`, as the driver finds them in the other two games. The ｵｰﾄﾒｯｾｰｼﾞ page has a trackbar
+`0x415`, which is what the driver knew the ﾒｯｾｰｼﾞ page by, so its `options` step fails on this build until it
+tells the two apart.
+
 ### The glyph publisher grows a cell (2026-11-19)
 
 The first native save of 創刻のアテリアル differed from the port's, made on the same page, in one field: the

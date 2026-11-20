@@ -693,8 +693,16 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The title's 3D scene keeps its state and draws nothing (the user's decision, 2026-11-19).** Ops `0x324` to
     `0x32f`: the handlers keep what the scripts set (`Graphics.Scene3D.cs`). What that leaves undrawn is its own
     item, "The title's 3D leaves are not drawn", under Engine fidelity.
-  - **Next, by the plan:** what is left of step 7 before the manifest says P3: `SAVEWINPOS` above, and the shell
-    compared with the game's `AGERC.DLL` menu and dialogs. The opcodes, the build's rules and the saves are done.
+  - **The shell lacks 4.38D's ｵｰﾄﾒｯｾｰｼﾞ page.** The game's menu bar and 設定 dialog were compared with the port's
+    shell (2026-11-19; `engine-re.md`, "4.38D's menu bar and 設定 dialog"). Native has one more menu command,
+    `ｵｰﾄﾒｯｾｰｼﾞの設定(&A)...`, and a fifth tab that holds Auto's two delays with the per-character times and the
+    音声終了まで待つ check. The port's panel shows the two delays on its ﾒｯｾｰｼﾞ page and has no control for the
+    three new settings, which a script (CONFIG2) can still set. The driver's `options` and `option` steps fail on
+    native 4.38D: they take the new page for the ﾒｯｾｰｼﾞ page. Done when the port's menu and panel show the page
+    for a build that has the settings, the driver reads and sets its five controls on both targets, and a
+    scenario sets them on both and compares the `SYS4REG.INI` each writes.
+  - **Next, by the plan:** what is left of step 7 before the manifest says P3: `SAVEWINPOS` above and the
+    ｵｰﾄﾒｯｾｰｼﾞ page. The opcodes, the build's rules and the saves are done.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`
