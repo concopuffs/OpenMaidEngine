@@ -11,6 +11,8 @@ public enum ShellValueFormat
     Opacity,
     /// <summary>Milliseconds as seconds with one decimal.</summary>
     Seconds,
+    /// <summary>Milliseconds as seconds with two decimals, as the ｵｰﾄﾒｯｾｰｼﾞ page's per-character times read.</summary>
+    Centiseconds,
     /// <summary>A value that is already a percentage.</summary>
     Percent,
     /// <summary>Basis points (0..10000) as a percentage.</summary>
@@ -22,9 +24,12 @@ public abstract record ShellPanelItem;
 
 /// <summary>A native option's slider, labelled by the option, with the range's ends labelled as 設定's are. An inverted
 /// slider runs from the domain's top on the left (ﾒｯｾｰｼﾞｽﾋﾟｰﾄﾞ's 遅い), and <paramref name="Switch"/> is the route
-/// check box drawn with it (ｻｳﾝﾄﾞ's BGM, 効果音 and 音声).</summary>
+/// check box drawn with it (ｻｳﾝﾄﾞ's BGM, 効果音 and 音声).
+/// <paramref name="LabelKey"/> names the row where the option's own label does not: the ｵｰﾄﾒｯｾｰｼﾞ page calls each
+/// delay 基本時間 under its group's title.</summary>
 public sealed record ShellPanelSlider(string Option, string LowKey, string HighKey, ShellValueFormat Format,
-                                      bool Inverted = false, string? Switch = null) : ShellPanelItem;
+                                      bool Inverted = false, string? Switch = null, string? LabelKey = null)
+    : ShellPanelItem;
 
 /// <summary>A check box for a native switch option or a port switch (<see cref="ShellPanel.PortSwitches"/>).</summary>
 public sealed record ShellPanelSwitch(string Option) : ShellPanelItem;
@@ -42,7 +47,11 @@ public sealed record ShellPanelAbout : ShellPanelItem;
 public sealed record ShellPanelDiagnostics : ShellPanelItem;
 
 /// <summary>A titled group of rows, as 設定's group boxes hold its controls.</summary>
-public sealed record ShellPanelGroup(string TitleKey, IReadOnlyList<ShellPanelItem> Items);
+public sealed record ShellPanelGroup(string TitleKey, IReadOnlyList<ShellPanelItem> Items)
+{
+    /// <summary>The group is left out on a build whose 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page, which holds its rows.</summary>
+    public bool WithoutAutoPage { get; init; }
+}
 
 /// <summary>One section of the panel.</summary>
 public sealed record ShellPanelSection(ShellSection Section, IReadOnlyList<ShellPanelGroup> Groups)
@@ -50,7 +59,11 @@ public sealed record ShellPanelSection(ShellSection Section, IReadOnlyList<Shell
     public string TitleKey => $"section.{Section.ToString().ToLowerInvariant()}";
 
     /// <summary>Whether op 0x142's gate makes the section read-only: the native options' sections.</summary>
-    public bool ScriptShared => Section is ShellSection.Message or ShellSection.Sound or ShellSection.Other;
+    public bool ScriptShared =>
+        Section is ShellSection.Message or ShellSection.Auto or ShellSection.Sound or ShellSection.Other;
+
+    /// <summary>The section exists only on a build whose 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page.</summary>
+    public bool AutoPageOnly => Section == ShellSection.Auto;
 }
 
 /// <summary>
@@ -71,7 +84,7 @@ public static class ShellPanel
     [
         "panel.title", "panel.ok", "panel.cancel", "panel.read-only",
         "range.slow", "range.fast", "range.light", "range.dark", "range.short", "range.long", "range.quiet",
-        "range.loud",
+        "range.loud", "label.base-time",
         "value.no-wait", "value.milliseconds", "value.seconds", "value.percent", "value.window-size",
         "value.window-size.canvas",
         "screen.fullscreen", "screen.windowed",
@@ -95,8 +108,25 @@ public static class ShellPanel
             [
                 new ShellPanelSlider("auto-wait-voice", "range.short", "range.long", ShellValueFormat.Seconds),
                 new ShellPanelSlider("auto-wait-text", "range.short", "range.long", ShellValueFormat.Seconds),
-            ]),
+            ]) { WithoutAutoPage = true },
             new("group.message-options", [new ShellPanelSwitch("smooth-text"), new ShellPanelSwitch("wheel-advance")]),
+        ]),
+        // AGE 4.38D's page, in its groups' order: the per-character time, the delay, and for a voiced page the check.
+        new(ShellSection.Auto,
+        [
+            new("group.auto-voice",
+            [
+                new ShellPanelSlider("auto-pitch-voice", "range.short", "range.long", ShellValueFormat.Centiseconds),
+                new ShellPanelSlider("auto-wait-voice", "range.short", "range.long", ShellValueFormat.Seconds,
+                                     LabelKey: "label.base-time"),
+                new ShellPanelSwitch("auto-wait-voice-end"),
+            ]),
+            new("group.auto-text",
+            [
+                new ShellPanelSlider("auto-pitch-text", "range.short", "range.long", ShellValueFormat.Centiseconds),
+                new ShellPanelSlider("auto-wait-text", "range.short", "range.long", ShellValueFormat.Seconds,
+                                     LabelKey: "label.base-time"),
+            ]),
         ]),
         new(ShellSection.Sound,
         [
@@ -136,6 +166,14 @@ public static class ShellPanel
 
     public static ShellPanelSection Section(ShellSection section) => Sections.First(s => s.Section == section);
 
+    /// <summary>The sections a build's panel lists: all but ｵｰﾄﾒｯｾｰｼﾞ, or all with it.</summary>
+    public static IReadOnlyList<ShellPanelSection> SectionsWith(bool autoMessagePage) =>
+        Sections.Where(section => autoMessagePage || !section.AutoPageOnly).ToArray();
+
+    /// <summary>A section's groups on a build with or without the ｵｰﾄﾒｯｾｰｼﾞ page.</summary>
+    public static IReadOnlyList<ShellPanelGroup> GroupsWith(ShellPanelSection section, bool autoMessagePage) =>
+        section.Groups.Where(group => !(autoMessagePage && group.WithoutAutoPage)).ToArray();
+
     /// <summary>The string-table key of a native or port option's label.</summary>
     public static string LabelKey(string option) => $"option.{option}";
 
@@ -156,6 +194,8 @@ public static class ShellPanel
                                          ((16 - value) * 100 / 16).ToString(CultureInfo.InvariantCulture)),
         ShellValueFormat.Seconds => Fill(strings["value.seconds"],
                                          (value / 1000.0).ToString("0.0", CultureInfo.InvariantCulture)),
+        ShellValueFormat.Centiseconds => Fill(strings["value.seconds"],
+                                              (value / 1000.0).ToString("0.00", CultureInfo.InvariantCulture)),
         ShellValueFormat.BasisPoints => Fill(strings["value.percent"],
                                              (value / 100).ToString(CultureInfo.InvariantCulture)),
         _ => Fill(strings["value.percent"], value.ToString(CultureInfo.InvariantCulture)),

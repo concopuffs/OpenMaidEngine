@@ -617,6 +617,24 @@ def test_option_step():
     # The native driver's 設定 controls: every option has one, and each trackbar's position map inverts its value map
     # on every value the option takes, within the trackbar's 0..100 (0..16 for MesWinAlpha).
     check(set(native.SETTINGS_CONTROLS) == set(core.OPTIONS), "every option has a 設定 control")
+    # 4.38D's ｵｰﾄﾒｯｾｰｼﾞ page: the two delays move to it, and nothing else has a second control.
+    check(set(native.AUTO_PAGE_CONTROLS) == set(core.AUTO_PAGE_MOVED)
+          and all(core.OPTIONS[name][0] == "message" and native.AUTO_PAGE_CONTROLS[name][0] == "auto"
+                  and native.settings_control_of(name, True) is native.AUTO_PAGE_CONTROLS[name]
+                  and native.settings_control_of(name, False) is native.SETTINGS_CONTROLS[name]
+                  and all(native.AUTO_PAGE_CONTROLS[name][3](native.AUTO_PAGE_CONTROLS[name][2](value)) == value
+                          for value in range(0, 10001, 100))
+                  for name in core.AUTO_PAGE_MOVED),
+          "the Auto delays have a control on the ｵｰﾄﾒｯｾｰｼﾞ page")
+    check([core.option_section(name, True) for name in ("auto-wait-text", "auto-pitch-text", "message-speed")]
+          == ["auto", "auto", "message"]
+          and core.option_section("auto-wait-text", False) == "message",
+          "an option's 設定 page depends on whether 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page")
+    check(core.option_value("auto-pitch-voice", "230") == ("auto-pitch-voice", 230)
+          and core.option_value("auto-wait-voice-end", "off") == ("auto-wait-voice-end", 0),
+          "the ｵｰﾄﾒｯｾｰｼﾞ options take ms and on/off")
+    check(raises(core.parse_step, "option auto-pitch-text 375", contains="steps of 10"),
+          "a per-character time is a multiple of 10 ms")
     for name, (section, low, high, step, _) in core.OPTIONS.items():
         page, _, position_of, value_at = native.SETTINGS_CONTROLS[name]
         check(page == section, f"{name}'s control is on its section's page")

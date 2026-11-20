@@ -54,19 +54,26 @@ public class ShellPanelTests
             Calls.Add($"route {category}={enabled}");
         }
 
-        public void ApplyMessageSettings(MessageSettings settings) =>
+        public void ApplyMessageSettings(MessageSettings settings)
+        {
+            string auto = settings.CommitsAutoPitch
+                ? $" auto {settings.AutoMessagePitch0} {settings.AutoMessagePitch1} {settings.AutoMessageOption}"
+                : "";
             Calls.Add($"message {settings.MessageSpeed} {settings.MesWinAlpha} {settings.AutoMessageTime0} " +
-                      $"{settings.AutoMessageTime1}; CALLBACK_SETTING");
+                      $"{settings.AutoMessageTime1}{auto}; CALLBACK_SETTING");
+        }
     }
 
     // ---- the layout ----
 
-    [Fact]
-    public void EveryOptionHasOneRowInItsOwnSection()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]   // AGE 4.38D: 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page
+    public void EveryOptionHasOneRowInItsOwnSection(bool autoMessagePage)
     {
         var rows = new List<(string Option, ShellSection Section)>();
-        foreach (ShellPanelSection section in ShellPanel.Sections)
-            foreach (ShellPanelItem item in section.Groups.SelectMany(g => g.Items))
+        foreach (ShellPanelSection section in ShellPanel.SectionsWith(autoMessagePage))
+            foreach (ShellPanelItem item in ShellPanel.GroupsWith(section, autoMessagePage).SelectMany(g => g.Items))
             {
                 if (item is ShellPanelSlider slider)
                 {
@@ -77,14 +84,20 @@ public class ShellPanelTests
                 else if (item is ShellPanelChoice choice) rows.Add((choice.Option, section.Section));
             }
 
+        ShellOption[] options = ShellOptions.All.Where(o => o.IsVisible(AntiFont, autoMessagePage)).ToArray();
         Assert.Equal(rows.Count, rows.Select(r => r.Option).Distinct().Count());
-        Assert.Equal(ShellOptions.All.Select(o => o.Name).Concat(ShellPanel.PortSwitches).Concat(ShellPanel.PortChoices)
-                         .Order(),
+        Assert.Equal(options.Select(o => o.Name).Concat(ShellPanel.PortSwitches).Concat(ShellPanel.PortChoices).Order(),
                      rows.Select(r => r.Option).Order());
-        foreach (ShellOption option in ShellOptions.All)
-            Assert.Equal(option.Section, rows.Single(r => r.Option == option.Name).Section);
+        foreach (ShellOption option in options)
+            Assert.Equal(option.SectionWith(autoMessagePage), rows.Single(r => r.Option == option.Name).Section);
+        // Only a build with the page has its options and its section; the two delays are then on it.
+        Assert.Equal(autoMessagePage, options.Any(o => o.AutoPageOnly));
+        Assert.Equal(autoMessagePage ? ShellSection.Auto : ShellSection.Message,
+                     rows.Single(r => r.Option == "auto-wait-text").Section);
+        Assert.Equal(Enum.GetValues<ShellSection>().Where(s => autoMessagePage || s != ShellSection.Auto),
+                     ShellPanel.SectionsWith(autoMessagePage).Select(s => s.Section));
         Assert.Equal(Enum.GetValues<ShellSection>(), ShellPanel.Sections.Select(s => s.Section));
-        Assert.Equal([ShellSection.Message, ShellSection.Sound, ShellSection.Other],
+        Assert.Equal([ShellSection.Message, ShellSection.Auto, ShellSection.Sound, ShellSection.Other],
                      ShellPanel.Sections.Where(s => s.ScriptShared).Select(s => s.Section));
     }
 
@@ -92,15 +105,21 @@ public class ShellPanelTests
     [InlineData("message-speed", 5, 95)]      // 設定's 0x414 at 100 - v: 遅い on the left
     [InlineData("window-opacity", 0, 16)]     // 0x415 at 16 - v: 薄い on the left
     [InlineData("auto-wait-voice", 1200, 1200)]
+    [InlineData("auto-pitch-text", 370, 370)]
     [InlineData("bgm-volume", 7500, 7500)]
     public void SlidersRunAs設定sDo(string name, int value, int position)
     {
         ShellOption option = ShellOptions.Find(name)!;
-        ShellPanelSlider slider = ShellPanel.Sections.SelectMany(s => s.Groups).SelectMany(g => g.Items)
-            .OfType<ShellPanelSlider>().Single(s => s.Option == name);
+        // An Auto delay has a row on ﾒｯｾｰｼﾞ and one on ｵｰﾄﾒｯｾｰｼﾞ, of which a build shows one; both run alike.
+        ShellPanelSlider[] sliders = ShellPanel.Sections.SelectMany(s => s.Groups).SelectMany(g => g.Items)
+            .OfType<ShellPanelSlider>().Where(s => s.Option == name).ToArray();
 
-        Assert.Equal(position, ShellPanel.Position(option, slider, value));
-        Assert.Equal(value, ShellPanel.ValueAt(option, slider, position));
+        Assert.Equal(option.AutoPageSection == null ? 1 : 2, sliders.Length);
+        foreach (ShellPanelSlider slider in sliders)
+        {
+            Assert.Equal(position, ShellPanel.Position(option, slider, value));
+            Assert.Equal(value, ShellPanel.ValueAt(option, slider, position));
+        }
     }
 
     [Theory]
@@ -110,6 +129,8 @@ public class ShellPanelTests
     [InlineData(ShellValueFormat.Opacity, 0, "100%")]
     [InlineData(ShellValueFormat.Seconds, 500, "0.5秒")]
     [InlineData(ShellValueFormat.Seconds, 10000, "10.0秒")]
+    [InlineData(ShellValueFormat.Centiseconds, 370, "0.37秒")]   // the ｵｰﾄﾒｯｾｰｼﾞ page's edit at position 37
+    [InlineData(ShellValueFormat.Centiseconds, 1000, "1.00秒")]
     [InlineData(ShellValueFormat.BasisPoints, 6000, "60%")]
     [InlineData(ShellValueFormat.Percent, 50, "50%")]
     public void ValuesReadNaturally(ShellValueFormat format, int value, string text) =>
@@ -193,6 +214,49 @@ public class ShellPanelTests
             "message 20 8 500 2000; CALLBACK_SETTING",
         ], host.Calls);
         Assert.False(draft.HasChanges);   // the committed values are the new opening ones
+    }
+
+    [Fact]
+    public void WithoutTheAutoPageItsOptionsNeitherShowNorApply()
+    {
+        var host = new Host { MessageSettings = new MessageSettings(5, 8, 500, 2000, 230, 370, 1) };
+        var draft = new ShellOptionsDraft(host, AntiFont, readOnly: false);
+
+        Assert.DoesNotContain(draft.Visible, o => o.AutoPageOnly);
+        Assert.False(draft.Set("auto-pitch-text", 100));
+        Assert.False(draft.Set("auto-wait-voice-end", 1));
+        Assert.True(draft.Commit());
+        Assert.Equal("message 5 8 500 2000; CALLBACK_SETTING", host.Calls[^1]);
+    }
+
+    [Fact]
+    public void TheAutoPageReadsAndCommitsThePitchesAndTheCheck()
+    {
+        // Native 4.38D (docs/engine-re.md, "4.38D's menu bar and 設定 dialog"): the trackbars at 23, 9, 37 and 12
+        // with the check off wrote AutoMessagePitch0=230, AutoMessageTime0=900, AutoMessagePitch1=370,
+        // AutoMessageTime1=1200 and AutoMessageOption=1.
+        var host = new Host { MessageSettings = new MessageSettings(5, 8, 500, 2000, 0, 15, 0) };
+        var draft = new ShellOptionsDraft(host, AntiFont, readOnly: false, autoMessagePage: true);
+        ShellOption voicePitch = ShellOptions.Find("auto-pitch-voice")!;
+
+        Assert.Contains(voicePitch, draft.Visible);
+        Assert.Equal(1, draft.Value("auto-wait-voice-end"));   // option 0: the page waits for its voice
+        Assert.Equal(10, draft.Value("auto-pitch-text"));      // a position is 10 ms
+        // While the check is on, the voice group's per-character time is disabled.
+        Assert.True(draft.Disabled(voicePitch));
+        Assert.False(draft.Set(voicePitch, 230));
+        Assert.True(draft.Set("auto-wait-voice-end", 0));
+        Assert.False(draft.Disabled(voicePitch));
+        Assert.True(draft.Set(voicePitch, 230));
+        Assert.True(draft.Set("auto-wait-voice", 900));
+        Assert.True(draft.Set("auto-pitch-text", 375));
+        Assert.True(draft.Set("auto-wait-text", 1200));
+        Assert.Empty(host.Calls);   // nothing applies before OK
+
+        Assert.True(draft.Commit());
+
+        Assert.Equal("message 5 8 900 1200 auto 230 370 1; CALLBACK_SETTING", host.Calls[^1]);
+        Assert.False(draft.HasChanges);
     }
 
     [Fact]

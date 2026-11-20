@@ -34,7 +34,7 @@ public partial class Main
     {
         _menuItems = null;
         _menuBarHeight = 0;
-        _shellMenu = new ShellMenu(_shellStrings, settings);
+        _shellMenu = new ShellMenu(_shellStrings, settings, _engineBuild.Rules.Shell.AutoMessagePage);
         if (Array.IndexOf(userArgs, "--no-menu-bar") >= 0) return;
         _menuItems = _shellMenu.CreateBar();
         _menuBarHeight = NativeMenuBar.BarHeight;

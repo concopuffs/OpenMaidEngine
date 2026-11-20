@@ -73,6 +73,45 @@ public class ShellModelTests
     }
 
     [Fact]
+    public void TheTreeWithTheAutoPageIsMenu110AsFourThirtyEightDHoldsIt()
+    {
+        // As 4.38D's AGERC.DLL holds menu 110 (loaded inside the running 創刻のアテリアル, 2026-11-19): ﾒｯｾｰｼﾞの設定
+        // has left the ﾒｯｾｰｼﾞ popup, with its separator, for 設定, where ｵｰﾄﾒｯｾｰｼﾞの設定 follows it.
+        List<MenuItem> bar = ShellMenu.Build(Ja, autoMessagePage: true);
+        List<MenuItem> other = ShellMenu.Build(Ja);
+
+        Assert.Equal(Labels(other), Labels(bar));
+        foreach (int same in new[] { 0, 1, 4 }) Assert.Equal(Labels(other[same].Children), Labels(bar[same].Children));
+        Assert.Equal(Labels(other[2].Children).Take(4), Labels(bar[2].Children));
+        Assert.Equal(Labels(other[3].Children).Take(8), Labels(bar[3].Children).Take(8));
+        Assert.Equal(["ﾒｯｾｰｼﾞの設定(&M)...", "ｵｰﾄﾒｯｾｰｼﾞの設定(&A)...", "ｻｳﾝﾄﾞ設定(&S)...", "その他の設定(&X)..."],
+                     Labels(bar[3].Children).Skip(8));
+
+        static IEnumerable<int> Ids(IEnumerable<MenuItem> items) => items.SelectMany(i =>
+            i.Kind == MenuItemKind.Popup ? Ids(i.Children) : i.Kind == MenuItemKind.Command ? [i.Id] : []);
+        Assert.Equal([0x9c43, 0x9c44, 0x9c41, 0x9c46, 0x9c47, 0x9c63, 0x9c6f, 0x9c64, 0x9c65, 0x9c5a, 0x9c5b, 0x9c49,
+                      0x9c4a, 0x9c4b, 0x9c5d, 0x9c5e, 0x9c4d, 0x9c4e, 0x9c4f, 0x9c50, 0x9c55, 0x9c52, 0x9c53, 0x9c54,
+                      0x9c56, 0x9c57, 0x9c58, 0x9c59, 0x9c6c, 0x9c70, 0x9c68, 0x9c6e, 0x9c6d, 0x9c45], Ids(bar));
+    }
+
+    [Fact]
+    public void PruneWithArterialsKeysGivesTheBarItsWindowShows()
+    {
+        // 創刻のアテリアル's Menu_* keys are the other two games'. The bar read from its window (GetMenuString,
+        // 2026-11-19): ｹﾞｰﾑ holds 終了 alone, ﾒｯｾｰｼﾞ its four commands, and 設定 画面表示, a separator and the
+        // four dialog commands 40044, 40048, 40040 and 40046.
+        List<MenuItem> bar = new ShellMenu(Ja, Settings(ShippedMenuKeys), autoMessagePage: true).CreateBar();
+
+        Assert.Equal(["ｹﾞｰﾑ(&G)", "画像の保存(&C)", "ﾒｯｾｰｼﾞ(&M)", "設定(&O)", "ﾍﾙﾌﾟ(&H)"], Labels(bar));
+        Assert.Equal(["終了(&X)\tESC"], Labels(bar[0].Children));
+        Assert.Equal([40035, 40047, 40036, 40037], bar[2].Children.Select(i => i.Id));
+        Assert.Equal(["画面表示(&W)", "-", "ﾒｯｾｰｼﾞの設定(&M)...", "ｵｰﾄﾒｯｾｰｼﾞの設定(&A)...", "ｻｳﾝﾄﾞ設定(&S)...",
+                      "その他の設定(&X)..."], Labels(bar[3].Children));
+        Assert.Equal([40044, 40048, 40040, 40046], bar[3].Children.Skip(2).Select(i => i.Id));
+        Assert.Equal(ShellCommands.AutoSettings, 40048);
+    }
+
+    [Fact]
     public void SettingFallsBackToTheRegisteredDefaults()
     {
         Func<string, int> setting = Settings(("MENU_SAVE", "0"), ("MENU_MESSAGE", "1"));
@@ -189,12 +228,13 @@ public class ShellModelTests
     [Fact]
     public void Op142GraysTheNativeSetAndNothingElse()
     {
-        var menu = new ShellMenu(Ja, Settings());
-        List<MenuItem> bar = ShellMenu.Build(Ja);
+        // 4.38D's tree holds every command: the other builds' and ｵｰﾄﾒｯｾｰｼﾞの設定.
+        var menu = new ShellMenu(Ja, Settings(), autoMessagePage: true);
+        List<MenuItem> bar = ShellMenu.Build(Ja, autoMessagePage: true);
         var state = new ShellState(Windowed: true, TextWaitWithHandler);
         int[] gated = [ShellCommands.MessageSkip, ShellCommands.HideWindow, ShellCommands.AutoMessage,
                        ShellCommands.MessageSettings, ShellCommands.SoundSettings, ShellCommands.OtherSettings,
-                       ShellCommands.ReadMessageSkip];
+                       ShellCommands.ReadMessageSkip, ShellCommands.AutoSettings];
 
         menu.Refresh(bar, state with { Vm = state.Vm with { SystemMenuEnabled = false } });
 
@@ -295,7 +335,15 @@ public class ShellModelTests
                          (entry.Section, entry.Min, entry.Max, entry.Step, entry.Live));
         }
 
-        string sections = Regex.Match(source, @"^SECTION_COMMANDS = \{(.*?)\}", RegexOptions.Multiline).Groups[1].Value;
+        // The two Auto delays are on 4.38D's ｵｰﾄﾒｯｾｰｼﾞ page, by the same list on both sides.
+        string moved = Regex.Match(source, @"^AUTO_PAGE_MOVED = \((.*?)\)", RegexOptions.Multiline).Groups[1].Value;
+        Assert.Equal(ShellOptions.All.Where(o => o.AutoPageSection == ShellSection.Auto).Select(o => o.Name),
+                     Regex.Matches(moved, "[a-z-]+").Select(m => m.Value));
+        Assert.Equal(ShellOptions.All.Where(o => o.AutoPageOnly).Select(o => o.Name),
+                     ShellOptions.All.Where(o => o.Section == ShellSection.Auto).Select(o => o.Name));
+
+        string sections = Regex.Match(source, @"^SECTION_COMMANDS = \{(.*?)\}",
+                                      RegexOptions.Singleline | RegexOptions.Multiline).Groups[1].Value;
         Dictionary<string, string> commands = Regex.Matches(sections, @"""([a-z]+)"":\s*""([a-z-]+)""")
             .ToDictionary(m => m.Groups[1].Value, m => m.Groups[2].Value);
         foreach (ShellSection section in ShellOptions.All.Select(o => o.Section).Distinct())
@@ -424,6 +472,8 @@ public class ShellModelTests
 
         Check(new ShellMenu(en, Settings(ShippedMenuKeys)).CreateBar());
         Check(ShellMenu.Build(en));
+        Check(new ShellMenu(en, Settings(ShippedMenuKeys), autoMessagePage: true).CreateBar());
+        Check(ShellMenu.Build(en, autoMessagePage: true));
     }
 
     [Theory]
@@ -457,9 +507,11 @@ public class ShellModelTests
     [Fact]
     public void OptionsApplyInAgercSettingsApplysOrder()
     {
-        // agerc_settings_apply@0x10005c20 (docs/engine-re.md, "設定").
+        // agerc_settings_apply@0x10005c20 (docs/engine-re.md, "設定"). The ｵｰﾄﾒｯｾｰｼﾞ page's three follow the
+        // delays, in the order SYS4REG.INI keeps them; 4.38D's own apply order was not read.
         Assert.Equal(["message:MessageSpeed", "message:MesWinAlpha", "message:AutoMessageTime0",
-                      "message:AutoMessageTime1", "message:UseAntiFont", "message:AdvanceMesOnWheel", "sound:Music",
+                      "message:AutoMessageTime1", "message:AutoMessagePitch0", "message:AutoMessagePitch1",
+                      "message:AutoMessageOption", "message:UseAntiFont", "message:AdvanceMesOnWheel", "sound:Music",
                       "sound:SE", "sound:Voice", "sound:MusicFadeOnVoicePlaying", "sound:Volume0", "sound:Volume1",
                       "sound:Volume2", "sound:Volume3", "sound:MusicFadeOnVoicePlayingVolume",
                       "system:EffectSkipOnClick"],
@@ -476,12 +528,19 @@ public class ShellModelTests
         Assert.Equal(16, Option("window-opacity").Max);
         // The Auto delays are trackbars at ms / 100: a hand-written 2050 shows as 2000, and the panel writes steps.
         Assert.Equal(2000, Option("auto-wait-text").Snap(2050));
+        // The ｵｰﾄﾒｯｾｰｼﾞ page's per-character times are trackbars at ms / 10.
+        Assert.Equal((0, 1000, 370), (Option("auto-pitch-text").Min, Option("auto-pitch-text").Max,
+                                      Option("auto-pitch-text").Snap(375)));
+        Assert.True(Option("auto-wait-voice-end").IsSwitch);
+        Assert.Equal("auto-wait-voice-end", Option("auto-pitch-voice").DisabledWhile);
+        Assert.False(Option("auto-pitch-voice").IsVisible(Sys4StartupSettings.Empty));
+        Assert.True(Option("auto-pitch-voice").IsVisible(Sys4StartupSettings.Empty, autoMessagePage: true));
         Assert.Equal(10000, Option("master-volume").Snap(12345));
         Assert.Equal(0, Option("bgm-volume").Snap(-1));
         Assert.True(Option("effect-skip").IsSwitch);
         Assert.Equal(ShellOptionApply.Live, Option("se-volume").Apply);
         Assert.Equal(ShellOptionApply.OnOk, Option("lower-bgm-level").Apply);
-        Assert.Equal([ShellSection.Message, ShellSection.Sound, ShellSection.Other],
+        Assert.Equal([ShellSection.Message, ShellSection.Auto, ShellSection.Sound, ShellSection.Other],
                      ShellOptions.All.Select(o => o.Section).Distinct());
 
         // 文字の縁をなめらかにする exists only where ENABLEANTIFONT binds message:UseAntiFont.

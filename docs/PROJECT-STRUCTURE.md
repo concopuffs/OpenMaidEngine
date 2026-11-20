@@ -601,9 +601,10 @@ and dispatch: a step indexes the handlers bound to the table's opcodes at constr
 semantic name, else its label) to its handler; it is the only list of implemented opcodes. The handlers (`Op…`
 methods) sit in the partials by family. `engine/Ome.Engine/Diagnostics/UnsupportedOpcodeDiagnostic.cs` is the
 structured diagnostic for an opcode with no handler. `EngineBuilds.cs` declares every engine
-build the port reproduces (4.24J, 4.33G) as its parent plus changes, and the VM takes the build's rules; the rule
-types sit beside the natives that read them (`Text/TextRules.cs`, `Model/GfxRules.cs`, `Persistence/SettingsRules.cs`,
-`Persistence/SaveRules.cs`; `superpowers/specs/2026-11-12-engine-layering-design.md` §7).
+build the port reproduces (4.24J, 4.33G, 4.38D) as its parent plus changes, and the VM takes the build's rules; the
+rule types sit beside the natives that read them (`Text/TextRules.cs`, `Model/GfxRules.cs`,
+`Persistence/SettingsRules.cs`, `Persistence/SaveRules.cs`, and `ShellRules` in `Natives/ShellServices.cs`, which
+the front end's shell reads; `superpowers/specs/2026-11-12-engine-layering-design.md` §7).
 Its partial-class companion `engine/Ome.Engine.Vm/VirtualMachine.Audio.cs` holds the BGM, voice, SFX and mixer
 handlers, each a call to the audio native. `engine/Ome.Engine.Vm/VirtualMachine.Movie.cs` owns modal/asynchronous/
 positioned movie playback, movie surface metadata/activity queries, and movie-mask transition dispatch; `Step`

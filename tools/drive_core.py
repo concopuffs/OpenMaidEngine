@@ -512,18 +512,23 @@ MENU_COMMANDS = {
     "exit": 0x9c41, "save": 0x9c43, "load": 0x9c44, "version": 0x9c45, "save-screen": 0x9c46,
     "image-folder": 0x9c47, "fullscreen": 0x9c5a, "windowed": 0x9c5b, "skip": 0x9c63, "hide": 0x9c64,
     "auto": 0x9c65, "sound-settings": 0x9c68, "message-settings": 0x9c6c, "system-info": 0x9c6d,
-    "other-settings": 0x9c6e, "read-skip": 0x9c6f,
+    "other-settings": 0x9c6e, "read-skip": 0x9c6f, "auto-settings": 0x9c70,
 }
 
 
 # The options `option` sets (docs/superpowers/specs/2026-11-09-engine-shell-design.md §5.3; the port's ShellOptions):
 # name -> (section, min, max, step, live). Values are the registry's: ms per glyph, ms, basis points, percent, 0/1. A
-# live option applies while 設定 is open (the ｻｳﾝﾄﾞ volumes and routes); the rest apply on OK.
+# live option applies while 設定 is open (the ｻｳﾝﾄﾞ volumes and routes); the rest apply on OK. The "auto" options are
+# those of the ｵｰﾄﾒｯｾｰｼﾞ page, which only AGE 4.38D's 設定 has (docs/engine-re.md, "4.38D's menu bar and 設定
+# dialog"): the per-character times in ms and the 音声終了まで待つ check, on while message:AutoMessageOption is 0.
 OPTIONS = {
     "message-speed": ("message", 0, 100, 1, False),
     "window-opacity": ("message", 0, 16, 1, False),
     "auto-wait-voice": ("message", 0, 10000, 100, False),
     "auto-wait-text": ("message", 0, 10000, 100, False),
+    "auto-pitch-voice": ("auto", 0, 1000, 10, False),
+    "auto-wait-voice-end": ("auto", 0, 1, 1, False),
+    "auto-pitch-text": ("auto", 0, 1000, 10, False),
     "smooth-text": ("message", 0, 1, 1, False),
     "wheel-advance": ("message", 0, 1, 1, False),
     "master-volume": ("sound", 0, 10000, 100, True),
@@ -538,9 +543,19 @@ OPTIONS = {
     "effect-skip": ("other", 0, 1, 1, False),
 }
 
+# The options a 設定 with the ｵｰﾄﾒｯｾｰｼﾞ page shows on that page instead of ﾒｯｾｰｼﾞ.
+AUTO_PAGE_MOVED = ("auto-wait-voice", "auto-wait-text")
+
 # The menu command that opens each section's 設定 tab, and the section the `options` step opens.
-SECTION_COMMANDS = {"message": "message-settings", "sound": "sound-settings", "other": "other-settings"}
+SECTION_COMMANDS = {
+    "message": "message-settings", "auto": "auto-settings", "sound": "sound-settings", "other": "other-settings",
+}
 OPTIONS_SECTION = "message"
+
+
+def option_section(name: str, auto_page: bool) -> str:
+    """The 設定 page that holds an option: its own, or ｵｰﾄﾒｯｾｰｼﾞ for the two delays where 設定 has that page."""
+    return "auto" if auto_page and name in AUTO_PAGE_MOVED else OPTIONS[name][0]
 
 
 LANGUAGE_TAG = re.compile(r"[a-z]{2,3}(?:-[a-z0-9]{1,8})*|x(?:-[a-z0-9]{1,8})+")

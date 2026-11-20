@@ -66,6 +66,9 @@ public static class ShellCommands
     public const int SoundSettings = 0x9c68, MessageSettings = 0x9c6c, SystemInfo = 0x9c6d, OtherSettings = 0x9c6e;
     public const int ReadMessageSkip = 0x9c6f;
 
+    /// <summary>ｵｰﾄﾒｯｾｰｼﾞの設定, which only AGE 4.38D's menu 110 has.</summary>
+    public const int AutoSettings = 0x9c70;
+
     public static IReadOnlyList<ShellCommand> All { get; } =
     [
         new()
@@ -118,6 +121,12 @@ public static class ShellCommands
             Name = "message-settings", Id = MessageSettings, Kind = ShellCommandKind.Section,
             LabelKey = "command.message-settings", SystemMenuGated = true, Section = ShellSection.Message,
             Action = (host, _, _) => host.OpenPanel(ShellSection.Message),
+        },
+        new()
+        {
+            Name = "auto-settings", Id = AutoSettings, Kind = ShellCommandKind.Section,
+            LabelKey = "command.auto-settings", SystemMenuGated = true, Section = ShellSection.Auto,
+            Action = (host, _, _) => host.OpenPanel(ShellSection.Auto),
         },
         new()
         {

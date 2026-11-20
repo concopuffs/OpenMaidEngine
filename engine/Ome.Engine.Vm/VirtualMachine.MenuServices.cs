@@ -40,7 +40,8 @@ public sealed partial class VirtualMachine : IVmMenuServices
     /// message:AutoMessageTime0/1. The front end reads them through the waits' Invoke, on the engine thread.</summary>
     public MessageSettings MessageSettings => new(
         _text.MessageGlyphDelayMilliseconds, _text.MessageWindowAlphaSetting, _skip.AutoMessageTime0Ms,
-        _skip.AutoMessageTime1Ms);
+        _skip.AutoMessageTime1Ms, _skip.AutoMessagePitch(0) ?? 0, _skip.AutoMessagePitch(1) ?? 0,
+        _skip.AutoMessageOption);
 
     /// <summary>Menu 0x9c64 (IAGEService +0x8c, iage_service_request_hide_window@0x45f700). Native ORs bit 0x80000000
     /// into the service trigger mask while the window is hidden (any trigger ends that wait), and otherwise bit 0x20,
@@ -86,6 +87,11 @@ public sealed partial class VirtualMachine : IVmMenuServices
         _text.SetMessageWindowAlphaSetting(settings.MesWinAlpha);
         _skip.SetAutoMessageTime(0, settings.AutoMessageTime0);
         _skip.SetAutoMessageTime(1, settings.AutoMessageTime1);
+        if (!settings.CommitsAutoPitch) return;
+        // The ｵｰﾄﾒｯｾｰｼﾞ page's per-character times and its check, as ops 0x2e7 and 0x2e8 set them.
+        _skip.SetAutoMessagePitch(0, settings.AutoMessagePitch0);
+        _skip.SetAutoMessagePitch(1, settings.AutoMessagePitch1);
+        _skip.AutoMessageOption = settings.AutoMessageOption;
     }
 
     /// <summary>0x406cd0: toggle message:ReadTextSkip, then (at a text wait) re-check the current message against

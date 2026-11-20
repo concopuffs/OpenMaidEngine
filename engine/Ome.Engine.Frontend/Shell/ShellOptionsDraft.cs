@@ -64,11 +64,14 @@ public sealed class ShellOptionsDraft
 
     /// <param name="settings">The profile's SYS4INI keys, which decide the visible options.</param>
     /// <param name="readOnly">True while op 0x142's gate is 0.</param>
-    public ShellOptionsDraft(IShellSettingsHost host, Sys4StartupSettings settings, bool readOnly)
+    /// <param name="autoMessagePage">The engine build's <c>ShellRules.AutoMessagePage</c>.</param>
+    public ShellOptionsDraft(IShellSettingsHost host, Sys4StartupSettings settings, bool readOnly,
+                             bool autoMessagePage = false)
     {
         _host = host;
         ReadOnly = readOnly;
-        Visible = ShellOptions.All.Where(o => o.IsVisible(settings)).ToArray();
+        AutoMessagePage = autoMessagePage;
+        Visible = ShellOptions.All.Where(o => o.IsVisible(settings, autoMessagePage)).ToArray();
         for (int category = 0; category < 4; category++) _openedVolumes[category] = host.Volume(category);
         for (int category = 1; category < 4; category++) _openedRoutes[category] = host.RouteEnabled(category);
         foreach (ShellOption option in ShellOptions.All)
@@ -81,8 +84,16 @@ public sealed class ShellOptionsDraft
 
     public bool ReadOnly { get; }
 
+    /// <summary>Whether the build's 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page.</summary>
+    public bool AutoMessagePage { get; }
+
     /// <summary>The options the profile shows, in the panel's order.</summary>
     public IReadOnlyList<ShellOption> Visible { get; }
+
+    /// <summary>Whether a switch that is on disables <paramref name="option"/> (<see cref="ShellOption.DisabledWhile"/>).
+    /// </summary>
+    public bool Disabled(ShellOption option) =>
+        option.DisabledWhile is { } name && ShellOptions.Find(name) is { } by && Visible.Contains(by) && _values[by] != 0;
 
     public int Value(ShellOption option) => _values[option];
 
@@ -114,6 +125,10 @@ public sealed class ShellOptionsDraft
             "window-opacity" => message.MesWinAlpha,
             "auto-wait-voice" => (int)Math.Clamp(message.AutoMessageTime0, 0, int.MaxValue),
             "auto-wait-text" => (int)Math.Clamp(message.AutoMessageTime1, 0, int.MaxValue),
+            "auto-pitch-voice" => message.AutoMessagePitch0,
+            "auto-pitch-text" => message.AutoMessagePitch1,
+            // The check is on while the option's bit 0 is clear: the page waits for its voice.
+            "auto-wait-voice-end" => (message.AutoMessageOption & 1) == 0 ? 1 : 0,
             "smooth-text" => _host.LoadInt("message", Sys4RegIniStore.UseAntiFontKey, 1) != 0 ? 1 : 0,
             "wheel-advance" => _host.LoadInt("message", Sys4RegIniStore.AdvanceMesOnWheelKey, 0) != 0 ? 1 : 0,
             "lower-bgm-on-voice" => _host.LoadInt("sound", "MusicFadeOnVoicePlaying", 1) != 0 ? 1 : 0,
@@ -126,10 +141,10 @@ public sealed class ShellOptionsDraft
     }
 
     /// <summary>Edit one option: the value snaps to the option's domain, and a live option applies at once. False when
-    /// the draft is read-only or the profile does not show the option.</summary>
+    /// the draft is read-only, the profile does not show the option, or a switch that is on disables it.</summary>
     public bool Set(ShellOption option, int value)
     {
-        if (ReadOnly || !Visible.Contains(option)) return false;
+        if (ReadOnly || !Visible.Contains(option) || Disabled(option)) return false;
         int snapped = option.Snap(value);
         _values[option] = snapped;
         if (option.Apply != ShellOptionApply.Live) return true;
@@ -151,7 +166,8 @@ public sealed class ShellOptionsDraft
             int value = _values[option];
             switch (option.Name)
             {
-                case "message-speed" or "window-opacity" or "auto-wait-voice" or "auto-wait-text":
+                case "message-speed" or "window-opacity" or "auto-wait-voice" or "auto-wait-text"
+                    or "auto-pitch-voice" or "auto-wait-voice-end" or "auto-pitch-text":
                     break;   // with ApplyMessageSettings below
                 case "smooth-text":
                     if (Visible.Contains(option)) _host.SetTextAntialias(value != 0);
@@ -176,7 +192,9 @@ public sealed class ShellOptionsDraft
         }
         // mk:mksh goes through AGE:reg +0x14, which never reaches SYS4REG.INI; page 104 has no control for it anyway.
         _host.ApplyMessageSettings(new MessageSettings(
-            Value("message-speed"), Value("window-opacity"), Value("auto-wait-voice"), Value("auto-wait-text")));
+            Value("message-speed"), Value("window-opacity"), Value("auto-wait-voice"), Value("auto-wait-text"),
+            Value("auto-pitch-voice"), Value("auto-pitch-text"), Value("auto-wait-voice-end") != 0 ? 0 : 1,
+            CommitsAutoPitch: AutoMessagePage));
         foreach (ShellOption option in ShellOptions.All) _opened[option] = _values[option];
         return true;
     }

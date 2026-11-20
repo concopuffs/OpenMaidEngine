@@ -31,7 +31,24 @@ public sealed record ShellOption(string Name, ShellSection Section, string Regis
     /// <summary>Whether the profile shows the option; by default every profile does.</summary>
     public Func<Sys4StartupSettings, bool> VisibleRule { get; init; } = _ => true;
 
-    public bool IsVisible(Sys4StartupSettings settings) => VisibleRule(settings);
+    /// <summary>An option only 設定's ｵｰﾄﾒｯｾｰｼﾞ page has (<c>ShellRules.AutoMessagePage</c>).</summary>
+    public bool AutoPageOnly { get; init; }
+
+    /// <summary>The section that shows the option on a build with the ｵｰﾄﾒｯｾｰｼﾞ page, when that is not
+    /// <see cref="Section"/>: the two Auto delays move there from ﾒｯｾｰｼﾞ.</summary>
+    public ShellSection? AutoPageSection { get; init; }
+
+    /// <summary>A switch option that disables this one while it is on, as 音声終了まで待つ disables the voice group's
+    /// 文字単位時間.</summary>
+    public string? DisabledWhile { get; init; }
+
+    /// <summary>Whether a profile on a build with or without the ｵｰﾄﾒｯｾｰｼﾞ page shows the option.</summary>
+    public bool IsVisible(Sys4StartupSettings settings, bool autoMessagePage = false) =>
+        (!AutoPageOnly || autoMessagePage) && VisibleRule(settings);
+
+    /// <summary>The section that shows the option.</summary>
+    public ShellSection SectionWith(bool autoMessagePage) =>
+        autoMessagePage && AutoPageSection is { } moved ? moved : Section;
 
     /// <summary>The value <paramref name="value"/> lands on: clamped to the domain, then down to a step.</summary>
     public int Snap(int value)
@@ -55,9 +72,24 @@ public static class ShellOptions
         new("message-speed", ShellSection.Message, "message", Sys4RegIniStore.MessageSpeedKey, 0, 100, 1, OnOk),
         new("window-opacity", ShellSection.Message, "message", Sys4RegIniStore.MesWinAlphaKey, 0, 16, 1, OnOk),
         new("auto-wait-voice", ShellSection.Message, "message", Sys4RegIniStore.AutoMessageTime0Key, 0, 10000, 100,
-            OnOk),
+            OnOk) { AutoPageSection = ShellSection.Auto },
         new("auto-wait-text", ShellSection.Message, "message", Sys4RegIniStore.AutoMessageTime1Key, 0, 10000, 100,
-            OnOk),
+            OnOk) { AutoPageSection = ShellSection.Auto },
+        // ｵｰﾄﾒｯｾｰｼﾞ (AGE 4.38D's page; docs/engine-re.md, "4.38D's menu bar and 設定 dialog"): the two delays above as
+        // trackbars 0x415 and 0x417, the per-character times as 0x414 and 0x416 at ms / 10, and check 1000, 音声終了
+        // まで待つ, which is on while message:AutoMessageOption is 0 and disables the voice group's per-character time.
+        new("auto-pitch-voice", ShellSection.Auto, "message", Sys4RegIniStore.AutoMessagePitch0Key, 0, 1000, 10, OnOk)
+        {
+            AutoPageOnly = true, DisabledWhile = "auto-wait-voice-end",
+        },
+        new("auto-wait-voice-end", ShellSection.Auto, "message", Sys4RegIniStore.AutoMessageOptionKey, 0, 1, 1, OnOk)
+        {
+            AutoPageOnly = true,
+        },
+        new("auto-pitch-text", ShellSection.Auto, "message", Sys4RegIniStore.AutoMessagePitch1Key, 0, 1000, 10, OnOk)
+        {
+            AutoPageOnly = true,
+        },
         // Check 1000, which exists only where ENABLEANTIFONT binds the key.
         new("smooth-text", ShellSection.Message, "message", Sys4RegIniStore.UseAntiFontKey, 0, 1, 1, OnOk)
         {
@@ -82,12 +114,14 @@ public static class ShellOptions
     /// <summary>agerc_settings_apply's order: MessageSpeed, MesWinAlpha, the Auto delays, UseAntiFont,
     /// AdvanceMesOnWheel, the three route enables, MusicFadeOnVoicePlaying, the four volumes, then
     /// MusicFadeOnVoicePlayingVolume and EffectSkipOnClick. (Its last write, mk:mksh, comes from a control page 104
-    /// lacks, so it is always 0 and not persisted; the panel leaves it out.)</summary>
+    /// lacks, so it is always 0 and not persisted; the panel leaves it out.) The ｵｰﾄﾒｯｾｰｼﾞ page's three follow the
+    /// delays; 4.38D's own order was not read, and they go to the engine in one message-settings request.</summary>
     public static IReadOnlyList<ShellOption> ApplyOrder { get; } =
     [
         .. new[]
         {
-            "message-speed", "window-opacity", "auto-wait-voice", "auto-wait-text", "smooth-text", "wheel-advance",
+            "message-speed", "window-opacity", "auto-wait-voice", "auto-wait-text", "auto-pitch-voice",
+            "auto-pitch-text", "auto-wait-voice-end", "smooth-text", "wheel-advance",
             "bgm", "se", "voice", "lower-bgm-on-voice", "master-volume", "bgm-volume", "se-volume", "voice-volume",
             "lower-bgm-level", "effect-skip",
         }.Select(name => Find(name)!),

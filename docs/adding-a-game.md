@@ -218,7 +218,9 @@ The driver is needed before the port boots: it shows what native does, and it ma
 - Put each real difference from the triage into the build's definition in `EngineBuilds.cs`, as the nearest build
   plus named changes, each with a comment that points to its evidence.
 - Settings: bind the build's `SYS4REG.INI` keys (`SettingsRules`), and compare the game's `AGERC.DLL` menu and
-  dialogs with the shell the port draws.
+  dialogs with the shell the port draws: the bar the window shows, menu 110 unpruned, and each 設定 page's
+  controls. What the build's shell has that the others' lack goes into its `ShellRules`, and the driver's `option`
+  steps get its controls on both targets (`engine-re.md`, "4.38D's menu bar and 設定 dialog", is the worked case).
 - Saves: make a native save with the driver. Read its identity, version stamp and record sizes, and round-trip it
   through the save codec: `Ome.Cli save-info <file> --game <id>` does both and says where the file differs from
   the profile and the engine build. The port reads no save while `writesEnabled` is false, so turn it on in the

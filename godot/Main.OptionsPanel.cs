@@ -73,7 +73,8 @@ public partial class Main
             return;
         // While op 0x142's gate is 0 the script-shared sections are read-only; native 設定 cannot open then.
         bool readOnly = !_waits.Invoke(() => _vm.MenuState).SystemMenuEnabled;
-        var draft = new ShellOptionsDraft(new SettingsHost(this), _catalog.StartupSettings, readOnly);
+        var draft = new ShellOptionsDraft(new SettingsHost(this), _catalog.StartupSettings, readOnly,
+                                          _engineBuild.Rules.Shell.AutoMessagePage);
         PortOptions opened = _portOptions.Effective;
         // 設定's OK runs agerc_settings_apply and CALLBACK_SETTING.BIN even when nothing changed; ﾊﾞｰｼﾞｮﾝ情報's OK
         // runs neither, so the about view applies only an edit.
@@ -133,17 +134,21 @@ public partial class Main
         if (option.Snap(value) != value)
             throw new DriveProtocolException(
                 $"option {option.Name} takes {option.Min}..{option.Max} in steps of {option.Step}, got {value}");
-        OptionsPanel panel = OpenPanelForDriver(option.Section);
+        // The section that shows the option on this build: the Auto delays are on 4.38D's ｵｰﾄﾒｯｾｰｼﾞ page.
+        ShellSection section = option.SectionWith(_engineBuild.Rules.Shell.AutoMessagePage);
+        if (option.AutoPageOnly && !_engineBuild.Rules.Shell.AutoMessagePage)
+            throw new DriveProtocolException($"this game's options have no {option.Name}: its 設定 has no ｵｰﾄﾒｯｾｰｼﾞ page");
+        OptionsPanel panel = OpenPanelForDriver(section);
         if (panel.SetOption(option, value) is not { } set)
         {
             panel.Press("cancel");
             throw new DriveProtocolException(
-                $"the options panel's {option.Section} section has no usable control for {option.Name}");
+                $"the options panel's {section} section has no usable control for {option.Name}");
         }
         panel.Press("ok");
         return new System.Text.Json.Nodes.JsonObject
         {
-            ["option"] = option.Name, ["value"] = set, ["section"] = option.Section.ToString().ToLowerInvariant(),
+            ["option"] = option.Name, ["value"] = set, ["section"] = section.ToString().ToLowerInvariant(),
         };
     }
 
@@ -233,7 +238,7 @@ public partial class Main
     private void UseShellStrings(ShellStrings strings)
     {
         _shellStrings = strings;
-        _shellMenu = new ShellMenu(_shellStrings, _catalog.StartupSettings);
+        _shellMenu = new ShellMenu(_shellStrings, _catalog.StartupSettings, _engineBuild.Rules.Shell.AutoMessagePage);
         if (_menuItems != null) _shellMenu.Relabel(_menuItems);
         if (_menuStrip != null) _shellMenu.Relabel(_menuStrip.Bar.Items);
         RefreshMenu();

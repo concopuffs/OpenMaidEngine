@@ -573,14 +573,27 @@ The port keeps the two captured frames as it does for the crossfade, and its ref
 
 ### 4.38D's menu bar and 設定 dialog (2026-11-19)
 
-Read from native 創刻のアテリアル's windows while the driver ran it (the menu with `GetMenuString`, the dialog's
-controls by class, id and rectangle, each tab captured with `PrintWindow`). Against the bar and the dialog the
-other two games show ("Native menu bar" below) two things differ, both for Auto's per-character delay ("Auto
-pitch" above):
+Read from native 創刻のアテリアル while the driver ran it: the bar its window shows with `GetMenuString`, menu 110 as
+`AGERC.DLL` holds it by loading it inside the game (`LoadMenuW`, called through Frida), the dialog's controls by
+class, id and rectangle, and each tab captured with `PrintWindow`. Against the menu and the dialog of the other
+two games ("Native menu bar" below) two things differ, both for Auto's per-character delay ("Auto pitch" above):
 
-- **The menu bar** has one more command: `ｵｰﾄﾒｯｾｰｼﾞの設定(&A)...`, id 40048, in 設定(&O) between
-  `ﾒｯｾｰｼﾞの設定(&M)...` (40044) and `ｻｳﾝﾄﾞ設定(&S)...` (40040). Every other item, id and order is the pruned bar
-  Himegari and Kamidori show, which the port's shell draws.
+- **Menu 110** keeps every popup, item and id of 4.24J's and changes two things. `ﾒｯｾｰｼﾞの設定(&M)...` (40044,
+  `0x9c6c`) has left the ﾒｯｾｰｼﾞ popup, with the separator before it, for 設定(&O), and `ｵｰﾄﾒｯｾｰｼﾞの設定(&A)...`
+  (40048, `0x9c70`) is new and follows it there. The whole tree:
+
+  | popup | items |
+  |---|---|
+  | ｹﾞｰﾑ | ｾｰﾌﾞ `0x9c43`, ﾛｰﾄﾞ `0x9c44`, separator, 終了 `0x9c41` |
+  | 画像の保存 | `0x9c46`, `0x9c47` |
+  | ﾒｯｾｰｼﾞ | `0x9c63`, `0x9c6f`, `0x9c64`, `0x9c65` |
+  | 設定 | 画面表示 (`0x9c5a`, `0x9c5b`), ﾏｳｽの右ｸﾘｯｸ時の動作 (`0x9c49` to `0x9c4b`), 文字表示 (`0x9c5d`, `0x9c5e`), ﾒｯｾｰｼﾞｽﾋﾟｰﾄﾞ (`0x9c4d` to `0x9c50`), ﾒｯｾｰｼﾞｳｲﾝﾄﾞｳの透過 (`0x9c55`, `0x9c52` to `0x9c54`), separator, BGMの設定 (`0x9c56`, `0x9c57`), SEの設定 (`0x9c58`, `0x9c59`), ﾒｯｾｰｼﾞの設定 `0x9c6c`, ｵｰﾄﾒｯｾｰｼﾞの設定 `0x9c70`, ｻｳﾝﾄﾞ設定 `0x9c68`, その他の設定 `0x9c6e` |
+  | ﾍﾙﾌﾟ | `0x9c6d`, separator, `0x9c45` |
+
+  The game's `Menu_*` keys are the other two games' (every key 0 but `MENU_MESSAGE`). The bar its window shows is
+  this tree less the items 4.24J's `agerc_prune_menu_by_settings` removes, by the same positions: ｹﾞｰﾑ holds 終了
+  alone, ﾒｯｾｰｼﾞ its four commands, and 設定 画面表示, the separator and the four dialog commands (40044, 40048,
+  40040, 40046). 4.38D's own prune function was not read, so with other keys its bar may differ from the port's.
 - **設定 has five tabs**: ﾒｯｾｰｼﾞ, ｵｰﾄﾒｯｾｰｼﾞ, ｻｳﾝﾄﾞ, その他, 動作環境. The ﾒｯｾｰｼﾞ page keeps the speed, the window's
   opacity and the two checks, and no longer has the two Auto delays. The ｵｰﾄﾒｯｾｰｼﾞ page has them, with what
   4.38D adds:
@@ -599,9 +612,28 @@ pitch" above):
   off gave `AutoMessagePitch0=230`, `AutoMessageTime0=900`, `AutoMessagePitch1=370`, `AutoMessageTime1=1200` and
   `AutoMessageOption=1`.
 
-The pages are child dialogs beside the tab control `0x417`, as the driver finds them in the other two games. The ｵｰﾄﾒｯｾｰｼﾞ page has a trackbar
-`0x415`, which is what the driver knew the ﾒｯｾｰｼﾞ page by, so its `options` step fails on this build until it
-tells the two apart.
+The pages are child dialogs beside the tab control `0x417`, as in the other two games. The ｵｰﾄﾒｯｾｰｼﾞ page has a
+trackbar `0x415`, as the ﾒｯｾｰｼﾞ and ｻｳﾝﾄﾞ pages have, so the driver tells the pages apart in this order: 動作環境 by
+its copy button `0x419`, ｻｳﾝﾄﾞ by trackbar `0x418`, ﾒｯｾｰｼﾞ by the wheel check `0x3e9`, ｵｰﾄﾒｯｾｰｼﾞ by trackbar `0x415`,
+and その他 by its lone check `0x3e8` (`settings_pages` in `tools/drive_native.py`; the first three hold on 4.24J's
+and 4.33G's dialogs too).
+
+**The port** (2026-11-19). A build says whether it has the page: `ShellRules.AutoMessagePage` in `EngineBuilds.cs`,
+true for 4.38D. With it:
+
+- The shell's menu is the tree above (`ShellMenu.TreeWithAutoPage`), pruned as before.
+- The options panel has an ｵｰﾄﾒｯｾｰｼﾞ section with the page's two groups, and its ﾒｯｾｰｼﾞ section has no Auto group.
+  While 音声終了まで待つ is on, the voice group's 文字単位時間 row is disabled.
+- 決定 sends the two per-character times and the check with the delays in its one message-settings request, which
+  sets them as ops `0x2e7` and `0x2e8` do. The settings writer saves them when the game closes.
+- The driver's `option` and `options` steps take the page's controls on both targets (`tools-reference.md`, "Game
+  driver": `auto-pitch-voice`, `auto-pitch-text`, `auto-wait-voice-end`).
+
+`arterial-auto-options.steps` sets the five controls and one on the ﾒｯｾｰｼﾞ page on both targets. The `options`
+lists agree before and after, and the `SYS4REG.INI` each target wrote at its exit is the same file, line for line.
+
+Not read: the order 4.38D's `agerc_settings_apply` applies the values in, and what OK writes to
+`AutoMessageOption` when a script left more than bit 0 in it (the port writes 0 or 1).
 
 ### The glyph publisher grows a cell (2026-11-19)
 

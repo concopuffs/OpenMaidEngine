@@ -1,0 +1,35 @@
+# 創刻のアテリアル's ｵｰﾄﾒｯｾｰｼﾞ page, which only AGE 4.38D's 設定 has (docs/engine-re.md, "4.38D's menu bar and 設定
+# dialog"): on SC0000's first page the `option` steps set its five controls, each through ｵｰﾄﾒｯｾｰｼﾞの設定 and OK, then
+# one on the ﾒｯｾｰｼﾞ page through its own command. Natively AGERC's dialog, on the port the options panel.
+#
+# - The first `options` lists the sandbox's values. 音声終了まで待つ is on (message:AutoMessageOption=0), which
+#   disables the voice group's 文字単位時間, so auto-pitch-voice is not listed until the check is off.
+# - The last `options` lists what was set, the same on both targets.
+#
+# Compare SYS4REG.INI after `stop` on both targets: AutoMessageTime0=900, AutoMessageTime1=1200,
+# AutoMessagePitch0=230, AutoMessagePitch1=370, AutoMessageOption=1 and MessageSpeed=30. On a fresh sandbox, on both
+# targets:
+#   py -3.11 -X utf8 tools/drive.py --game arterial native|port start
+#   py -3.11 -X utf8 tools/drive.py --game arterial native|port run tools/drive/scenarios/arterial-auto-options.steps
+#   py -3.11 -X utf8 tools/drive.py --game arterial native|port stop
+
+rand-seed 13
+wait 5
+click adv.next                          # skips the logo
+wait-state script=TITLE timeout=90
+wait 6
+click title.start
+wait-state top=SC0000@0xfff timeout=90  # page 1
+settle timeout=20
+
+options                                 # the sandbox's values
+option auto-wait-voice-end off          # 音声終了まで待つ off enables the voice group's 文字単位時間
+option auto-pitch-voice 230
+option auto-wait-voice 900
+option auto-pitch-text 370
+option auto-wait-text 1200
+option message-speed 30                 # the ﾒｯｾｰｼﾞ page, from ﾒｯｾｰｼﾞの設定
+wait 1
+options                                 # the values set above
+expect top=SC0000@0xfff
+shot arterial-auto-options

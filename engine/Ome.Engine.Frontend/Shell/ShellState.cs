@@ -4,7 +4,7 @@ namespace Ome.Engine.Frontend.Shell;
 
 /// <summary>The options panel's sections (docs/superpowers/specs/2026-11-09-engine-shell-design.md, §7.1). 情報 holds
 /// the about view and the diagnostics.</summary>
-public enum ShellSection { Message, Sound, Other, Screen, Ome, Info }
+public enum ShellSection { Message, Auto, Sound, Other, Screen, Ome, Info }
 
 /// <summary>
 /// What a shell surface reads when it opens: the bar or the strip opening a popup (native's WM_INITMENU), the panel,

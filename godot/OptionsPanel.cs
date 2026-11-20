@@ -140,7 +140,7 @@ public partial class OptionsPanel : Control
 
         var nav = new VBoxContainer { CustomMinimumSize = new Vector2(148, 0) };
         nav.AddThemeConstantOverride("separation", 4);
-        foreach (ShellPanelSection panelSection in ShellPanel.Sections)
+        foreach (ShellPanelSection panelSection in Sections)
         {
             ShellSection section = panelSection.Section;
             var button = new Button
@@ -201,7 +201,7 @@ public partial class OptionsPanel : Control
         }
         ShellPanelSection panelSection = ShellPanel.Section(section);
         bool locked = panelSection.ScriptShared && _context.Draft.ReadOnly;
-        foreach (ShellPanelGroup group in panelSection.Groups)
+        foreach (ShellPanelGroup group in ShellPanel.GroupsWith(panelSection, _context.Draft.AutoMessagePage))
         {
             var rows = new VBoxContainer();
             rows.AddThemeConstantOverride("separation", 6);
@@ -214,6 +214,9 @@ public partial class OptionsPanel : Control
         _note.Text = locked ? S["panel.read-only"] : "";
         _scroll.ScrollVertical = 0;
     }
+
+    /// <summary>The sections this build's panel lists.</summary>
+    private IReadOnlyList<ShellPanelSection> Sections => ShellPanel.SectionsWith(_context.Draft.AutoMessagePage);
 
     private Control? Row(ShellPanelItem item, ShellPanelGroup group, bool locked) => item switch
     {
@@ -230,11 +233,15 @@ public partial class OptionsPanel : Control
     {
         ShellOption option = ShellOptions.Find(slider.Option)!;
         if (!_context.Draft.Visible.Contains(option)) return null;
+        // A switch that is on disables the row, as 設定 disables the control (音声終了まで待つ and the voice group's
+        // 文字単位時間); the switch redraws the section when it changes.
+        locked |= _context.Draft.Disabled(option);
         var row = new HBoxContainer();
         row.AddThemeConstantOverride("separation", 8);
+        string label = S[slider.LabelKey ?? option.LabelKey];
         Control name = slider.Switch != null
             ? Switch(slider.Switch, locked)!
-            : Label(S[option.LabelKey] == S[group.TitleKey] ? "" : S[option.LabelKey], FontSize, Text);
+            : Label(label == S[group.TitleKey] ? "" : label, FontSize, Text);
         name.CustomMinimumSize = new Vector2(NameWidth, 0);
         row.AddChild(name);
         Label low = Label(S[slider.LowKey], SmallFontSize, Dim);
@@ -278,7 +285,15 @@ public partial class OptionsPanel : Control
             if (!_context.Draft.Visible.Contains(option)) return null;
             check.SetPressedNoSignal(_context.Draft.Value(option) != 0);
             check.Disabled = locked;
-            check.Toggled += on => _context.Draft.Set(option, on ? 1 : 0);
+            bool disablesOthers = ShellOptions.All.Any(other => other.DisabledWhile == option.Name);
+            check.Toggled += on =>
+            {
+                _context.Draft.Set(option, on ? 1 : 0);
+                if (!disablesOthers) return;
+                // The rows it disables or enables are drawn again; the focus stays on the switch.
+                ShowSection(_section);
+                if (_switches.TryGetValue(name, out CheckBox? redrawn)) redrawn.GrabFocus();
+            };
         }
         else
         {
@@ -449,9 +464,9 @@ public partial class OptionsPanel : Control
         };
         if (step != 0)
         {
-            int count = ShellPanel.Sections.Count;
-            int at = ShellPanel.Sections.ToList().FindIndex(s => s.Section == _section);
-            ShowSection(ShellPanel.Sections[(at + step + count) % count].Section);
+            int count = Sections.Count;
+            int at = Sections.ToList().FindIndex(s => s.Section == _section);
+            ShowSection(Sections[(at + step + count) % count].Section);
             _sectionButtons[_section].GrabFocus();
             return true;
         }
@@ -491,7 +506,7 @@ public partial class OptionsPanel : Control
         var buttons = new JsonArray();
         foreach (string name in _switches.Keys) buttons.Add((JsonNode?)Ja[ShellPanel.LabelKey(name)]);
         if (_copy != null) buttons.Add((JsonNode?)Ja["diag.copy"]);
-        foreach (ShellPanelSection section in ShellPanel.Sections) buttons.Add((JsonNode?)Ja[section.TitleKey]);
+        foreach (ShellPanelSection section in Sections) buttons.Add((JsonNode?)Ja[section.TitleKey]);
         buttons.Add((JsonNode?)Ja["panel.ok"]);
         buttons.Add((JsonNode?)Ja["panel.cancel"]);
         return new JsonObject
@@ -519,7 +534,7 @@ public partial class OptionsPanel : Control
             CopyDiagnostics();
             return Ja["diag.copy"];
         }
-        foreach (ShellPanelSection section in ShellPanel.Sections)
+        foreach (ShellPanelSection section in Sections)
         {
             if (!Matches(section.TitleKey)) continue;
             ShowSection(section.Section);
@@ -543,7 +558,8 @@ public partial class OptionsPanel : Control
     /// usable control for the option (another section's, one the profile hides, or a read-only section's).</summary>
     public int? SetOption(ShellOption option, int value)
     {
-        if (option.Section != _section || !_context.Draft.Set(option, value)) return null;
+        if (option.SectionWith(_context.Draft.AutoMessagePage) != _section || !_context.Draft.Set(option, value))
+            return null;
         ShowSection(_section);
         return _context.Draft.Value(option);
     }
@@ -567,12 +583,17 @@ public partial class OptionsPanel : Control
     {
         var options = new JsonArray();
         foreach (ShellOption option in _context.Draft.Visible)
+        {
+            // A control a switch disables is not listed, as the native driver lists only 設定's enabled controls.
+            if (_context.Draft.Disabled(option)) continue;
             options.Add((JsonNode)new JsonObject
             {
-                ["name"] = option.Name, ["section"] = option.Section.ToString().ToLowerInvariant(),
+                ["name"] = option.Name,
+                ["section"] = option.SectionWith(_context.Draft.AutoMessagePage).ToString().ToLowerInvariant(),
                 ["value"] = _context.Draft.Value(option), ["min"] = option.Min, ["max"] = option.Max,
                 ["step"] = option.Step, ["applies"] = option.Apply == ShellOptionApply.Live ? "live" : "ok",
             });
+        }
         return options;
     }
 

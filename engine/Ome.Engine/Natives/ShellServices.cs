@@ -4,10 +4,21 @@ using Ome.Engine.Persistence;
 
 namespace Ome.Engine.Natives;
 
-/// <summary>message:MessageSpeed, MesWinAlpha and AutoMessageTime0/1, as the 設定 dialog reads and commits them.
-/// </summary>
+/// <summary>The shell rules an engine build gives the front end (docs/superpowers/specs/2026-11-12-engine-layering-design.md
+/// §7.3): what its AGERC menu and 設定 dialog have that the other builds' lack.</summary>
+/// <param name="AutoMessagePage">Whether 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page, with Auto's two delays, their per-character
+/// times and the 音声終了まで待つ check, and the menu the command that opens it, with ﾒｯｾｰｼﾞの設定 beside it in 設定
+/// (AGE 4.38D; docs/engine-re.md, "4.38D's menu bar and 設定 dialog"). Without it the two delays are on the ﾒｯｾｰｼﾞ
+/// page and ﾒｯｾｰｼﾞの設定 is in the ﾒｯｾｰｼﾞ popup.</param>
+public sealed record ShellRules(bool AutoMessagePage);
+
+/// <summary>message:MessageSpeed, MesWinAlpha and AutoMessageTime0/1, as the 設定 dialog reads and commits them, and
+/// on a build with the ｵｰﾄﾒｯｾｰｼﾞ page message:AutoMessagePitch0/1 and AutoMessageOption too. A commit applies the
+/// last three only with <paramref name="CommitsAutoPitch"/>, which the page's dialog sets.</summary>
 public readonly record struct MessageSettings(int MessageSpeed, int MesWinAlpha, long AutoMessageTime0,
-                                              long AutoMessageTime1);
+                                              long AutoMessageTime1, int AutoMessagePitch0 = 0,
+                                              int AutoMessagePitch1 = 0, int AutoMessageOption = 0,
+                                              bool CommitsAutoPitch = false);
 
 /// <summary>A menu command the interpreter applies at its next safe point.</summary>
 public enum ShellMenuRequestKind

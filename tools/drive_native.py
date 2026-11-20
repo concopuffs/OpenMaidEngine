@@ -459,12 +459,16 @@ TBM_GETPOS, TBM_SETPOS, BM_GETCHECK, IDOK, IDCANCEL, GWL_STYLE = 0x400, 0x405, 0
 
 # 設定's control for each `option` (dialog 9; docs/engine-re.md, "設定"): its page, its control id and, for a
 # trackbar, the position a value sits at and the value a position reads as. The ﾒｯｾｰｼﾞ page's trackbars are
-# horizontal and the ｻｳﾝﾄﾞ page's vertical; a check box's checked state is the value.
+# horizontal and the ｻｳﾝﾄﾞ page's vertical; a check box's checked state is the value. The "auto" page is AGE
+# 4.38D's ｵｰﾄﾒｯｾｰｼﾞ (docs/engine-re.md, "4.38D's menu bar and 設定 dialog").
 SETTINGS_CONTROLS = {
     "message-speed": ("message", 0x414, lambda v: 100 - v, lambda p: 100 - p),
     "window-opacity": ("message", 0x415, lambda v: 16 - v, lambda p: 16 - p),
     "auto-wait-voice": ("message", 0x416, lambda v: v // 100, lambda p: p * 100),
     "auto-wait-text": ("message", 0x417, lambda v: v // 100, lambda p: p * 100),
+    "auto-pitch-voice": ("auto", 0x414, lambda v: v // 10, lambda p: p * 10),
+    "auto-wait-voice-end": ("auto", 1000, None, None),
+    "auto-pitch-text": ("auto", 0x416, lambda v: v // 10, lambda p: p * 10),
     "smooth-text": ("message", 1000, None, None),
     "wheel-advance": ("message", 0x3E9, None, None),
     "master-volume": ("sound", 0x414, lambda v: 100 - v // 100, lambda p: (100 - p) * 100),
@@ -478,6 +482,17 @@ SETTINGS_CONTROLS = {
     "lower-bgm-level": ("sound", 0x418, lambda v: v, lambda p: p),
     "effect-skip": ("other", 1000, None, None),
 }
+
+# Where 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page, the two delays are on it, at other ids (core.AUTO_PAGE_MOVED).
+AUTO_PAGE_CONTROLS = {
+    "auto-wait-voice": ("auto", 0x415, lambda v: v // 100, lambda p: p * 100),
+    "auto-wait-text": ("auto", 0x417, lambda v: v // 100, lambda p: p * 100),
+}
+
+
+def settings_control_of(name: str, auto_page: bool) -> tuple[str, int, Any, Any]:
+    """An option's page, control id and position maps in a 設定 with or without the ｵｰﾄﾒｯｾｰｼﾞ page."""
+    return AUTO_PAGE_CONTROLS[name] if auto_page and name in AUTO_PAGE_CONTROLS else SETTINGS_CONTROLS[name]
 
 
 # --------------------------------------------------------------------------------------------- requests
@@ -1017,7 +1032,10 @@ class Daemon:
         if not isinstance(name, str) or not isinstance(value, int) or isinstance(value, bool):
             raise DriveError("'option' needs a string 'name' and an integer 'value'")
         name, value = core.option_value(name, str(value))
-        section = core.OPTIONS[name][0]
+        auto_page = self.has_auto_page()
+        if core.OPTIONS[name][0] == "auto" and not auto_page:
+            raise DriveError(f"this game's 設定 has no ｵｰﾄﾒｯｾｰｼﾞ page, so no {name}")
+        section = core.option_section(name, auto_page)
         dialog, pages = self.open_settings(section)
         try:
             control = self.settings_control(pages, name)
@@ -1035,12 +1053,16 @@ class Daemon:
         dialog, pages = self.open_settings(core.OPTIONS_SECTION)
         try:
             listed = []
-            for name, (section, low, high, step, live) in core.OPTIONS.items():
-                control = win32().dialog_item(pages[section], SETTINGS_CONTROLS[name][1])
+            for name, (_, low, high, step, live) in core.OPTIONS.items():
+                section, control_id, _, _ = settings_control_of(name, "auto" in pages)
+                if section not in pages:
+                    continue   # the ｵｰﾄﾒｯｾｰｼﾞ page's own options, in a 設定 without it
+                control = win32().dialog_item(pages[section], control_id)
                 if not control or not win32().user32.IsWindowEnabled(control) or not (
                         win32().style(control) & 0x10000000):   # WS_VISIBLE: a hidden page's controls keep it
                     continue
-                listed.append({"name": name, "section": section, "value": self.read_settings_control(name, control),
+                listed.append({"name": name, "section": section,
+                               "value": self.read_settings_control(pages, name, control),
                                "min": low, "max": high, "step": step, "applies": "live" if live else "ok"})
         finally:
             self.end_settings(dialog, IDCANCEL)
@@ -1061,35 +1083,41 @@ class Daemon:
             time.sleep(0.05)
         raise DriveError(f"設定 did not open at its {section} tab within {seconds:g} s")
 
+    def has_auto_page(self) -> bool:
+        """Whether the menu bar has ｵｰﾄﾒｯｾｰｼﾞの設定, and so 設定 the ｵｰﾄﾒｯｾｰｼﾞ page (AGE 4.38D)."""
+        return win32().menu_item(self.menu_target(), core.MENU_COMMANDS["auto-settings"]) is not None
+
     @staticmethod
     def settings_pages(dialog: int) -> dict[str, int]:
-        """設定's pages by the controls only each has: 動作環境's copy button 0x419, ｻｳﾝﾄﾞ's trackbar 0x418,
-        ﾒｯｾｰｼﾞ's 0x415, and その他's lone check 1000."""
+        """設定's pages by the controls each has, tested in this order: 動作環境's copy button 0x419, ｻｳﾝﾄﾞ's
+        trackbar 0x418, ﾒｯｾｰｼﾞ's wheel check 0x3e9, the trackbar 0x415 of 4.38D's ｵｰﾄﾒｯｾｰｼﾞ (ﾒｯｾｰｼﾞ and ｻｳﾝﾄﾞ have
+        one too), and その他's lone check 1000."""
         pages = {}
         for page in win32().child_dialogs(dialog):
-            for kind, control in (("system", 0x419), ("sound", 0x418), ("message", 0x415), ("other", 1000)):
+            for kind, control in (("system", 0x419), ("sound", 0x418), ("message", 0x3E9), ("auto", 0x415),
+                                  ("other", 1000)):
                 if win32().dialog_item(page, control):
                     pages.setdefault(kind, page)
                     break
         return pages
 
     def settings_control(self, pages: dict[str, int], name: str) -> int:
-        section, control_id, _, _ = SETTINGS_CONTROLS[name]
+        section, control_id, _, _ = settings_control_of(name, "auto" in pages)
         control = win32().dialog_item(pages[section], control_id)
         if not control or not win32().usable(control):
             raise DriveError(f"設定's {section} tab shows no usable control for {name}")
         return control
 
-    def read_settings_control(self, name: str, control: int) -> int:
-        _, _, _, value_at = SETTINGS_CONTROLS[name]
+    def read_settings_control(self, pages: dict[str, int], name: str, control: int) -> int:
+        _, _, _, value_at = settings_control_of(name, "auto" in pages)
         if value_at is None:
             return 1 if win32().send(control, BM_GETCHECK, 0, 0) == 1 else 0
         return value_at(win32().send(control, TBM_GETPOS, 0, 0))
 
     def set_settings_control(self, pages: dict[str, int], name: str, control: int, value: int) -> int:
-        section, _, position_of, _ = SETTINGS_CONTROLS[name]
+        section, _, position_of, _ = settings_control_of(name, "auto" in pages)
         if position_of is None:
-            if self.read_settings_control(name, control) != value:
+            if self.read_settings_control(pages, name, control) != value:
                 before = self.api.clicks()
                 win32().post(control, BM_CLICK, 0, 0)
                 self.wait_click(control, before)
@@ -1100,7 +1128,7 @@ class Daemon:
             win32().send(control, TBM_SETPOS, 1, position)
             win32().send(page, scroll, TB_THUMBPOSITION | position << 16, control)
             win32().send(page, scroll, TB_ENDTRACK, control)
-        return self.read_settings_control(name, control)
+        return self.read_settings_control(pages, name, control)
 
     def end_settings(self, dialog: int, button: int, seconds: float = 15) -> None:
         """Press 設定's OK or ｷｬﾝｾﾙ and wait until it has closed."""
@@ -1119,11 +1147,7 @@ class Daemon:
     def choose_menu(self, command: int) -> dict[str, Any]:
         if command in core.LIVE_REFUSED_MENU_COMMANDS and self.saves.get("mode") == "live":
             raise DriveError(core.LIVE_REFUSED_MENU_COMMANDS[command])
-        hwnd = self.require_window()
-        target = win32().menu_window(self.age_pid, hwnd)
-        if target is None:
-            raise DriveError("fullscreen detaches the menu bar: show the top-edge strip first "
-                             "(hold the pointer on the top edge)")
+        target = self.menu_target()
         item = win32().menu_item(target, command)
         if item is None:
             raise DriveError(f"the menu bar has no command 0x{command:x}")
@@ -1131,6 +1155,14 @@ class Daemon:
             raise DriveError(f"menu command 0x{command:x} ({item['label']}) is grayed")
         win32().post(target, WM_COMMAND, command, 0)
         return {"command": command, **item}
+
+    def menu_target(self) -> int:
+        """The window that holds the menu bar: AGE's, or in fullscreen the top-edge strip while it shows."""
+        target = win32().menu_window(self.age_pid, self.require_window())
+        if target is None:
+            raise DriveError("fullscreen detaches the menu bar: show the top-edge strip first "
+                             "(hold the pointer on the top edge)")
+        return target
 
     def op_detach(self, request: dict[str, Any]) -> dict[str, Any]:
         self.closing = True

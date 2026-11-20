@@ -1,4 +1,5 @@
 using Ome.Engine.Model;
+using Ome.Engine.Natives;
 using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
 using Ome.Engine.Text;
@@ -7,7 +8,8 @@ namespace Ome.Engine.Vm;
 
 /// <summary>Every rule an engine build gives the natives (docs/superpowers/specs/2026-11-12-engine-layering-design.md
 /// §7.3). The rule types live beside the natives that read them.</summary>
-public sealed record EngineRules(TextRules Text, GfxRules Gfx, SettingsRules Settings, SaveRules Saves);
+public sealed record EngineRules(TextRules Text, GfxRules Gfx, SettingsRules Settings, SaveRules Saves,
+                                 ShellRules Shell);
 
 /// <summary>
 /// One build of native AGE whose behaviour the port reproduces (spec §7.1). <see cref="Id"/> is the version the build
@@ -39,7 +41,8 @@ public static class EngineBuilds
                 PublisherGrowsGlyphCells: false),
             Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
             Settings: SettingsRules.LoaderKeys,
-            Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize)));
+            Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize),
+            Shell: new ShellRules(AutoMessagePage: false)));
 
     /// <summary>AGE 4.33G, Kamidori's clean install (docs/engine-re.md, "Kamidori engine builds"). The profile runs this
     /// build whichever executable the player has (spec §7.5).</summary>
@@ -110,6 +113,8 @@ public static class EngineBuilds
             // The float sections are 4.33G's, read in 0x40d5a0 and 0x40fe90.
             Saves = new SaveRules(versionStamp: "438D", numberedGfxRecordSize: NativeGfxSaveLayout.RotationCacheRecordSize,
                                   floatSectionsFromMinor: 20),
+            // Its AGERC menu 110 and 設定 dialog, read from the running game.
+            Shell = new ShellRules(AutoMessagePage: true),
         },
     };
 

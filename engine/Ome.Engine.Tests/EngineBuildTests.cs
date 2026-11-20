@@ -78,6 +78,10 @@ public sealed class EngineBuildTests
             AspectCalibration = AspectCalibration.BlackBoxRatio,
         }, child.Text);
         Assert.Equal(parent.Gfx, child.Gfx);
+        // Its 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page and its menu the command that opens it; the other two builds' do not.
+        Assert.False(EngineBuilds.Age424J.Rules.Shell.AutoMessagePage);
+        Assert.False(parent.Shell.AutoMessagePage);
+        Assert.True(child.Shell.AutoMessagePage);
 
         // The settings writer writes the parent's keys in order, with four more: the file native 4.38D writes.
         IReadOnlyList<Sys4RegIniKey> keys = child.Settings.BoundKeys;

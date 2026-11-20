@@ -66,16 +66,38 @@ public sealed class ShellMenu
         new ShellMenuPopup("menu.help", [C("system-info"), Sep, C("version")], RightJustified: true),
     ];
 
+    /// <summary>Menu 110 as AGE 4.38D's AGERC.DLL holds it (loaded inside the running 創刻のアテリアル, 2026-11-19):
+    /// ﾒｯｾｰｼﾞの設定 has left the ﾒｯｾｰｼﾞ popup, with its separator, for 設定, where ｵｰﾄﾒｯｾｰｼﾞの設定 follows it. The
+    /// items <see cref="Prune"/> removes keep their positions.</summary>
+    public static IReadOnlyList<ShellMenuNode> TreeWithAutoPage { get; } =
+    [
+        Tree[0],
+        Tree[1],
+        new ShellMenuPopup("menu.message", [C("skip"), C("read-skip"), C("hide"), C("auto")]),
+        new ShellMenuPopup("menu.settings",
+        [
+            .. ((ShellMenuPopup)Tree[3]).Items.Take(8),
+            C("message-settings"),
+            C("auto-settings"),
+            C("sound-settings"),
+            C("other-settings"),
+        ]),
+        Tree[4],
+    ];
+
     private readonly ShellStrings _strings;
     private readonly Func<string, int> _setting;
+    private readonly IReadOnlyList<ShellMenuNode> _tree;
 
-    public ShellMenu(ShellStrings strings, Sys4StartupSettings settings)
-        : this(strings, key => Setting(settings, key)) { }
+    /// <param name="autoMessagePage">The engine build's <c>ShellRules.AutoMessagePage</c>.</param>
+    public ShellMenu(ShellStrings strings, Sys4StartupSettings settings, bool autoMessagePage = false)
+        : this(strings, key => Setting(settings, key), autoMessagePage) { }
 
-    public ShellMenu(ShellStrings strings, Func<string, int> setting)
+    public ShellMenu(ShellStrings strings, Func<string, int> setting, bool autoMessagePage = false)
     {
         _strings = strings;
         _setting = setting;
+        _tree = autoMessagePage ? TreeWithAutoPage : Tree;
     }
 
     public ShellStrings Strings => _strings;
@@ -83,7 +105,7 @@ public sealed class ShellMenu
     /// <summary>A fresh copy of the bar: the tree in this language, pruned by the profile's <c>Menu_*</c> keys.</summary>
     public List<MenuItem> CreateBar()
     {
-        List<MenuItem> bar = Build(_strings);
+        List<MenuItem> bar = Build(_tree, _strings);
         Prune(bar, _setting);
         return bar;
     }
@@ -103,8 +125,10 @@ public sealed class ShellMenu
         }
     }
 
-    /// <summary>The whole tree as menu items, before any pruning.</summary>
-    public static List<MenuItem> Build(ShellStrings strings) => Build(Tree, strings);
+    /// <summary>The whole tree as menu items, before any pruning: <see cref="Tree"/>, or
+    /// <see cref="TreeWithAutoPage"/>.</summary>
+    public static List<MenuItem> Build(ShellStrings strings, bool autoMessagePage = false) =>
+        Build(autoMessagePage ? TreeWithAutoPage : Tree, strings);
 
     private static List<MenuItem> Build(IEnumerable<ShellMenuNode> nodes, ShellStrings strings)
     {
