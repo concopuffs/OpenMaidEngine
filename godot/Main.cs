@@ -1080,6 +1080,7 @@ public partial class Main : Godot.Control
             System.Environment.Exit(VmStopTimeoutExitCode);
         }
 
+        KeepWindowPosition();
         if (!_selftest && _vm != null)
         {
             if (_saves!.FlushMessageSettingsOnShutdown(_text!, _vm.SkipAndAuto) is { } settingsError)

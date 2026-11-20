@@ -65,5 +65,7 @@ public sealed class LineEndCharactersTests
         Assert.True(Settings(("SAVEWINPOS", "1")).SaveWindowPosition);
         Assert.False(Settings(("SAVEWINPOS", "0")).SaveWindowPosition);
         Assert.False(Settings().SaveWindowPosition);
+        // Native's loader and writer test for 1; another value keeps no position.
+        Assert.False(Settings(("SAVEWINPOS", "2")).SaveWindowPosition);
     }
 }

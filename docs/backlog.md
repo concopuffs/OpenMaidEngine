@@ -576,9 +576,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The revision diff against 4.33G is triaged (2026-11-19):** every one of its 36 opcode rows and 11 helper
     rows has a disposition (`engine-re.md`, "Kamidori against Arterial, triaged"). What it found real and the port
     lacks, each done when the port does what that section says native does and a test or a scenario holds it:
-    - **`SAVEWINPOS`.** With it set (1 here) native opens its window where it was left, and keeps the position in
-      the registry. The port opens its window where the platform puts it. The port must not write the registry;
-      where it keeps the position is to decide (`OME.INI` holds the port's own options).
     - **Op `0x2c7` on 4.33G** is a plain byte substring; the port runs 4.38D's `SBSubstr` on every build. No script
       of Kamidori has a site.
     - **Two points left unread:** whether 4.33G draws a surface through a sprite with the alpha test on (4.38D
@@ -588,7 +585,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     `SYS4REG.INI` keys 4.38D adds in its `SettingsRules`, and Auto's per-character delay with its three settings
     and four opcodes (`engine-re.md`, the same section; `LineEndCharactersTests`, `AutoMessagePitchTests`). None of
     the three is compared with native yet: no page of the game was driven with a `）` at a line's end or with a
-    pitch set (its CONFIG2 sets the pitch). The catalog's font, the extended face, the dash join and 4.38D's
+    pitch set (its CONFIG2 sets the pitch, and so does 設定's ｵｰﾄﾒｯｾｰｼﾞ page, which the driver's `option` steps set
+    on both targets). The kept window position (`SAVEWINPOS`) is in too, in `OME.INI` (`engine-re.md`, "The kept
+    window position"; `WindowPositionTests`). The catalog's font, the extended face, the dash join and 4.38D's
     aspect-mode font calibration are in too, and compared (`ExtendedGlyphTests`, `AspectFontRealizationTests`; the
     frames of pages 1 and 4 equal native's in every pixel). Open there:
     - **The portable text backend's extended glyphs are not looked at.** It takes the font file
@@ -693,9 +692,11 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The title's 3D scene keeps its state and draws nothing (the user's decision, 2026-11-19).** Ops `0x324` to
     `0x32f`: the handlers keep what the scripts set (`Graphics.Scene3D.cs`). What that leaves undrawn is its own
     item, "The title's 3D leaves are not drawn", under Engine fidelity.
-  - **Next, by the plan:** what is left of step 7 before the manifest says P3: `SAVEWINPOS` above. The opcodes,
-    the build's rules, the saves and the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page; `engine-re.md`, "4.38D's menu bar and 設定
-    dialog") are done.
+  - **Next, by the plan:** step 7 is done: the opcodes, the build's rules, the saves, the shell (4.38D's
+    ｵｰﾄﾒｯｾｰｼﾞ page; `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position
+    (`engine-re.md`, "The kept window position"). Whether the manifest's `support` entry says P3 is the user's to
+    decide: it makes the launcher list the game and drops the run's warning. After P3 come the sweep (P4) and the
+    modding track.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

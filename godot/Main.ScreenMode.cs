@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Ome.Engine.Devices;
 using Ome.Engine.Frontend.Shell;
 using Godot;
@@ -20,6 +21,10 @@ public partial class Main : IWindowDevice
     private const ulong StripDwellTickMilliseconds = 100;   // age_main_window_proc's SetTimer(1, 100)
 
     private Vector2I _windowedSize, _windowedPosition;
+
+    /// <summary>The catalog's SAVEWINPOS is 1 and this run has a window and an OME.INI: the window opens where it was
+    /// left, and the exit keeps where it is (docs/engine-re.md, "The kept window position").</summary>
+    private bool _keepsWindowPosition;
     private SystemMenuStrip? _menuStrip;
     private CanvasLayer? _menuStripLayer;
     private bool _menuStripShown;
@@ -39,8 +44,52 @@ public partial class Main : IWindowDevice
         Window root = GetTree().Root;
         _windowedSize = root.Size;
         _windowedPosition = root.Position;
+        RestoreWindowPosition(root);
         CreateMenuStrip();
         _shell!.StartScreenMode(windowedArgument: Array.IndexOf(userArgs, "--windowed") >= 0);
+    }
+
+    /// <summary>Native's settings loader and engine_create_main_window (4.38D): with set:SaveWinPos the window opens
+    /// at the kept position, or centred when none is kept or the window would not lie on a screen from it
+    /// (<see cref="WindowPosition.Restore"/>). A fullscreen start keeps the position for the switch to a window.
+    /// </summary>
+    private void RestoreWindowPosition(Window root)
+    {
+        int screenCount = DisplayServer.GetScreenCount();
+        _keepsWindowPosition = _catalog.StartupSettings.SaveWindowPosition && _omeIni != null && screenCount > 0
+                               && DisplayServer.GetName() != "headless";
+        if (!_keepsWindowPosition) return;
+        var screens = new List<ScreenRect>();
+        for (int screen = 0; screen < screenCount; screen++)
+        {
+            Vector2I at = DisplayServer.ScreenGetPosition(screen), size = DisplayServer.ScreenGetSize(screen);
+            screens.Add(new ScreenRect(at.X, at.Y, size.X, size.Y));
+        }
+        WindowPosition? kept = _omeIni!.LoadWindowPosition();
+        WindowPosition position = WindowPosition.Restore(kept, _windowedSize.X, _windowedSize.Y, screens,
+                                                         DisplayServer.GetPrimaryScreen());
+        _windowedPosition = new Vector2I(position.Left, position.Top);
+        if (root.Mode == Window.ModeEnum.Windowed) root.Position = _windowedPosition;
+        GD.Print($"[window] SAVEWINPOS: the window opens at {position.Left},{position.Top} " +
+                 (kept == position ? "(kept)" : kept == null ? "(centred: none kept)"
+                                                             : $"(centred: {kept.Value.Left},{kept.Value.Top} is off the screens)"));
+    }
+
+    /// <summary>Native's settings writer (engine_settings_save, 4.38D): with set:SaveWinPos the window's normal
+    /// position is kept at exit, or in fullscreen the one it left a window at. The port tracks that position every
+    /// frame it shows a window, so a minimized or fullscreen exit keeps the last one.</summary>
+    private void KeepWindowPosition()
+    {
+        if (!_keepsWindowPosition || _omeIni == null) return;
+        try
+        {
+            _omeIni.SaveWindowPosition(new WindowPosition(_windowedPosition.X, _windowedPosition.Y));
+            GD.Print($"[window] SAVEWINPOS: kept {_windowedPosition.X},{_windowedPosition.Y} in {_omeIni.FilePath}");
+        }
+        catch (Exception error) when (error is System.IO.IOException or UnauthorizedAccessException)
+        {
+            GD.PushWarning($"[window] keeping the window's position in {_omeIni.FilePath} failed: {error.Message}");
+        }
     }
 
     /// <summary>The strip holds its own copy of the shell's menu, pruned as the bar is (native's WM_INITDIALOG:

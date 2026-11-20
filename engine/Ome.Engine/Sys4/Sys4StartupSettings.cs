@@ -68,6 +68,12 @@ public sealed class Sys4StartupSettings
     /// raises.</summary>
     public int HWheelKeyDownAction => ReadInt("HWHEELKEYDOWN", -1);
 
+    /// <summary>SAVEWINPOS (set:SaveWinPos, registered default 0; AGE 4.38D) is 1: the game keeps where its window
+    /// was left and opens it there again (docs/engine-re.md, "The kept window position"). Native's loader and writer
+    /// test for 1; its window creation takes any nonzero value, which with neither of the other two opens the window
+    /// at the settings' registered 0, 0, and the port reads such a value as 0. 創刻のアテリアル's catalog sets 1.</summary>
+    public bool SaveWindowPosition => ReadInt("SAVEWINPOS", 0) == 1;
+
     /// <summary>NOSETMUSIC (set:NoSetMusic, registered default 0). Nonzero gives AGERC's 設定 dialog the ｻｳﾝﾄﾞ page
     /// without sound:Music's radio buttons (dialog 102 instead of 101); Himegari's 3 also starts sound:Music at 2
     /// (<see cref="Persistence.Sys4RegIniStore.ForPath"/>). Missing or non-numeric means 0.</summary>
@@ -139,11 +145,6 @@ public sealed class Sys4StartupSettings
     public IReadOnlyList<string> JustifyCharacters
         => _pairs.Where(pair => string.Equals(pair.Key, "JUSTIFYCHAR", StringComparison.OrdinalIgnoreCase))
                  .Select(pair => pair.Value).ToArray();
-
-    /// <summary>SAVEWINPOS (set:SaveWinPos, registered default 0; AGE 4.38D). Nonzero makes native open its window
-    /// where it was left (docs/engine-re.md, "Kamidori against Arterial, triaged"). 創刻のアテリアル sets 1. Missing
-    /// or non-numeric means 0.</summary>
-    public bool SaveWindowPosition => ReadInt("SAVEWINPOS", 0) != 0;
 
     private int ReadInt(string key, int fallback)
         => int.TryParse(GetValueOrDefault(key)?.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture,

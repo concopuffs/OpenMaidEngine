@@ -405,20 +405,14 @@ pauses the timer: its redraw direction is always neutral (op `0x83`).
 | `display:MultiSample` | 0 | `SYS4REG.INI`, after `VirtualFullScreenType` | Direct3D multisampling; the port's renderer has its own |
 | `message:AutoMessagePitch0`, `message:AutoMessagePitch1`, `message:AutoMessageOption` | 0 | `SYS4REG.INI`, after `AutoMessageTime1`, in that order | Auto's per-character delay |
 | `set:SaveWinPos` | 0 | the catalog's `SAVEWINPOS` | keeps the window's position |
-| `set:WinPosLeft`, `set:WinPosTop` | 0 | the registry (below) | the kept position |
+| `set:WinPosLeft`, `set:WinPosTop` | 0 | the registry ("The kept window position") | the kept position |
 | `set:HWheelKeyUp`, `set:HWheelKeyDown` | -1 | the catalog's `HWHEELKEYUP` and `HWHEELKEYDOWN` | a key the horizontal wheel sends (`age_main_window_proc`); 創刻のアテリアル's catalog has neither key, so the wheel sends none |
 
 A `SYS4REG.INI` that native 4.38D wrote has exactly 4.33G's keys and these four, in the places named (read from
 the driver's sandbox, 2026-11-19).
 
-With `set:SaveWinPos` set, `engine_create_main_window@0x4a07c0` opens the window at `set:WinPosLeft` and
-`set:WinPosTop` instead of `CW_USEDEFAULT`; `display_toggle_screen_mode_and_menu_bar@0x4135a0` stores the window's
-position in the two settings when it leaves windowed mode and places the window there when it returns; and the
-settings writer `engine_settings_save@0x47d1d0`, when the setting is 1, first opens
-`HKCU\Software\<set:RegRootPath>\<set:RegSubKey>`, then writes `SYS4REG.INI`. The registry holds the position:
-after native runs on this machine the key `HKCU\Software\Eushully\創刻のアテリアル` has the DWORD values
-`WinPosLeft` and `WinPosTop`, and the file has neither. The code between the key's opening and the file's writing
-is not decompiled: 4.38D's image does not resolve its imports, and the decompiler stops at the first registry call.
+With `set:SaveWinPos` set, native opens its window where it was left and keeps the position in the registry, not
+in the file: "The kept window position" below has the four places that do it and what the port does instead.
 
 **Saves.** The sections a numbered save holds are 4.33G's. `context_state_serialize` (`0x40d1e0`=`0x40d5a0`)
 differs in six lines, all names and offsets, and the reader copies each section with 4.33G's size expressions
@@ -570,6 +564,57 @@ dispatch the handler calls `screen_transition_finalize(target, 0)` and begins no
 The port keeps the two captured frames as it does for the crossfade, and its reference renderer draws the one
 `LegacyScreenTransitionTiming.MosaicAt` names and breaks it into blocks
 (`LegacyScreenTransitionComposite.Mosaic`). No frame of it has been compared with native's.
+
+### The kept window position (2026-11-19)
+
+4.38D registers `set:SaveWinPos` (the catalog's `SAVEWINPOS`; 創刻のアテリアル sets 1) and `set:WinPosLeft` and
+`set:WinPosTop`, each 0. Read in `/arterial/4.38D`. An import call in that dump is a five-byte call to a stub
+outside the image with one filler byte after it, which stops the decompiler, so the registry parts were read from
+the bytes.
+
+- **Load.** `engine_settings_load@0x47f810` opens `HKCU\Software\<set:RegRootPath>\<set:RegSubKey>` for reading.
+  When the key opens and `set:SaveWinPos` is 1 (`0x47fab6`), it reads the DWORD values `WinPosLeft` and
+  `WinPosTop`, each −1 when absent. If left < 0, left + `set:WinX` > the primary screen's width
+  (`GetSystemMetrics(SM_CXSCREEN)`), top < 0 or top + `set:WinY` > its height, both become the centre:
+  (screen − canvas) / 2, halved toward zero. The result goes to the two settings. When the key does not open,
+  they keep their 0.
+- **Create.** `engine_create_main_window@0x4a07c0` opens a windowed game at the two settings when
+  `set:SaveWinPos` is not 0, and otherwise at `CW_USEDEFAULT`.
+- **Screen mode.** `display_toggle_screen_mode_and_menu_bar@0x4135a0` stores the window's normal position in the
+  two settings when it leaves a window (`window_get_normal_position@0x4052a0`: `GetWindowPlacement`'s
+  `rcNormalPosition`), and places the window there when it returns.
+- **Save.** `engine_settings_save@0x47d1d0`, when the setting is 1, creates or opens the same key for writing and
+  writes `WinPosLeft` and `WinPosTop`: in a window (`display:ScreenMode` 1) the window's normal position, in
+  fullscreen the two settings. Then it writes `SYS4REG.INI`, which has neither. After native runs on this machine
+  the key `HKCU\Software\Eushully\創刻のアテリアル` has the two values.
+
+**The port** writes no registry. For a game whose catalog sets `SAVEWINPOS` to 1
+(`Sys4StartupSettings.SaveWindowPosition`) it keeps the position in `OME.INI`, as `[display] WindowLeft` and
+`WindowTop` beside the window's size (`WindowPosition` in `Ome.Engine.Frontend/Shell`; `Main.ScreenMode.cs`):
+
+- At startup the window opens at the kept position when it lies on a screen from there, and otherwise, or with
+  nothing kept, centred on the primary screen (`WindowPosition.Restore`). A fullscreen start keeps the position
+  for the switch to a window.
+- At exit the file takes the window's last position as a normal window. The port tracks it every frame a window
+  shows, so an exit while minimized or in fullscreen keeps the last one.
+
+Where the port differs from native, on purpose:
+
+- The position is the client area's corner in the coordinates Godot's window calls use, which start at the
+  top-left corner of the area the screens cover. Native's is the window's outer corner.
+- The check uses the port's window size (the game area and the menu bar's rows) and accepts any screen. Native
+  checks the canvas against the primary screen alone, so it centres a window that was left on a second screen.
+- With nothing kept the port centres the window. Native does that only when the registry key exists; when it does
+  not, the settings' 0 opens the window at the screen's corner.
+- A `SAVEWINPOS` other than 0 or 1 reads as 0. Native's window creation would open at the settings' 0, 0 and
+  keep nothing.
+- `OME.INI` is one file per data root. A launcher profile has its own, as native has one registry key per game;
+  runs without `--data-root` share one file, and so one position.
+
+Driven on the port (2026-11-19, a named driver sandbox, the window read with `ClientToScreen`): a first start
+centred the window and the exit kept that; a kept position opened the window there; an exit in fullscreen kept
+the window's position; a fullscreen start put the window at the kept position on Alt+Enter; a position off the
+screens was centred. `WindowPositionTests` holds the rule and the file's two keys.
 
 ### 4.38D's menu bar and 設定 dialog (2026-11-19)
 

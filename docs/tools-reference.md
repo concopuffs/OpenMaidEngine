@@ -1020,7 +1020,9 @@ use the last `input-wait` event in `timeline.jsonl` as the authoritative manual 
   `rows_cut`, the most rows it lost. Each line's `count` is how often that happened.
 - **`OME.INI`** — the port's own options, shared by every game (engine shell spec §5.6): `[ui] Language` (a language
   tag; `ja`, the default; a malformed tag reads as `ja`), `[display] WindowWidth`/`WindowHeight` (the windowed game area; 0 or a missing or invalid pair is
-  the canvas), `[debug] FpsCounter` and `LocatorHud` (0/1). It lives in Godot's `user://` folder, or beside the saves
+  the canvas), `[debug] FpsCounter` and `LocatorHud` (0/1). It also keeps `[display] WindowLeft`/`WindowTop`, where
+  the window was left, which the port writes at exit and reads at startup for a game whose catalog sets
+  `SAVEWINPOS` to 1 (`engine-re.md`, "The kept window position"); no option edits them. It lives in Godot's `user://` folder, or beside the saves
   under `--data-root`, so a driven run reads its sandbox's and never the player's; a self-test reads none. The
   options panel's 画面 and OME sections edit it, and its 決定 writes only the options the player changed, so a flag's
   value never reaches the file. A write keeps unknown sections and keys but drops comments. The startup log's

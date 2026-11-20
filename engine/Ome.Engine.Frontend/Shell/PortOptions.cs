@@ -152,12 +152,32 @@ public sealed class OmeIniStore(string path)
     }
 
     /// <exception cref="IOException">The file could not be written.</exception>
-    public void Save(PortOptions options)
+    public void Save(PortOptions options) => Write(options.Serialize);
+
+    /// <summary>display:WindowLeft and WindowTop: where a game that keeps its window's position left it
+    /// (<see cref="WindowPosition"/>). Null when the file has none, or cannot be read.</summary>
+    public WindowPosition? LoadWindowPosition()
+    {
+        try
+        {
+            return File.Exists(FilePath) ? WindowPosition.Parse(File.ReadAllText(FilePath, Encoding.UTF8)) : null;
+        }
+        catch (Exception error) when (error is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Keep the window's position; the options and every other key stay as the file has them.</summary>
+    /// <exception cref="IOException">The file could not be written.</exception>
+    public void SaveWindowPosition(WindowPosition position) => Write(position.Serialize);
+
+    private void Write(Func<string?, string> serialize)
     {
         string? previous = File.Exists(FilePath) ? File.ReadAllText(FilePath, Encoding.UTF8) : null;
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         string temporary = $"{FilePath}.tmp-{Guid.NewGuid():N}";   // unique, so two writers never share one
-        File.WriteAllText(temporary, options.Serialize(previous), new UTF8Encoding(false));
+        File.WriteAllText(temporary, serialize(previous), new UTF8Encoding(false));
         File.Move(temporary, FilePath, overwrite: true);
     }
 }
