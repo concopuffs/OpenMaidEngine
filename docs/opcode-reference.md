@@ -654,6 +654,17 @@ Implemented: the audio native shares op 0xb7's retained-track/zero handling but 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0xc0`; scope=Himegari SYS4422. Ghidra /v2 op_0xc0_get_current_bgm_track@0x428440 writes EngineCtx.current_bgm_track_id (+0xa0b84) to operand 1. op 0xbf's bgm_play_track retains the selected direct-name id at the same music-facade field; layout-3 serialization copies it to payload +0x008 and restoration copies it back. Installed SAVE00 stores 0x18, matching FORT's BGM024.
 
+### 0xc1 `toggle-bgm-pause` (u00415650, argc 0)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** Flip the BGM's pause: a playing track is held where it is, and a held one plays on from there.
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0xc1`; scope=SYS4438 handler, the BGM object and its DirectSound and CD backends; 4.33G's handler pairs with it at similarity 1.00. op_0xc1_handler@0x4189f0 tail-calls 0x476470 on the BGM object (ctx+0xaa0d8), which stores !flag at +0x410 and calls the current backend's vtable +0xc with it. The DirectSound backend's (0x47a2b0) calls 0x49c790(11), sound_buffer_stop on the channel's buffer, for a nonzero flag and 0x49c860(11), which plays the buffer again with its stored loop flag, for zero; the CD backend's (0x404530) sends MCI_PAUSE or MCI_RESUME. 0x4763e0 (a play of another track) and bgm_stop_release@0x476310 zero +0x410.
+
+The flag flips whether or not a track plays; starting a track and releasing the source clear it, and an identical play request, which keeps the stream, does not. With the DirectSound route the backend stops channel 11's buffer and later plays it on; with the CD route it sends MCI_PAUSE and MCI_RESUME. Not read: whether a numbered save keeps the flag, and whether anything else plays or stops channel 11 while it is held. 創刻のアテリアル has 1 site.
+
 ### 0xc2 `fade-bgm` (u0041D2B0, argc 2)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`, `SYS4438`
@@ -756,6 +767,18 @@ Port status (2026-07-29): implemented with native SYS4REG.INI route persistence 
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1bf`; scope=Himegari SYS4422. Ghidra /v2: op_0x1bf_arm_voice_duck_release@0x416c70 clears ctx+0x6dbf0 when bit 0x10000 is set and stores 1 at ctx+0x6dbec unless bit 0 is set, exactly mirroring engine_main_tick_with_exception_policy's post-delayed-voice code (0x411aae). The tick consumes ctx+0x6dbec when the ducked voice ends (run-state 0x4000 -> 0x200 fade); voice_bgm_duck_begin clears it and op 0xbf skips re-applying the duck volume while it is set. Corpus: follows the ADV line template's speaker subroutine call inside a statement block (8,752 Himegari / 18,043 Kamidori sites). The historical name call-end was a structural guess.
 
 Port status (2026-11-12): the handler calls the audio native's ArmVoiceBgmDuckRelease, which applies the 0x1cf one-shot stage (bit 0x10000 clears the mask) and, unless bit 0 is set, arms the release; the engine tick restores ducked BGM once the voice is idle, the release is armed, no 0xc2 fade owns the envelope and bit 0 is clear. A delayed voice start (0x2c0) arms it the same way. The duck no longer lifts at voice completion alone, so BGM stays ducked between lines until the next line's 0x1bf. The restore is native's one-second run-state-0x200 fade (2026-11-03): linear in basis points from the ducked level to full in 10 ms steps, owning the BGM envelope so a voice starting meanwhile does not duck.
+
+### 0x1c4 `voice-is-playing` (u00415720, argc 1)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out) — 1 while the voice channel, native channel 12, is playing, else 0.
+- **operand access:** `1` write
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x1c4`; scope=SYS4438 handler; 4.33G's pairs with it at similarity 1.00. op_0x1c4_voice_is_playing@0x42bad0 writes 0 when the sound manager pointer (ctx+0x1490c) is null, else whether sound_channel_is_playing(12) is nonzero.
+
+Op 0x1be with the channel fixed at 12. Without a sound manager it writes 0. 創刻のアテリアル has 1 site.
 
 ### 0x1cf `set-voice-bgm-duck-control` (set-voice-bgm-duck-control, argc 1)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
@@ -1088,6 +1111,18 @@ Native applies strlen to the NUL-terminated engine byte string and shifts the by
 - **grounding:** source=inference, confidence=high
 - **evidence:** method=inference; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1c8`; scope=Himegari SYS4422. Kelebek identifies integer-to-string conversion. All five corpus sites are in ADDEXP and feed concat immediately: level numbers, signed deployment-cost deltas, and movement deltas. Source types are global/local integer and the destination is a local string.
 
+### 0x1cd `sqrt` (u0041A560, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out)(x) — out = the square root of x.
+- **operand access:** `1` write (SYS4422) / write-float (SYS4433) / write-float (SYS4438) · `2` read (SYS4422) / read-float (SYS4433) / read-float (SYS4438)
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x1cd`; scope=SYS4438 handler; 4.33G's pairs with it at similarity 1.00 and is not read. op_0x1cd_handler@0x42a3d0 calls vm_operand_fetch_float(2), then 0x584e30, the C runtime's sqrt on st(0), and vm_operand_write_float(1, the result rounded to a float).
+
+The C runtime's sqrt on the fetched value; a negative x gives a NaN. 4.33G and 4.38D read and write through the float accessors, 4.24J through the integer ones (the operand contracts below), and the port takes each operand through its ABI's accessor. 4.24J's handler itself is not read. 創刻のアテリアル has 1 site.
+
 ### 0x2c5 `byte-string-length` (strlen, argc 2)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`, `SYS4438`
@@ -1219,6 +1254,78 @@ Both operands come through the float accessor (vm_operand_fetch_float), which le
 - **evidence:** method=native-re; confidence=high; profiles=kamidori; revisions=SYS4433; artifact=`Kamidori SYS4433 Ghidra /kamidori/SYS4433 (4.33F), addresses given for /kamidori/4.33G`; site=`vm-map/opcodes.toml opcode 0x2d8`; scope=SYS4433 array-fill handler and complete official/translated Kamidori catalogs. Dispatcher slot 0x2d8 installs handler 0x42b930. It resolves operand 1 through the integer address resolver, converts operand 2 to the encrypted cell form, and writes it count times while operand 3 is positive. Both catalog scans contain 23 calls in the same five scripts; CALCDMG has 15 pointer-addressed sites.
 
 The destination follows the ordinary SYS4 address resolver, so direct global/local integer spans and integer-pointer operands retain their address domain. The complete Kamidori corpus has 23 calls in CALCDMG, SETEN, SETSTUDIOCH, SELORN, and TOWN; CALCDMG owns 15 and uses the opcode to initialize pointer-addressed calculation arrays. This contract is proven only for SYS4433; Himegari's observed SYS4422 snapshot does not contain opcode 0x2d8.
+
+### 0x2df `eq-float` (u0042BAC1, argc 3)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **summary:** (out)(a)(b) — out = 1 when a == b as floats, else 0.
+- **operand access:** `1` write · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2df`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2df_handler@0x42e0a0 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first equals the second, else 0.
+
+Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has no sites.
+
+### 0x2e0 `ne-float` (u0042CE0F, argc 3)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **summary:** (out)(a)(b) — out = 1 when a != b as floats, else 0.
+- **operand access:** `1` write · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e0`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2e0_handler@0x42e110 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first differs from the second, else 0.
+
+Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has no sites.
+
+### 0x2e1 `lt-float` (u0042CE10, argc 3)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out)(a)(b) — out = 1 when a < b as floats, else 0.
+- **operand access:** `1` write · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e1`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2e1_handler@0x42e180 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first is less than the second, else 0.
+
+Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has 1 site.
+
+### 0x2e2 `lte-float` (u0042CE11, argc 3)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **summary:** (out)(a)(b) — out = 1 when a <= b as floats, else 0.
+- **operand access:** `1` write · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e2`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2e2_handler@0x42e1f0 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first is less than or equal to the second, else 0.
+
+Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has no sites.
+
+### 0x2e3 `gr-float` (u0042CE30, argc 3)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out)(a)(b) — out = 1 when a > b as floats, else 0.
+- **operand access:** `1` write · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e3`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2e3_handler@0x42e260 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first is greater than the second, else 0.
+
+Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has 5 sites.
+
+### 0x2e4 `gre-float` (u0042CE31, argc 3)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **summary:** (out)(a)(b) — out = 1 when a >= b as floats, else 0.
+- **operand access:** `1` write · `2` read-float · `3` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e4`; scope=SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read. op_0x2e4_handler@0x42e2d0 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first is greater than or equal to the second, else 0.
+
+Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has no sites.
 
 ### 0x2eb `get-game-version` (u0042CEB0, argc 1)
 - **observed by:** arterial (SYS4438)
@@ -1794,6 +1901,18 @@ Port status (2026-07-29, skip lifecycle corrected 2026-07-29): implemented throu
 
 The handler uses an alpha step of 16 and timer interval=argument when argument <=64. Above 64 it uses step=1 and interval=argument/16. The main loop polls that timer and does not resume ordinary script execution until the target endpoint is presented. An already-active ADV fast-forward channel publishes the target without starting the service; with system:EffectSkipOnClick enabled, logical action 4 forces an in-progress service to the same endpoint. ROOM uses (1,2,10) for button/character entry and exit fades and (1,2,30) for the final fade before returning to TITLE. The port captures retained-frame snapshots whenever op 0x20c presents to a selected offscreen render target, then reproduces the blocking and forced-endpoint lifecycle in the interactive host.
 
+### 0x26 `reveal-surface-wiped` (u00418C00, argc 4)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (surface)(interval ms)(divisions)(type) — blocking wipe of a captured surface over the frame: types 0 to 3 wipe from the left, right, top or bottom edge in that many steps, and type 4 is op 0x27's type 0.
+- **operand access:** `1` read (surface 0..999, untested) · `2` read · `3` read · `4` read
+- **control (port handler):** waits may; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x26`; scope=SYS4438 handler, pattern_surface_transition_begin and pattern_surface_transition_tick; 4.33G's handler pairs with it at similarity 1.00. op_0x26_reveal_surface_wiped@0x41c660 sets the frame's wait kind to 9, tests operand 4 against 0..4 (trace string 0x5a58c0) and, with operand 3 above 0 and run-state 0x8000000 clear, calls pattern_surface_transition_begin@0x43fce0(operand 1, operand 3, operand 4); a zero return ends the handler, else it sets run-state 0x10 and calls sleep_timer_arm@0x44fe50(operand 2). Otherwise it calls screen_transition_finalize@0x43d230(operand 1, 0). Begin under draw mode 1 (ctx+0xa2bd4) tests the active region's width for modes 0 and 1 and its height for 2 and 3 against the count (+0x2020) and sets the rectangle +0x2010..+0x201c empty at the starting edge. pattern_surface_transition_tick@0x440510 adds its argument + 1 to the counter +0x1fb8, caps it at the count, moves the rectangle's far edge to (extent / count) x counter from the starting edge and draws that rectangle of the surface at the same place (gfx_draw_surface_through_sprite), then presents; it reports the reveal finished when the counter reaches the count. engine_main_tick@0x411e70 passes it interval_timer_poll_elapsed_steps@0x44fee0, the periods missed since the last tick, or 0x10000000 when action 4 is triggered.
+
+Native's command name is ComEfWp. A type outside 0..4 (signed) traces 「関数：ComEfWp エラー：Typeは0から1の間にしてください」 and does nothing else. With divisions above 0 and no fast-forward the handler begins pattern mode type (pattern_surface_transition_begin), which refuses a division count the screen's width (types 0, 1 and 4) or height (2 and 3) does not divide by with a SetLineFade trace and starts nothing; when it begins, the handler sets run-state 0x10, arms the interval timer and blocks in VM state 9. Otherwise it finishes on the surface at once (screen_transition_finalize: a negative slot fills 0x20 with black). In the shipped draw mode the tick counts the timer's periods: for modes 0 to 3 the surface shows in one rectangle that grows from the edge by the screen's width or height over divisions each period, drawn over the frame that was there, and the reveal is over after divisions periods. Action 4 forces it to its end. 創刻のアテリアル has 15 sites in 10 scripts; the first site of each script passes surface 2 with (1 ms, 64, type 0), (1 ms, 64, type 3) or (30 ms, 16, type 3). Neither Himegari nor Kamidori calls it.
+
 ### 0x27 `reveal-surface-striped` (u00418CC0, argc 4)
 - **observed by:** arterial (SYS4438), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`, `SYS4438`
@@ -1846,14 +1965,17 @@ SYS4433 maps selector 0..4 to native pattern modes 8..12. The worker implements 
 
 Both revision handlers convert origin/extent operands into paired edge rectangles, validate the two surfaces, mark the destination dirty, and dispatch to direct copy, area-weighted shrink, interpolating enlargement, or a two-pass mixed-axis route through scratch surface 0x20, which it creates over slot 32 and releases after, so a script surface there is lost (the port does the same). Kamidori's only two calls, ALLMAP@0x4e2 and SAVE@0xbb6, downsample the full 1024x576 surface 2 into a 384x216 thumbnail on surfaces 193 and 195. The portable host implements that observed shrink contract with an area-weighted RGBA sampler; equal-sized rectangles continue through the established exact-copy path.
 
-### 0x36 `legacy-transition-two-surface` (u00419C00, argc 3)
+### 0x36 `mosaic-transition-surfaces` (u00419C00, argc 3)
 - **observed by:** arterial (SYS4438)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
 - **semantic status:** investigated
-- **summary:** (source_surface)(target_surface)(duration_ms) — start a blocking legacy screen transition in mode 9 between two surfaces. Under DRAWMODE=1 the begin copies them to surfaces 0x24 and 0x25 and creates scratch 0x20 blank. With fast-forward set it finalizes on the target. Neither Himegari nor Kamidori calls it, so the port traces and skips it.
-- **operand access:** `1` read · `2` read · `3` read
-- **grounding:** source=investigation, confidence=med
-- **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x36`; scope=Himegari SYS4422. Ghidra SYS4433 (Kamidori): dispatch slot 0x36 (ctx+0x9f7dc) resolves to op_0x36_legacy_transition_two_surface@0x41c100. It sets run-state bit 8, arms the sleep timer with operand 3 and calls screen_transition_begin@0x43a6d0(source, target, 9, 0xa0, 0), or with run-state 0x8000000 calls screen_transition_finalize@0x43a320(target, 0). No call in either corpus.
+- **summary:** (source_surface)(target_surface)(interval ms) — blocking mosaic transition between two captured surfaces: the source breaks up into blocks that grow by a pixel each timer period, and after 80 periods the target comes back out of blocks that shrink; 160 periods in all.
+- **operand access:** `1` read (surface 0..999, untested) · `2` read (surface 0..999, untested) · `3` read
+- **control (port handler):** waits may; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x36`; scope=SYS4438 handler, screen_transition_begin and screen_transition_tick mode 9, MosaicTexture; 4.33G's handler pairs with it at similarity 1.00. op_0x36_mosaic_transition_surfaces@0x41d7a0 sets the frame's wait kind to 7 and, with run-state 0x8000000 clear, sets run-state 8, calls sleep_timer_arm@0x44fe50(operand 3) and screen_transition_begin@0x43d5e0(operand 1, operand 2, 9, 0xa0, 0), polls the triggered action mask (ctx+0xaa648) and zeroes it; otherwise it calls screen_transition_finalize@0x43d230(operand 2, 0). Begin's mode 9 under draw mode 1 creates 0x24 and 0x25 blank at the size it clipped (+0x2018, +0x201c), copies the two surfaces into them with gfx_copy_surface_rect@0x48d2f0, creates 0x20 blank and stores the parameter at +0x2028. screen_transition_tick@0x43dfe0 mode 9: +0x1fb8 += argument, capped at +0x2028; below half of it gfx_mosaic_surface_rect@0x44e520(0x20, rect, 0x24, rect, counter), else (0x20, rect, 0x25, rect, +0x2028 - counter + 1); +0x1fb8 += 1; gfx_render_frame, gfx_draw_surface_through_sprite(0x20) and present; at +0x2028 <= +0x1fb8 it calls gfx_recreate_transition_copy_surfaces@0x490670 and reports the transition finished. gfx_mosaic_surface_rect calls gfx_mosaic_texture@0x48ee10 under draw mode 1, which copies the pixel at (x - x % dot, y - y % dot) of the rectangle and traces 0x5b08b8 for a dot of 0.
+
+The handler sets run-state 8, arms the interval timer with operand 3 and begins legacy screen transition mode 9 with the parameter 0xa0, then polls the triggered actions and clears them. Begin copies the two surfaces to 0x24 and 0x25 through gfx_copy_surface_rect, which tests neither slot, and creates scratch 0x20 blank. Each tick adds the missed periods to its counter and caps it at 0xa0; below 0x50 it fills 0x20 from 0x24 with MosaicTexture at a dot of the counter, else from 0x25 at a dot of 0xa0 - counter + 1; it then adds 1, renders the frame, draws 0x20 over it and presents. The transition is over when the counter reaches 0xa0, where the tick creates 0x24 and 0x25 again at the screen's size. MosaicTexture gives every pixel the top-left pixel of its dot x dot block, the blocks counted from the rectangle's corner, and refuses a dot of 0 with the trace 「関数：MosaicTexture エラー：モザイクサイズの指定が不正ですsize = 0」: the counter is 0 on a tick that runs in the first period, and 0x20 is then drawn as it is, blank the first time. What a blank surface draws as is not measured, and the port shows the source unchanged for that period. Action 4 forces the counter to its cap, which shows the target at a dot of 1. With fast-forward set at dispatch the handler finishes on the target at once (screen_transition_finalize: a negative slot fills 0x20 with black). The records of 0x24 and 0x25 are created from the engine's start (engine_initialize_graphics_from_settings), so a save shows no change in them. 創刻のアテリアル has 8 sites in 6 scripts; the first site of each script passes (1, 2, 3 ms) or (1, 2, 20 ms). Neither Himegari nor Kamidori calls it.
 
 ### 0x80 `set-default-gfx-object-slot` (u0041AF00, argc 1)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
@@ -1993,10 +2115,13 @@ Port (2026-11-07): MovieSurfaceRegistry.Release drops the slot's movie binding w
 - **observed by:** arterial (SYS4438)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
 - **semantic status:** investigated
-- **summary:** (handle) — get/create the retained object, clear its transform mark obj+0x68 and reset its current scale, rotation and translation matrices (obj+0x6c/+0xec/+0x16c) to identity. The current axis/angle floats obj+0x1ec..0x204 and the channel targets are left alone. Neither Himegari nor Kamidori calls it, so the port traces and skips it.
+- **summary:** (handle) — get or create the retained object, clear its transform mark and set its current scale, rotation and translation matrices to identity.
 - **operand access:** `1` read
+- **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1fc`; scope=Himegari SYS4422. Ghidra /v2: op_0x1fc_handler@0x422610 fetches operand 1 and calls gfx_object_reset_transform_current@0x47e5b0, which writes obj+0x68=0, rebuilds the three current matrices as identity and raises redraw dirty owner+0xb558. The six transform setters (0x1fd/0x1fe/0x1ff current, 0x21e/0x21f/0x220 channel) and their range-transform counterparts write the mark as 1; no gfx path reads it, but it reaches the save record (Kamidori SAVE07 objects 0xc382/0xc44b, 2026-11-08). No call in either corpus.
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x1fc`; scope=SYS4438 handler and worker; 4.33G's handler pairs with it at similarity 1.00. op_0x1fc_handler@0x421dc0 passes operand 1 to 0x494bd0, which calls gfx_object_get_or_create, zeroes obj+0x68, writes the identity matrix at obj+0x6c, +0xec and +0x16c, and sets the manager's dirty flag (+0xb58c).
+
+Native clears obj+0x68 and writes identity to the three matrices at obj+0x6c, +0xec and +0x16c; the axis and angle floats at obj+0x1ec..0x204 and the channel targets are left alone. The port keeps a rotation as its axis and angle: it keeps the axis and sets the angle to 0, so a later read of the current rotation gives angle 0 where native gives the angle last set. 創刻のアテリアル has 5 sites; neither Himegari nor Kamidori calls it.
 
 ### 0x1fd `gfx-set-scale-current` (u00420620, argc 4)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
@@ -2302,6 +2427,18 @@ Port status (2026-11-03): VirtualMachine stores tick_presentation_enabled for op
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high, noop_headless=True
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x224`; scope=Himegari SYS4422. Ghidra handler 0x417550 -> gfx_command_queue_clear 0x47cb10, which destroys queued nodes and restores the sentinel links/count.
+
+### 0x225 `erase-transition-commands` (u00421780, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (first_command_handle)(count) — erase queued transition commands: with a count above 1 those whose command handle is from first_command_handle up to, not including, first_command_handle + count; otherwise the one at first_command_handle.
+- **operand access:** `1` read · `2` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x225`; scope=SYS4438 handler and workers; 4.33G's handler pairs with it at similarity 1.00. op_0x225_handler@0x422d90: with operand 2 above 1 it calls 0x4934a0(handle, count), which erases the nodes of the map at the manager's +0x418 between lower_bound(handle) and lower_bound(handle + count); otherwise 0x493180(handle), which finds that one key and erases it. The producers gfx_queue_surface_alpha_transition, gfx_queue_patterned_surface_transition and the two blur range producers insert into the same map.
+
+The commands are the queued surface alpha, patterned surface and blur range transitions, which native keeps in one map keyed by command handle (the map op 0x224 clears whole). The port erases them from its four stores. 創刻のアテリアル has 4 sites.
 
 ### 0x227 `query-gfx-rotation-current` (query-gfx-rotation-current, argc 6)
 - **observed by:** kamidori (SYS4433)
@@ -2702,6 +2839,42 @@ Operands are command_handle, target_surface, range_start, range_count, start_len
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x252`; scope=SYS4438 handler and the two present workers; the opcode is observed only in 創刻のアテリアル. op_0x252_set_present_clear@0x4247f0 stores operand 1 at the graphics manager's +0xb55c (ctx+0x59e60), which the manager's constructor sets to 0 and nothing else writes. gfx_render_frame@0x49ab00 tests bit 0 and gfx_present_object_range@0x49adf0 bit 1; each then calls d3d_clear_render_target_black before it begins its scene, the call op 0x20e's handler makes. The only site in 創刻のアテリアル is SYSTEM4@0xa, with 3.
 
 Without a flag a present draws over the pixels its target holds, and only op 0x20e clears. The port keeps the flags in the graphics native (Graphics.SetPresentClear) and clears as op 0x20e does, before each present of that kind.
+
+### 0x253 `gfx-reset-transform-range` (u00423019, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (first_handle)(count) — op 0x1fc for every retained object that exists from first_handle up to, not including, first_handle + count.
+- **operand access:** `1` read · `2` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x253`; scope=SYS4438 handler and worker; the opcode exists only in AGE 4.38D among the builds read. op_0x253_handler@0x424820 passes operands 1 and 2 to 0x494f20, which walks the object map from lower_bound(first) to lower_bound(first + count) and, for each object, zeroes obj+0x68 and writes the identity matrix at obj+0x6c, +0xec and +0x16c.
+
+It creates no object: the worker walks the object map between the two lower bounds. 創刻のアテリアル has 1 site.
+
+### 0x254 `gfx-set-scale-range` (u00423049, argc 5)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **summary:** (first_handle)(count)(scale_x_percent)(scale_y_percent)(scale_z_percent) — op 0x1fd's current scale for every retained object that exists in the range.
+- **operand access:** `1` read · `2` read · `3` read-float · `4` read-float · `5` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x254`; scope=SYS4438 handler and worker; the opcode exists only in AGE 4.38D among the builds read. op_0x254_handler@0x424860 fetches operands 3 to 5 as floats, divides each by 100.0 and passes them with operands 1 and 2 to 0x495170, which walks the object map between the two lower bounds and, for each object, sets obj+0x68 and writes the scale matrix at obj+0x6c.
+
+Each scale operand is divided by 100.0. It creates no object. No script of 創刻のアテリアル uses it.
+
+### 0x256 `gfx-set-translation-range` (u00423050, argc 5)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (first_handle)(count)(x)(y)(z) — op 0x1ff's current translation for every retained object that exists in the range.
+- **operand access:** `1` read · `2` read · `3` read-float · `4` read-float · `5` read-float
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x256`; scope=SYS4438 handler and worker; the opcode exists only in AGE 4.38D among the builds read. op_0x256_handler@0x424970 fetches operands 3 to 5 as floats and passes them with operands 1 and 2 to 0x495470, which walks the object map between the two lower bounds and, for each object, sets obj+0x68 and writes the translation matrix at obj+0x16c.
+
+It creates no object. 創刻のアテリアル has 2 sites. Its neighbours 0x255 (a rotation by axis and angle over a range) and 0x257 (three floats into obj+0x18..0x20 over a range) are in native's table, and no script uses them; the port has no handler for either.
 
 ### 0x258 `set-surface-persistence-flags` (set-surface-persistence-flags, argc 2)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
@@ -3151,6 +3324,53 @@ Once due, the handler restarts the timer and pushes the following pc; a -1 targe
 
 ctx+0x6da74, which it sets, is cleared only by adv_text_reveal_service_tick@0x406fa0 at a reveal tick with action 6 up (0x407101); while set, a held action 6 does not start fast-forward at a reveal. TITLE, FIELD and every control-strip callback run it, which is why a Ctrl held from Kamidori's SC0000 stops at SC2000@0xaf5 (docs/engine-re.md, "Physical fast-forward"). It ends fast-forward however it started (0x4170ce), persistent Skip and read-skip included; op 0x72's entry starts it again, also when the calling callback returns into the wait. The port models it in the skip-and-auto native (engine/Ome.Engine/Natives/SkipAndAuto.PhysicalInput.cs) and op 0x101's handler.
 
+### 0x102 `register-stepped-joy-callback` (u0041E3C0, argc 3)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (action)(step)(target) — store a local code target for one logical action at one step of the stepped callback table, which op 0x104 dispatches.
+- **operand access:** `1` read · `2` read · `3` read (callback target)
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x102`; scope=SYS4438 handler; 4.33G's handler pairs with it at similarity 1.00. op_0x102_handler@0x420b40 stores operand 3 at ctx+0x6a36c + (step + (action + frame * 33) * 10) * 4 after testing 0 <= action < 32 and 0 <= step < 10, signed; a failed test throws {0x5a5c68, 0x10005}. The frame setup 0x40e740 fills the frame's 0x528 bytes of the table with 0xff, and 0x405400 (the scene reset and op 0xfc) the whole table.
+
+The table has ten steps for each of 32 rows per script frame; the row of the action count is the idle callback's, as with op 0xfb. An action outside 0..31 or a step outside 0..9 throws a script error with flags 0x10005, the はい/いいえ box, worded SetKeyJumpExの第１引数が不正です． for either. A frame starts with every target -1. 創刻のアテリアル has 11 sites.
+
+### 0x103 `set-joy-callback-steps` (u0041E4A0, argc 1)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (steps) — set how many steps op 0x104 cycles through, and put the running frame back at step 0.
+- **operand access:** `1` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x103`; scope=SYS4438 handler; 4.33G's handler pairs with it at similarity 1.00. op_0x103_handler@0x420c20 stores operand 1 at ctx+0x771ac and zeroes the frame's step at ctx+0x771b4 + frame * 4. 0x405400 zeroes ctx+0x771ac.
+
+The count is one value for every frame; the scene reset and op 0xfc zero it, and op 0x104 divides by it. 創刻のアテリアル has 1 site.
+
+### 0x104 `dispatch-stepped-joy-callbacks` (u00415C50, argc 0)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** Call the stepped callback of the highest logical action op 0xff polled, or of the idle row when none is set, at the running frame's step; then advance the step, modulo op 0x103's count.
+- **control (port handler):** waits never; leaves falls, jumps
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x104`; scope=SYS4438 handler; 4.33G's handler pairs with it at similarity 1.00. op_0x104_handler@0x418f40 scans from ctx+0x772f4[frame] - 1 down to 0 for a bit of the triggered mask ctx+0xaa648. For a set bit it zeroes the frame's step (ctx+0x771b4) when the global 0x5e73fc differs, stores the action there, pushes pc + 1, or pc with ctx+0x772f4[frame] = action when ctx+0x771b0 has the bit, and jumps to the table's target for the action and step unless it is -1, in which case it pops; with no bit it does the same for the row of the action count (ctx+0x814), pushing pc + 1. Each path ends by storing (step + 1) % ctx+0x771ac.
+
+The scan goes down from the frame's limit, which op 0xff sets to the action count. The step starts again at 0 when the action differs from the one dispatched last. An action of op 0x105's mask returns to op 0x104 itself with the limit lowered to it, so the next pass takes the lower actions; any other action and the idle row return to the next instruction. A target of -1 calls nothing. With a count of 0 native divides by zero and the process ends; the port halts. The action dispatched last is one module global for every frame and scene. 創刻のアテリアル has 1 site.
+
+### 0x105 `set-joy-callback-repeat-mask` (u0041E4D0, argc 1)
+- **observed by:** none in recorded corpora
+- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
+- **semantic status:** investigated
+- **summary:** (mask) — the logical actions whose stepped callback returns to op 0x104 itself, so that the lower actions held with them are dispatched too.
+- **operand access:** `1` read
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x105`; scope=SYS4438 handler; 4.33G's handler pairs with it at similarity 1.00. op_0x105_handler@0x420c60 stores operand 1 at ctx+0x771b0, which op 0x104 tests for the action it dispatches. scene_context_init_reset and 0x432200 zero it.
+
+The scene reset zeroes the mask. No script of 創刻のアテリアル uses it.
+
 ### 0x106 `get-joystick-button-count` (get-joystick-button-count, argc 1)
 - **observed by:** kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4433`
@@ -3232,6 +3452,18 @@ Both native handlers directly return the input manager field populated from the 
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x10d`; scope=Himegari SYS4422. Ghidra /v2: op_0x10d_consume_mouse_wheel_delta@0x428cf0 copies ctx+0x1c34 to operand 1 and immediately clears the field. AGE's window procedure at 0x486925 handles WM_MOUSEWHEEL by sign-extending the high word of wParam and accumulating it at ctx+0x1c34; HISTORY.BIN polls this value and branches on its sign to select one scroll direction.
+
+### 0x10e `get-key-state` (u0041E650, argc 2)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out)(scan_code) — GetAsyncKeyState of the virtual key of a DirectInput scan code, as a signed 16-bit value: negative while the key is down.
+- **operand access:** `1` write · `2` read (scan code 0..255, untested)
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x10e`; scope=SYS4438 handler and worker; 4.33G's handler pairs with it at similarity 1.00. op_0x10e_handler@0x42c1e0 passes operand 2 to 0x4710c0, which returns 0 when the input manager's +0x1820 is zero and else GetAsyncKeyState(table[+0x1420 + index * 4]) sign-extended from 16 bits, and writes the result to operand 1. The table is the DIK-to-VK table op 0xfd reads at the same address.
+
+The worker reads its DIK-to-VK table, 256 entries, at the operand as it comes, and returns 0 while the input manager is inactive. Windows also sets bit 0 of the result when the key was pressed since the last call; the port returns -32768 or 0. 創刻のアテリアル has 3 sites.
 
 ### 0x10f `set-system-key-disable-mask` (set-system-key-disable-mask, argc 1)
 - **observed by:** arterial (SYS4438)
@@ -3437,6 +3669,18 @@ Port status (2026-11-07): profile-lifetime engine setting state, written only, a
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1cb`; scope=Himegari SYS4422. Ghidra /v2: op_0x1cb_get_read_message_skip@0x4272f0 calls the engine setting interface's getter for `message:ReadTextSkip` and writes the result to operand 1. The shared ADV redraw routine uses it for the active Read-message-skip icon.
 
 Port status (2026-07-24): implemented through the same profile-lifetime setting used by 0x1ca and the ADV ReadTextDB query path.
+
+### 0x2e5 `consume-mouse-hwheel-delta` (u0042CE50, argc 1)
+- **observed by:** arterial (SYS4438)
+- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
+- **semantic status:** investigated
+- **summary:** (out) — return the accumulated signed horizontal wheel delta and clear it.
+- **operand access:** `1` write
+- **control (port handler):** waits never; leaves falls
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x2e5`; scope=SYS4438 handler and the window procedure; the opcode exists only in AGE 4.38D among the builds read. op_0x2e5_handler@0x42e340 reads ctx+0x1c38, zeroes it and writes the value to operand 1. age_main_window_proc@0x49f9a0 handles the horizontal wheel at 0x4a02c8: with run-state 0x90100000 set it looks up set:HWheelKeyUp (a positive delta) or set:HWheelKeyDown (a negative one) and, for a value that is not negative, ors 1 << value into the triggered action mask (ctx+0xaa648); otherwise it adds the delta to ctx+0x1c38.
+
+The horizontal twin of op 0x10d. The window procedure adds a WM_MOUSEHWHEEL delta (positive to the right) to the accumulator unless the run state holds an ADV wait (0x90100000); there it raises the action set:HWheelKeyUp or set:HWheelKeyDown names, which are -1 (none) unless the catalog sets HWHEELKEYUP or HWHEELKEYDOWN, and the delta is dropped. 創刻のアテリアル has 16 sites and sets neither key.
 
 ## marker
 
@@ -3648,15 +3892,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x20`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x26 `u00418C00` (u00418C00, argc 4)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read · `3` read · `4` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x26`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2b `u00418F30` (u00418F30, argc 5)
 - **observed by:** none in recorded corpora
@@ -4122,14 +4357,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0xbe`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
-### 0xc1 `u00415650` (u00415650, argc 0)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0xc1`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0xc3 `u0041D390` (u0041D390, argc 1)
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
@@ -4241,49 +4468,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0xfd`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x102 `u0041E3C0` (u0041E3C0, argc 3)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read · `3` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x102`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x103 `u0041E4A0` (u0041E4A0, argc 1)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x103`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x104 `u00415C50` (u00415C50, argc 0)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x104`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x105 `u0041E4D0` (u0041E4D0, argc 1)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x105`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x10e `u0041E650` (u0041E650, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write · `2` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x10e`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x12d `u0041E720` (u0041E720, argc 7)
 - **observed by:** none in recorded corpora
@@ -4423,15 +4607,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x1c3`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
-### 0x1c4 `u00415720` (u00415720, argc 1)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x1c4`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0x1c5 `u00425800` (u00425800, argc 4)
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
@@ -4455,15 +4630,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x1c9`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x1cd `u0041A560` (u0041A560, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write (SYS4422) / write-float (SYS4433) / write-float (SYS4438) · `2` read (SYS4422) / read-float (SYS4433) / read-float (SYS4438)
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x1cd`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x1d6 `u0041DA40` (u0041DA40, argc 2)
 - **observed by:** none in recorded corpora
@@ -4553,15 +4719,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x221`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
-### 0x225 `u00421780` (u00421780, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x225`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
 ### 0x226 `u004217D0` (u004217D0, argc 5)
 - **observed by:** none in recorded corpora
 - **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
@@ -4625,32 +4782,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x24a`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x253 `u00423019` (u00423019, argc 2)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x253`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x254 `u00423049` (u00423049, argc 5)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x254`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x256 `u00423050` (u00423050, argc 5)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` read · `2` read · `3` read-float · `4` read-float · `5` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x256`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x257 `257` (257, argc 5)
 - **observed by:** none in recorded corpora
@@ -4819,65 +4950,6 @@ Port status (2026-11-03): implemented with op 0x1f4. A nested close decrements t
 - **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
 - **grounding:** source=kelebek, confidence=low
 - **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2d9`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2df `u0042BAC1` (u0042BAC1, argc 3)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2df`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e0 `u0042CE0F` (u0042CE0F, argc 3)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e0`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e1 `u0042CE10` (u0042CE10, argc 3)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write · `2` read-float · `3` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e1`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e2 `u0042CE11` (u0042CE11, argc 3)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e2`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e3 `u0042CE30` (u0042CE30, argc 3)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write · `2` read-float · `3` read-float
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e3`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e4 `u0042CE31` (u0042CE31, argc 3)
-- **observed by:** none in recorded corpora
-- **ABI applicability:** upstream catalog framing is available; proven revision membership is not yet established
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e4`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
-
-### 0x2e5 `u0042CE50` (u0042CE50, argc 1)
-- **observed by:** arterial (SYS4438)
-- **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
-- **semantic status:** catalog-only
-- **summary:** Broader AGE-catalog compatibility stub; the port currently traces and skips it.
-- **operand access:** `1` write
-- **grounding:** source=kelebek, confidence=low
-- **evidence:** method=upstream-catalog; confidence=low; profiles=none (engine/catalog scoped); revisions=unspecified; artifact=`Kelebek1/Eushully-Decompiler age-shared.cpp`; site=`vm-map/opcodes.toml opcode 0x2e5`; scope=upstream AGE opcode catalog; engine revision applicability unspecified. ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim.
 
 ### 0x2ee `u0042CEC2` (u0042CEC2, argc 1)
 - **observed by:** none in recorded corpora

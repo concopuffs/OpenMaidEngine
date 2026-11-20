@@ -24,6 +24,7 @@ public sealed partial class Audio
     private AudioClip? _bgmChannelClip;
     private bool _bgmChannelLoaded;
     private bool _bgmLoop;
+    private bool _bgmPaused;                 // bgm object +0x410: op 0xc1's toggle; a start and a release clear it
     private int _bgmLevel = FullLevel;       // bgm object +0x420: the committed envelope level, basis points
     private int _bgmChannelLevel = FullLevel;   // the level channel 11 was last given (a fade step is not committed)
     private BgmFade? _fade;
@@ -63,6 +64,23 @@ public sealed partial class Audio
         StopBgmSource();
         UpdateTimedWork();
     }
+
+    /// <summary>
+    /// Op 0xc1: flip the BGM's pause (bgm object +0x410) and tell the backend. The DirectSound backend stops channel
+    /// 11's buffer where it is, or plays it on from there; with no track on the channel it does nothing, and the flag
+    /// still flips. Starting a track and releasing the source clear the flag; an identical play request, which keeps
+    /// the stream, does not.
+    /// </summary>
+    public void ToggleBgmPause()
+    {
+        _bgmPaused = !_bgmPaused;
+        _timeline?.Event("bgm-pause", new() { ["paused"] = _bgmPaused });
+        if (_bgmLoaded && _bgmChannelLoaded) _device.SetPaused(BgmChannel, _bgmPaused);
+        UpdateTimedWork();
+    }
+
+    /// <summary>Whether op 0xc1 holds the BGM.</summary>
+    public bool BgmPaused => _bgmPaused;
 
     /// <summary>Op 0xc0: the retained track. A fade to zero that has run its course has cleared it.</summary>
     public long CurrentBgmTrack
@@ -122,6 +140,7 @@ public sealed partial class Audio
         });
         if (clip == null) return;   // the track that played goes on
         _fade = null;
+        _bgmPaused = false;
         _bgmLevel = FullLevel;
         _bgmChannelLevel = FullLevel;
         _bgmLoaded = true;
@@ -143,6 +162,7 @@ public sealed partial class Audio
     {
         RestoreDuck();
         _fade = null;
+        _bgmPaused = false;
         _bgmLoaded = false;
         _bgmChannelLoaded = false;
         UnloadChannel(BgmChannel);

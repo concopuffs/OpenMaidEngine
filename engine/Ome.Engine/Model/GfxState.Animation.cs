@@ -242,6 +242,63 @@ public sealed partial class GfxState
         o.TranslationCurrent = translation;
     }
 
+    /// <summary>Op 0x1fc: clear the object's transform mark (obj+0x68) and set its current scale, rotation and
+    /// translation matrices (obj+0x6c, +0xec, +0x16c) to identity. Native leaves the axis and angle floats
+    /// (obj+0x1ec..0x204) and the channel targets as they are; the port keeps a rotation as its axis and angle, so it
+    /// keeps the axis and sets the angle to 0, which is the identity matrix.</summary>
+    public void ResetCurrentTransform(long handle) => ResetCurrentTransform(GetOrCreate(handle));
+
+    private static void ResetCurrentTransform(GfxObject o)
+    {
+        o.TransformMarked = false;
+        o.ScaleCurrent = (1, 1, 1);
+        o.RotationCurrent = (o.RotationCurrent.X, o.RotationCurrent.Y, o.RotationCurrent.Z, 0);
+        o.EvaluatedRotationCache = RotationCache(o.RotationCurrent);
+        o.V16c = (0, 0, 0);
+        o.TranslationCurrent = (0, 0, 0);
+    }
+
+    // AGE 4.38D's range forms walk the object map from the first handle not below `first` to the first not below
+    // `first + count`: the objects that exist in the range, and no new one.
+    private List<GfxObject> ObjectsInRange(long first, long count)
+    {
+        var objects = new List<GfxObject>();
+        long end = unchecked(first + count);
+        foreach (long handle in _scene.OrderedObjectHandles)
+            if (handle >= first && handle < end && _scene.Objects.TryGetValue(handle, out GfxObject? o))
+                objects.Add(o);
+        return objects;
+    }
+
+    /// <summary>Op 0x253 (AGE 4.38D): <see cref="ResetCurrentTransform(long)"/> for every object that exists in the
+    /// range.</summary>
+    public void ResetCurrentTransformRange(long first, long count)
+    {
+        foreach (GfxObject o in ObjectsInRange(first, count)) ResetCurrentTransform(o);
+    }
+
+    /// <summary>Op 0x254 (AGE 4.38D): op 0x1fd's current scale for every object that exists in the range.</summary>
+    public void SetCurrentScaleRange(long first, long count, (double X, double Y, double Z) percent)
+    {
+        foreach (GfxObject o in ObjectsInRange(first, count))
+        {
+            o.TransformMarked = true;
+            o.ScaleCurrent = (percent.X / 100.0, percent.Y / 100.0, percent.Z / 100.0);
+        }
+    }
+
+    /// <summary>Op 0x256 (AGE 4.38D): op 0x1ff's current translation for every object that exists in the range.
+    /// </summary>
+    public void SetCurrentTranslationRange(long first, long count, (double X, double Y, double Z) translation)
+    {
+        foreach (GfxObject o in ObjectsInRange(first, count))
+        {
+            o.TransformMarked = true;
+            o.V16c = translation;
+            o.TranslationCurrent = translation;
+        }
+    }
+
     /// <summary>Op 0x21e: normalized scale target (100 = identity), with independent delay/duration.</summary>
     public void SetScaleChannel(long handle, long delayMs, long durationMs, (double X, double Y, double Z) percent)
     {

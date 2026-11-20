@@ -150,6 +150,11 @@ public sealed partial class VirtualMachine
         public ExecFrame? RawInputFrame;
         public int MouseButtonState;
         public int MouseWheelDelta;
+        public int MouseHorizontalWheelDelta;   // AGE 4.38D, ctx+0x1c38: op 0x2e5 reads and clears it
+        // AGE 4.38D's stepped callbacks: how many steps op 0x104 cycles through (ctx+0x771ac, op 0x103) and the
+        // actions that return to op 0x104 itself (ctx+0x771b0, op 0x105). The scene reset zeroes both.
+        public int InputCallbackSteps;
+        public int InputCallbackRepeatMask;
         public int HeldInputCallbackMask;
         public int QueuedInputCallbackMask;
         public bool InitialRootRun;   // the run's first root run (SYSTEM4 plays LOGO and OP); a reloaded scene's is not
@@ -377,6 +382,27 @@ public sealed partial class VirtualMachine
             return total < 0 ? MouseWheelOutcome.Advance : MouseWheelOutcome.Dropped;
         }
         QueueMouseWheelDelta(delta);
+        return MouseWheelOutcome.Accumulated;
+    }
+
+    /// <summary>Route one native WM_MOUSEHWHEEL delta as AGE 4.38D's age_main_window_proc@0x49f9a0 does. While an ADV
+    /// text wait polls (and in the hidden-window wait entered from one) its sign raises logical action
+    /// set:HWheelKeyUp or set:HWheelKeyDown, as the vertical wheel raises its own; both are -1 unless the catalog
+    /// sets them, and a negative action raises nothing. Otherwise the delta accumulates for op 0x2e5.</summary>
+    public MouseWheelOutcome ApplyMouseHorizontalWheel(int delta)
+    {
+        if (delta == 0) return MouseWheelOutcome.Dropped;
+        int action = delta > 0 ? _o.HWheelKeyUpAction : _o.HWheelKeyDownAction;
+        if (_hiddenWindowWaiting && _hiddenWindowWheelTriggers)
+            return action is >= 0 and < 32 && TryLatchAdvCoroutineYieldTrigger(1 << action)
+                ? MouseWheelOutcome.Activated
+                : MouseWheelOutcome.Dropped;
+        if (_advTextWaitPolling)
+            return action is >= 0 and < 32 && TryActivateInputActions(1 << action)
+                ? MouseWheelOutcome.Activated
+                : MouseWheelOutcome.Dropped;
+        _scene.MouseHorizontalWheelDelta += delta;
+        _waits.WakeInputCallbackService();
         return MouseWheelOutcome.Accumulated;
     }
 

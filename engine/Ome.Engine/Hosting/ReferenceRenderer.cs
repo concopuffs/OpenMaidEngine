@@ -58,7 +58,7 @@ public sealed class ReferenceRenderer
 
     /// <summary>Draw <paramref name="frame"/> into <see cref="Pixels"/>. A frame that starts clean clears to black and
     /// fills its background colour; a whole-screen transition draws its source, then blends its flattened target
-    /// over it.</summary>
+    /// over it, shows the target in a pattern's rectangles, or breaks the source into a mosaic's blocks.</summary>
     public void Draw(FrameDescription frame)
     {
         _pixelCache.BeginFrame();
@@ -76,6 +76,7 @@ public sealed class ReferenceRenderer
         {
             DrawItems(screen.Source);
             if (screen.Alpha != 0) DrawFlattenedTransitionTarget(screen);
+            LegacyScreenTransitionComposite.Mosaic(_pixels, _width, _height, screen.MosaicDot);
         }
         else DrawItems(frame.Items);
         Perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocated);
@@ -123,7 +124,8 @@ public sealed class ReferenceRenderer
     }
 
     // Native screen_transition_tick mode 4: the target surface, flattened over the overlay colour, blends over the
-    // source already in the buffer at the transition's alpha.
+    // source already in the buffer at the transition's alpha. A patterned reveal (pattern_surface_transition_tick)
+    // shows it inside the pattern's rectangles instead, with the source everywhere else.
     private void DrawFlattenedTransitionTarget(FrameScreenTransition screen)
     {
         if (_transitionSourcePixels.Length != _pixels.Length)
@@ -132,7 +134,10 @@ public sealed class ReferenceRenderer
         System.Array.Clear(_pixels);
         FillQuad(0, 0, _width, _height, screen.OverlayRgb, 1f);
         DrawItems(screen.Target);
-        if (screen.Alpha < 256)
+        if (screen.Patterned)
+            LegacyScreenTransitionComposite.RevealTargetOverSource(
+                _pixels, _transitionSourcePixels, _width, _height, screen.Reveal);
+        else if (screen.Alpha < 256)
             LegacyScreenTransitionComposite.BlendTargetOverSource(_pixels, _transitionSourcePixels, screen.Alpha);
     }
 

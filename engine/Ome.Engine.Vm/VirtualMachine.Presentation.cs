@@ -134,7 +134,7 @@ public sealed partial class VirtualMachine
     }
 
     /// <summary>
-    /// Ops 0x27 and 0x28 (modes <paramref name="firstMode"/> + their type): native's tests in its order, before the
+    /// Ops 0x26, 0x27 and 0x28 (modes <paramref name="firstMode"/> + their type): native's tests in its order, before the
     /// surface is drawn. A type outside 0 to 4 is traced and skipped. With no divisions or under fast-forward the
     /// handler finishes on the surface at once. Otherwise <c>pattern_surface_transition_begin</c> sizes the surface
     /// (tracing a slot past 999) and then refuses a mode or a division count the screen does not take, with a trace
@@ -166,35 +166,56 @@ public sealed partial class VirtualMachine
         return TransitionSurfaceSlotRefused(ins, slot);
     }
 
-    private StepResult OpRevealSurfaceStriped(Instruction ins, int pc)
+    // Ops 0x26, 0x27 and 0x28 (surface)(interval ms)(divisions)(type): the same handler but for the trace's command
+    // name and the mode their type 0 is.
+    private StepResult RevealSurfaceWithPattern(Instruction ins, string command, int firstMode)
     {
         var a = ins.Args;
-        if (PatternRevealRefused(ins, "ComEfBl", 4) is { } refused) return refused;
+        if (PatternRevealRefused(ins, command, firstMode) is { } refused) return refused;
         // pattern_surface_transition_begin/_tick draw the surface itself; with no divisions or under fast-forward,
         // the handler finalizes on the surface.
-        if (AdvFastForwardActive || Read(a[2]) <= 0)
-            MarkScratchIfFinalizeFills(Read(a[0]));
+        bool finishesAtOnce = AdvFastForwardActive || Read(a[2]) <= 0;
+        if (finishesAtOnce) MarkScratchIfFinalizeFills(Read(a[0]));
         _waits.RevealSurfaceWithPattern(
             Gfx,
             new SurfacePatternTransitionRequest(
                 (int)Read(a[0]), Read(a[1]), (int)Read(a[2]),
-                (SurfacePatternTransitionMode)(4 + (int)Read(a[3]))),
-            AdvFastForwardActive || Read(a[2]) <= 0);
+                (SurfacePatternTransitionMode)(firstMode + (int)Read(a[3]))),
+            finishesAtOnce);
         return StepResult.Next;
     }
 
+    // 0x26 (native ComEfWp): one wipe from an edge, types 0 to 3; type 4 is op 0x27's type 0
+    private StepResult OpRevealSurfaceWiped(Instruction ins, int pc) => RevealSurfaceWithPattern(ins, "ComEfWp", 0);
+
+    // 0x27 (native ComEfBl): equal strips that grow together, types 0 to 3; type 4 is op 0x28's type 0
+    private StepResult OpRevealSurfaceStriped(Instruction ins, int pc) => RevealSurfaceWithPattern(ins, "ComEfBl", 4);
+
+    // 0x28 (native ComEfBl2): the strips started one period apart, types 0 to 3; type 4 is a mode begin refuses
     private StepResult OpRevealSurfaceStaggeredStrips(Instruction ins, int pc)
+        => RevealSurfaceWithPattern(ins, "ComEfBl2", 8);
+
+    // 0x36: the mosaic transition between two captured surfaces (screen_transition_begin mode 9)
+    private StepResult OpMosaicTransitionSurfaces(Instruction ins, int pc)
     {
         var a = ins.Args;
-        if (PatternRevealRefused(ins, "ComEfBl2", 8) is { } refused) return refused;
-        if (AdvFastForwardActive || Read(a[2]) <= 0)
-            MarkScratchIfFinalizeFills(Read(a[0]));
-        _waits.RevealSurfaceWithPattern(
-            Gfx,
-            new SurfacePatternTransitionRequest(
-                (int)Read(a[0]), Read(a[1]), (int)Read(a[2]),
-                (SurfacePatternTransitionMode)(8 + (int)Read(a[3]))),
-            AdvFastForwardActive || Read(a[2]) <= 0);
+        if (AdvFastForwardActive)
+        {
+            // The handler finishes on the target alone, where a negative slot is the black endpoint.
+            if (FinishedTransitionSurfaceRefused(ins, Read(a[1])) is { } finishRefused) return finishRefused;
+            MarkScratchIfFinalizeFills(Read(a[1]));
+        }
+        else
+        {
+            // Begin copies both surfaces (to 0x24 and 0x25) through gfx_copy_surface_rect, which tests neither slot,
+            // and creates 0x20 blank.
+            if ((TransitionSurfaceSlotRefused(ins, Read(a[0])) ?? TransitionSurfaceSlotRefused(ins, Read(a[1])))
+                is { } refused)
+                return refused;
+            MarkLegacyTransitionScratchWritten();
+        }
+        DiscardHeldTriggersUnlessFastForward();   // the handler polls the triggered actions and clears them
+        _waits.MosaicSurfaces(Gfx, (int)Read(a[0]), (int)Read(a[1]), Read(a[2]), AdvFastForwardActive);
         return StepResult.Next;
     }
 

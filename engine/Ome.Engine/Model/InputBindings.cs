@@ -127,6 +127,21 @@ public sealed class InputBindings
         else if (axis == 1) _joystickY = Math.Clamp(value, -1.0, 1.0);
     }
 
+    /// <summary>The entries of native's DIK-to-VK table, which op 0x10e indexes.</summary>
+    public const int ScanCodeCount = 256;
+
+    /// <summary>
+    /// Op 0x10e: GetAsyncKeyState for the virtual key of DirectInput scan code <paramref name="dikScanCode"/>, as
+    /// the signed 16-bit value AGE widens: -32768 while the key is down, else 0. Windows also sets bit 0 when the key
+    /// was pressed since the last call by anyone; that bit is not modelled. A scan code with no virtual key asks for
+    /// key 0, which is never down.
+    /// </summary>
+    public int KeyState(int dikScanCode)
+    {
+        int virtualKey = DikToVirtualKey(dikScanCode);
+        return virtualKey != 0 && _heldVirtualKeys.Contains(virtualKey) ? short.MinValue : 0;
+    }
+
     public int PollActionMask()
     {
         int mask = 0;

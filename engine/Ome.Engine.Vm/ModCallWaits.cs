@@ -19,7 +19,7 @@ internal sealed class ModCallWaits(IInputAndWaits inner, VirtualMachine vm) : II
         nameof(ShowDiagnosticMessage), nameof(ShowScriptError), nameof(EditFullwidthString),
         nameof(Sleep), nameof(WaitForTimedCallbackDeadline), nameof(PlayModalMovieToSurface),
         nameof(WaitForForegroundTransition), nameof(FadeSurfaceWithBlack), nameof(FadeSurfaceToWhite),
-        nameof(CrossfadeSurfaces), nameof(RevealSurfaceWithPattern), nameof(WaitForTextReveal),
+        nameof(CrossfadeSurfaces), nameof(RevealSurfaceWithPattern), nameof(MosaicSurfaces), nameof(WaitForTextReveal),
         nameof(WaitForInput), nameof(WaitForAdvInputPoll), nameof(WaitForServiceTrigger),
     ];
 
@@ -126,6 +126,13 @@ internal sealed class ModCallWaits(IInputAndWaits inner, VirtualMachine vm) : II
     {
         Refuse(nameof(RevealSurfaceWithPattern));
         inner.RevealSurfaceWithPattern(gfx, request, forceEndpoint);
+    }
+
+    public void MosaicSurfaces(GfxState gfx, int sourceSurface, int targetSurface, long intervalMilliseconds,
+                               bool forceEndpoint = false)
+    {
+        Refuse(nameof(MosaicSurfaces));
+        inner.MosaicSurfaces(gfx, sourceSurface, targetSurface, intervalMilliseconds, forceEndpoint);
     }
 
     // ---- text and input waits ----

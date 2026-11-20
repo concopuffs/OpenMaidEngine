@@ -592,6 +592,7 @@ CODE_TARGET_ARGS: dict[int, frozenset[int]] = {
     0x00d4: frozenset((3, 4)),
     0x00d5: frozenset((1,)),
     0x00fb: frozenset((2,)),
+    0x0102: frozenset((3,)),
 }
 CONTROL_FLOW = frozenset(CODE_TARGET_ARGS)
 ARRAY_OPCODE = 0x64

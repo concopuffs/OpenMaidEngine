@@ -184,6 +184,51 @@ public sealed partial class VirtualMachine
         Write(a[0], NativeTruncate(ReadFloatExact(a[1]))); return StepResult.Next;
     }
 
+    // 0x2df to 0x2e4 (AGE 4.38D): (out)(a)(b), 1 when the two floats compare so and 0 otherwise. Both come through
+    // the float accessor. A NaN is equal to nothing and neither less nor greater.
+    private StepResult OpEqFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], ReadFloatExact(a[1]) == ReadFloatExact(a[2]) ? 1 : 0); return StepResult.Next;
+    }
+
+    private StepResult OpNeFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], ReadFloatExact(a[1]) != ReadFloatExact(a[2]) ? 1 : 0); return StepResult.Next;
+    }
+
+    private StepResult OpLtFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], ReadFloatExact(a[1]) < ReadFloatExact(a[2]) ? 1 : 0); return StepResult.Next;
+    }
+
+    private StepResult OpLteFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], ReadFloatExact(a[1]) <= ReadFloatExact(a[2]) ? 1 : 0); return StepResult.Next;
+    }
+
+    private StepResult OpGrFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], ReadFloatExact(a[1]) > ReadFloatExact(a[2]) ? 1 : 0); return StepResult.Next;
+    }
+
+    private StepResult OpGreFloat(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Write(a[0], ReadFloatExact(a[1]) >= ReadFloatExact(a[2]) ? 1 : 0); return StepResult.Next;
+    }
+
+    // 0x1cd: (out)(x), the C runtime's sqrt of x; a negative x gives a NaN. Each operand goes through the accessor
+    // its ABI's contract names.
+    private StepResult OpSqrt(Instruction ins, int pc)
+    {
+        WriteNumber(ins, 0, Math.Sqrt(ReadNumber(ins, 1))); return StepResult.Next;
+    }
+
     private StepResult OpMov(Instruction ins, int pc)
     {
         var a = ins.Args;

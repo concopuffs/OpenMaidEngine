@@ -232,6 +232,14 @@ internal class RecordingWaits : IInputAndWaits, IFastForwardListener, ITextListe
         SurfacePatternTransitions.Add(request);
         SurfacePatternForceEndpoints.Add(forceEndpoint);
     }
+    public readonly List<(int Source, int Target, long IntervalMs)> SurfaceMosaics = new();
+    public readonly List<bool> SurfaceMosaicForceEndpoints = new();
+    public void MosaicSurfaces(
+        GfxState gfx, int sourceSurface, int targetSurface, long intervalMilliseconds, bool forceEndpoint = false)
+    {
+        SurfaceMosaics.Add((sourceSurface, targetSurface, intervalMilliseconds));
+        SurfaceMosaicForceEndpoints.Add(forceEndpoint);
+    }
     public void PlayModalMovieToSurface(long resourceId, int surfaceSlot, long movieFlags)
         => ModalMovies.Add((resourceId, surfaceSlot, movieFlags));
     // Native's input latch handing a held click to the next modal movie (VirtualMachine.InputLatch.cs); the text native

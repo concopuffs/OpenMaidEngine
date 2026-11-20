@@ -425,6 +425,11 @@ public class InputAndWaitsTests
         public void UpdateJoystickAxisState(int axis, double value) { }
         public MouseWheelOutcome ApplyMouseWheel(int delta, bool advanceMessageOnWheel, bool textRevealing)
             => MouseWheelOutcome.Dropped;
+        public MouseWheelOutcome ApplyMouseHorizontalWheel(int delta)
+        {
+            Record($"hwheel {delta}");
+            return MouseWheelOutcome.Accumulated;
+        }
         public bool IsRawInputCallbackActive => false;
         public bool IsAdvTextWaitPolling => Polling;
         public bool TryLatchAdvCoroutineYieldTrigger(int actionMask) => false;

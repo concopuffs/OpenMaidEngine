@@ -72,6 +72,8 @@ public sealed class IndexBoundsTests
         cases.Add(0x32a, 1, 1000, Past.Halts, "mesh slot 1000 is outside 0..999");
         cases.Add(0x32e, 1, 10, Past.Halts, "light 10 is outside 0..9");
         cases.Add(0x32f, 1, 10, Past.Halts, "light 10 is outside 0..9");
+        // The DIK-to-VK table, 256 entries, which op 0x10e's worker reads at the operand as it comes.
+        cases.Add(0x10e, 2, 256, Past.Halts, "scan code 256 is outside 0..255");
         // Numeric glyph styles, 0 to 9: native's test admits 0 to 10 and traces the rest.
         foreach ((int op, int argument) in new[] { (0x13a, 1), (0x2da, 1), (0x23b, 2) })
         {
@@ -109,6 +111,9 @@ public sealed class IndexBoundsTests
         // Input actions, 0 to 31.
         cases.Add(0xfb, 1, 32, Past.AsksYesNo, "SetKeyJumpの引数が不正です．");
         cases.Add(0xfe, 1, 32, Past.AsksYesNo, "SetKeyTotalの引数が不正です．");
+        // The stepped callback table: 32 actions of ten steps, one message for both.
+        cases.Add(0x102, 1, 32, Past.AsksYesNo, "SetKeyJumpExの第１引数が不正です．");
+        cases.Add(0x102, 2, 10, Past.AsksYesNo, "SetKeyJumpExの第１引数が不正です．");
         cases.Add(0x107, 1, 32, Past.Continues, "");
         cases.Add(0x10b, 1, 32, Past.Continues, "");
         cases.Add(0x10b, 2, 32, Past.Halts, "physical button 32 is outside 0..31");
@@ -122,12 +127,14 @@ public sealed class IndexBoundsTests
         cases.Add(0x1d4, 4, -1, Past.Halts, "history record -1 is negative");
         // The 28 read tests (engine-re.md, "The 28 ops' native tests", 2026-11-17).
         // Transition surfaces: gfx_surface_get_size traces past 999, but the op goes on and draws the slot unchecked.
-        // Ops 0x27 and 0x28 run here with no divisions, so they finish on the surface at once (the facts below drive
-        // fast-forward, the pattern begin and the negative slot a finish takes).
-        foreach ((int op, int argument) in new[] { (0x21, 1), (0x22, 1), (0x24, 1), (0x25, 1), (0x25, 2), (0x27, 1),
-                                                   (0x28, 1) })
+        // Ops 0x26 to 0x28 run here with no divisions, so they finish on the surface at once (the facts below drive
+        // fast-forward, the pattern begin and the negative slot a finish takes). Op 0x36's begin copies both of its
+        // surfaces through gfx_copy_surface_rect, which tests neither slot.
+        foreach ((int op, int argument) in new[] { (0x21, 1), (0x22, 1), (0x24, 1), (0x25, 1), (0x25, 2), (0x26, 1),
+                                                   (0x27, 1), (0x28, 1), (0x36, 1), (0x36, 2) })
             cases.Add(op, argument, 1000, Past.Halts, "surface slot 1000 is outside 0..999");
         // The pattern reveals' type, 0 to 4, signed: traced before the surface is read.
+        cases.Add(0x26, 4, 5, Past.Traces, "関数：ComEfWp エラー：Typeは0から1の間にしてください");
         cases.Add(0x27, 4, 5, Past.Traces, "関数：ComEfBl エラー：Typeは0から1の間にしてください");
         cases.Add(0x28, 4, -1, Past.Traces, "関数：ComEfBl2 エラー：Typeは0から1の間にしてください");
         // Op 0x208 reads 0 x 0 with the trace for any slot outside 0..999, -1 (HIDEWIN's op 0x215 answer) too

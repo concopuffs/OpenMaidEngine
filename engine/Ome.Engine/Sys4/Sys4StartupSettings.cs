@@ -59,6 +59,15 @@ public sealed class Sys4StartupSettings
     /// which every scene binds to its History record with op 0x97. Missing or non-numeric means 3.</summary>
     public int WheelKeyUpAction => ReadInt("WHEELKEYUP", 3);
 
+    /// <summary>HWHEELKEYUP (set:HWheelKeyUp, registered default -1; AGE 4.38D): the logical action a turn of the
+    /// horizontal wheel to the right raises while an ADV text wait polls (age_main_window_proc@0x49f9a0,
+    /// WM_MOUSEHWHEEL). A negative value raises none. 創刻のアテリアル's catalog has no such key.</summary>
+    public int HWheelKeyUpAction => ReadInt("HWHEELKEYUP", -1);
+
+    /// <summary>HWHEELKEYDOWN (set:HWheelKeyDown, registered default -1; AGE 4.38D): the action a turn to the left
+    /// raises.</summary>
+    public int HWheelKeyDownAction => ReadInt("HWHEELKEYDOWN", -1);
+
     /// <summary>NOSETMUSIC (set:NoSetMusic, registered default 0). Nonzero gives AGERC's 設定 dialog the ｻｳﾝﾄﾞ page
     /// without sound:Music's radio buttons (dialog 102 instead of 101); Himegari's 3 also starts sound:Music at 2
     /// (<see cref="Persistence.Sys4RegIniStore.ForPath"/>). Missing or non-numeric means 0.</summary>

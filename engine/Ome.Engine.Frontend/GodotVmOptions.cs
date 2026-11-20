@@ -30,7 +30,9 @@ public static class GodotVmOptions
             AutoFreeTex: settings.AutoFreeTex,
             WheelKeyUpAction: settings.WheelKeyUpAction,
             WheelKeyDownAction: settings.WheelKeyDownAction,
-            GameVersion: startupSettings != null ? GameVersionRule.Of(settings, registry) : "");
+            GameVersion: startupSettings != null ? GameVersionRule.Of(settings, registry) : "",
+            HWheelKeyUpAction: settings.HWheelKeyUpAction,
+            HWheelKeyDownAction: settings.HWheelKeyDownAction);
     }
 
     /// <summary>The interactive session's skip and auto settings: the profile's CancelMesSkipOnClick and CoexistMesSkip,

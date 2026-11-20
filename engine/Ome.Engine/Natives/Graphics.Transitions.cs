@@ -13,9 +13,12 @@ public readonly record struct ScreenTransitionStart(long StartMs, long DurationM
 public readonly record struct BackbufferPublicationPolicy(bool PreserveExistingPixels, bool AppendGpuLayers);
 
 /// <summary>The pending whole-screen transition at one instant: the source and target objects, the progress (0..1) and
-/// the overlay colour the target is flattened over.</summary>
+/// the overlay colour the target is flattened over. A running pattern reveal carries its <see cref="Pattern"/> and a
+/// running mosaic transition sets <see cref="Mosaic"/>, each with the timer <see cref="Periods"/> that have passed; at
+/// its end, and when it is forced there, either is the target alone (progress 1).</summary>
 public readonly record struct LegacyScreenTransitionSnapshot(
-    IReadOnlyList<RenderObject> Source, IReadOnlyList<RenderObject> Target, double Progress, long OverlayRgb);
+    IReadOnlyList<RenderObject> Source, IReadOnlyList<RenderObject> Target, double Progress, long OverlayRgb,
+    SurfacePatternTransitionRequest? Pattern = null, long Periods = 0, bool Mosaic = false);
 
 // Publication and the whole-screen transition: what op 0x222 and op 0x20c publish (a render target's captured objects
 // and pixels, or the backbuffer's range and whether it keeps its pixels), and the 0x21/0x22/0x24/0x25 family's
@@ -243,9 +246,9 @@ public sealed partial class Graphics
             }, overlayRgb: 0xffffff);
     }
 
-    /// <summary>Ops 0x27 and 0x28: reveal a surface's captured objects over the live ones by a pattern (drawn as a
-    /// crossfade). A negative surface, which the ops pass only when they finish at once, is black: native's
-    /// <c>screen_transition_finalize</c> fills scratch surface 0x20 with black for it.</summary>
+    /// <summary>Ops 0x26, 0x27 and 0x28: reveal a surface's captured objects over the live ones in the pattern's
+    /// rectangles (<see cref="LegacyPatternReveal"/>). A negative surface, which the ops pass only when they finish at
+    /// once, is black: native's <c>screen_transition_finalize</c> fills scratch surface 0x20 with black for it.</summary>
     public ScreenTransitionStart StartSurfacePatternReveal(SurfacePatternTransitionRequest request, bool forceEndpoint)
     {
         long start = _clock.NowMs;
@@ -261,8 +264,30 @@ public sealed partial class Graphics
                 ["surface"] = request.Surface,
                 ["divisions"] = request.Divisions,
                 ["mode"] = (int)request.Mode,
-                ["presentation_policy"] = "crossfade-approximation",
-            }, durationOverride: duration);
+            }, durationOverride: duration, pattern: request,
+            periodMs: LegacyScreenTransitionTiming.PatternPeriodMilliseconds(request.IntervalMilliseconds));
+    }
+
+    /// <summary>Op 0x36: the source surface's captured objects break up into growing blocks, then the target's (the
+    /// live objects when it has none) come back out of shrinking ones (<see
+    /// cref="LegacyScreenTransitionTiming.MosaicAt"/>). A negative target, which the op passes only when it finishes
+    /// at once, is black.</summary>
+    public ScreenTransitionStart StartSurfaceMosaic(
+        int sourceSurface, int targetSurface, long intervalMilliseconds, bool forceEndpoint)
+    {
+        long start = _clock.NowMs;
+        IReadOnlyList<RenderObject> source = _renderTargetSnapshots.TryGetValue(sourceSurface, out var capturedSource)
+            ? capturedSource : System.Array.Empty<RenderObject>();
+        IReadOnlyList<RenderObject> target = targetSurface < 0 ? System.Array.Empty<RenderObject>()
+            : _renderTargetSnapshots.TryGetValue(targetSurface, out var capturedTarget)
+                ? capturedTarget : State.SnapshotVisibleObjects(start);
+        return StartScreenTransition(source, target, start, intervalMilliseconds, forceEndpoint, new()
+        {
+            ["kind"] = "surface-mosaic",
+            ["source"] = sourceSurface,
+            ["target"] = targetSurface,
+        }, durationOverride: LegacyScreenTransitionTiming.MosaicDurationMilliseconds(intervalMilliseconds),
+            periodMs: LegacyScreenTransitionTiming.PatternPeriodMilliseconds(intervalMilliseconds), mosaic: true);
     }
 
     // The native 0x21/0x22/0x25 family advances an 8-bit alpha accumulator. Values <=64 use the operand as the timer
@@ -271,12 +296,16 @@ public sealed partial class Graphics
     private ScreenTransitionStart StartScreenTransition(
         IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
         long start, long intervalArgument, bool forceEndpoint,
-        Dictionary<string, object?> detail, long overlayRgb = 0, long? durationOverride = null)
+        Dictionary<string, object?> detail, long overlayRgb = 0, long? durationOverride = null,
+        SurfacePatternTransitionRequest? pattern = null, long periodMs = 1, bool mosaic = false)
     {
         long duration = durationOverride ?? LegacyScreenTransitionTiming.DurationMilliseconds(intervalArgument);
         _scene.ScreenTransition = new ScreenTransition(source, target, start, duration, overlayRgb)
         {
             Forced = forceEndpoint,
+            Pattern = pattern,
+            PeriodMs = System.Math.Max(1, periodMs),
+            Mosaic = mosaic,
         };
         RequestPresentation();
         detail["interval_argument"] = intervalArgument;
@@ -318,12 +347,18 @@ public sealed partial class Graphics
             snapshot = default;
             return false;
         }
-        double progress = _scene.ScreenTransition.Forced ? 1.0
-            : System.Math.Clamp((nowMs - _scene.ScreenTransition.StartMs)
-                / (double)_scene.ScreenTransition.DurationMs, 0.0, 1.0);
+        ScreenTransition transition = _scene.ScreenTransition;
+        long elapsed = System.Math.Max(0, nowMs - transition.StartMs);
+        double progress = transition.Forced ? 1.0
+            : System.Math.Clamp(elapsed / (double)transition.DurationMs, 0.0, 1.0);
+        // A pattern or a mosaic counts the timer's periods while it runs. At its end, natural or forced, native's
+        // last tick and screen_transition_finalize show the target alone.
+        bool counting = !transition.Forced && elapsed < transition.DurationMs;
         snapshot = new LegacyScreenTransitionSnapshot(
-            _scene.ScreenTransition.Source, _scene.ScreenTransition.Target, progress, _scene.ScreenTransition.OverlayRgb);
-        if (_scene.ScreenTransition.Forced) _scene.ScreenTransition = null;
+            transition.Source, transition.Target, progress, transition.OverlayRgb,
+            counting ? transition.Pattern : null, counting ? elapsed / transition.PeriodMs : 0,
+            counting && transition.Mosaic);
+        if (transition.Forced) _scene.ScreenTransition = null;
         return true;
     }
 
@@ -343,6 +378,9 @@ public sealed partial class Graphics
         public long DurationMs { get; }
         public long OverlayRgb { get; }
         public bool Forced { get; set; }
+        public SurfacePatternTransitionRequest? Pattern { get; init; }   // ops 0x26 to 0x28
+        public bool Mosaic { get; init; }                                // op 0x36
+        public long PeriodMs { get; init; } = 1;                         // the interval timer's period for those two
 
         public ScreenTransition(IReadOnlyList<RenderObject> source, IReadOnlyList<RenderObject> target,
                                 long startMs, long durationMs, long overlayRgb)

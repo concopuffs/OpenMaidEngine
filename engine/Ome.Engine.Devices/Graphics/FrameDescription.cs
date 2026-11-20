@@ -66,15 +66,31 @@ public readonly record struct FrameItem(
                BlendKind.Alpha);
 }
 
-/// <summary>A whole-screen transition (native screen_transition_tick mode 4): the source frame is drawn opaque, and the
-/// target, flattened over a clear of <see cref="OverlayRgb"/>, is blended over it at <see cref="Alpha"/> (0..256,
-/// 256 = the target alone). At <see cref="Alpha"/> 0 the target is not drawn and <see cref="Target"/> is empty.</summary>
+/// <summary>A rectangle of the canvas in pixels; <see cref="Right"/> and <see cref="Bottom"/> are exclusive.</summary>
+public readonly record struct FrameRect(int Left, int Top, int Right, int Bottom);
+
+/// <summary>A whole-screen transition between two complete frames. The source frame is drawn opaque; then, in one of
+/// three ways:
+/// <list type="bullet">
+/// <item>A blend (native screen_transition_tick mode 4): the target, flattened over a clear of
+/// <see cref="OverlayRgb"/>, is blended over the source at <see cref="Alpha"/> (0..256, 256 = the target alone). At
+/// <see cref="Alpha"/> 0 the target is not drawn and <see cref="Target"/> is empty.</item>
+/// <item>A patterned reveal (<see cref="Patterned"/>; native pattern_surface_transition_tick): the flattened target
+/// replaces the source inside <see cref="Reveal"/>'s rectangles and nowhere else. <see cref="Alpha"/> is 256, or 0
+/// when there is no rectangle yet.</item>
+/// <item>A mosaic (<see cref="MosaicDot"/> above 1; native MosaicTexture): the frame is <see cref="Source"/> alone,
+/// in blocks of <see cref="MosaicDot"/> pixels counted from the top-left corner, each block showing its own top-left
+/// pixel. <see cref="Alpha"/> is 0.</item>
+/// </list></summary>
 public sealed class FrameScreenTransition
 {
     public List<FrameItem> Source { get; } = new(256);
     public List<FrameItem> Target { get; } = new(256);
     public long OverlayRgb { get; set; }
     public int Alpha { get; set; }
+    public bool Patterned { get; set; }
+    public List<FrameRect> Reveal { get; } = new(64);
+    public int MosaicDot { get; set; }
 }
 
 /// <summary>

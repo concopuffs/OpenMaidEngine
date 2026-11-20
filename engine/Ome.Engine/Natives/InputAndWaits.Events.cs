@@ -13,7 +13,7 @@ namespace Ome.Engine.Natives;
 // (IInterpreterInput). While no engine thread runs, an event is routed at once.
 public sealed partial class InputAndWaits
 {
-    private enum InputKind { Pointer, Wheel, Button, Key, JoystickButton, JoystickAxis, HoldKey, Advance }
+    private enum InputKind { Pointer, Wheel, HorizontalWheel, Button, Key, JoystickButton, JoystickAxis, HoldKey, Advance }
 
     private readonly record struct InputEvent(InputKind Kind, int A, int B = 0, int C = 0, bool Pressed = false,
                                               double Value = 0);
@@ -71,6 +71,12 @@ public sealed partial class InputAndWaits
     /// lets a wheel-down advance, as a click does.
     /// </summary>
     public void MouseWheel(int delta) => Queue(new(InputKind.Wheel, delta));
+
+    /// <summary>The horizontal wheel turned: a WM_MOUSEHWHEEL delta (signed multiples of 120, positive to the right).
+    /// AGE 4.38D raises the HWHEELKEYUP or HWHEELKEYDOWN action at an ADV text wait and otherwise accumulates the
+    /// delta until op 0x2e5 reads and clears it (VirtualMachine.ApplyMouseHorizontalWheel). A script of an older build
+    /// has no opcode that reads it.</summary>
+    public void MouseHorizontalWheel(int delta) => Queue(new(InputKind.HorizontalWheel, delta));
 
     /// <summary>A mouse button (<paramref name="physicalButton"/> 0 is left, 1 is right) changed at native client
     /// pixel (<paramref name="x"/>, <paramref name="y"/>).</summary>
@@ -156,6 +162,7 @@ public sealed partial class InputAndWaits
         {
             case InputKind.Pointer: _interpreter.UpdatePointer(input.A, input.B); break;
             case InputKind.Wheel: RouteMouseWheel(input.A); break;
+            case InputKind.HorizontalWheel: _interpreter.ApplyMouseHorizontalWheel(input.A); break;
             case InputKind.Button: RouteMouseButton(input.A, input.Pressed, input.B, input.C); break;
             case InputKind.Key: RouteKey(input.A, input.Pressed); break;
             case InputKind.JoystickButton: RouteJoystickButton(input.A, input.Pressed); break;
@@ -325,6 +332,7 @@ public sealed partial class InputAndWaits
         public void UpdateJoystickAxisState(int axis, double value) { }
         public MouseWheelOutcome ApplyMouseWheel(int delta, bool advanceMessageOnWheel, bool textRevealing)
             => MouseWheelOutcome.Dropped;
+        public MouseWheelOutcome ApplyMouseHorizontalWheel(int delta) => MouseWheelOutcome.Dropped;
         public bool IsRawInputCallbackActive => false;
         public bool IsAdvTextWaitPolling => false;
         public bool TryLatchAdvCoroutineYieldTrigger(int actionMask) => false;

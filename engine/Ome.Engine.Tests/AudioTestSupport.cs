@@ -66,6 +66,11 @@ internal sealed class RecordingAudioDevice : IAudioDevice
         }
     }
 
+    public void SetPaused(int channel, bool paused)
+    {
+        lock (_lock) Commands.Add($"{(paused ? "pause" : "resume")} {channel}");
+    }
+
     public void SetVolume(int channel, float volumeDb)
     {
         lock (_lock) Commands.Add($"volume {channel} {Db(volumeDb)}");

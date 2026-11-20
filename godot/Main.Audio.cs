@@ -45,6 +45,9 @@ public partial class Main : IAudioDevice
 
     void IAudioDevice.Unload(int channel) => Callable.From(() => StopAudioChannel(channel, unload: true)).CallDeferred();
 
+    void IAudioDevice.SetPaused(int channel, bool paused)
+        => Callable.From(() => SetAudioChannelPaused(channel, paused)).CallDeferred();
+
     void IAudioDevice.SetVolume(int channel, float volumeDb)
         => Callable.From(() => SetAudioChannelVolume(channel, volumeDb)).CallDeferred();
 
@@ -93,8 +96,16 @@ public partial class Main : IAudioDevice
                 break;
         }
         player.VolumeDb = volumeDb;
+        player.StreamPaused = false;
         player.Play();
         _audioChannelPlayIds[channel] = playId;
+    }
+
+    // A held player keeps its position; a player that does not play has nothing to hold.
+    private void SetAudioChannelPaused(int channel, bool paused)
+    {
+        if (AudioChannel(channel) is not { } player || _audioChannelPlayIds[channel] == 0) return;
+        player.StreamPaused = paused;
     }
 
     private void StopAudioChannel(int channel, bool unload)
@@ -102,6 +113,7 @@ public partial class Main : IAudioDevice
         if (AudioChannel(channel) is not { } player) return;
         _audioChannelPlayIds[channel] = 0;
         player.Stop();
+        player.StreamPaused = false;
         if (unload) player.Stream = null;
     }
 
@@ -116,7 +128,7 @@ public partial class Main : IAudioDevice
         for (int channel = 0; channel < AudioChannelCount; channel++)
         {
             int playId = _audioChannelPlayIds[channel];
-            if (playId == 0 || _audioChannels[channel].Playing) continue;
+            if (playId == 0 || _audioChannels[channel].Playing || _audioChannels[channel].StreamPaused) continue;
             _audioChannelPlayIds[channel] = 0;
             _audioEnded.Enqueue(new AudioChannelEnded(channel, playId));
         }

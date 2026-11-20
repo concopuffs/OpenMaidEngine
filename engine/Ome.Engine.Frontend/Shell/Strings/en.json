@@ -86,6 +86,7 @@
   "error.prompt.cancel": "Cancel: end the program.",
   "error.depth": "Invalid depth {0} != {1}",
   "error.argument": "Invalid argument to {0}.",
+  "error.argument.first": "Invalid first argument to {0}.",
   "error.random-zero": "The RANDOM bound is 0.",
   "error.script-slot-empty": "No file is loaded at this depth. Depth={0}",
   "error.wave-load": "Could not read the WAV file {0}",

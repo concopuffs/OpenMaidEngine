@@ -140,16 +140,21 @@ it; git history keeps the record.
   and emitted as polygon items, so that neither renderer needs a 3D pass. Its frames cannot be compared with
   native's pixel for pixel, since the motion runs on the clock. The two effects only DEBUG.BIN builds can stay
   state only.
-- **Strip reveals and mask wipes are drawn as crossfades.** The port keeps each transition's mode, thickness,
-  timing and blocking, but both render paths blend the whole target in at one alpha.
-  - The legacy strip reveals `0x27`/`0x28` (Kamidori: one `0x27` call and 192 `0x28` calls across 47 scripts;
-    `engine-re.md`, "Kamidori SYS4433 comparison image and K6 frontier") end in
-    `LegacyScreenTransitionComposite.Alpha`, which ignores the mode.
+- **The range wipe `0x24f` is drawn as a crossfade, and no pattern reveal is compared with native.** Two parts:
   - The type-2 range wipe `0x24f` (Kamidori's story-portrait helper in ten scripts; `engine-re.md`, "Patterned
-    retained-range transition opcode `0x24f`") goes through `CrossfadeApproximation` (`godot/Main.Compositor.cs`).
+    retained-range transition opcode `0x24f`") keeps its mode, thickness, timing and blocking, but goes through
+    `CrossfadeApproximation` (`Graphics.Frame.cs`), which blends the whole target in at one alpha. Done when it
+    reveals its clip mask as native draws it.
+  - The legacy reveals `0x26`, `0x27` and `0x28` (Kamidori: one `0x27` call and 192 `0x28` calls across 47
+    scripts; 創刻のアテリアル: 15 `0x26` calls) and `0x36`'s mosaic transition (創刻のアテリアル: 8 calls) show
+    what native's ticks were read to draw since 2026-11-19 (`engine-re.md`, "The pattern reveals' geometry" and
+    "The mosaic transition"; `PatternRevealAndMosaicTransitionTests`), in the reference renderer, which draws
+    every whole-screen transition. No frame of one has been put beside native's. Two things are known to differ:
+    the port counts the timer's periods at its own frames, and on the mosaic's first period, where native draws
+    its blank scratch surface (a dot of 0 is refused), the port shows the source unchanged.
 
-  Done when each mode reveals its strips or clip mask as native draws them, checked frame by frame against native
-  with `drive.py` at a low `speed`.
+  Done when each is checked frame by frame against native with `drive.py` (the port at a low `speed`; native
+  cannot be slowed, so a reveal of a few frames may only be comparable at its ends).
 - **Kamidori: History leaves different objects in a save.** `kamidori-history-after-load.steps` saves slot No.003
   after opening and closing History on SC0000's first name-plate page. Native's `SAVE03.DAT` and the port's differ
   under `save-diff` in 29 gfx records (2026-11-12): field `+0x14` of objects `0xd6d8`–`0xd6ef` is 53 natively and
@@ -235,8 +240,8 @@ still handled on their own. Each change should be behaviour-neutral and pass the
   leaves a frame description to the reference renderer (`engine/Ome.Engine/Hosting/ReferenceRenderer.cs`) while a
   whole-screen transition runs (the description's `ScreenTransition`), and `Main.Recomposite`
   (`godot/Main.Compositor.cs`) sends it every frame of a `--gfx-log` or `--timeline-log` run. The screen transitions
-  are AGE's blocking transitions between two complete frames: the black and white fades, `0x25`'s crossfade and the
-  `0x27`/`0x28` strip reveals. Kamidori's title fades to and from Game Start are among them. Native (mode 4) flattens
+  are AGE's blocking transitions between two complete frames: the black and white fades, `0x25`'s crossfade, the
+  `0x26` to `0x28` pattern reveals and `0x36`'s mosaic. Kamidori's title fades to and from Game Start are among them. Native (mode 4) flattens
   the target frame into one surface and blends it over the captured source frame
   (`ReferenceRenderer.DrawFlattenedTransitionTarget`). Fading each item on the GPU would dim the frame and let layers
   show through each other, so the GPU renderer needs an offscreen target it does not have.
@@ -599,13 +604,26 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
     strings, where both supported games have 2 floats. The saved prefix is 260,993 integers, 1 float and 231
     strings.
-  - **Opcodes:** 693 scripts (480 base, 213 append; 3,229,915 instructions) use 303 opcodes. 16 have no handler,
-    at 76 sites (45 at 56,206 when the profile was added): `0x2e5` (16 sites), `0x26` (15), `0x102` (11), `0x36`
-    (8), `0x1fc` (5), `0x2e3` (5), `0x225` (4), `0x10e` (3), `0x256` (2), and one site each of `0xc1`, `0x103`,
-    `0x104`, `0x1c4`, `0x1cd`, `0x253` and `0x2e1`. Of these, `0x253`, `0x256` and `0x2e1`–`0x2e5` exist only in
-    4.38D's engine; the rest are in 4.33G's too, and Kamidori's scripts never use them. Read already: `0x26` and
-    `0x36` are legacy screen transitions (a pattern wipe, and a two-surface mode 9).
-    `build/games/arterial/intake.json` lists each one's scripts (`Ome.Cli intake`).
+  - **Opcodes: every one its scripts use has a handler (2026-11-19).** 693 scripts (480 base, 213 append;
+    3,229,915 instructions) use 303 opcodes, and `Ome.Cli catalog-scan --game arterial` reports none unsupported
+    (45 at 56,206 sites when the profile was added). The last sixteen, with the siblings read beside them, are in
+    `engine-re.md`, "The opcodes 創刻のアテリアル's scripts add": the float comparisons and the square root, the
+    voice query, the transform reset and its range forms, the erase of queued transition commands, the stepped
+    input callbacks, the horizontal wheel, the key state, the music's pause, the wipes (`0x26`) and the mosaic
+    transition (`0x36`). Each was read in the 4.38D image and has tests; none was driven on a page or compared
+    with native. Open there:
+    - **The wipes and the mosaic** are in the item "The range wipe `0x24f` is drawn as a crossfade, and no
+      pattern reveal is compared with native".
+    - **The music's pause** (`0xc1`, one site): whether a numbered save keeps the flag was not read, and the port
+      does not save it. The Godot device holds the stream with `StreamPaused`; no run has heard it.
+    - **The key state** (`0x10e`) answers -32768 or 0. Windows also sets bit 0 when the key was pressed since the
+      last call, which the port does not model; whether a script tests more than the sign was not looked at.
+    - **The horizontal wheel** (`0x2e5`) reaches the port as Godot's wheel-left and wheel-right buttons. The
+      driver has no step for it, so no scenario turns it.
+    - **The stepped callbacks' last row** is one value for the process natively, and the port keeps it across a
+      scene reset as native does (`SceneReloadTests`); no script of the game was followed through a reset with it.
+    - **Ops `0x255` and `0x257`** (a rotation, and three floats, over a range of objects) are in native's table
+      beside the range forms the port has. No script uses them, and the port has no handler for either.
   - **Float arithmetic is implemented (2026-11-19):** `0x2d0`–`0x2d3` (add, subtract, multiply, divide), `0x2d5`
     (move) and `0x2d7` (float to integer), 33,164 sites, read in the 4.38D image (`vm-map/opcodes.toml`;
     `FloatArithmeticOpsTests`). So are the local float references its scripts pass at 584 operands (type `0xd`)

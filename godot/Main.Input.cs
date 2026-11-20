@@ -108,6 +108,17 @@ public partial class Main
             GetViewport().SetInputAsHandled();
             return;
         }
+        if (e is InputEventMouseButton tilt
+            && tilt.Pressed
+            && (tilt.ButtonIndex == MouseButton.WheelLeft || tilt.ButtonIndex == MouseButton.WheelRight))
+        {
+            // WM_MOUSEHWHEEL supplies signed multiples of WHEEL_DELTA (120), positive to the right.
+            int direction = tilt.ButtonIndex == MouseButton.WheelRight ? 1 : -1;
+            int steps = System.Math.Max(1, (int)System.Math.Round(tilt.Factor));
+            _waits.MouseHorizontalWheel(direction * 120 * steps);
+            GetViewport().SetInputAsHandled();
+            return;
+        }
         if (e is InputEventMouseButton mb
             && (mb.ButtonIndex == MouseButton.Left || mb.ButtonIndex == MouseButton.Right))
         {

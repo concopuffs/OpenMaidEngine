@@ -22,6 +22,8 @@ public interface IInterpreterInput
     void UpdateJoystickAxisState(int axis, double value);
     /// <summary>Route one WM_MOUSEWHEEL delta as age_main_window_proc and the ADV services do.</summary>
     MouseWheelOutcome ApplyMouseWheel(int delta, bool advanceMessageOnWheel, bool textRevealing);
+    /// <summary>Route one WM_MOUSEHWHEEL delta as AGE 4.38D's age_main_window_proc does.</summary>
+    MouseWheelOutcome ApplyMouseHorizontalWheel(int delta);
 
     /// <summary>A timed raw input callback (HISTORY, HIDEWIN, FIELD) belongs to the frame that runs.</summary>
     bool IsRawInputCallbackActive { get; }

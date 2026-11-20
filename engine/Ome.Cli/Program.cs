@@ -1133,6 +1133,7 @@ sealed class AudioTrace(ResourceMap res) : IAudioAssets, IAudioDevice
         if (channel == Audio.BgmChannel) Events.Add(("stop-bgm", 0, ""));
     }
 
+    public void SetPaused(int channel, bool paused) { }
     public void SetVolume(int channel, float volumeDb) { }
     public void SetBusVolume(AudioBus bus, float volumeDb) { }
     public void SetBusMuted(AudioBus bus, bool muted) { }

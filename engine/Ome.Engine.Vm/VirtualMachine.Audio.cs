@@ -177,6 +177,12 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
+    // 0x1c4 (out boolean): whether the voice channel, native channel 12, is playing; 0 without a sound manager
+    private StepResult OpVoiceIsPlaying(Instruction ins, int pc)
+    {
+        Write(ins.Args[0], _audio.IsChannelPlaying(Audio.NativeChannelCount - 1) ? 1 : 0); return StepResult.Next;
+    }
+
     // 0x1be (out boolean)(native channel 0..12). sound_channel_is_playing@0x483000 traces channels of 13 and up and
     // writes 0; its test is signed, so a negative channel reads before its table.
     private StepResult OpGetSoundChannelPlaying(Instruction ins, int pc)
@@ -192,6 +198,12 @@ public sealed partial class VirtualMachine
         }
         Write(a[0], _audio.IsChannelPlaying((int)channel) ? 1 : 0);
         return StepResult.Next;
+    }
+
+    // 0xc1: flip the BGM's pause
+    private StepResult OpToggleBgmPause(Instruction ins, int pc)
+    {
+        _audio.ToggleBgmPause(); return StepResult.Next;
     }
 
     // 0xc2 / semantics: fade-bgm (target in basis points: CONFIG passes setting × 100)

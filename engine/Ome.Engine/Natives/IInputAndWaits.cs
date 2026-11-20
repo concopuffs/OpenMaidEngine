@@ -99,6 +99,10 @@ public interface IInputAndWaits
         bool forceEndpoint = false) { }
     void RevealSurfaceWithPattern(
         GfxState gfx, SurfacePatternTransitionRequest request, bool forceEndpoint = false) { }
+    // Op 0x36: block while the source surface breaks up into a mosaic and the target comes back out of one.
+    void MosaicSurfaces(
+        GfxState gfx, int sourceSurface, int targetSurface, long intervalMilliseconds,
+        bool forceEndpoint = false) { }
 
     // ---- text and input waits ----
 

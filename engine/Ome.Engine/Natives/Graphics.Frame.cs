@@ -68,10 +68,35 @@ public sealed partial class Graphics
             FrameScreenTransition screen = _frameScreenTransitions[buffer];
             screen.Source.Clear();
             screen.Target.Clear();
-            LowerObjects(transition.Source, screen.Source, perf, decisions);
-            screen.Alpha = LegacyScreenTransitionComposite.Alpha(transition.Progress);
+            screen.Reveal.Clear();
+            screen.Patterned = false;
+            screen.MosaicDot = 0;
             screen.OverlayRgb = transition.OverlayRgb;
-            if (screen.Alpha != 0) LowerObjects(transition.Target, screen.Target, perf, decisions);
+            if (transition.Mosaic)
+            {
+                // Op 0x36: one of the two surfaces alone, in blocks. Before the first period nothing has been drawn
+                // yet, and the port shows the source as it is; it does the same for the dot of 0 MosaicTexture
+                // refuses on the first period.
+                (bool showsTarget, int dot) = transition.Periods <= 0
+                    ? (false, 1) : LegacyScreenTransitionTiming.MosaicAt(transition.Periods);
+                LowerObjects(showsTarget ? transition.Target : transition.Source, screen.Source, perf, decisions);
+                screen.Alpha = 0;
+                screen.MosaicDot = dot;
+            }
+            else
+            {
+                LowerObjects(transition.Source, screen.Source, perf, decisions);
+                if (transition.Pattern is { } pattern)
+                {
+                    // Ops 0x26 to 0x28: the target shows inside the rectangles the tick has drawn so far.
+                    LegacyPatternReveal.Rects(_screenWidth, _screenHeight, pattern.Divisions, pattern.Mode,
+                                              transition.Periods, screen.Reveal);
+                    screen.Patterned = true;
+                    screen.Alpha = screen.Reveal.Count == 0 ? 0 : 256;
+                }
+                else screen.Alpha = LegacyScreenTransitionComposite.Alpha(transition.Progress);
+                if (screen.Alpha != 0) LowerObjects(transition.Target, screen.Target, perf, decisions);
+            }
             frame.ScreenTransition = screen;
         }
         else LowerObjects(_frameObjects, frame.Items, perf, decisions);

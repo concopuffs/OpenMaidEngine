@@ -10,6 +10,9 @@ public sealed partial class VirtualMachine : IInterpreterInput
 {
     private long _mouseCallbackIntervalMs;
     private long _mouseCallbackArmedAtMs;
+    // The action op 0x104 dispatched last, or the action count for the idle row: a module global in native
+    // (0x5e73fc, -1 in the image), which no reset touches.
+    private int _lastSteppedInputAction = -1;
 
     /// <summary>Native run-state 0x80000000: the engine runs adv_input_service_poll@0x411230 in place of the interpreter
     /// until a click, fast-forward, Auto or a callback ends the wait. Op 0x72 enters it for a text page. Op 0xfa enters
@@ -182,6 +185,7 @@ public sealed partial class VirtualMachine : IInterpreterInput
             | _scene.HeldInputCallbackMask
             | Take(ref _scene.QueuedInputCallbackMask);
         _cur.InputCallbackScanIndex = 0;
+        _cur.InputCallbackScanLimit = InputBindings.ActionCount;   // AGE 4.38D: op 0x104's scan starts below it
         return StepResult.Next;
     }
 
@@ -209,6 +213,76 @@ public sealed partial class VirtualMachine : IInterpreterInput
             return StepResult.Jump(target);
         }
         return StepResult.Next;
+    }
+
+    // 0x102 (AGE's SetKeyJumpEx): (action)(step)(target) — the stepped callback table's entry
+    private StepResult OpRegisterSteppedJoyCallback(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        long action = Read(a[0]), step = Read(a[1]);
+        // op_0x102_handler@0x420b40 throws one error with flags 0x10005 for an action outside 0..31 and for a step
+        // outside 0..9.
+        if (action is < 0 or >= InputBindings.MaximumActions || step is < 0 or >= ExecFrame.InputCallbackStepCount)
+            return YesNoScriptError(AgeBoxMessage.Keyed(AgeBoxText.BadFirstArgument, "SetKeyJumpEx"), pc);
+        _cur.InputCallbackStepTargets[(int)action * ExecFrame.InputCallbackStepCount + (int)step] = (int)Read(a[2]);
+        return StepResult.Next;
+    }
+
+    // 0x103: (steps) — how many steps op 0x104 cycles through; this frame starts again at step 0
+    private StepResult OpSetJoyCallbackSteps(Instruction ins, int pc)
+    {
+        _scene.InputCallbackSteps = unchecked((int)Read(ins.Args[0]));
+        _cur.InputCallbackStep = 0;
+        return StepResult.Next;
+    }
+
+    // 0x105: (mask) — the actions whose callback returns to op 0x104 itself
+    private StepResult OpSetJoyCallbackRepeatMask(Instruction ins, int pc)
+    {
+        _scene.InputCallbackRepeatMask = unchecked((int)Read(ins.Args[0])); return StepResult.Next;
+    }
+
+    // 0x104: dispatch the stepped callback of the highest action op 0xff polled below this frame's scan limit, or
+    // of the idle row. op_0x104_handler@0x418f40:
+    //  - the step starts again at 0 when the action is not the one dispatched last;
+    //  - an action of the repeat mask (op 0x105) returns to op 0x104 itself, with the scan limit lowered to it, so
+    //    the next pass takes the actions below; any other action, and the idle row, returns to the next instruction;
+    //  - a target of -1 calls nothing;
+    //  - the step then advances, modulo op 0x103's count.
+    private StepResult OpDispatchSteppedJoyCallbacks(Instruction ins, int pc)
+    {
+        int steps = _scene.InputCallbackSteps;
+        if (steps == 0)
+        {
+            // Native divides by the count: with none set (op 0x103 not run since the scene reset) the process dies.
+            HaltReason ??= $"division-by-zero: {At(ins)}: the stepped callbacks have no step count (op 0x103), where "
+                           + "AGE divides by it and the process ends";
+            return StepResult.Halt;
+        }
+        int action = -1;
+        for (int index = _cur.InputCallbackScanLimit - 1; index >= 0; index--)
+            if (index < 32 && (_cur.PendingInputCallbackMask & (1 << index)) != 0)
+            {
+                action = index;
+                break;
+            }
+        bool repeats = action >= 0 && (_scene.InputCallbackRepeatMask & (1 << action)) != 0;
+        int row = action >= 0 ? action : InputBindings.ActionCount;
+        if (_lastSteppedInputAction != row) _cur.InputCallbackStep = 0;
+        _lastSteppedInputAction = row;
+        if (repeats) _cur.InputCallbackScanLimit = action;
+        // Native indexes the frame's block flat, so a step of ten or more reads the next row; past the frame's block
+        // it reads another frame's, where the port finds no target.
+        int step = _cur.InputCallbackStep;
+        long entry = (long)row * ExecFrame.InputCallbackStepCount + step;
+        int targetOffset = entry >= 0 && entry < _cur.InputCallbackStepTargets.Length
+            ? _cur.InputCallbackStepTargets[entry]
+            : -1;
+        _cur.InputCallbackStep = unchecked(step + 1) % steps;
+        if (targetOffset < 0 || !_cur.Script.IndexByOffset.TryGetValue(targetOffset, out int target))
+            return StepResult.Next;
+        _cur.CallStack.Add(repeats ? pc : pc + 1);
+        return StepResult.Jump(target);
     }
 
     // 0x107: button slot N emits action N+4
@@ -242,6 +316,24 @@ public sealed partial class VirtualMachine : IInterpreterInput
     {
         var a = ins.Args;
         Write(a[0], Take(ref _scene.MouseWheelDelta)); return StepResult.Next;
+    }
+
+    // 0x2e5 (AGE 4.38D): (out) — the accumulated horizontal wheel delta, read and cleared
+    private StepResult OpConsumeMouseHorizontalWheelDelta(Instruction ins, int pc)
+    {
+        Write(ins.Args[0], Take(ref _scene.MouseHorizontalWheelDelta)); return StepResult.Next;
+    }
+
+    // 0x10e: (out)(DirectInput scan code) — GetAsyncKeyState of the code's virtual key
+    private StepResult OpGetKeyState(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        long scanCode = Read(a[1]);
+        // The worker indexes its 256-entry DIK-to-VK table with the operand as it comes.
+        if (IndexRefused(ins, "scan code", scanCode, InputBindings.ScanCodeCount, IndexTest.Unchecked) is { } refused)
+            return refused;
+        Write(a[0], InputBindings.KeyState((int)scanCode));
+        return StepResult.Next;
     }
 
     // 0x109

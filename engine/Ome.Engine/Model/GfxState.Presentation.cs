@@ -90,6 +90,29 @@ public sealed partial class GfxState
         MarkRetainedMutation();
     }
 
+    /// <summary>
+    /// Op 0x225: erase queued transition commands by their command handle. Native keeps the surface alpha, patterned
+    /// surface and blur range transitions in one map keyed by that handle (the graphics manager's +0x418, the map op
+    /// 0x224 clears): a count above 1 erases the keys from <paramref name="first"/> up to, not including,
+    /// <paramref name="first"/> + count, and any other count erases the one key <paramref name="first"/>.
+    /// </summary>
+    public void EraseTransitionCommands(long first, long count)
+    {
+        long end = count > 1 ? unchecked(first + count) : first + 1;
+        bool Erased(long key) => key >= first && key < end;
+        int removed = 0;
+        foreach (int slot in _scene.SurfaceTransitions.Where(pair => Erased(pair.Value.CommandKey))
+                     .Select(pair => pair.Key).ToArray())
+            removed += _scene.SurfaceTransitions.Remove(slot) ? 1 : 0;
+        foreach (long key in _scene.PatternedSurfaceTransitions.Keys.Where(Erased).ToArray())
+            removed += _scene.PatternedSurfaceTransitions.Remove(key) ? 1 : 0;
+        foreach (long key in _scene.RadialBlurTransitions.Keys.Where(Erased).ToArray())
+            removed += _scene.RadialBlurTransitions.Remove(key) ? 1 : 0;
+        foreach (long key in _scene.DirectionalBlurTransitions.Keys.Where(Erased).ToArray())
+            removed += _scene.DirectionalBlurTransitions.Remove(key) ? 1 : 0;
+        if (removed > 0) MarkRetainedMutation();
+    }
+
     public void QueueMovieMaskTransition(MovieMaskTransitionRequest request)
     {
         _scene.MovieMaskTransitions[request.SurfaceSlot] = new MovieMaskTransition

@@ -16,7 +16,7 @@ public sealed partial class InputAndWaits : IInputAndWaits
     void IInputAndWaits.ResetSceneContext() => ResetScene();
     long IInputAndWaits.InputClockMilliseconds => _clock.NowMs;
 
-    // ---- presentation and the legacy screen transitions (ops 0x21, 0x22, 0x24 and 0x25) ----
+    // ---- presentation and the legacy screen transitions (ops 0x21, 0x22, 0x24 to 0x28 and 0x36) ----
 
     void IInputAndWaits.PresentObjectRange(GfxState gfx, long firstHandle, long count)
         => PresentObjectRange(firstHandle, count);
@@ -38,6 +38,11 @@ public sealed partial class InputAndWaits : IInputAndWaits
     public void RevealSurfaceWithPattern(
         GfxState gfx, SurfacePatternTransitionRequest request, bool forceEndpoint = false)
         => WaitForScreenTransition(_graphics.StartSurfacePatternReveal(request, forceEndpoint));
+
+    public void MosaicSurfaces(
+        GfxState gfx, int sourceSurface, int targetSurface, long intervalMilliseconds, bool forceEndpoint = false)
+        => WaitForScreenTransition(
+            _graphics.StartSurfaceMosaic(sourceSurface, targetSurface, intervalMilliseconds, forceEndpoint));
 
     // ---- text and input waits ----
 

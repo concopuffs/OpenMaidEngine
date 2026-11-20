@@ -17,6 +17,8 @@ public sealed class SilentAudioDevice : IAudioDevice
 
     public void Unload(int channel) { }
 
+    public void SetPaused(int channel, bool paused) { }
+
     public void SetVolume(int channel, float volumeDb) { }
 
     public void SetBusVolume(AudioBus bus, float volumeDb) { }

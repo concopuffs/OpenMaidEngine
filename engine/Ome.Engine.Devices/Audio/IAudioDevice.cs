@@ -38,6 +38,11 @@ public interface IAudioDevice
     /// <summary>Stop the channel and drop its clip.</summary>
     void Unload(int channel);
 
+    /// <summary>Hold a playing channel where it is, or let a held one go on from there. A channel that does not play
+    /// ignores it. <see cref="Play"/>, <see cref="Stop"/>, <see cref="Load"/> and <see cref="Unload"/> end a hold, and
+    /// a held play is not reported as ended.</summary>
+    void SetPaused(int channel, bool paused);
+
     /// <summary>Set the channel's volume; it lasts until the next <see cref="Play"/>, which sets its own.</summary>
     void SetVolume(int channel, float volumeDb);
 

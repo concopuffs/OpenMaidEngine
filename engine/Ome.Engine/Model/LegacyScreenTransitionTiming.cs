@@ -15,35 +15,37 @@ public static class LegacyScreenTransitionTiming
         int width, int height, long intervalMilliseconds, int divisions,
         SurfacePatternTransitionMode mode)
     {
-        if (width <= 0 || height <= 0 || divisions <= 0) return 0;
-        long span;
-        switch (mode)
-        {
-            case SurfacePatternTransitionMode.VerticalStripsLeftToRight:
-            case SurfacePatternTransitionMode.VerticalStripsRightToLeft:
-                if (width % divisions != 0) return 0;
-                span = width / divisions;
-                break;
-            case SurfacePatternTransitionMode.HorizontalStripsTopToBottom:
-            case SurfacePatternTransitionMode.HorizontalStripsBottomToTop:
-                if (height % divisions != 0) return 0;
-                span = height / divisions;
-                break;
-            case SurfacePatternTransitionMode.StaggeredVerticalStripsLeftToRight:
-            case SurfacePatternTransitionMode.StaggeredVerticalStripsRightToLeft:
-                if (width % divisions != 0) return 0;
-                span = divisions - 1L + width / divisions;
-                break;
-            case SurfacePatternTransitionMode.StaggeredHorizontalStripsTopToBottom:
-            case SurfacePatternTransitionMode.StaggeredHorizontalStripsBottomToTop:
-                if (height % divisions != 0) return 0;
-                span = divisions - 1L + height / divisions;
-                break;
-            default:
-                return 0;
-        }
-        long interval = System.Math.Max(1, intervalMilliseconds);
-        return System.Math.Clamp(span * interval, 1, 60_000);
+        // The periods the tick counts before it reports the reveal finished: the wipes take one a division, the strips
+        // one a pixel of a strip, and the staggered strips start one period apart.
+        long span = LegacyPatternReveal.Span(width, height, divisions, mode);
+        if (span == 0) return 0;
+        return System.Math.Clamp(span * PatternPeriodMilliseconds(intervalMilliseconds), 1, 60_000);
+    }
+
+    /// <summary>The interval timer's period for a pattern reveal or the mosaic transition: sleep_timer_arm takes 1 for
+    /// an interval of 0.</summary>
+    public static long PatternPeriodMilliseconds(long intervalMilliseconds) => System.Math.Max(1, intervalMilliseconds);
+
+    /// <summary>Op 0x36's transition (screen_transition_begin mode 9) runs for this many timer periods: the parameter
+    /// 0xa0 its handler passes.</summary>
+    public const int MosaicPeriods = 0xa0;
+
+    public static long MosaicDurationMilliseconds(long intervalMilliseconds)
+        => System.Math.Clamp(MosaicPeriods * PatternPeriodMilliseconds(intervalMilliseconds), 1, 60_000);
+
+    /// <summary>
+    /// What mode 9's tick draws once <paramref name="periods"/> timer periods (1 or more) have passed: the source
+    /// surface in blocks that grow by a pixel a period over the first half, then the target surface in blocks that
+    /// shrink again. Its counter is one behind the periods, since the tick draws before it counts the period it runs
+    /// in. A dot of 0, which only the first period gives, is a size MosaicTexture refuses; a dot of 1 is the surface
+    /// as it is.
+    /// </summary>
+    public static (bool ShowsTarget, int Dot) MosaicAt(long periods)
+    {
+        long counter = System.Math.Clamp(periods - 1, 0, MosaicPeriods);
+        return counter < MosaicPeriods / 2
+            ? (false, (int)counter)
+            : (true, (int)(MosaicPeriods - counter) + 1);
     }
 
     private const string WidthTrace = "関数：SetLineFade エラー：分割サイズが不正です． 画面の幅で割り切れるようにしてください．";
@@ -52,7 +54,7 @@ public static class LegacyScreenTransitionTiming
 
     /// <summary>
     /// The test <c>pattern_surface_transition_begin</c> (/v2 <c>0x43c4a0</c>, 4.33G <c>0x43cdd0</c>) makes in the
-    /// shipped draw mode before it begins (ops 0x27 and 0x28): the screen's width (modes 0, 1, 4, 5, 8 and 9) or height
+    /// shipped draw mode before it begins (ops 0x26 to 0x28): the screen's width (modes 0, 1, 4, 5, 8 and 9) or height
     /// (modes 2, 3, 6, 7, 10 and 11) must divide by <paramref name="divisions"/>, and any other mode is refused. Null
     /// when it begins; otherwise what is wrong and native's trace, after which the op starts nothing. The ops finish at
     /// once instead of beginning when <paramref name="divisions"/> is not positive.

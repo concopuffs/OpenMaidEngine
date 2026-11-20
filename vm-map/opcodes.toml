@@ -8719,36 +8719,42 @@ argc = 4
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00418C00"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "reveal-surface-wiped"
+category = "draw"
+summary = "(surface)(interval ms)(divisions)(type) — blocking wipe of a captured surface over the frame: types 0 to 3 wipe from the left, right, top or bottom edge in that many steps, and type 4 is op 0x27's type 0."
+details = "Native's command name is ComEfWp. A type outside 0..4 (signed) traces 「関数：ComEfWp エラー：Typeは0から1の間にしてください」 and does nothing else. With divisions above 0 and no fast-forward the handler begins pattern mode type (pattern_surface_transition_begin), which refuses a division count the screen's width (types 0, 1 and 4) or height (2 and 3) does not divide by with a SetLineFade trace and starts nothing; when it begins, the handler sets run-state 0x10, arms the interval timer and blocks in VM state 9. Otherwise it finishes on the surface at once (screen_transition_finalize: a negative slot fills 0x20 with black). In the shipped draw mode the tick counts the timer's periods: for modes 0 to 3 the surface shows in one rectangle that grows from the edge by the screen's width or height over divisions each period, drawn over the frame that was there, and the reveal is over after divisions periods. Action 4 forces it to its end. 創刻のアテリアル has 15 sites in 10 scripts; the first site of each script passes surface 2 with (1 ms, 64, type 0), (1 ms, 64, type 3) or (30 ms, 16, type 3). Neither Himegari nor Kamidori calls it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "may"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler, pattern_surface_transition_begin and pattern_surface_transition_tick; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x26_reveal_surface_wiped@0x41c660 sets the frame's wait kind to 9, tests operand 4 against 0..4 (trace string 0x5a58c0) and, with operand 3 above 0 and run-state 0x8000000 clear, calls pattern_surface_transition_begin@0x43fce0(operand 1, operand 3, operand 4); a zero return ends the handler, else it sets run-state 0x10 and calls sleep_timer_arm@0x44fe50(operand 2). Otherwise it calls screen_transition_finalize@0x43d230(operand 1, 0). Begin under draw mode 1 (ctx+0xa2bd4) tests the active region's width for modes 0 and 1 and its height for 2 and 3 against the count (+0x2020) and sets the rectangle +0x2010..+0x201c empty at the starting edge. pattern_surface_transition_tick@0x440510 adds its argument + 1 to the counter +0x1fb8, caps it at the count, moves the rectangle's far edge to (extent / count) x counter from the starting edge and draws that rectangle of the surface at the same place (gfx_draw_surface_through_sprite), then presents; it reports the reveal finished when the counter reaches the count. engine_main_tick@0x411e70 passes it interval_timer_poll_elapsed_steps@0x44fee0, the periods missed since the last tick, or 0x10000000 when action 4 is triggered." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "captured surface slot the wipe reveals"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "timer period in milliseconds"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "steps the screen's width or height is divided into"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "type 0..4, the pattern mode"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -9110,30 +9116,37 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "legacy-transition-two-surface"
+name = "mosaic-transition-surfaces"
 category = "draw"
-summary = "(source_surface)(target_surface)(duration_ms) — start a blocking legacy screen transition in mode 9 between two surfaces. Under DRAWMODE=1 the begin copies them to surfaces 0x24 and 0x25 and creates scratch 0x20 blank. With fast-forward set it finalizes on the target. Neither Himegari nor Kamidori calls it, so the port traces and skips it."
+summary = "(source_surface)(target_surface)(interval ms) — blocking mosaic transition between two captured surfaces: the source breaks up into blocks that grow by a pixel each timer period, and after 80 periods the target comes back out of blocks that shrink; 160 periods in all."
+details = "The handler sets run-state 8, arms the interval timer with operand 3 and begins legacy screen transition mode 9 with the parameter 0xa0, then polls the triggered actions and clears them. Begin copies the two surfaces to 0x24 and 0x25 through gfx_copy_surface_rect, which tests neither slot, and creates scratch 0x20 blank. Each tick adds the missed periods to its counter and caps it at 0xa0; below 0x50 it fills 0x20 from 0x24 with MosaicTexture at a dot of the counter, else from 0x25 at a dot of 0xa0 - counter + 1; it then adds 1, renders the frame, draws 0x20 over it and presents. The transition is over when the counter reaches 0xa0, where the tick creates 0x24 and 0x25 again at the screen's size. MosaicTexture gives every pixel the top-left pixel of its dot x dot block, the blocks counted from the rectangle's corner, and refuses a dot of 0 with the trace 「関数：MosaicTexture エラー：モザイクサイズの指定が不正ですsize = 0」: the counter is 0 on a tick that runs in the first period, and 0x20 is then drawn as it is, blank the first time. What a blank surface draws as is not measured, and the port shows the source unchanged for that period. Action 4 forces the counter to its cap, which shows the target at a dot of 1. With fast-forward set at dispatch the handler finishes on the target at once (screen_transition_finalize: a negative slot fills 0x20 with black). The records of 0x24 and 0x25 are created from the engine's start (engine_initialize_graphics_from_settings), so a save shows no change in them. 創刻のアテリアル has 8 sites in 6 scripts; the first site of each script passes (1, 2, 3 ms) or (1, 2, 20 ms). Neither Himegari nor Kamidori calls it."
 noop_headless = false
+waits = "may"
+leaves = ["falls"]
 source = "investigation"
-confidence = "med"
+confidence = "high"
 depends_on = []
-evidence = "Ghidra SYS4433 (Kamidori): dispatch slot 0x36 (ctx+0x9f7dc) resolves to op_0x36_legacy_transition_two_surface@0x41c100. It sets run-state bit 8, arms the sleep timer with operand 3 and calls screen_transition_begin@0x43a6d0(source, target, 9, 0xa0, 0), or with run-state 0x8000000 calls screen_transition_finalize@0x43a320(target, 0). No call in either corpus."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler, screen_transition_begin and screen_transition_tick mode 9, MosaicTexture; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x36_mosaic_transition_surfaces@0x41d7a0 sets the frame's wait kind to 7 and, with run-state 0x8000000 clear, sets run-state 8, calls sleep_timer_arm@0x44fe50(operand 3) and screen_transition_begin@0x43d5e0(operand 1, operand 2, 9, 0xa0, 0), polls the triggered action mask (ctx+0xaa648) and zeroes it; otherwise it calls screen_transition_finalize@0x43d230(operand 2, 0). Begin's mode 9 under draw mode 1 creates 0x24 and 0x25 blank at the size it clipped (+0x2018, +0x201c), copies the two surfaces into them with gfx_copy_surface_rect@0x48d2f0, creates 0x20 blank and stores the parameter at +0x2028. screen_transition_tick@0x43dfe0 mode 9: +0x1fb8 += argument, capped at +0x2028; below half of it gfx_mosaic_surface_rect@0x44e520(0x20, rect, 0x24, rect, counter), else (0x20, rect, 0x25, rect, +0x2028 - counter + 1); +0x1fb8 += 1; gfx_render_frame, gfx_draw_surface_through_sprite(0x20) and present; at +0x2028 <= +0x1fb8 it calls gfx_recreate_transition_copy_surfaces@0x490670 and reports the transition finished. gfx_mosaic_surface_rect calls gfx_mosaic_texture@0x48ee10 under draw mode 1, which copies the pixel at (x - x % dot, y - y % dot) of the rectangle and traces 0x5b08b8 for a dot of 0." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "captured source surface"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "captured target surface"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "surface", count = 1000 }
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "timer period in milliseconds"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -9840,14 +9853,19 @@ argc = 0
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00415650"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "toggle-bgm-pause"
+category = "audio"
+summary = "Flip the BGM's pause: a playing track is held where it is, and a held one plays on from there."
+details = "The flag flips whether or not a track plays; starting a track and releasing the source clear it, and an identical play request, which keeps the stream, does not. With the DirectSound route the backend stops channel 11's buffer and later plays it on; with the CD route it sends MCI_PAUSE and MCI_RESUME. Not read: whether a numbered save keeps the flag, and whether anything else plays or stops channel 11 while it is held. 創刻のアテリアル has 1 site."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler, the BGM object and its DirectSound and CD backends; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0xc1_handler@0x4189f0 tail-calls 0x476470 on the BGM object (ctx+0xaa0d8), which stores !flag at +0x410 and calls the current backend's vtable +0xc with it. The DirectSound backend's (0x47a2b0) calls 0x49c790(11), sound_buffer_stop on the channel's buffer, for a nonzero flag and 0x49c860(11), which plays the buffer again with its stored loop flag, for zero; the CD backend's (0x404530) sends MCI_PAUSE or MCI_RESUME. 0x4763e0 (a play of another track) and bgm_stop_release@0x476310 zero +0x410." },
+]
 
 [[opcode]]
 op = 0xc3
@@ -10099,33 +10117,40 @@ evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this
 op = 0x102
 label = "u0041E3C0"
 argc = 3
+code_target_args = [3]
+code_target_kind = "callback"
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041E3C0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "register-stepped-joy-callback"
+category = "input"
+summary = "(action)(step)(target) — store a local code target for one logical action at one step of the stepped callback table, which op 0x104 dispatches."
+details = "The table has ten steps for each of 32 rows per script frame; the row of the action count is the idle callback's, as with op 0xfb. An action outside 0..31 or a step outside 0..9 throws a script error with flags 0x10005, the はい/いいえ box, worded SetKeyJumpExの第１引数が不正です． for either. A frame starts with every target -1. 創刻のアテリアル has 11 sites."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x102_handler@0x420b40 stores operand 3 at ctx+0x6a36c + (step + (action + frame * 33) * 10) * 4 after testing 0 <= action < 32 and 0 <= step < 10, signed; a failed test throws {0x5a5c68, 0x10005}. The frame setup 0x40e740 fills the frame's 0x528 bytes of the table with 0xff, and 0x405400 (the scene reset and op 0xfc) the whole table." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "action"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "step"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "target"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -10136,18 +10161,23 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041E4A0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-joy-callback-steps"
+category = "input"
+summary = "(steps) — set how many steps op 0x104 cycles through, and put the running frame back at step 0."
+details = "The count is one value for every frame; the scene reset and op 0xfc zero it, and op 0x104 divides by it. 創刻のアテリアル has 1 site."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x103_handler@0x420c20 stores operand 1 at ctx+0x771ac and zeroes the frame's step at ctx+0x771b4 + frame * 4. 0x405400 zeroes ctx+0x771ac." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "steps"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -10158,14 +10188,19 @@ argc = 0
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00415C50"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "dispatch-stepped-joy-callbacks"
+category = "input"
+summary = "Call the stepped callback of the highest logical action op 0xff polled, or of the idle row when none is set, at the running frame's step; then advance the step, modulo op 0x103's count."
+details = "The scan goes down from the frame's limit, which op 0xff sets to the action count. The step starts again at 0 when the action differs from the one dispatched last. An action of op 0x105's mask returns to op 0x104 itself with the limit lowered to it, so the next pass takes the lower actions; any other action and the idle row return to the next instruction. A target of -1 calls nothing. With a count of 0 native divides by zero and the process ends; the port halts. The action dispatched last is one module global for every frame and scene. 創刻のアテリアル has 1 site."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls", "jumps"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x104_handler@0x418f40 scans from ctx+0x772f4[frame] - 1 down to 0 for a bit of the triggered mask ctx+0xaa648. For a set bit it zeroes the frame's step (ctx+0x771b4) when the global 0x5e73fc differs, stores the action there, pushes pc + 1, or pc with ctx+0x772f4[frame] = action when ctx+0x771b0 has the bit, and jumps to the table's target for the action and step unless it is -1, in which case it pops; with no bit it does the same for the row of the action count (ctx+0x814), pushing pc + 1. Each path ends by storing (step + 1) % ctx+0x771ac." },
+]
 
 [[opcode]]
 op = 0x105
@@ -10174,14 +10209,25 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041E4D0"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "set-joy-callback-repeat-mask"
+category = "input"
+summary = "(mask) — the logical actions whose stepped callback returns to op 0x104 itself, so that the lower actions held with them are dispatched too."
+details = "The scene reset zeroes the mask. No script of 創刻のアテリアル uses it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x105_handler@0x420c60 stores operand 1 at ctx+0x771b0, which op 0x104 tests for the action it dispatches. scene_context_init_reset and 0x432200 zero it." },
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "mask"
+observed_types = []
+access = ["read"]
 
 [[opcode]]
 op = 0x106
@@ -10217,26 +10263,32 @@ argc = 2
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041E650"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "get-key-state"
+category = "input"
+summary = "(out)(scan_code) — GetAsyncKeyState of the virtual key of a DirectInput scan code, as a signed 16-bit value: negative while the key is down."
+details = "The worker reads its DIK-to-VK table, 256 entries, at the operand as it comes, and returns 0 while the input manager is inactive. Windows also sets bit 0 of the result when the key was pressed since the last call; the port returns -32768 or 0. 創刻のアテリアル has 3 sites."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler and worker; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x10e_handler@0x42c1e0 passes operand 2 to 0x4710c0, which returns 0 when the input manager's +0x1820 is zero and else GetAsyncKeyState(table[+0x1420 + index * 4]) sign-extended from 16 bits, and writes the result to operand 1. The table is the DIK-to-VK table op 0xfd reads at the same address." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "state"
 observed_types = ["l-int"]
 access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "scan code"
 observed_types = ["imm"]
 access = ["read"]
+unchecked_index = { table = "scan code", count = 256 }
 
 [[opcode]]
 op = 0x10f
@@ -10718,18 +10770,23 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00415720"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "voice-is-playing"
+category = "audio"
+summary = "(out) — 1 while the voice channel, native channel 12, is playing, else 0."
+details = "Op 0x1be with the channel fixed at 12. Without a sound manager it writes 0. 創刻のアテリアル has 1 site."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; 4.33G's pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x1c4_voice_is_playing@0x42bad0 writes 0 when the sound manager pointer (ctx+0x1490c) is null, else whether sound_channel_is_playing(12) is nonzero." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "playing"
 observed_types = ["l-int"]
 access = ["write"]
 
@@ -10788,24 +10845,29 @@ argc = 2
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0041A560"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "sqrt"
+category = "compute"
+summary = "(out)(x) — out = the square root of x."
+details = "The C runtime's sqrt on the fetched value; a negative x gives a NaN. 4.33G and 4.38D read and write through the float accessors, 4.24J through the integer ones (the operand contracts below), and the port takes each operand through its ABI's accessor. 4.24J's handler itself is not read. 創刻のアテリアル has 1 site."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; 4.33G's pairs with it at similarity 1.00 and is not read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x1cd_handler@0x42a3d0 calls vm_operand_fetch_float(2), then 0x584e30, the C runtime's sqrt on st(0), and vm_operand_write_float(1, the result rounded to a float)." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "result"
 observed_types = ["l-float"]
 access_by_abi = { SYS4422 = ["write"], SYS4433 = ["write-float"], SYS4438 = ["write-float"] }
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "x"
 observed_types = ["l-float"]
 access_by_abi = { SYS4422 = ["read"], SYS4433 = ["read-float"], SYS4438 = ["read-float"] }
 
@@ -10882,16 +10944,21 @@ abi_source = "kelebek"
 [opcode.semantics]
 name = "gfx-reset-transform-current"
 category = "draw"
-summary = "(handle) — get/create the retained object, clear its transform mark obj+0x68 and reset its current scale, rotation and translation matrices (obj+0x6c/+0xec/+0x16c) to identity. The current axis/angle floats obj+0x1ec..0x204 and the channel targets are left alone. Neither Himegari nor Kamidori calls it, so the port traces and skips it."
+summary = "(handle) — get or create the retained object, clear its transform mark and set its current scale, rotation and translation matrices to identity."
+details = "Native clears obj+0x68 and writes identity to the three matrices at obj+0x6c, +0xec and +0x16c; the axis and angle floats at obj+0x1ec..0x204 and the channel targets are left alone. The port keeps a rotation as its axis and angle: it keeps the axis and sets the angle to 0, so a later read of the current rotation gives angle 0 where native gives the angle last set. 創刻のアテリアル has 5 sites; neither Himegari nor Kamidori calls it."
 noop_headless = false
+waits = "never"
+leaves = ["falls"]
 source = "investigation"
 confidence = "high"
 depends_on = []
-evidence = "Ghidra /v2: op_0x1fc_handler@0x422610 fetches operand 1 and calls gfx_object_reset_transform_current@0x47e5b0, which writes obj+0x68=0, rebuilds the three current matrices as identity and raises redraw dirty owner+0xb558. The six transform setters (0x1fd/0x1fe/0x1ff current, 0x21e/0x21f/0x220 channel) and their range-transform counterparts write the mark as 1; no gfx path reads it, but it reaches the save record (Kamidori SAVE07 objects 0xc382/0xc44b, 2026-11-08). No call in either corpus."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler and worker; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x1fc_handler@0x421dc0 passes operand 1 to 0x494bd0, which calls gfx_object_get_or_create, zeroes obj+0x68, writes the identity matrix at obj+0x6c, +0xec and +0x16c, and sets the manager's dirty flag (+0xb58c)." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "handle"
 observed_types = ["imm", "l-int"]
 access = ["read"]
 
@@ -11047,24 +11114,29 @@ argc = 2
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00421780"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "erase-transition-commands"
+category = "draw"
+summary = "(first_command_handle)(count) — erase queued transition commands: with a count above 1 those whose command handle is from first_command_handle up to, not including, first_command_handle + count; otherwise the one at first_command_handle."
+details = "The commands are the queued surface alpha, patterned surface and blur range transitions, which native keeps in one map keyed by command handle (the map op 0x224 clears whole). The port erases them from its four stores. 創刻のアテリアル has 4 sites."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler and workers; 4.33G's handler pairs with it at similarity 1.00", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x225_handler@0x422d90: with operand 2 above 1 it calls 0x4934a0(handle, count), which erases the nodes of the map at the manager's +0x418 between lower_bound(handle) and lower_bound(handle + count); otherwise 0x493180(handle), which finds that one key and erases it. The producers gfx_queue_surface_alpha_transition, gfx_queue_patterned_surface_transition and the two blur range producers insert into the same map." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "first command handle"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "count"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -11704,24 +11776,29 @@ argc = 2
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00423019"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "gfx-reset-transform-range"
+category = "draw"
+summary = "(first_handle)(count) — op 0x1fc for every retained object that exists from first_handle up to, not including, first_handle + count."
+details = "It creates no object: the worker walks the object map between the two lower bounds. 創刻のアテリアル has 1 site."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler and worker; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x253_handler@0x424820 passes operands 1 and 2 to 0x494f20, which walks the object map from lower_bound(first) to lower_bound(first + count) and, for each object, zeroes obj+0x68 and writes the identity matrix at obj+0x6c, +0xec and +0x16c." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "first handle"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "count"
 observed_types = ["imm"]
 access = ["read"]
 
@@ -11732,14 +11809,49 @@ argc = 5
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00423049"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "gfx-set-scale-range"
+category = "draw"
+summary = "(first_handle)(count)(scale_x_percent)(scale_y_percent)(scale_z_percent) — op 0x1fd's current scale for every retained object that exists in the range."
+details = "Each scale operand is divided by 100.0. It creates no object. No script of 創刻のアテリアル uses it."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler and worker; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x254_handler@0x424860 fetches operands 3 to 5 as floats, divides each by 100.0 and passes them with operands 1 and 2 to 0x495170, which walks the object map between the two lower bounds and, for each object, sets obj+0x68 and writes the scale matrix at obj+0x6c." },
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "first handle"
+observed_types = []
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "count"
+observed_types = []
+access = ["read"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "scale x percent"
+observed_types = []
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 4
+role = "scale y percent"
+observed_types = []
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 5
+role = "scale z percent"
+observed_types = []
+access = ["read-float"]
 
 [[opcode]]
 op = 0x256
@@ -11748,42 +11860,47 @@ argc = 5
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u00423050"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "gfx-set-translation-range"
+category = "draw"
+summary = "(first_handle)(count)(x)(y)(z) — op 0x1ff's current translation for every retained object that exists in the range."
+details = "It creates no object. 創刻のアテリアル has 2 sites. Its neighbours 0x255 (a rotation by axis and angle over a range) and 0x257 (three floats into obj+0x18..0x20 over a range) are in native's table, and no script uses them; the port has no handler for either."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler and worker; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x256_handler@0x424970 fetches operands 3 to 5 as floats and passes them with operands 1 and 2 to 0x495470, which walks the object map between the two lower bounds and, for each object, sets obj+0x68 and writes the translation matrix at obj+0x16c." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "first handle"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "count"
 observed_types = ["imm"]
 access = ["read"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "x"
 observed_types = ["imm"]
 access = ["read-float"]
 
 [[opcode.semantics.args]]
 i = 4
-role = ""
+role = "y"
 observed_types = ["imm"]
 access = ["read-float"]
 
 [[opcode.semantics.args]]
 i = 5
-role = ""
+role = "z"
 observed_types = ["imm"]
 access = ["read-float"]
 
@@ -12767,14 +12884,37 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0042BAC1"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "eq-float"
+category = "compute"
+summary = "(out)(a)(b) — out = 1 when a == b as floats, else 0."
+details = "Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has no sites."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2df_handler@0x42e0a0 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first equals the second, else 0." },
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "result"
+observed_types = []
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "a"
+observed_types = []
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "b"
+observed_types = []
+access = ["read-float"]
 
 [[opcode]]
 op = 0x2e0
@@ -12783,14 +12923,37 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0042CE0F"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "ne-float"
+category = "compute"
+summary = "(out)(a)(b) — out = 1 when a != b as floats, else 0."
+details = "Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has no sites."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2e0_handler@0x42e110 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first differs from the second, else 0." },
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "result"
+observed_types = []
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "a"
+observed_types = []
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "b"
+observed_types = []
+access = ["read-float"]
 
 [[opcode]]
 op = 0x2e1
@@ -12799,30 +12962,35 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0042CE10"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "lt-float"
+category = "compute"
+summary = "(out)(a)(b) — out = 1 when a < b as floats, else 0."
+details = "Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has 1 site."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2e1_handler@0x42e180 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first is less than the second, else 0." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "result"
 observed_types = ["l-int"]
 access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "a"
 observed_types = ["l-float"]
 access = ["read-float"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "b"
 observed_types = ["l-float"]
 access = ["read-float"]
 
@@ -12833,14 +13001,37 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0042CE11"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "lte-float"
+category = "compute"
+summary = "(out)(a)(b) — out = 1 when a <= b as floats, else 0."
+details = "Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has no sites."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2e2_handler@0x42e1f0 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first is less than or equal to the second, else 0." },
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "result"
+observed_types = []
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "a"
+observed_types = []
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "b"
+observed_types = []
+access = ["read-float"]
 
 [[opcode]]
 op = 0x2e3
@@ -12849,30 +13040,35 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0042CE30"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "gr-float"
+category = "compute"
+summary = "(out)(a)(b) — out = 1 when a > b as floats, else 0."
+details = "Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has 5 sites."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2e3_handler@0x42e260 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first is greater than the second, else 0." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "result"
 observed_types = ["l-int"]
 access = ["write"]
 
 [[opcode.semantics.args]]
 i = 2
-role = ""
+role = "a"
 observed_types = ["l-float"]
 access = ["read-float"]
 
 [[opcode.semantics.args]]
 i = 3
-role = ""
+role = "b"
 observed_types = ["imm", "g-int", "l-int"]
 access = ["read-float"]
 
@@ -12883,14 +13079,37 @@ argc = 3
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0042CE31"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "gre-float"
+category = "compute"
+summary = "(out)(a)(b) — out = 1 when a >= b as floats, else 0."
+details = "Both operands come through the float accessor, so an integer operand is converted. A NaN is equal to nothing and neither less nor greater. 創刻のアテリアル has no sites."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2e4_handler@0x42e2d0 fetches operands 2 and 3 with vm_operand_fetch_float and writes 1 to operand 1 when the first is greater than or equal to the second, else 0." },
+]
+
+[[opcode.semantics.args]]
+i = 1
+role = "result"
+observed_types = []
+access = ["write"]
+
+[[opcode.semantics.args]]
+i = 2
+role = "a"
+observed_types = []
+access = ["read-float"]
+
+[[opcode.semantics.args]]
+i = 3
+role = "b"
+observed_types = []
+access = ["read-float"]
 
 [[opcode]]
 op = 0x2e5
@@ -12899,18 +13118,23 @@ argc = 1
 abi_source = "kelebek"
 
 [opcode.semantics]
-name = "u0042CE50"
-category = "unknown"
-summary = "Broader AGE-catalog compatibility stub; the port currently traces and skips it."
+name = "consume-mouse-hwheel-delta"
+category = "input"
+summary = "(out) — return the accumulated signed horizontal wheel delta and clear it."
+details = "The horizontal twin of op 0x10d. The window procedure adds a WM_MOUSEHWHEEL delta (positive to the right) to the accumulator unless the run state holds an ADV wait (0x90100000); there it raises the action set:HWheelKeyUp or set:HWheelKeyDown names, which are -1 (none) unless the catalog sets HWHEELKEYUP or HWHEELKEYDOWN, and the delta is dropped. 創刻のアテリアル has 16 sites and sets neither key."
 noop_headless = false
-source = "kelebek"
-confidence = "low"
+waits = "never"
+leaves = ["falls"]
+source = "investigation"
+confidence = "high"
 depends_on = []
-evidence = "ABI label/argc come from Kelebek's revision-unscoped AGE table; this record makes no per-revision semantic claim."
+evidence = [
+  { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 handler and the window procedure; the opcode exists only in AGE 4.38D among the builds read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2e5_handler@0x42e340 reads ctx+0x1c38, zeroes it and writes the value to operand 1. age_main_window_proc@0x49f9a0 handles the horizontal wheel at 0x4a02c8: with run-state 0x90100000 set it looks up set:HWheelKeyUp (a positive delta) or set:HWheelKeyDown (a negative one) and, for a value that is not negative, ors 1 << value into the triggered action mask (ctx+0xaa648); otherwise it adds the delta to ctx+0x1c38." },
+]
 
 [[opcode.semantics.args]]
 i = 1
-role = ""
+role = "delta"
 observed_types = ["l-int"]
 access = ["write"]
 

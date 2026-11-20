@@ -165,6 +165,43 @@ public sealed partial class VirtualMachine
         Gfx.SetCurrentTranslation(Read(a[0]), (ReadNumber(ins, 1), ReadNumber(ins, 2), ReadNumber(ins, 3))); return StepResult.Next;
     }
 
+    // 0x1fc (handle): the object's current scale, rotation and translation back to identity
+    private StepResult OpGfxResetTransformCurrent(Instruction ins, int pc)
+    {
+        Gfx.ResetCurrentTransform(Read(ins.Args[0])); return StepResult.Next;
+    }
+
+    // 0x253 (AGE 4.38D): (first handle)(count), op 0x1fc for the objects that exist in the range
+    private StepResult OpGfxResetTransformRange(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Gfx.ResetCurrentTransformRange(Read(a[0]), Read(a[1])); return StepResult.Next;
+    }
+
+    // 0x254 (AGE 4.38D): (first handle)(count)(sx%)(sy%)(sz%), op 0x1fd for the objects that exist in the range
+    private StepResult OpGfxSetScaleRange(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Gfx.SetCurrentScaleRange(Read(a[0]), Read(a[1]), (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4)));
+        return StepResult.Next;
+    }
+
+    // 0x256 (AGE 4.38D): (first handle)(count)(x)(y)(z), op 0x1ff for the objects that exist in the range
+    private StepResult OpGfxSetTranslationRange(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Gfx.SetCurrentTranslationRange(Read(a[0]), Read(a[1]),
+                                       (ReadNumber(ins, 2), ReadNumber(ins, 3), ReadNumber(ins, 4)));
+        return StepResult.Next;
+    }
+
+    // 0x225 (first command handle)(count): erase queued transition commands
+    private StepResult OpEraseTransitionCommands(Instruction ins, int pc)
+    {
+        var a = ins.Args;
+        Gfx.EraseTransitionCommands(Read(a[0]), Read(a[1])); return StepResult.Next;
+    }
+
     // 0x1fd (handle)(sx%)(sy%)(sz%) -> current scale matrix
     private StepResult OpGfxSetScaleCurrent(Instruction ins, int pc)
     {

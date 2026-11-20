@@ -45,6 +45,9 @@ public static class AgeBoxText
     /// <summary>A command refused its argument: <c>{0}</c> is the command's name in AGE's script language
     /// (SetKeyTotal for op 0xfe).</summary>
     public const string BadArgument = "error.argument";
+    /// <summary>A command refused its argument, in the words AGE 4.38D's SetKeyJumpEx (op 0x102) uses: <c>{0}</c> is
+    /// the command's name.</summary>
+    public const string BadFirstArgument = "error.argument.first";
     /// <summary>Op 0x60's bound is 0.</summary>
     public const string RandomBoundZero = "error.random-zero";
     /// <summary>Op 0x8 names a frame slot no script was loaded into: <c>{0}</c> is the slot.</summary>
@@ -92,6 +95,7 @@ public static class AgeBoxText
         [PromptCancel] = "キャンセル：プログラムを終了します．",
         [DepthMismatch] = "Depth が不正です {0} != {1}",
         [BadArgument] = "{0}の引数が不正です．",
+        [BadFirstArgument] = "{0}の第１引数が不正です．",
         [RandomBoundZero] = "RANDOMの最大値が0になっています．",
         [EmptyScriptSlot] = "この階層にはファイルが読み込まれていません．Depth={0}",
         [WaveLoadFailed] = "WAVファイル {0} の読み込みに失敗しました",

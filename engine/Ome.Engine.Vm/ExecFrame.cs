@@ -25,6 +25,13 @@ internal sealed class ExecFrame
     public readonly int[] InputCallbackTargets = Enumerable.Repeat(-1, 32).ToArray(); // op 0xfb
     public int PendingInputCallbackMask;                 // op 0xff snapshot consumed by op 0x100
     public int InputCallbackScanIndex;
+    // AGE 4.38D's stepped callbacks (ops 0x102 to 0x105): a target for each action and step (native's 33 rows of
+    // ten steps per frame; the idle row is the action count's, as op 0xfb's), the step this frame is at
+    // (ctx+0x771b4), and how far op 0x104 scans, which op 0xff sets to the action count (ctx+0x772f4).
+    public const int InputCallbackStepCount = 10;
+    public readonly int[] InputCallbackStepTargets = Enumerable.Repeat(-1, 33 * InputCallbackStepCount).ToArray();
+    public int InputCallbackStep;
+    public int InputCallbackScanLimit;
     public readonly HotspotRegistry Hotspots = new();
     // 無視 after an interpreter error: native adds the frame's last decoded instruction length to its pc. A
     // waiting frame's native pc is already past the wait, so the port applies the dwords to the wait's successor.

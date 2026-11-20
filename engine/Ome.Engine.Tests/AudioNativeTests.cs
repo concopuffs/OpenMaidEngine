@@ -37,6 +37,33 @@ public class AudioNativeTests
     }
 
     [Fact]
+    public void ThePauseToggleHoldsThePlayingTrackAndAStartOrAStopClearsIt()
+    {
+        // Op 0xc1 (bgm object +0x410): the backend holds channel 11 where it is, and plays it on.
+        var rig = new AudioRig();
+        rig.Audio.ToggleBgmPause();                     // nothing plays: the flag flips and the device hears nothing
+        Assert.True(rig.Audio.BgmPaused);
+        Assert.Empty(rig.Device.CommandsStartingWith("pause"));
+        rig.Audio.ToggleBgmPause();
+
+        rig.Audio.PlayBgm(5);
+        rig.Audio.ToggleBgmPause();
+        rig.Audio.ToggleBgmPause();
+        rig.Audio.ToggleBgmPause();
+        Assert.Equal(["pause 11", "resume 11", "pause 11"],
+            rig.Device.Commands.Where(command => command is "pause 11" or "resume 11"));
+
+        rig.Audio.PlayBgm(5);                           // the identical request keeps the stream, and the hold
+        Assert.True(rig.Audio.BgmPaused);
+        rig.Audio.PlayBgm(6);                           // another track starts unheld
+        Assert.False(rig.Audio.BgmPaused);
+
+        rig.Audio.ToggleBgmPause();
+        rig.Audio.StopBgm();                            // the release clears it
+        Assert.False(rig.Audio.BgmPaused);
+    }
+
+    [Fact]
     public void AFadeArmedAgainPartWayStartsFromTheCommittedLevel()
     {
         var rig = new AudioRig();

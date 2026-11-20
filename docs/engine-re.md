@@ -442,6 +442,131 @@ and the dash join their differences were not read. With the calibration above, t
 創刻のアテリアル's first and fourth pages (text, ruby, window and background, GDI backend) equal native's in every
 pixel (2026-11-19), so nothing on those pages depends on what is unread.
 
+### The opcodes 創刻のアテリアル's scripts add (2026-11-19)
+
+Sixteen opcodes the game's scripts use had no handler once the Auto pitch (above) was in; the port has those now,
+and the siblings read with them. Each one's contract (operands, tests, traces, evidence) is its entry in
+`vm-map/opcodes.toml`; this section keeps the engine's side, at 4.38D's addresses. Among the builds read, the
+float comparisons `0x2df` to `0x2e4`, the horizontal wheel `0x2e5` and the range transforms `0x253` to `0x257`
+exist only in 4.38D. 4.33G has the rest, each with a handler that pairs at similarity 1.00, and neither older
+game's scripts call them.
+
+**Floats.** `0x2df` to `0x2e4` compare two operands fetched with `vm_operand_fetch_float` (`==`, `!=`, `<`, `<=`,
+`>`, `>=`) and write 1 or 0; a NaN compares as IEEE has it. `0x1cd` writes the C runtime's `sqrt` of a float
+operand through `vm_operand_write_float`, so an integer destination takes it truncated.
+
+**Object transforms.** An object keeps three current matrices: scale at `+0x6c`, rotation at `+0xec` and
+translation at `+0x16c`, with the mark `+0x68` that says one was set. `gfx_object_reset_transform@0x494bd0`
+(op `0x1fc`) gets or creates the object, clears the mark and makes the three identity. The range forms walk the
+object map from `lower_bound(first)` to `lower_bound(first + count)` and create nothing:
+`gfx_object_range_reset_transform@0x494f20` (`0x253`), `gfx_object_range_set_scale@0x495170` (`0x254`, each
+percentage over 100.0), `gfx_object_range_set_rotation@0x4952b0` (`0x255`, axis and degrees) and
+`gfx_object_range_set_translation@0x495470` (`0x256`). No script uses `0x255` or `0x257` (three floats into
+`obj+0x18..0x20` over a range), and the port has no handler for either.
+
+**Queued transition commands.** The graphics manager's command map (`+0x418`) holds the surface alpha, patterned
+surface and blur range transitions by their command handle. Op `0x225` erases one key
+(`gfx_command_map_erase@0x493180`) or, for a count above 1, the keys in `[first, first + count)`
+(`gfx_command_map_erase_range@0x4934a0`).
+
+**Stepped input callbacks** (native `SetKeyJumpEx`). Beside the callback table of ops `0xfb` and `0xff`
+(`ctx+0x68ecc`) there is a stepped one at `ctx+0x6a36c`: 10 targets for each of 33 rows a script frame, where
+rows 0 to 31 are the actions and row 32 is the row taken when no action is triggered.
+`input_callback_tables_reset@0x405400` fills both with -1 and zeroes the step count.
+
+| field | meaning |
+|---|---|
+| `ctx+0x771ac` | the step count op `0x103` sets; op `0x104` divides by it, unchecked |
+| `ctx+0x771b0` | op `0x105`'s mask of the actions whose callback returns to op `0x104` itself |
+| `ctx+0x771b4[frame]` | the frame's current step |
+| `ctx+0x772f4[frame]` | the scan limit: op `0xff` sets it to the action count, and a repeat action lowers it |
+| `0x5e73fc` | the row op `0x104` dispatched last, one value for the process (-1 at start) |
+
+Op `0x104` scans the triggered mask (`ctx+0xaa648`) from the scan limit down for the highest action, takes the
+idle row when it finds none, starts again at step 0 when the row differs from the last one, calls the row's
+target for the step and advances the step modulo the count. A target of -1 calls nothing. An action of the
+repeat mask pushes the opcode's own position, so the dispatch runs again for the lower actions, and lowers the
+scan limit to itself; any other pushes the position after it.
+
+**The horizontal wheel.** `age_main_window_proc` handles `WM_MOUSEHWHEEL` at `0x4a02c8`. Under run-state
+`0x90100000` it raises the action of the catalog's `set:HWheelKeyUp` or `set:HWheelKeyDown` setting, unless that is
+negative; otherwise it adds the delta to `ctx+0x1c38`. Op `0x2e5` reads that sum and zeroes it. The game's
+catalog sets neither action.
+
+**The key state.** `input_get_key_state@0x4710c0` (op `0x10e`) returns `(short)GetAsyncKeyState` of the virtual
+key its DIK table (input manager `+0x1420`, 256 entries, read unchecked) gives for a scan code, or 0 while the
+manager's `+0x1820` is zero.
+
+**The music's pause.** The BGM object (`ctx+0xaa0d8`) holds its route at `+0x408`, its track at `+0x40c`, a pause
+flag at `+0x410` and a backend for each route at `+0x434`. `bgm_toggle_pause@0x476470` (op `0xc1`) flips the flag
+and calls the route's backend with it: the DirectSound one (`0x47a2b0`) stops channel 11's buffer where it is
+(`sound_channel_pause@0x49c790`) or plays it on with its stored loop flag (`sound_channel_resume@0x49c860`), and
+the CD one sends `MCI_PAUSE` or `MCI_RESUME`. A play of another track (`0x4763e0`) and `bgm_stop_release` zero the
+flag; a play request for the track that already plays returns early and leaves it. Whether a numbered save keeps
+the flag was not read. The port holds its channel through the audio device's `SetPaused`.
+
+#### The pattern reveals' geometry
+
+Ops `0x26` (native `ComEfWp`), `0x27` (`ComEfBl`) and `0x28` (`ComEfBl2`) share one handler shape and one worker
+pair, `pattern_surface_transition_begin@0x43fce0` and `pattern_surface_transition_tick@0x440510`; they differ in
+the mode their type 0 is (0, 4 and 8). "Legacy transitions and scratch surface `0x20`" below has their tests and
+endpoints. This is what the tick draws in the shipped draw mode (`ctx+0xa2bd4 == 1`), read in 4.38D.
+
+`engine_main_tick@0x411e70` services run-state `0x10`: it passes the tick
+`interval_timer_poll_elapsed_steps@0x44fee0`, the timer periods missed since the last tick, when a period has
+passed, and `0x10000000` when action 4 is triggered. The tick counts its argument + 1, so its counters are the
+periods since the reveal began. With W and H the active region's size, D the division count (`+0x2020`) and p the
+periods:
+
+| modes | extent | shown after p periods | finished at |
+|---|---|---|---|
+| 0, 1 | W | one rectangle `(W / D) × min(p, D)` wide, from the left (0) or right (1) edge | p = D |
+| 2, 3 | H | one rectangle `(H / D) × min(p, D)` high, from the top (2) or bottom (3) edge | p = D |
+| 4, 5 | W | D strips of `W / D`, each `min(p, W / D)` wide from its own left (4) or right (5) edge | p = W / D |
+| 6, 7 | H | D strips of `H / D`, each `min(p, H / D)` high from its own top (6) or bottom (7) edge | p = H / D |
+| 8 to 11 | as 4 to 7 | the same strips, where strip i (counted from the starting edge) shows `min(p − i, T)` once that is positive, T its thickness | p = D − 1 + T |
+
+The staggered modes keep a counter a strip (`+0x202c`), set to minus the strip's number at begin. Every rectangle
+of the surface is drawn at its own place through `gfx_draw_surface_through_sprite`, over what the back buffer
+holds: `gfx_direct_draw_begin@0x4906d0` and `gfx_transform_state_push_identity@0x489210` clear nothing. So the
+rest of the screen keeps the frame that was there. Begin refuses a count the extent does not divide by and a mode
+outside 0 to 11, with a `SetLineFade` trace, and the handler then starts nothing.
+
+The port computes the rectangles in `LegacyPatternReveal` and the reference renderer copies the target frame into
+them (`LegacyScreenTransitionComposite.RevealTargetOverSource`). It samples the periods at its own frames
+(`elapsed / interval`), where native's tick sleeps up to 4 ms to meet a period. No frame of a reveal has been
+compared with native's.
+
+#### The mosaic transition
+
+Op `0x36` begins legacy screen transition mode 9 with the parameter `0xa0` (`screen_transition_begin@0x43d5e0`)
+and blocks under run-state 8, which `screen_transition_tick@0x43dfe0` services. Begin creates surfaces `0x24`
+and `0x25` blank at the clipped size and copies the source and the target surface into them
+(`gfx_copy_surface_rect@0x48d2f0`, which tests neither slot), creates scratch `0x20` blank and stores the
+parameter at `+0x2028`.
+
+Each tick adds the missed periods to the counter `+0x1fb8` and caps it at `0xa0`. Below `0x50` it fills `0x20`
+from `0x24` at a dot of the counter; from there on it fills `0x20` from `0x25` at a dot of `0xa0 − counter + 1`.
+It then adds 1, renders the frame (`gfx_render_frame`), draws `0x20` over it and presents. When the counter
+reaches `0xa0` it creates `0x24` and `0x25` again at the screen's size
+(`gfx_recreate_transition_copy_surfaces@0x490670`) and the transition is over. So the source breaks up for 80
+periods and the target comes back for 80, and the whole lasts `0xa0` periods of operand 3 milliseconds.
+
+The fill is native `MosaicTexture` (`gfx_mosaic_texture@0x48ee10`, reached through
+`gfx_mosaic_surface_rect@0x44e520`, native `GrtoMZ`; op `0x35` calls it too). Every pixel of the rectangle takes
+the pixel at `(x − x % dot, y − y % dot)`: a row whose y divides by the dot samples every dot-th pixel into a line
+buffer, and the rows under it reuse the buffer. It refuses a dot of 0 with the trace
+「関数：MosaicTexture エラー：モザイクサイズの指定が不正ですsize = 0」. The counter is 0 on a tick that
+runs in the first period, so `0x20` is then drawn as it is, which is blank the first time. What a blank surface
+draws as was not measured; the port shows the source unchanged for that period.
+
+Action 4 passes `0x10000000`, which caps the counter and shows the target at a dot of 1. With fast-forward set at
+dispatch the handler calls `screen_transition_finalize(target, 0)` and begins nothing.
+
+The port keeps the two captured frames as it does for the crossfade, and its reference renderer draws the one
+`LegacyScreenTransitionTiming.MosaicAt` names and breaks it into blocks
+(`LegacyScreenTransitionComposite.Mosaic`). No frame of it has been compared with native's.
+
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 
 This image is the English fan translation's 4.33F build (see "Kamidori engine builds" above), and the addresses
@@ -552,9 +677,10 @@ step apart. Thus simultaneous modes last `strip_thickness * interval`, while sta
 publishes the full target immediately. Kamidori's sole `0x27` call is
 `SC1050@0x8cf5 (2,40,64,3)`, a 360 ms bottom-to-top horizontal-strip reveal. Its 192 `0x28` calls across 47
 scripts all use surface 2, 64 divisions, a 10 or 15 ms interval, and selectors 0..3, exercising all four
-stagger directions. The port preserves the exact blocking/timing/endpoint contract and currently represents
-the unavailable legacy strip compositor as a host-level crossfade approximation. Both handlers and both
-workers are named/commented in the saved SYS4433 image.
+stagger directions. The port preserves the exact blocking/timing/endpoint contract, and since 2026-11-19 its
+reference renderer shows the surface in the rectangles native's tick draws ("The pattern reveals' geometry"
+above); before that it drew a crossfade. Both handlers and both workers are named/commented in the saved SYS4433
+image.
 
 After these implementations, strict natural execution reaches the stable `TITLE.BIN` loop, native-style
 mouse/callback input selects Game Start, and `GAMESTART.BIN` enters `SC0000.BIN` through its first completed
@@ -6374,10 +6500,10 @@ treats the scratch slot by mode. A blank create or a fill sets the record's crea
 | 4 | `0x25` (`0x41aeb0`) | untouched: source and target are composited directly |
 | 5–7 | `0x2a` (`0x41b260`): mode `5 + style`, style 0–2 | created and filled black |
 | 8 | `0x2e` (`0x41b8c0`): an asset mask | untouched in draw mode 1 (draw mode 0 builds the mask object) |
-| 9 | `0x36` (`0x41c100`) | created blank; the two surfaces are copied to `0x24` and `0x25` |
+| 9 | `0x36` (`0x41c100`), the mosaic transition | created blank; the two surfaces are copied to `0x24` and `0x25` |
 
-The strip reveals `0x27`/`0x28` do not use this manager. Their begin and tick (SYS4433 `0x43cdd0` and
-`0x43d600`) never write `0x20`.
+The pattern reveals `0x26`, `0x27` and `0x28` do not use this manager. Their begin and tick (SYS4433 `0x43cdd0`
+and `0x43d600`) never write `0x20`; "The pattern reveals' geometry" above has what they draw.
 
 Every handler takes `screen_transition_finalize` (SYS4422 `0x4399c0`, SYS4433 `0x43a320`) when fast-forward
 (run-state `0x8000000`) is set at dispatch. Finalize publishes its surface operand directly and fills `0x20`
