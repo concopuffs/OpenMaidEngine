@@ -133,8 +133,10 @@ Leader `G[0x214b71]`, capacity 10000; 1426 scene ids are set, 0 to 8932. Scene 0
 ### Scene dispatch (SCINIT and SCJUMP)
 
 A scene is a number, and `G[0x21480a]` holds the one being played. `SCINIT` gives each its script; one script
-holds several scenes and branches on the number (`SC0000` on ten values). Each of the 219 base scene scripts
-sets `G[0x18880 + scene]` and stores it in the shared profile: the scene has been seen.
+holds several scenes and branches on the number (`SC0000` holds scenes 0 to 9). Two cells a scene record that
+it ran. `G[0x5e0 + scene]` is set by the scene's own code (`SC0000` sets `G[0x5e0]` to `G[0x5e9]`, `SC3000`
+`G[0x1198]`) and is in a save: the scene has been played in this game. `G[0x18880 + scene]` is set by each of
+the 219 base scene scripts and stored in the shared profile: the scene has been seen by this player.
 
 `SCJUMP` picks the next scene. A caller (`ALLMAP`, `AFFAIR`, `BTL`, `SYSTEM4`) sets the context `G[0x352f]` and
 `G[0x21480b] = 0x7fffffff`, runs `SETADVFLAG` (an empty script here), and then runs every script of a 32-slot
@@ -158,13 +160,20 @@ script and in the rest of the chain, finds it clear. The caller then sees `G[0x0
 | `$3$SCJUMP` | 10 | 10, from 710 to 765 |
 | `$4$SCJUMP` | 1505 | 103, from 811 to 8891 |
 
-Most conditions of the base script test the area in play, `G[0x9883]` (1151 times), `G[0x9ba8]` (973) and a bit of
-`G[0x9ae0]` (970), with one more cell that differs from rule to rule (`G[0x1198] != 1`, `G[0x119b] != 1` …):
-a scene on the map is offered at a place and until something is set. 85 rules test `G[0x5e0 + scene] != 1` for
-the scene they name.
+What a rule tests is mostly two things. The first is the played cells: 585 of the base script's rules begin
+`G[0x5e0 + scene] != 1` for the scene they name, so a scene is offered until it has been played, and others ask
+that another scene has been (`G[0x11a9] == 1 && G[0x5e1] != 1` offers scene 1 once scene 3017 is played). The
+second is the place: the area in play, `G[0x9883]` (1151 tests), `G[0x9ba8]` (973) and bit 0 of `G[0x9ae0]`
+(970). `G[0x9ba8]` is the second cell of `G[0x9ba7]`, which `ALLMAP` indexes with the unit in `G[0x9ade]` (a
+slot of `UNINIT`) to get the point that unit stands on. Unit 1 has no card in `UNINIT` and is read as the
+player's, so a rule such as `G[0x1198] != 1 && G[0x9883] == 3 && (G[0x9ae0] & 1) == 1 && G[0x9ba8] == 1`
+offers scene 3000 when unit 1 is on point 1 of area 3. So the played cells are the game's story
+flags, first of all: of the 836 candidates `tools/story_flags.py` lists on this game, 372 lie in the played
+cells' range (`0x5e0` to `0x2cef`).
 
-Not decoded: what the seven contexts are, what the per-rule cells mean and who sets them, and with that the
-game's story flags. `docs/scjump-progression.md` is Himegari's; nothing of it is assumed here.
+Not decoded: what the seven contexts are, what `G[0x9ae0]`'s bit is, and the story cells outside the played
+cells. `tools/scjump_decode.py` was written for Himegari's `SCJUMP` and was not run;
+`docs/scjump-progression.md` is Himegari's, and nothing of it is assumed here.
 
 ## Characters
 
@@ -758,4 +767,5 @@ already holds.
   most of `UNINIT`'s, are not read.
 - **Who reads the sort numbers** is not found: no script reads those arrays through a lookup.
 - **Copies in saved state** ("Saved state" above) are checked for a card's numbers only.
-- **`SCJUMP`'s contexts and per-rule cells** ("Scene dispatch" above), and with them the story flags.
+- **`SCJUMP`'s seven contexts** ("Scene dispatch" above), and the story cells that are not a scene's played
+  cell.

@@ -879,6 +879,15 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x5e0"
+name = "scene_played_flags"
+category = "story-flag"
+type = "int[10000]"
+usage = "A scene's own code sets [scene] to 1 (SC0000 sets cells 0 to 9), and a save keeps it. SCJUMP's rules test it: 585 of the base script's begin with their own scene's cell != 1, and others ask that another scene's is 1."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x18880"
 name = "scene_seen_flags"
 category = "data-table"

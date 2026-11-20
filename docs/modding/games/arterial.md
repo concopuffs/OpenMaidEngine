@@ -26,7 +26,7 @@ command needs the game options:
   page, ｵｰﾄﾒｯｾｰｼﾞ, with Auto mode's delays; the driver's `option` steps set its controls on both targets
   (`auto-pitch-voice`, `auto-pitch-text`, `auto-wait-voice-end`).
 - The globals registry is young: `use arterial.globals` names the page's cells, the scene dispatch and the main
-  tables' text, references and a card's and an item's numbers (101 names; [reference](../../global-reference-arterial.md)). Every
+  tables' text, references and a card's and an item's numbers (102 names; [reference](../../global-reference-arterial.md)). Every
   other cell has no name yet: name it by its address (`G[0x9883]`), as the decompiled scripts print it.
 
 ## First mod values

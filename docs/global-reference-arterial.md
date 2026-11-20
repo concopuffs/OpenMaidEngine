@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals-arterial.toml by tools/globals_build.py --build -->
 # Global Variable Reference — arterial (generated)
 
-10219 globals (101 curated, 10118 auto shape-inferred). Source of truth: `vm-map/globals-arterial.toml`.
+10219 globals (102 curated, 10117 auto shape-inferred). Source of truth: `vm-map/globals-arterial.toml`.
 
 ## Tables
 
@@ -262,7 +262,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x34d` | — | low | auto-shape | array |
 | `0x41f` | — | low | auto-shape | array |
 | `0x4f1` | — | low | auto-shape | array |
-| `0x5e0` | — | low | auto-shape | array |
 | `0x2d57` | — | low | auto-shape | array |
 | `GS 0x2dcc` | — | low | auto-shape | array |
 | `0x3147` | — | low | auto-shape | array |
@@ -577,6 +576,12 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x43f664` | card_arg_row | high | investigation | The row of the card CALCARM and the card panel work on; a caller sets it and card_arg_slot before calling CALCARM through preloaded script slot 0x1c. |
 | `0x43f665` | card_arg_slot | high | investigation | The slot of that card. |
 | `0x43f666` | card_arg_count | med | investigation | How many ADDCARD adds. |
+
+## story-flag
+
+| address | name | conf | source | usage |
+|---|---|---|---|---|
+| `0x5e0` | scene_played_flags | high | investigation | A scene's own code sets [scene] to 1 (SC0000 sets cells 0 to 9), and a save keeps it. SCJUMP's rules test it: 585 of the base script's begin with their own scene's cell != 1, and others ask that another scene's is 1. |
 
 ## string-table
 

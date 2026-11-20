@@ -715,7 +715,7 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The data level, M2, is started and not reached (2026-11-20).** In: the extraction, the executed boot
     image (145 scripts), the layout tool `tools/init_arterial.py` with its tests, the layout of all 278 arrays
     of the 29 boot tables and the scene dispatch's protocol (`arterial-data-tables.md`), and the registry
-    `vm-map/globals-arterial.toml` with 101 names, nine record tables (`character`, `card`, `talent`, `skill`,
+    `vm-map/globals-arterial.toml` with 102 names, nine record tables (`character`, `card`, `talent`, `skill`,
     `item`, `deck`, and `area_point`, `area_route`, `area_unit` under the scope `area`). No table lies in the saved prefix, and a card's numbers in play are worked out from
     the tables each time (`CALCARM`), not kept in a save. The manifest stays at M1. What M2's gate still asks,
     each done when `arterial-data-tables.md` and the registry say it:
@@ -734,8 +734,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       give them) and the scope `area`; a point's name, kind, position and target, a route's two points and a
       unit's card are read, and the other arrays, most of `UNINIT`'s twenty, are not.
     - **Copies in saved state.** Checked for a card's numbers only (none is kept); no other field was.
-    - **`SCJUMP`** is read as far as its protocol and its rule counts. Its seven contexts, the cell each rule
-      tests and the story flags are not (`story_flags.py` and `scjump_decode.py` were not run on the game).
+    - **`SCJUMP`** is read as far as its protocol, its rule counts and what its rules test: the scenes' played
+      cells (`scene_played_flags`), the area in play and the point unit 1 stands on. Its seven contexts are
+      not read, nor the story cells outside the played cells (`story_flags.py` lists 836 candidates), and
+      `scjump_decode.py`, written for Himegari's `SCJUMP`, was not run on the game.
   - **Next, by the plan:** the rest of the data tables (M2, step 9), then the base mod (M3), and the sweep (P4).
     Step 7 is done: the opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page;
     `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept
