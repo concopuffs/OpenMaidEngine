@@ -55,6 +55,40 @@ public class ExtendedGlyphTests
         Assert.Equal(19, mask.Ascent);
     }
 
+    [Fact]
+    public void ARubyCharacterOfTheAreaIsDrawnInThePrimaryFontAndTakesTheRubyFontsCell()
+    {
+        // The extended font is made once, from the primary LOGFONT; the ruby layout measures with the ruby font.
+        var inner = new RecordingRasterizer(request => request.FontFace == Extended
+            ? new GlyphMask(1, 1, 1, 0, 1, 24, 0, 24, 22, [16], ascent: 30)
+            : new GlyphMask(1, 1, 1, 0, 1, 9, 0, 9, 8, [16], ascent: 7));
+        GlyphRasterRequest ruby = new GlyphRasterRequest(
+            RubyTextLayout.FontFace, 8, -4, 0, 0xe002, 0xf042, GlyphRasterPolicy.NativeCp932Gray4)
+        {
+            ExtendedFont = new ExtendedGlyphFont(22, 700),
+        };
+
+        GlyphMask mask = new ExtendedFaceGlyphRasterizer(inner, Extended).Rasterize(ruby);
+
+        GlyphRasterRequest drawn = inner.Requests[0];
+        Assert.Equal((Extended, 22, -11, 700), (drawn.FontFace, drawn.PixelHeight, drawn.RequestedWidth, drawn.Weight));
+        Assert.Equal((24, 9, 8, (int?)7), (mask.CellAdvanceX, mask.CellWidth, mask.CellHeight, mask.Ascent));
+    }
+
+    [Fact]
+    public void ARubysRequestsNameThePrimaryFontOnlyForTheAreasCharacters()
+    {
+        AdvTextStyle style = AdvTextStyle.Default with { PrimaryFontSize = 22, Bold = true, RubyFontSize = 8 };
+
+        IReadOnlyList<GlyphRasterRequest> requests = RubyTextLayout.CreateRequests(
+            "あ", style, GlyphRasterPolicy.NativeCp932Gray4, antialias: true);
+
+        Assert.Null(requests[0].ExtendedFont);
+        Assert.Equal((ushort?)0xf042, requests[1].Cp932Code);
+        Assert.Equal((8, 0), (requests[1].PixelHeight, requests[1].Weight));
+        Assert.Equal(new ExtendedGlyphFont(22, 700), requests[1].ExtendedFont);
+    }
+
     [Theory]
     [InlineData(0xf03f)]
     [InlineData(0xf9fd)]
@@ -183,6 +217,23 @@ public class ExtendedGlyphTests
 
         Assert.Equal("####..####..", Row(plain, 3)[..12]);
         // The second dash's strip is its first two columns (4 - 2), copied to end at its own x + 1.
+        Assert.Equal("####.#####..", Row(joined, 3)[..12]);
+    }
+
+    [Fact]
+    public void ARubysDashesJoinAsTheBaseTextsDoWhereTheBuildJoins()
+    {
+        // The ruby goes through the same glyph drawers: op 0x82's redraw of a ruby record, with no gap.
+        static GlyphMask Dash(GlyphRasterRequest _) => new(4, 1, 4, 0, 1, 6, 0, 6, 5, [16, 16, 16, 16], ascent: 4);
+        AdvTextStyle style = AdvTextStyle.Default with { PrimaryFontSize = 5, RenderMode = 0 };
+
+        RgbaImage plain = Surface(40, 16), joined = Surface(40, 16);
+        new RetainedGlyphLayoutEngine(new RecordingRasterizer(Dash)).RenderRubyAt(
+            plain, 0, 0, "", style, GlyphRasterPolicy.NativeCp932Gray4, false, RubyLayoutRules.FixedOffsets);
+        new RetainedGlyphLayoutEngine(new RecordingRasterizer(Dash), joinsExtendedDashes: true).RenderRubyAt(
+            joined, 0, 0, "", style, GlyphRasterPolicy.NativeCp932Gray4, false, RubyLayoutRules.FixedOffsets);
+
+        Assert.Equal("####..####..", Row(plain, 3)[..12]);
         Assert.Equal("####.#####..", Row(joined, 3)[..12]);
     }
 

@@ -313,7 +313,7 @@ public sealed class RetainedGlyphLayoutEngine
         bool history = false)
         => RubyTextLayout.Draw(
             destination, _rasterizer, baseLeft, baseTop, baseWidth, ruby, style, policy, antialias, rules, history,
-            _coverageAlpha);
+            _coverageAlpha, DashJoin(destination, style, policy, antialias));
 
     /// <summary>Draw ruby characters from the cell at (<paramref name="x"/>, <paramref name="y"/>)
     /// (<see cref="RubyTextLayout.DrawAt"/>) with this engine's rasterizer.</summary>
@@ -326,7 +326,12 @@ public sealed class RetainedGlyphLayoutEngine
         GlyphRasterPolicy policy,
         bool antialias,
         RubyLayoutRules rules)
-        => RubyTextLayout.DrawAt(destination, _rasterizer, x, y, ruby, style, policy, antialias, rules, _coverageAlpha);
+        => RubyTextLayout.DrawAt(destination, _rasterizer, x, y, ruby, style, policy, antialias, rules, _coverageAlpha,
+                                 DashJoin(destination, style, policy, antialias));
+
+    // A ruby's dashes join as the base text's do, with the pen moving by the primary text's room.
+    private GlyphRoom? DashJoin(RgbaImage? destination, AdvTextStyle style, GlyphRasterPolicy policy, bool antialias)
+        => _joinsExtendedDashes && destination != null ? Room(style, policy, antialias) : null;
 
     /// <summary>
     /// Draw op 0x82's records into <paramref name="destination"/> (text_redraw_retained_group@0x451530; SYS4433

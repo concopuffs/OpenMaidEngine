@@ -589,8 +589,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     frames of pages 1 and 4 equal native's in every pixel). Open there:
     - **The portable text backend's extended glyphs are not looked at.** It takes the font file
       (`GodotTextServerGlyphMaskRasterizer.AddGameFont`), and no run has drawn the game's text with it.
-    - **The ruby drawer does not join dashes.** Native's ruby goes through the same glyph drawers, so a `0xF042`
-      or `0xF043` in a ruby would be joined there. No ruby with one is known.
   - **File types no other game has:** two `.X` files (`LEAF0.X`, `LEAF1.X`) and the `.TTF`, among 21,349 entries
     in six archives and four appends.
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436

@@ -26,9 +26,13 @@ public static class RubyTextLayout
     public static int PixelHeight(int rubyFontSize)
         => rubyFontSize <= 0 ? DefaultSize : ImmediateSurfaceTextRenderer.NativePixelHeight(rubyFontSize);
 
+    /// <summary>The ruby's requests, in the ruby font. A character of the user-defined area also names the primary
+    /// font, whose height and weight the extended face draws it at (<see cref="GlyphRasterRequest.ExtendedFont"/>).
+    /// </summary>
     public static IReadOnlyList<GlyphRasterRequest> CreateRequests(
         string ruby, AdvTextStyle style, GlyphRasterPolicy policy, bool antialias)
-        => ImmediateSurfaceTextRenderer.CreateRequests(
+    {
+        IReadOnlyList<GlyphRasterRequest> requests = ImmediateSurfaceTextRenderer.CreateRequests(
             ruby,
             style with
             {
@@ -38,6 +42,15 @@ public static class RubyTextLayout
             },
             policy,
             antialias);
+        if (!requests.Any(request => ExtendedFaceGlyphRasterizer.IsExtended(request.Cp932Code))) return requests;
+        GlyphRasterRequest primary = ImmediateSurfaceTextRenderer.CreateRequests(" ", style, policy, antialias)[0];
+        var primaryFont = new ExtendedGlyphFont(primary.PixelHeight, primary.Weight);
+        return requests
+            .Select(request => ExtendedFaceGlyphRasterizer.IsExtended(request.Cp932Code)
+                ? request with { ExtendedFont = primaryFont }
+                : request)
+            .ToArray();
+    }
 
     /// <summary>
     /// Split a ruby over the base text's drawn rows as adv_text_build_glyph_records does at each horizontal wrap:
@@ -90,6 +103,11 @@ public static class RubyTextLayout
     /// SYS4422 gives the first record chain flag 0 and every later one 1, so the first ruby character publishes alone
     /// and the rest publish together in the next tick (adv_text_publish_next_glyph@0x451220). SYS4433 gives every
     /// record chain flag 1, so the whole ruby publishes in one tick.
+    /// <para>The characters go through AGE's glyph drawers, so given <paramref name="dashJoin"/> (a build with an
+    /// extended face) a dash of the user-defined area is joined after it is drawn, as in the base text, with the
+    /// primary font's size (<see cref="ExtendedDashJoin"/>). The drawer's pen moves by the room the primary text's
+    /// glyphs take: the glyph's own advance, or in aspect mode the reference cell, since the ADV append, History and
+    /// op 0x82 set the aspect-layout flag (+0x35598) around the ruby too.</para>
     /// </summary>
     public static IReadOnlyList<AdvRetainedGlyphRecord> Draw(
         RgbaImage? destination,
@@ -103,7 +121,8 @@ public static class RubyTextLayout
         bool antialias,
         RubyLayoutRules rules,
         bool history = false,
-        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
+        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths,
+        GlyphRoom? dashJoin = null)
     {
         ArgumentNullException.ThrowIfNull(rasterizer);
         ArgumentNullException.ThrowIfNull(ruby);
@@ -133,7 +152,7 @@ public static class RubyTextLayout
                         + (history ? rules.HistoryTopOffset : rules.LiveTopOffset));
         if (style.RenderMode == 3 && rules.RaiseByEffectInMode3) y = checked(y - style.EffectOffsetY);
 
-        return DrawCells(destination, requests, masks, x, y, gap, style, rules, coverageAlpha);
+        return DrawCells(destination, requests, masks, x, y, gap, style, rules, coverageAlpha, dashJoin);
     }
 
     /// <summary>
@@ -151,7 +170,8 @@ public static class RubyTextLayout
         GlyphRasterPolicy policy,
         bool antialias,
         RubyLayoutRules rules,
-        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
+        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths,
+        GlyphRoom? dashJoin = null)
     {
         ArgumentNullException.ThrowIfNull(rasterizer);
         ArgumentNullException.ThrowIfNull(ruby);
@@ -159,7 +179,7 @@ public static class RubyTextLayout
         IReadOnlyList<GlyphRasterRequest> requests = CreateRequests(
             rules.HalfWidthAwareSpacing ? ControlCharactersAsSpaces(ruby) : ruby, style, policy, antialias);
         GlyphMask[] masks = requests.Select(rasterizer.Rasterize).ToArray();
-        return DrawCells(destination, requests, masks, x, y, 0, style, rules, coverageAlpha);
+        return DrawCells(destination, requests, masks, x, y, 0, style, rules, coverageAlpha, dashJoin);
     }
 
     private static List<AdvRetainedGlyphRecord> DrawCells(
@@ -171,7 +191,8 @@ public static class RubyTextLayout
         int gap,
         AdvTextStyle style,
         RubyLayoutRules rules,
-        GlyphCoverageAlpha coverageAlpha)
+        GlyphCoverageAlpha coverageAlpha,
+        GlyphRoom? dashJoin)
     {
         AdvTextStyle plain = style with { RenderMode = 0 };
         var records = new List<AdvRetainedGlyphRecord>(requests.Count);
@@ -180,9 +201,15 @@ public static class RubyTextLayout
             GlyphMask mask = masks[index];
             int right = checked(x + mask.CellWidth);
             if (destination != null)
+            {
                 AgeGlyphMaskCompositor.DrawGlyph(
                     destination, mask, x, y,
                     AgeGlyphMaskCompositor.CellTopToBaseline(mask, requests[index].PixelHeight), plain, coverageAlpha);
+                // The style keeps the primary size and the effect offset the join reads.
+                if (dashJoin != null && ExtendedDashJoin.Applies(requests[index].Cp932Code))
+                    ExtendedDashJoin.AfterGlyph(destination, requests[index], mask, x, y,
+                                                checked(x + dashJoin.Of(requests[index]).Advance), style);
+            }
             int chain = rules.ChainEveryRubyRecord || index > 0 ? 1 : 0;
             records.Add(new AdvRetainedGlyphRecord(chain, x, y, right, checked(y + mask.CellHeight)));
             bool singleByte = requests[index].Cp932Code is < 0x100;

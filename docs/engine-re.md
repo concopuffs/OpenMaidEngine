@@ -368,10 +368,25 @@ source likewise, and copies nothing when what is left is empty; it writes the cl
 second copy starts from them. 創刻のアテリアル's first page begins with two dashes: the first is `0xF041`, which is
 not joined, and the second is `0xF043` (`tools/frida/capture_gdi_fonts.py`).
 
+**A ruby's user-defined characters (read 2026-11-20).** `adv_text_draw_ruby_over_row@0x460760` draws each ruby
+character through `text_draw_string_primary_or_ruby@0x4525c0` (or `0x469aa0` while `+0x548` is set), and both reach
+the two drawers. So a ruby character of the range is drawn with the extended font, which is still the primary font's
+(`+0x3963c`): at the primary font's height and weight, with the ruby font's ascent, which the ruby drawer read. A
+`0xF042` or `0xF043` in a ruby is joined as above. The strip is again the primary font size (`+0x313d4`) tall. The
+pen the second copy ends at moves by the drawer's own rule: the glyph's `gmCellIncX`, or in aspect mode the reference
+cell (`+0x313e8`), since the ADV append, History and op `0x82` set the aspect-layout flag (`+0x35598`) around the ruby
+too. The ruby layout measures each character with `GetTextExtentPoint32A` and the ruby font selected, not the
+extended one. For a code of the range Windows' font linking answers that, so the width depends on the machine: on
+this one ＭＳ ゴシック at 8 pixels gives 9 for `0xF041`–`0xF043` and 8 for あ, and at 22 pixels 24 against 22. No
+ruby of the game has such a character.
+
 The port wraps each glyph rasterizer (`ExtendedFaceGlyphRasterizer`): a code of the range is drawn with the face,
 at the uncalibrated width, and the mask keeps the text font's ascent. `ExtendedDashJoin` makes the copies after
-each glyph the surface text renderer and the ADV layout engine draw. The ruby drawer does not join. Compared with
-native on that first page (2026-11-19, the GDI backend): the two dashes are equal in every pixel.
+each glyph the surface text renderer, the ADV layout engine and the ruby layout draw. A ruby's request names the
+primary font (`GlyphRasterRequest.ExtendedFont`), so the face draws the glyph at that font's height and weight, while
+the cell stays the ruby font's. The GDI backend takes that cell from `GetTextExtentPoint32A`, as native does
+(`RubyTextLayout`, 2026-11-20). Compared with native on that first page (2026-11-19, the GDI backend): the two
+dashes are equal in every pixel. No ruby with such a character has been compared.
 
 **Auto pitch.** 4.38D gives Auto a delay per character of the page, from three new settings: the pitches
 `message:AutoMessagePitch0` (after a voice) and `message:AutoMessagePitch1` (an unvoiced page), and

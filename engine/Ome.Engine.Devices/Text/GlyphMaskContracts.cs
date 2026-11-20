@@ -56,6 +56,12 @@ public sealed record GlyphRasterRequest
 
     private readonly int _widthPercent = 100;
 
+    /// <summary>The primary font a ruby character of the user-defined area is drawn in, or null for the request's own
+    /// font. AGE 4.38D makes its extended font once, from the primary font's LOGFONT, so a ruby's user-defined
+    /// character is drawn at the primary font's height and weight, while the ruby layout measures its cell with the
+    /// ruby font (docs/engine-re.md, "The dash join"; <c>ExtendedFaceGlyphRasterizer</c>).</summary>
+    public ExtendedGlyphFont? ExtendedFont { get; init; }
+
     /// <summary>The glyph's width in percent of the font's own, 1 to 100: presented text an entry fits to its source
     /// text's extent (localization spec §7.2, <c>fit = "shrink"</c>). The backends draw every glyph at the font's
     /// width; <c>CachedGlyphMaskRasterizer</c> narrows the mask (<c>GlyphMaskNarrowing</c>).</summary>
@@ -67,6 +73,10 @@ public sealed record GlyphRasterRequest
             : throw new ArgumentOutOfRangeException(nameof(WidthPercent), value, "A glyph's width is 1 to 100 percent.");
     }
 }
+
+/// <summary>The height and weight of the font a ruby's user-defined character is drawn in
+/// (<see cref="GlyphRasterRequest.ExtendedFont"/>).</summary>
+public readonly record struct ExtendedGlyphFont(int PixelHeight, int Weight);
 
 /// <summary>
 /// One glyph mask plus GDI-compatible placement and cell metrics. Coverage values use AGE's normalized

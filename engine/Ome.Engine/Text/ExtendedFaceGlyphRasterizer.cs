@@ -14,6 +14,10 @@ namespace Ome.Engine.Text;
 /// (adv_text_append_horizontal_glyph_records@0x466000).</para>
 /// <para>It wraps the rasterizer below the glyph cache, so every text path gets the face: live text, ruby, surface
 /// strings, History and the redraw. A build names the face in <see cref="TextRules.ExtendedGlyphFace"/>.</para>
+/// <para>A ruby is drawn through the same drawers with the ruby font selected, and the extended font is still the
+/// primary font's: a ruby character of the range is drawn at the primary font's height and weight
+/// (<see cref="GlyphRasterRequest.ExtendedFont"/>), with the ruby font's ascent, and its cell is the ruby font's,
+/// which adv_text_draw_ruby_over_row@0x460760 measures with GetTextExtentPoint32A.</para>
 /// </summary>
 public sealed class ExtendedFaceGlyphRasterizer : IGlyphMaskRasterizer
 {
@@ -38,18 +42,22 @@ public sealed class ExtendedFaceGlyphRasterizer : IGlyphMaskRasterizer
     {
         ArgumentNullException.ThrowIfNull(request);
         if (!IsExtended(request.Cp932Code)) return _inner.Rasterize(request);
+        ExtendedGlyphFont font = request.ExtendedFont ?? new ExtendedGlyphFont(request.PixelHeight, request.Weight);
         GlyphMask glyph = _inner.Rasterize(new GlyphRasterRequest(
-            _face, request.PixelHeight, -(request.PixelHeight / 2), request.Weight, request.UnicodeScalar,
+            _face, font.PixelHeight, -(font.PixelHeight / 2), font.Weight, request.UnicodeScalar,
             request.Cp932Code, request.Policy, request.Antialias)
         {
             WidthPercent = request.WidthPercent,
         });
-        // The text's own font at this size: any of its glyphs carries its ascent.
-        int? ascent = _inner.Rasterize(request).Ascent;
-        return ascent == glyph.Ascent
+        // The text's own font at this size: any of its glyphs carries its ascent, and a ruby's cell is its.
+        GlyphMask own = _inner.Rasterize(request);
+        bool rubyCell = request.ExtendedFont != null;
+        int cellWidth = rubyCell ? own.CellWidth : glyph.CellWidth;
+        int cellHeight = rubyCell ? own.CellHeight : glyph.CellHeight;
+        return own.Ascent == glyph.Ascent && cellWidth == glyph.CellWidth && cellHeight == glyph.CellHeight
             ? glyph
             : new GlyphMask(glyph.Width, glyph.Height, glyph.Stride, glyph.OriginX, glyph.OriginY, glyph.CellAdvanceX,
-                            glyph.CellAdvanceY, glyph.CellWidth, glyph.CellHeight, glyph.Coverage.Span, ascent,
+                            glyph.CellAdvanceY, cellWidth, cellHeight, glyph.Coverage.Span, own.Ascent,
                             glyph.Monochrome);
     }
 }
