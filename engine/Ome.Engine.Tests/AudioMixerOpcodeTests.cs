@@ -56,9 +56,10 @@ public class AudioMixerOpcodeTests
         Assert.Equal(AudioMixerSettings.UnconfiguredVolume, vm.Globals[12]);
         Assert.Equal(0, vm.Globals[13]);
         Assert.Equal(1, vm.Globals[14]);
+        // With no retained track the Music route's change releases the source (bgm_stop_release).
         Assert.Equal(["bus-volume Master " + RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(8000)),
                       "bus-volume Voice " + RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(4500)),
-                      "stop 11", "bus-mute Music True"],
+                      "unload 11", "bus-mute Music True"],
                      rig.Device.Commands);
         Assert.True(settings.TryGetVolume(3, out int stored) && stored == 4500);   // the settings it persists from
     }

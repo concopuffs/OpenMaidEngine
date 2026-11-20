@@ -16,15 +16,13 @@ public sealed partial class Audio
     /// other kind.</summary>
     private sealed record BgmFade(int From, int Target, int Steps, long StartMs, long DurationMs, bool Script);
 
-    private long _bgmTrack;                  // EngineCtx.current_bgm_track_id: op 0xc0 and numbered saves
+    // The retained track, pause flag and start mode are the scene's (_scene.BgmTrack, BgmPaused, BgmStartMode).
     private bool _bgmLoaded;                 // a track is live on channel 11
     // The track last decoded on channel 11, and whether the device holds it. The DirectSound backend's stop
     // (vtable 0x57977c +4, 0x468980) only stops the channel's buffer, and only a decode replaces it, so native's channel
     // keeps the track after a stop; the port unloads the device and keeps the clip.
     private AudioClip? _bgmChannelClip;
     private bool _bgmChannelLoaded;
-    private bool _bgmLoop;
-    private bool _bgmPaused;                 // bgm object +0x410: op 0xc1's toggle; a start and a release clear it
     private int _bgmLevel = FullLevel;       // bgm object +0x420: the committed envelope level, basis points
     private int _bgmChannelLevel = FullLevel;   // the level channel 11 was last given (a fade step is not committed)
     private BgmFade? _fade;
@@ -32,35 +30,48 @@ public sealed partial class Audio
     private int _duckRestoreLevel = FullLevel;
     private bool _duckReleaseArmed;          // voice_bgm_duck_release_armed (op 0x1bf, a delayed voice start)
 
-    /// <summary>Op 0xbf. An identical request keeps the stream and its position: FIELD reasserts the stage BGM after
-    /// every unit's action (docs/engine-re.md, "Forced BGM lifecycle siblings").</summary>
-    public void PlayBgm(long trackId)
+    /// <summary>
+    /// Op 0xbf (bgm_play_track, start mode 1). The retained track keeps its stream and position: FIELD reasserts the
+    /// stage BGM after every unit's action (docs/engine-re.md, "Forced BGM lifecycle siblings"). Where
+    /// <paramref name="comparesStartMode"/> (the build's <see cref="AudioRules.PlayComparesStartMode"/>) it does so only
+    /// with the retained start mode 1, so a track op 0xb9 played once, or one a scene reset left, starts again. Another
+    /// track starts; zero starts the retained track again, and with none releases the source.
+    /// </summary>
+    public void PlayBgm(long trackId, bool comparesStartMode = false)
     {
+        const int loop = 1;
         CompleteScriptFade();
-        if (trackId != _bgmTrack)
-        {
-            _bgmTrack = trackId;
-            StartBgm(trackId, startMode: 1, forced: false);
-        }
+        bool keeps = trackId != 0 && trackId == _scene.BgmTrack
+            && (!comparesStartMode || _scene.BgmStartMode == loop);
+        // Every path leaves the start mode at 1: 4.24J stores it before its check, and 4.33G's check keeps only a 1.
+        _scene.BgmStartMode = loop;
+        if (!keeps) StartOrRelease(trackId, loop, forced: false);
         UpdateTimedWork();
     }
 
-    /// <summary>Ops 0xb7 (start mode 1, loop) and 0xb9 (0, once): start a track even if it is the current one; zero
-    /// restarts the retained track, and with none stops.</summary>
+    /// <summary>Ops 0xb7 (start mode 1, loop) and 0xb9 (0, once), bgm_force_play_track: store the start mode and start a
+    /// track even if it is the current one; zero restarts the retained track, and with none stops.</summary>
     public void RestartBgm(long trackId, int startMode)
     {
         CompleteScriptFade();
-        if (trackId != 0) _bgmTrack = trackId;
-        if (_bgmTrack == 0) StopBgmSource();
-        else StartBgm(_bgmTrack, startMode, forced: true);
+        _scene.BgmStartMode = startMode;
+        StartOrRelease(trackId, startMode, forced: true);
         UpdateTimedWork();
+    }
+
+    // A nonzero track is retained and started; zero starts the retained track, and with none releases the source.
+    private void StartOrRelease(long trackId, int startMode, bool forced)
+    {
+        if (trackId != 0) _scene.BgmTrack = trackId;
+        if (_scene.BgmTrack == 0) StopBgmSource();
+        else StartBgm(_scene.BgmTrack, startMode, forced);
     }
 
     /// <summary>Op 0xb8: release the source and clear the retained track (bgm_stop_release@0x464690).</summary>
     public void StopBgm()
     {
         CompleteScriptFade();
-        _bgmTrack = 0;
+        _scene.BgmTrack = 0;
         StopBgmSource();
         UpdateTimedWork();
     }
@@ -73,14 +84,15 @@ public sealed partial class Audio
     /// </summary>
     public void ToggleBgmPause()
     {
-        _bgmPaused = !_bgmPaused;
-        _timeline?.Event("bgm-pause", new() { ["paused"] = _bgmPaused });
-        if (_bgmLoaded && _bgmChannelLoaded) _device.SetPaused(BgmChannel, _bgmPaused);
+        _scene.BgmPaused = !_scene.BgmPaused;
+        _timeline?.Event("bgm-pause", new() { ["paused"] = _scene.BgmPaused });
+        if (_bgmLoaded && _bgmChannelLoaded) _device.SetPaused(BgmChannel, _scene.BgmPaused);
         UpdateTimedWork();
     }
 
-    /// <summary>Whether op 0xc1 holds the BGM.</summary>
-    public bool BgmPaused => _bgmPaused;
+    /// <summary>The BGM object's pause flag (+0x410), which op 0xc1 flips. A scene reset zeroes it and leaves the
+    /// stream, so a held stream stays held until a start, and the next op 0xc1 holds it again.</summary>
+    public bool BgmPaused => _scene.BgmPaused;
 
     /// <summary>Op 0xc0: the retained track. A fade to zero that has run its course has cleared it.</summary>
     public long CurrentBgmTrack
@@ -89,7 +101,7 @@ public sealed partial class Audio
         {
             ServiceFade(_clock.NowMs);
             UpdateTimedWork();
-            return _bgmTrack;
+            return _scene.BgmTrack;
         }
     }
 
@@ -128,7 +140,10 @@ public sealed partial class Audio
         UpdateTimedWork();
     }
 
-    private void StartBgm(long trackId, int startMode, bool forced)
+    // The start (bgm_play_track and bgm_force_play_track) clears the pause flag before it calls the backend, whose play
+    // decodes the track into channel 11 and starts it, looping by the start mode. A start ends a fade, except the Music
+    // route's restart (endsFade false), which leaves a running op 0xc2 fade to the tick.
+    private void StartBgm(long trackId, int startMode, bool forced, bool endsFade = true)
     {
         AudioClip? clip = _assets.Bgm(trackId);
         _timeline?.Event("bgm", new()
@@ -138,17 +153,16 @@ public sealed partial class Audio
             ["start_mode"] = startMode,
             ["force_restart"] = forced,
         });
+        _scene.BgmPaused = false;
         if (clip == null) return;   // the track that played goes on
-        _fade = null;
-        _bgmPaused = false;
+        if (endsFade) _fade = null;
         _bgmLevel = FullLevel;
         _bgmChannelLevel = FullLevel;
         _bgmLoaded = true;
-        _bgmLoop = startMode != 0;
         _bgmChannelClip = clip;
         _bgmChannelLoaded = true;
         _device.Load(BgmChannel, AudioBus.Music, clip);
-        PlayChannel(BgmChannel, _bgmLoop, NativeAudioVolume.ToDecibels(FullLevel));
+        PlayChannel(BgmChannel, loop: startMode != 0, NativeAudioVolume.ToDecibels(FullLevel));
     }
 
     private void StopBgmSource()
@@ -162,12 +176,34 @@ public sealed partial class Audio
     {
         RestoreDuck();
         _fade = null;
-        _bgmPaused = false;
+        ReleaseBgmStream();
+    }
+
+    private void ReleaseBgmStream()
+    {
+        _scene.BgmPaused = false;
         _bgmLoaded = false;
         _bgmChannelLoaded = false;
         UnloadChannel(BgmChannel);
         _bgmLevel = FullLevel;
         _bgmChannelLevel = FullLevel;
+    }
+
+    // sound_set_music_route_enabled (4.38D 0x408460, 4.24J 0x407f80) releases the source, puts the retained track back
+    // and calls bgm_force_play_track(0, +0x414) on the new route. The retained track starts again from its start at
+    // full level, with the retained start mode and the pause cleared; the off route sounds nothing. With no retained
+    // track (after a stop, a fade to zero or a scene reset) the source goes. A running op 0xc2 fade goes on: native's
+    // tick advances it whatever the route, so a fade to zero still releases the source when it ends.
+    private void RestartBgmForRoute(bool enabled)
+    {
+        if (_scene.BgmTrack == 0) ReleaseBgmStream();
+        else if (enabled) StartBgm(_scene.BgmTrack, _scene.BgmStartMode, forced: true, endsFade: false);
+        else
+        {
+            StopChannel(BgmChannel);
+            _scene.BgmPaused = false;
+            _bgmLevel = FullLevel;
+        }
     }
 
     // Ops 0xb7/0xb8/0xb9/0xbf, and a numbered load, first end a running op 0xc2 fade: bgm_fade_tick(..., 100) applies
@@ -203,7 +239,7 @@ public sealed partial class Audio
         {
             _timeline?.Event("bgm-fade-end", new() { ["target_basis_points"] = target, ["released"] = true });
             ReleaseBgmSource();
-            _bgmTrack = 0;
+            _scene.BgmTrack = 0;
             return;
         }
         if (fade.Script)
@@ -226,7 +262,7 @@ public sealed partial class Audio
 
     // Ops 0xb5/0xba on channel 11 (sound_buffer_start rewinds a buffer that has played): the track the channel holds
     // plays again from its start, once or looping by the op's start mode, at the channel's level, also after a BGM stop.
-    // The BGM's own start mode, which the Music route plays the live track with, stays.
+    // The retained start mode, which the Music route restarts the track with, stays.
     private void StartBgmChannel(int startMode)
     {
         if (_bgmChannelClip is not { } clip) return;

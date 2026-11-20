@@ -59,6 +59,12 @@ public sealed partial class Audio : IFastForwardListener
         // message_skip_queued_voice_id/arg: the last voice started while fast-forward ran, played when it ends.
         public VoiceStart? HeldVoice;
         public DelayedVoice? DelayedVoice;     // op 0x2c0's pending request (voice_schedule_delayed_playback@0x488480)
+        // The BGM object's retained state, which scene_context_init_reset zeroes (4.38D 0x40c7f4, 4.33G 0x40c438, 4.24J
+        // 0x40b513) while the stream plays on: what plays goes on, held if op 0xc1 held it; op 0xc0 then reads 0, a play
+        // of the same track starts it again, and the Music route has no track to restart.
+        public long BgmTrack;                  // +0x40c, EngineCtx.current_bgm_track_id: op 0xc0 and numbered saves
+        public bool BgmPaused;                 // +0x410: op 0xc1's toggle; a start and a release clear it
+        public int BgmStartMode;               // +0x414, EngineCtx.current_bgm_start_mode: 1 loops, 0 plays once
     }
 
     private Scene _scene = new();
@@ -162,8 +168,9 @@ public sealed partial class Audio : IFastForwardListener
     // ---- scene ----
 
     /// <summary>scene_context_init_reset's audio part, at a root reload: the held and delayed voices go, the op 0x1cf
-    /// control mask and the op 0x1d5 request clear, and delayed sound effect starts are cancelled
-    /// (sfx_clear_scheduled_starts) without stopping what plays or unloading a channel.</summary>
+    /// control mask and the op 0x1d5 request clear, delayed sound effect starts are cancelled
+    /// (sfx_clear_scheduled_starts), and the BGM's retained track, pause flag and start mode are zeroed, all without
+    /// stopping what plays or unloading a channel.</summary>
     public void ResetScene()
     {
         _scene = new();

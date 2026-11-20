@@ -613,7 +613,7 @@ semantic name, else its label) to its handler; it is the only list of implemente
 methods) sit in the partials by family. `engine/Ome.Engine/Diagnostics/UnsupportedOpcodeDiagnostic.cs` is the
 structured diagnostic for an opcode with no handler. `EngineBuilds.cs` declares every engine
 build the port reproduces (4.24J, 4.33G, 4.38D) as its parent plus changes, and the VM takes the build's rules; the
-rule types sit beside the natives that read them (`Text/TextRules.cs`, `Model/GfxRules.cs`,
+rule types sit beside the natives that read them (`Text/TextRules.cs`, `Model/GfxRules.cs`, `Natives/AudioRules.cs`,
 `Persistence/SettingsRules.cs`, `Persistence/SaveRules.cs`, and `ShellRules` in `Natives/ShellServices.cs`, which
 the front end's shell reads; `superpowers/specs/2026-11-12-engine-layering-design.md` §7).
 Its partial-class companion `engine/Ome.Engine.Vm/VirtualMachine.Audio.cs` holds the BGM, voice, SFX and mixer

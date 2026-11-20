@@ -507,9 +507,13 @@ it for the game's own calls (`InputBindings.KeyState`, 2026-11-20). The game's t
 flag at `+0x410` and a backend for each route at `+0x434`. `bgm_toggle_pause@0x476470` (op `0xc1`) flips the flag
 and calls the route's backend with it: the DirectSound one (`0x47a2b0`) stops channel 11's buffer where it is
 (`sound_channel_pause@0x49c790`) or plays it on with its stored loop flag (`sound_channel_resume@0x49c860`), and
-the CD one sends `MCI_PAUSE` or `MCI_RESUME`. A play of another track (`0x4763e0`) and `bgm_stop_release` zero the
-flag; a play request for the track that already plays returns early and leaves it. Whether a numbered save keeps
-the flag was not read. The port holds its channel through the audio device's `SetPaused`.
+the CD one sends `MCI_PAUSE` or `MCI_RESUME`. A start (`bgm_play_track@0x4763e0`, `bgm_force_play_track@0x476740`)
+and `bgm_stop_release` zero the flag; a play request for the track that already plays returns early and leaves it.
+A numbered save does not keep it: `context_state_serialize` saves only the track (`ctx+0xaa4e4`), the restore writes
+only the track back, and every game's `CALLBACK_LOAD.BIN` then runs `restart-bgm-loop 0`, whose start clears the
+flag. The port, which saves no flag and starts the track at the load, ends in the same state. The scene reset zeroes
+the flag without telling the backend ("The retained start mode, the scene reset and the Music route"). The port holds
+its channel through the audio device's `SetPaused`.
 
 #### The pattern reveals' geometry
 
@@ -1084,6 +1088,7 @@ The meaningful consumer catalog is:
 | `COEXISTMESSKIP` | Value 1 lets Auto and all-message Skip remain simultaneously enabled. With zero, `adv_toggle_auto_mode@0x406b70` clears Skip and `adv_toggle_skip_mode@0x406c20` clears Auto. Their only callers are IAGEService `+0x84`/`+0x88` (vtable `0x578034`, global object `0x5c5f10`), which the menu bar's ｵｰﾄﾒｯｾｰｼﾞ and ﾒｯｾｰｼﾞｽｷｯﾌﾟ call ("Native menu bar"); no opcode reaches them, and the script menus' ops `0x88`/`0x1b7` ignore the setting. | Modelled for the menu toggles (`SkipAndAutoSettings.CoexistMessageSkip`); inert on the script path (both shipped games have 1) |
 | `EffectSkipOnClick` (`SYS4REG.INI` `[system]`) | The registered default is 0, which a new profile writes; the 設定 dialog's その他 page sets it ("Native menu bar"). When it is 1, the effect services (run-state bits `0x8`, `0x10`, `0x80` and `0x100`, and `0x400` unless service-flags bit 0 is set) poll the input latch; logical action 4 forces the effect to its terminal frame (delta `0x10000000`, or the force-complete worker for `0x400`). With 0 nothing polls during the effect, and the click stays latched for the next service ("Effect skipping and the input latch"). | Active visual-effect input policy; the port reads it live from `SYS4REG.INI` and matches native on both settings |
 | `REDRAWTEXTONKEY` | Value 1 lets a wheel action at an ADV text wait step the text view (`FUN_00453520` ±1, serviced by `adv_text_view_service_tick@0x410d30`) and launch `CALLBACK_TEXT.BIN` under run-state `0x100000`. | Inert: both games set 0, and the port does not model value 1 (2026-11-04) |
+| `KEEPMUSICVOLUME` | Imported as `set:KeepMusicVolume` (`engine_settings_import_sys4ini_pairs`, 4.24J `0x46e204`). Op `0xbf` reads it after its start in all three builds: with 1, `sound:MusicFadeOnVoicePlaying` 1 and no duck release armed, it sets the BGM level to `sound:MusicFadeOnVoicePlayingVolume` × 100 (4.24J `bgm_apply_volume`). | Inert: no game's trailer has the key, and the port does not model it (2026-11-20) |
 | `WHEELKEYUP`, `WHEELKEYDOWN` | Rebinds the registry action bits from generic defaults 3/1 to 8/9. While an ADV text wait polls, a wheel turn raises that action instead of feeding op `0x10d`; every scene binds action 8 to History ("Mouse wheel at an ADV text wait"). The `message:WheelKey*OnTW` copies have no reader. | Active ADV input binding; port implemented (`Sys4StartupSettings.WheelKeyUpAction`, 2026-11-04) |
 | `USEAPPDATAFOLDER`, `SAVEPATH` | Selects `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SAVE` as the native save root. | Active native path policy; the port redirects it through the shared profile-root policy |
 | `REGFILEPATH` | Supplies the Eushully/product-relative directory for native `SYS4REG.INI`. With Himegari's `USEAPPDATAFOLDER=1`, AGE resolves `%LOCALAPPDATA%\Eushully\姫狩りダンジョンマイスター\SYS4REG.INI`. | Active native engine-options path; redirected with saves while retaining the native format |
@@ -6087,6 +6092,30 @@ silent-but-still-bound Godot stream with native release behavior.
 A focused regression covers same-track restart, zero aliasing, loop/one-shot selection, track replacement,
 stop/clear, fade-to-zero release, and restart after stop; the threaded self-test exercises both loop modes
 and real stop/release.
+
+**The retained start mode, the scene reset and the Music route (2026-11-20).** The BGM object keeps three values
+beside its route (`+0x408`): the track (`+0x40c`, `current_bgm_track_id`), the pause flag (`+0x410`,
+`current_bgm_paused`, op `0xc1`) and the start mode (`+0x414`, `current_bgm_start_mode`). Read in all three builds
+(4.24J `/v2`, 4.33G, 4.38D):
+
+- **Op `0xbf`'s early return.** `bgm_play_track` (4.24J `0x464750`, 4.33G `0x469e90`, 4.38D `0x4763e0`) is called with
+  start mode 1. 4.24J stores the mode and returns when the track is the retained one. 4.33G and 4.38D return only when
+  the start mode matches too, so a track op `0xb9` played once, or one a scene reset left, starts again from its start.
+  Track 0 starts the retained track again, and with none releases the source; 創刻のアテリアル's `DEBUGADV2` has the one
+  site. The port takes the comparison from the build (`AudioRules.PlayComparesStartMode`, `EngineBuilds.cs`).
+- **The scene reset.** `scene_context_init_reset` zeroes all three (4.24J `0x40b513`, 4.33G `0x40c438`, 4.38D
+  `0x40c7f4`) and calls no backend, so what plays goes on, held if op `0xc1` held it. Op `0xc0` then reads 0, and a
+  title's play of the track that plays starts it again: Himegari's `TITLE` plays `0x17` with op `0xbf` after a return
+  to title. The next op `0xc1` holds a held stream again, since the flag reads 0. The port keeps the three in the
+  audio native's `Scene`, which the reset rebuilds.
+- **The Music route.** `sound_set_music_route_enabled` (4.24J `0x407f80`, 4.38D `0x408460`) runs `bgm_stop_release`,
+  writes the track back and calls `bgm_force_play_track(0, +0x414)` on the new route. So a change of the route starts
+  the retained track again from its start, with the retained start mode, at full level and unheld; the off route
+  sounds nothing. With no retained track, after a stop, a fade to zero or a scene reset, the source goes. A running
+  `0xc2` fade goes on. Until 2026-11-20 the port replayed the loaded track at its faded level, kept the pause flag, and
+  played a track the reset had left.
+
+None of this has been heard on native: the reasoning is from the code of all three builds.
 
 **INPUTNAME native editor and CP932 string helpers (mapped 2026-07-29).** The three remaining
 INPUTNAME-only gaps are one implementation slice, but have two ownership layers:

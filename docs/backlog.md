@@ -606,8 +606,11 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     with native. Open there:
     - **The wipes and the mosaic** are in the item "The range wipe `0x24f` is drawn as a crossfade, and no
       pattern reveal is compared with native".
-    - **The music's pause** (`0xc1`, one site): whether a numbered save keeps the flag was not read, and the port
-      does not save it. The Godot device holds the stream with `StreamPaused`; no run has heard it.
+    - **The music's pause** (`0xc1`, one site, in `MMODE`): a numbered save does not keep the flag, and the scene
+      reset, op `0xbf`'s start-mode comparison and the Music route's restart are modelled from the code of all three
+      builds (`engine-re.md`, "The retained start mode, the scene reset and the Music route"). The Godot device holds
+      the stream with `StreamPaused`. No run has heard the hold, and none has heard a return to title start the title
+      track again.
     - **The horizontal wheel** (`0x2e5`) reaches the port as Godot's wheel-left and wheel-right buttons. The
       driver has no step for it, so no scenario turns it.
     - **The stepped callbacks' last row** is one value for the process natively, and the port keeps it across a

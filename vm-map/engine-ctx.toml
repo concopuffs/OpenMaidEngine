@@ -830,12 +830,17 @@ note = "selector-one cell and op 0x143 scan start; subsequent dwords are selecto
 offset = 0xa0b84
 name = "current_bgm_track_id"
 type = "int"
-note = "direct-name BGM track id retained by the music facade; op 0xbf starts/replaces it, ops 0xc0/0xc3 get/set it, and numbered-save layouts restore it"
+note = "direct-name BGM track id retained by the music facade; op 0xbf starts/replaces it, ops 0xc0/0xc3 get/set it, and numbered-save layouts restore it; scene_context_init_reset zeroes it without stopping the stream"
+[[field]]
+offset = 0xa0b88
+name = "current_bgm_paused"
+type = "int"
+note = "the music facade's pause flag (+0x410): op 0xc1 (bgm_toggle_pause) flips it and tells the backend; a start (bgm_play_track, bgm_force_play_track) and bgm_stop_release clear it; scene_context_init_reset zeroes it without telling the backend; numbered saves do not keep it"
 [[field]]
 offset = 0xa0b8c
 name = "current_bgm_start_mode"
 type = "int"
-note = "logical playback mode retained by the music facade and forwarded to its backend: zero stops at decoder EOF, nonzero rewinds; ordinary op 0xbf and forced op 0xb7 use one, forced op 0xb9 uses zero"
+note = "logical playback mode retained by the music facade and forwarded to its backend: zero stops at decoder EOF, nonzero rewinds; ordinary op 0xbf and forced op 0xb7 use one, forced op 0xb9 uses zero; the Music route restarts the retained track with it; scene_context_init_reset zeroes it"
 [[field]]
 offset = 0xa0bb8
 name = "sys4ini_magic"

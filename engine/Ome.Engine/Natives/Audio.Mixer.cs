@@ -64,11 +64,7 @@ public sealed partial class Audio
         {
             case AudioMixerCategory.Music:
                 RestoreDuck();
-                // A running op 0xc2 fade goes on: native's tick advances it whatever the route, so a fade to zero still
-                // releases the source when it ends. Turning the route on starts the track that was loaded again.
-                if (!enabled) StopChannel(BgmChannel);
-                else if (_bgmLoaded)
-                    PlayChannel(BgmChannel, _bgmLoop, NativeAudioVolume.ToDecibels(_bgmChannelLevel));
+                RestartBgmForRoute(enabled);
                 break;
             case AudioMixerCategory.SoundEffect when !enabled:
                 // sound_set_sfx_route_enabled@0x408010 stops channels 0..9 and leaves their delayed starts, which the
@@ -115,15 +111,15 @@ public sealed partial class Audio
     {
         ArgumentNullException.ThrowIfNull(soundEffectResourceIds);
         CompleteScriptFade();
-        _bgmTrack = bgmTrack;
-        if (_bgmTrack == 0)
+        _scene.BgmTrack = bgmTrack;
+        if (_scene.BgmTrack == 0)
         {
             _timeline?.Event("bgm-fade", new() { ["target_basis_points"] = 0, ["duration_ms"] = 0L });
             RestoreDuck();
             _fade = null;
             ReleaseBgmSource();
         }
-        else StartBgm(_bgmTrack, startMode: 1, forced: false);
+        else StartBgm(_scene.BgmTrack, startMode: 1, forced: false);
         for (int channel = 0; channel < SoundEffectChannelCount; channel++)
         {
             ReleaseSoundEffectChannel(channel);

@@ -10,10 +10,10 @@ public sealed partial class VirtualMachine
     private readonly Audio _audio;
     private readonly EngineTick _tick;
 
-    // 0xbf: an identical request keeps the stream
+    // 0xbf: an identical request keeps the stream; the build says whether the start mode must match too
     private StepResult OpPlayBgm(Instruction ins, int pc)
     {
-        _audio.PlayBgm(Read(ins.Args[0]));
+        _audio.PlayBgm(Read(ins.Args[0]), _rules.Audio.PlayComparesStartMode);
         return StepResult.Next;
     }
 

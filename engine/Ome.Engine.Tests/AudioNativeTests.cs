@@ -240,22 +240,93 @@ public class AudioNativeTests
     }
 
     [Fact]
-    public void TheMusicRouteStopsTheBgmAndTurningItOnPlaysTheLoadedTrackAtItsLevel()
+    public void TheMusicRouteStopsTheBgmAndTurningItOnStartsTheRetainedTrackAgainAtFullLevel()
     {
+        // sound_set_music_route_enabled: bgm_stop_release, then bgm_force_play_track(0, +0x414) on the new route.
         var rig = new AudioRig();
         rig.Audio.PlayBgm(5);
         rig.Audio.FadeBgm(5000, 0);
+        rig.Audio.ToggleBgmPause();
         rig.Device.Commands.Clear();
 
         Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, false));
         Assert.Equal(["stop 11", "bus-mute Music True"], rig.Device.Commands);
         Assert.False(rig.Audio.IsChannelPlaying(Audio.BgmChannel));
+        Assert.False(rig.Audio.BgmPaused);
 
         rig.Device.Commands.Clear();
         Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, true));
-        Assert.Equal([$"play 11 bgm:5 loop {RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(5000))}",
-                      "bus-mute Music False"], rig.Device.Commands);
+        Assert.Equal(["load 11 Music bgm:5", "play 11 bgm:5 loop 0.0dB", "bus-mute Music False"], rig.Device.Commands);
         Assert.True(rig.Audio.IsChannelPlaying(Audio.BgmChannel));
+    }
+
+    [Fact]
+    public void APlayOfTheRetainedTrackKeepsItsStreamUnlessTheBuildAlsoComparesTheStartMode()
+    {
+        var rig = new AudioRig();
+        rig.Audio.RestartBgm(5, 0);                     // op 0xb9: once
+        rig.Device.Commands.Clear();
+        rig.Audio.PlayBgm(5);                           // 4.24J: the track alone decides, and the stream goes on
+        Assert.Empty(rig.Device.Commands);
+        // The play left the start mode at 1, which the Music route restarts the track with.
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, false));
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, true));
+        Assert.Equal("play 11 bgm:5 loop 0.0dB", rig.Device.CommandsStartingWith("play")[^1]);
+
+        var later = new AudioRig();
+        later.Audio.RestartBgm(5, 0);
+        later.Device.Commands.Clear();
+        later.Audio.PlayBgm(5, comparesStartMode: true);   // 4.33G and 4.38D: the start mode differs, so it starts again
+        Assert.Equal(["load 11 Music bgm:5", "play 11 bgm:5 loop 0.0dB"], later.Device.Commands);
+        later.Device.Commands.Clear();
+        later.Audio.PlayBgm(5, comparesStartMode: true);   // now both match
+        Assert.Empty(later.Device.Commands);
+    }
+
+    [Fact]
+    public void PlayingTrackZeroStartsTheRetainedTrackAgainAndWithNoneReleasesTheSource()
+    {
+        // bgm_play_track with track 0, as Arterial's DEBUGADV2 plays it.
+        var rig = new AudioRig();
+        rig.Audio.PlayBgm(5);
+        rig.Device.Commands.Clear();
+        rig.Audio.PlayBgm(0);
+        Assert.Equal(["load 11 Music bgm:5", "play 11 bgm:5 loop 0.0dB"], rig.Device.Commands);
+        Assert.Equal(5, rig.Audio.CurrentBgmTrack);
+
+        rig.Audio.StopBgm();
+        rig.Device.Commands.Clear();
+        rig.Audio.PlayBgm(0);
+        Assert.Equal(["unload 11"], rig.Device.Commands);
+        Assert.Equal(0, rig.Audio.CurrentBgmTrack);
+    }
+
+    [Fact]
+    public void ARootReloadZeroesTheRetainedTrackPauseAndStartModeAndLeavesTheStream()
+    {
+        // scene_context_init_reset zeroes the BGM object's +0x40c, +0x410 and +0x414 and calls no backend.
+        var rig = new AudioRig();
+        rig.Audio.PlayBgm(5);
+        rig.Audio.ToggleBgmPause();
+        rig.Device.Commands.Clear();
+        rig.Audio.ResetScene();
+        Assert.Empty(rig.Device.Commands);              // the stream stays, held
+        Assert.Equal(0, rig.Audio.CurrentBgmTrack);
+        Assert.False(rig.Audio.BgmPaused);
+        rig.Audio.ToggleBgmPause();                     // so the next op 0xc1 holds it again
+        Assert.Equal(["pause 11"], rig.Device.Commands);
+
+        rig.Device.Commands.Clear();
+        rig.Audio.PlayBgm(5);                           // a title's play of the track that plays starts it again
+        Assert.Equal(["load 11 Music bgm:5", "play 11 bgm:5 loop 0.0dB"], rig.Device.Commands);
+
+        rig.Audio.ResetScene();
+        rig.Device.Commands.Clear();
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, false));
+        Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, true));
+        // No retained track to start again: the source goes at each change, as bgm_stop_release runs at each.
+        Assert.Equal(["unload 11", "bus-mute Music True", "unload 11", "bus-mute Music False"], rig.Device.Commands);
+        Assert.False(rig.Audio.IsChannelPlaying(Audio.BgmChannel));
     }
 
     [Fact]
@@ -300,10 +371,10 @@ public class AudioNativeTests
         rig.Audio.StartSoundEffect(Audio.BgmChannel, 0);
         string half = RecordingAudioDevice.Db(NativeAudioVolume.ToDecibels(5000));
         Assert.Equal([$"play 11 bgm:5 once {half}"], rig.Device.Commands);
-        // The Music route plays the live track with the BGM's own start mode, not the op's.
+        // The Music route starts the retained track again with the retained start mode, not the op's, at full level.
         Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, false));
         Assert.True(rig.Audio.TrySetRouteEnabled((int)AudioMixerCategory.Music, true));
-        Assert.Equal($"play 11 bgm:5 loop {half}", rig.Device.CommandsStartingWith("play")[^1]);
+        Assert.Equal("play 11 bgm:5 loop 0.0dB", rig.Device.CommandsStartingWith("play")[^1]);
 
         rig.Audio.StopBgm();
         rig.Device.Commands.Clear();

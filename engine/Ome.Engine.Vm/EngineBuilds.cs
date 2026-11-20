@@ -8,8 +8,8 @@ namespace Ome.Engine.Vm;
 
 /// <summary>Every rule an engine build gives the natives (docs/superpowers/specs/2026-11-12-engine-layering-design.md
 /// §7.3). The rule types live beside the natives that read them.</summary>
-public sealed record EngineRules(TextRules Text, GfxRules Gfx, SettingsRules Settings, SaveRules Saves,
-                                 ShellRules Shell);
+public sealed record EngineRules(TextRules Text, GfxRules Gfx, AudioRules Audio, SettingsRules Settings,
+                                 SaveRules Saves, ShellRules Shell);
 
 /// <summary>
 /// One build of native AGE whose behaviour the port reproduces (spec §7.1). <see cref="Id"/> is the version the build
@@ -40,6 +40,7 @@ public static class EngineBuilds
                 AspectCalibration: AspectCalibration.BlackBoxOverCellIncrement,
                 PublisherGrowsGlyphCells: false),
             Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
+            Audio: new AudioRules(PlayComparesStartMode: false),
             Settings: SettingsRules.LoaderKeys,
             Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize),
             Shell: new ShellRules(AutoMessagePage: false)));
@@ -69,6 +70,8 @@ public static class EngineBuilds
             },
             // Worker 0x486120 tests the record's bound bit before it returns the slot.
             Gfx = Age424J.Rules.Gfx with { UnboundObjectReadsAbsent = true },
+            // bgm_play_track@0x469e90 returns early only for the retained track with the retained start mode.
+            Audio = Age424J.Rules.Audio with { PlayComparesStartMode = true },
             // The SYS4REG.INI loader 0x472530 binds two more keys, and a native exit writes both as 0.
             Settings = Age424J.Rules.Settings
                 .BindingAfter("LimitAero", new Sys4RegIniKey("display", "VirtualFullScreenType", "0"))
