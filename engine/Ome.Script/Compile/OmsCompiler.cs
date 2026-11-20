@@ -39,8 +39,12 @@ public static class OmsCompiler
     public const int Mov = 0x55, Jmp = 0x8C, Jcc = 0xA0, Call = 0x8F, Ret = 0x05, Exit = 0x02, CallScript = 0x03;
     public const int BlockBegin = 0x1F4, BlockEnd = 0x1F5, Comment = 0x1A7, Resume = 0x7C, ThrowExit = 0x01;
 
+    /// <summary>Op 0x9, exit-script: it discards the whole script stack and loads the root script again, so no
+    /// instruction after it runs (the registry's <c>leaves = ["ends"]</c>).</summary>
+    public const int ExitScript = 0x09;
+
     /// <summary>Instructions after which control cannot fall through.</summary>
-    public static bool IsTerminator(int opcode) => opcode is Ret or Exit or Jmp or Resume or ThrowExit;
+    public static bool IsTerminator(int opcode) => opcode is Ret or Exit or Jmp or Resume or ThrowExit or ExitScript;
 
     /// <summary>Whether control can reach the next instruction: not a terminator, and not a conditional jump with both
     /// a then and an else target.</summary>

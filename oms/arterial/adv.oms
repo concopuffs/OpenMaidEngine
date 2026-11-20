@@ -1,0 +1,2728 @@
+oms 1
+// Arterial (創刻のアテリアル) ADV prelude (spec §11.2): the scene header's handlers, the library its scenes link
+// and the dialogue line template. Drafted 2026-11-20 from the core decompile of every SC and SP scene: the
+// header from SC0000 (279 of 282 scenes carry it unchanged), each library sub from the first scene that links
+// it, as many copies as one scene carries. Sub names describe behaviour as read then; the families that differ
+// only in a duration, a colour or whether the speaker is cleared carry those in their names. Maintained by
+// hand since.
+module arterial.adv
+use arterial.scripts
+
+// One ADV page (spec §11.2). G[0x3141]: the page has text. A speaker is given by a face picture: set_page_face
+// looks the picture up for its character (G[0x3140], -1 for narration) and draws the name plate in the name form
+// G[0x3143] (a column of the character's names; a value outside 0 to 5 shows ？？？？). G[0x3fb91] is the voice.
+@dialogue inline line(text: text, face: const = none, voice: const = none, form: const = 0x0) {
+    G[0x3141] = 0x1
+    begin_page_voice()
+    static if face == none {
+        atomic {
+            G[0x3146] = -(0x1)
+            clear_speaker_face()
+            clear_speaker()
+            arm_voice_duck_release()
+            set_tick_presentation(0x1)
+        }
+    } else {
+        atomic {
+            G[0x3143] = form
+            G[0x3fb90] = face
+            set_page_face()
+            set_tick_presentation(0x1)
+        }
+    }
+    static if voice != none {
+        atomic {
+            G[0x3fb86] = get_message_skip()
+            G[0x3fb87] = get_adv_read_skip_state()
+            if G[0x3fb86] | G[0x3fb87] {
+                reset_message_voice_state()
+                arm_voice_duck_release()
+            }
+            if G[0x3140] < 0x0 {
+                set_voice_bgm_duck_control(0x10001)
+                G[0x214809] = 0x2
+                G[0x214808] = 0xd
+            } else {
+                set_voice_bgm_duck_control(0x0)
+                G[0x214809] = G[0x29ee8e][G[0x3140]]
+                G[0x214808] = G[0x297db9][G[0x3140]]
+            }
+            G[0x3fb91] = voice
+            if G[0x214809] == 0x2 {
+                append_text_history_metadata(0x4, G[0x214808])
+                append_text_history_metadata(0x5, G[0x3fb91])
+            }
+            if G[0x214809] == 0x2 && G[0x2d57][G[0x2981a1][G[0x214808]]] == 0x0 {
+                if G[0x3fb86] | G[0x3fb87] {
+                    set_voice_bgm_duck_control(0x10001)
+                    mute_next_voice()
+                }
+            } else {
+                G[0x3fb91] = 0x0
+            }
+            if G[0x3fb91] {
+                play_voice(G[0x3fb91])
+            } else {
+                arm_voice_duck_release()
+            }
+        }
+    }
+    show_text(0x0, text)
+    wait_for_input(0x0)
+    end_text_line(0x0)
+    set_tick_presentation(0x0)
+    reset_adv_text_layout(0x1)
+}
+
+// The scene header's hotspot handlers: placed where each scene registers them, so the sidecar records their place.
+sub register_adv_hotspots {
+    atomic {
+        if G[0x5ce] {
+            if G[0x3fb93] == 0x0 {
+                register_hotspot_callbacks(0x243, 0x220, 0x2c, 0x11, quick_save_button_enter, quick_save_button_leave, quick_save_button_click)
+                register_hotspot_callbacks(0x274, 0x220, 0x2c, 0x11, quick_load_button_enter, quick_load_button_leave, quick_load_button_click)
+            }
+            register_hotspot_callbacks(0x2af, 0x220, 0x2c, 0x11, history_button_enter, history_button_leave, history_button_click)
+            register_hotspot_callbacks(0x2e0, 0x220, 0x2c, 0x11, auto_button_enter, auto_button_leave, auto_button_click)
+            register_hotspot_callbacks(0x311, 0x220, 0x2c, 0x11, skip_button_enter, skip_button_leave, skip_button_click)
+            register_hotspot_callbacks(0x342, 0x220, 0x2c, 0x11, read_skip_button_enter, read_skip_button_leave, read_skip_button_click)
+            register_hotspot_callbacks(0x37d, 0x220, 0x18, 0x11, hide_button_enter, hide_button_leave, hide_button_click)
+        }
+        register_hotspot_callbacks(-(0x3e8), -(0x3e8), 0x1, 0x1, -1, -1, cursor_key_0)
+        register_hotspot_callbacks(-(0x3e8), -(0x3e9), 0x1, 0x1, -1, -1, cursor_key_1)
+        register_hotspot_callbacks(-(0x3e8), -(0x3ea), 0x1, 0x1, -1, -1, cursor_key_2)
+        register_hotspot_callbacks(-(0x3e8), -(0x3eb), 0x1, 0x1, -1, -1, cursor_key_3)
+        register_hotspot_callbacks(-(0x3e8), -(0x3f0), 0x1, 0x1, -1, -1, cursor_key_8)
+        bind_hotspot_key(-(0x3e8), -(0x3e8), 0x1, 0x1, 0x0)
+        bind_hotspot_key(-(0x3e8), -(0x3e9), 0x1, 0x1, 0x1)
+        bind_hotspot_key(-(0x3e8), -(0x3ea), 0x1, 0x1, 0x2)
+        bind_hotspot_key(-(0x3e8), -(0x3eb), 0x1, 0x1, 0x3)
+        bind_hotspot_key(-(0x3e8), -(0x3f0), 0x1, 0x1, 0x8)
+        if G[0x3fb93] >= 0x0 {
+            register_hotspot_callbacks(-(0x3e8), -(0x3ef), 0x1, 0x1, -1, -1, cursor_key_7)
+            bind_hotspot_key(-(0x3e8), -(0x3ef), 0x1, 0x1, 0x7)
+        }
+        arm_hotspot_wait()
+    }
+    return
+}
+sub quick_save_button_enter {
+    atomic {
+        G[0x5d6] = 0x1
+        G[0x3fb8c] = 0x1
+        draw_message_window()
+    }
+    return
+}
+sub quick_save_button_leave {
+    atomic {
+        G[0x5d6] = 0x0
+        G[0x3fb8c] = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub quick_save_button_click {
+    atomic {
+        G[0x5d6] = 0x0
+        G[0x3fb8e] = save_numbered_slot(0x3e7)
+        G[0x5d6] = 0x1
+        sfx_load(0x26, 0x1)
+        sfx_start(0x1)
+        draw_message_window()
+    }
+    return
+}
+sub quick_load_button_enter {
+    atomic {
+        G[0x5d7] = 0x1
+        G[0x3fb8c] = 0x2
+        draw_message_window()
+    }
+    return
+}
+sub quick_load_button_leave {
+    atomic {
+        G[0x5d7] = 0x0
+        G[0x3fb8c] = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub quick_load_button_click {
+    query_numbered_save_metadata(out G[0x3fb8e], 0x3e7, out G[0x3fb8f], out G[0x3fb8f], out G[0x3fb8f], out G[0x3fb8f], out G[0x3fb8f], out G[0x3fb8f], out G[0x3fb8f])
+    if G[0x3fb8e] == 0x0 {
+        sfx_load(0x26, 0x1)
+        sfx_start(0x1)
+        sleep(0x1f4)
+        set_tick_presentation(0x0)
+        suspend_adv_skip_service()
+        note "savemesskip q-load"
+        instruction_marker_noop()
+        set_adv_wait_indicator_enabled(0x0)
+        G[0x3fb8e] = load_numbered_slot_and_resume(0x3e7)
+    }
+    return
+}
+sub history_button_enter {
+    atomic {
+        G[0x5d8] = 0x1
+        G[0x3fb8c] = 0x3
+        draw_message_window()
+    }
+    return
+}
+sub history_button_leave {
+    atomic {
+        G[0x5d8] = 0x0
+        G[0x3fb8c] = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub history_button_click {
+    atomic {
+        G[0x5d8] = 0x0
+        draw_message_window()
+    }
+    cancel_hotspot_wait()
+    run HISTORY
+    register_adv_hotspots()
+    return
+}
+sub auto_button_enter {
+    atomic {
+        G[0x5d9] = 0x1
+        G[0x3fb8c] = 0x4
+        draw_message_window()
+    }
+    return
+}
+sub auto_button_leave {
+    atomic {
+        G[0x5d9] = 0x0
+        G[0x3fb8c] = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub auto_button_click {
+    atomic {
+        G[0x5d2] = get_auto_message()
+        G[0x5d2] = 0x1 - G[0x5d2]
+        set_auto_message(G[0x5d2])
+        draw_message_window()
+    }
+    return
+}
+sub skip_button_enter {
+    atomic {
+        G[0x5da] = 0x1
+        G[0x3fb8c] = 0x5
+        draw_message_window()
+    }
+    return
+}
+sub skip_button_leave {
+    atomic {
+        G[0x5da] = 0x0
+        G[0x3fb8c] = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub skip_button_click {
+    atomic {
+        G[0x5da] = 0x0
+        set_message_skip(0x1)
+        draw_message_window()
+        set_anim_clock(0x64)
+        mark_frame_yield()
+        reset_message_skip_input()
+    }
+    return
+}
+sub read_skip_button_enter {
+    atomic {
+        G[0x5db] = 0x1
+        G[0x3fb8c] = 0x6
+        draw_message_window()
+    }
+    return
+}
+sub read_skip_button_leave {
+    atomic {
+        G[0x5db] = 0x0
+        G[0x3fb8c] = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub read_skip_button_click {
+    atomic {
+        G[0x5db] = 0x0
+        G[0x3fb87] = get_read_message_skip()
+        G[0x3fb87] = 0x1 - G[0x3fb87]
+        set_read_message_skip(G[0x3fb87])
+        draw_message_window()
+        set_anim_clock(0x64)
+        mark_frame_yield()
+        reset_message_skip_input()
+    }
+    return
+}
+sub hide_button_enter {
+    atomic {
+        G[0x5dc] = 0x1
+        G[0x3fb8c] = 0x7
+        draw_message_window()
+    }
+    return
+}
+sub hide_button_leave {
+    atomic {
+        G[0x5dc] = 0x0
+        G[0x3fb8c] = 0x0
+        draw_message_window()
+    }
+    return
+}
+sub hide_button_click {
+    atomic {
+        G[0x5dc] = 0x0
+        draw_message_window()
+    }
+    yield_adv_coroutine()
+    cancel_hotspot_wait()
+    register_adv_hotspots()
+    return
+}
+sub cursor_key_0 {
+    if G[0x5ce] {
+        if G[0x5d6] | G[0x5d7] | G[0x5d8] | G[0x5d9] | G[0x5da] | G[0x5db] | G[0x5dc] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(G[0x5d4], 0x215)
+        } else {
+            goto cursor_key_8
+        }
+    } else {
+        goto cursor_key_8
+    }
+    return
+cursor_key_1:
+    if G[0x5ce] {
+        if G[0x5d6] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x28a, G[0x5d5])
+            goto cursor_key_0_2
+        }
+        if G[0x5d7] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x2c5, G[0x5d5])
+            goto cursor_key_0_2
+        }
+        if G[0x5d8] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x2f6, G[0x5d5])
+            goto cursor_key_0_2
+        }
+        if G[0x5d9] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x327, G[0x5d5])
+            goto cursor_key_0_2
+        }
+        if G[0x5da] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x358, G[0x5d5])
+            goto cursor_key_0_2
+        }
+        if G[0x5db] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x389, G[0x5d5])
+            goto cursor_key_0_2
+        }
+        if G[0x5dc] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x3a0, G[0x5d5])
+            goto cursor_key_0_2
+        }
+        set_cursor_virtual(0x259, 0x229)
+    }
+cursor_key_0_2:
+    return
+cursor_key_2:
+    if G[0x5ce] {
+        if G[0x5d6] | G[0x5d7] | G[0x5d8] | G[0x5d9] | G[0x5da] | G[0x5db] | G[0x5dc] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(G[0x5d4], G[0x5d5] + G[0x5d3] * 0x2 - 0x1)
+            G[0x5d3] = 0x1 - G[0x5d3]
+            goto cursor_key_0_4
+        }
+        set_cursor_virtual(0x259, 0x229)
+    }
+cursor_key_0_4:
+    return
+cursor_key_3:
+    if G[0x5ce] {
+        if G[0x5d6] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x238, G[0x5d5])
+            goto cursor_key_0_6
+        }
+        if G[0x5d7] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x259, G[0x5d5])
+            goto cursor_key_0_6
+        }
+        if G[0x5d8] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x28a, G[0x5d5])
+            goto cursor_key_0_6
+        }
+        if G[0x5d9] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x2c5, G[0x5d5])
+            goto cursor_key_0_6
+        }
+        if G[0x5da] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x2f6, G[0x5d5])
+            goto cursor_key_0_6
+        }
+        if G[0x5db] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x327, G[0x5d5])
+            goto cursor_key_0_6
+        }
+        if G[0x5dc] {
+            get_cursor_virtual(out G[0x5d4], out G[0x5d5])
+            set_cursor_virtual(0x358, G[0x5d5])
+            goto cursor_key_0_6
+        }
+        set_cursor_virtual(0x389, 0x229)
+    }
+cursor_key_0_6:
+    return
+cursor_key_7:
+    atomic {
+        G[0x5d6] = 0x0
+        G[0x5d7] = 0x0
+        G[0x5d8] = 0x0
+        G[0x5d9] = 0x0
+        G[0x5da] = 0x0
+        G[0x5db] = 0x0
+        G[0x5dc] = 0x0
+        cancel_hotspot_wait()
+    }
+    if G[0x3fb93] {
+        GS[0xe8][G[0x214819]] = set_string("シーン回想終了")
+        G[0x21481b][G[0x214819]] = G[0x214819]
+        G[0x2149c0] = G[0x214819]
+        G[0x214819] += 0x1
+        GS[0xe8][G[0x214819]] = set_string("キャンセル")
+        G[0x21481b][G[0x214819]] = G[0x214819]
+        G[0x2149c0] = G[0x214819]
+        G[0x214819] += 0x1
+        G[0x2149c1] = 0x7
+        run BUNKI
+        if G[0x21481a] == 0x0 {
+            exit
+        }
+    } else {
+        G[0x3fba4] = 0x0
+        run MENU
+    }
+    register_adv_hotspots()
+    return
+cursor_key_8:
+    atomic {
+        G[0x5d6] = 0x0
+        G[0x5d7] = 0x0
+        G[0x5d8] = 0x0
+        G[0x5d9] = 0x0
+        G[0x5da] = 0x0
+        G[0x5db] = 0x0
+        G[0x5dc] = 0x0
+        cancel_hotspot_wait()
+    }
+    run HISTORY
+    register_adv_hotspots()
+    return
+}
+coroutine adv_hide_window_handler {
+    begin_window_transition()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    cancel_hotspot_wait()
+    run HIDEWIN
+    if G[0x3fb96] {
+        atomic {
+            redraw_message_window()
+            present_frame()
+            G[0x3fb96] = 0x0
+        }
+    }
+    coroutine_save_yield_handlers(adv_hide_window_handler, adv_show_window_handler)
+    register_adv_hotspots()
+    mark_save_resume_frame()
+    yield_adv_coroutine()
+    resume
+}
+coroutine adv_show_window_handler {
+    begin_window_transition()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    G[0x3141] = 0x1
+    present_window_transition()
+    resume
+}
+
+// Library functions: linked after the scene behind an exit guard, breadth first in order of first reference.
+@guard sub draw_message_window {
+    gfx_elem_erase(0xabe0, 0x2)
+    gfx_elem_erase(0xad0c, 0xe)
+    if G[0x5cc] {
+        draw_texture(0xabe0, 0x11, 0x4d, 0x19b, 0x37a, 0x66, 0x43, 0x1c3)
+        G[0x5d0] = get_message_window_alpha()
+        G[0x3fb8b] = 0x10 - G[0x5d0] << 0x4
+        gfx_draw_color(0xabe0, 0x0, G[0x3fb8b], G[0x36ea])
+        draw_texture(0xabe0 + 0x1, 0x11, 0x4d, 0x12e, 0x37a, 0x6c, 0x43, 0x1c0)
+        if G[0x5ce] {
+            if G[0x3fb93] == 0x0 {
+                draw_texture(0xad0c, 0x11, 0x71, 0x22e, 0x2c, 0x1b, 0x243, 0x21e)
+                draw_texture(0xad0c + 0x1, 0x11, 0x9e, 0x22e, 0x2c, 0x1b, 0x274, 0x21e)
+            }
+            draw_texture(0xad0c + 0x2, 0x11, 0xcb, 0x22e, 0x2c, 0x1b, 0x2af, 0x21e)
+            draw_texture(0xad0c + 0x3, 0x11, 0xf8, 0x22e, 0x2c, 0x1b, 0x2e0, 0x21e)
+            draw_texture(0xad0c + 0x4, 0x11, 0x125, 0x22e, 0x2c, 0x1b, 0x311, 0x21e)
+            draw_texture(0xad0c + 0x5, 0x11, 0x152, 0x22e, 0x2c, 0x1b, 0x342, 0x21e)
+            draw_texture(0xad0c + 0x6, 0x11, 0x17f, 0x22e, 0x18, 0x13, 0x37d, 0x21e)
+            if G[0x5d6] {
+                draw_texture(0xad0c + 0x7, 0x11, 0x71, 0x24a, 0x2c, 0x1b, 0x243, 0x21e)
+            }
+            if G[0x5d7] {
+                draw_texture(0xad0c + 0x8, 0x11, 0x9e, 0x24a, 0x2c, 0x1b, 0x274, 0x21e)
+            }
+            if G[0x5d8] {
+                draw_texture(0xad0c + 0x9, 0x11, 0xcb, 0x24a, 0x2c, 0x1b, 0x2af, 0x21e)
+            }
+            if G[0x5d9] {
+                draw_texture(0xad0c + 0xa, 0x11, 0xf8, 0x24a, 0x2c, 0x1b, 0x2e0, 0x21e)
+            }
+            if G[0x5da] {
+                draw_texture(0xad0c + 0xb, 0x11, 0x125, 0x24a, 0x2c, 0x1b, 0x311, 0x21e)
+            }
+            if G[0x5db] {
+                draw_texture(0xad0c + 0xc, 0x11, 0x152, 0x24a, 0x2c, 0x1b, 0x342, 0x21e)
+            }
+            if G[0x5dc] {
+                draw_texture(0xad0c + 0xd, 0x11, 0x17f, 0x24a, 0x18, 0x13, 0x37d, 0x21e)
+            }
+            G[0x3fb88] = get_auto_message()
+            G[0x3fb86] = get_message_skip_enabled()
+            G[0x3fb87] = get_read_message_skip()
+            gfx_draw_color(0xad0c + 0xe, 0x1, G[0x3fb88] * 0xff, 0xffffff)
+            gfx_draw_color(0xad0c + 0xf, 0x1, G[0x3fb86] * 0xff, 0xffffff)
+            gfx_draw_color(0xad0c + 0x10, 0x1, G[0x3fb87] * 0xff, 0xffffff)
+        }
+        G[0x3fba9] = op_0x215(0xad0c + 0xe)
+        if G[0x3fba9] < 0x0 {
+            draw_texture(0xad0c + 0xe, 0x3e, 0x0, 0x0, 0x40, 0x20, 0x2d6, 0x21b)
+            animate_gfx_srcrect_loop(0xad0c + 0xe, 0x32, 0xc, 0x3)
+            draw_texture(0xad0c + 0xf, 0x3f, 0x0, 0x0, 0x40, 0x20, 0x307, 0x21b)
+            animate_gfx_srcrect_loop(0xad0c + 0xf, 0x32, 0xc, 0x3)
+            draw_texture(0xad0c + 0x10, 0x40, 0x0, 0x0, 0x40, 0x20, 0x338, 0x21b)
+            animate_gfx_srcrect_loop(0xad0c + 0x10, 0x32, 0xc, 0x3)
+        }
+        goto draw_message_window_1
+    }
+    for G[0x3fba8] = 0xad0c; G[0x3fba8] < 0xad0c + 0xe; G[0x3fba8] += 0x1 {
+        gfx_draw_color(G[0x3fba8], 0x0, 0x0, 0xffffff)
+    }
+draw_message_window_1:
+    return
+}
+@guard sub begin_window_transition {
+    atomic {
+        return
+        exit
+    fade_message_window:
+        if G[0x5cc] {
+            G[0x5d0] = get_message_window_alpha()
+            G[0x3fb8b] = 0x10 - G[0x5d0] << 0x4
+            gfx_draw_color(0xabe0, 0x0, 0x0, G[0x36ea])
+            gfx_blit_color(0xabe0, 0x0, G[0x3fbcd], G[0x3fb8b], -(0x1))
+            gfx_draw_color(0xabe0 + 0x1, 0x0, 0x0, 0xffffff)
+            gfx_blit_color(0xabe0 + 0x1, 0x0, G[0x3fbcd], 0xff, -(0x1))
+            if G[0x3140] >= 0x0 {
+                gfx_draw_color(0xac44, 0x0, 0x0, G[0x36ea])
+                gfx_blit_color(0xac44, 0x0, G[0x3fbcd], G[0x3fb8b], -(0x1))
+                gfx_draw_color(0xac44 + 0x1, 0x0, 0x0, 0xffffff)
+                gfx_blit_color(0xac44 + 0x1, 0x0, G[0x3fbcd], 0xff, -(0x1))
+            }
+            if G[0x3145] >= 0x0 {
+                gfx_draw_color(0xaca8, 0x0, 0x0, 0xffffff)
+                gfx_blit_color(0xaca8, 0x0, G[0x3fbcd], 0xff, -(0x1))
+            }
+            if G[0x5ce] {
+                for G[0x3fba8] = 0xad0c; G[0x3fba8] <= 0xad0c + 0x6; G[0x3fba8] += 0x1 {
+                    gfx_draw_color(G[0x3fba8], 0x0, 0x0, 0xffffff)
+                    gfx_blit_color(G[0x3fba8], 0x0, G[0x3fbcd], 0xff, -(0x1))
+                    gfx_draw_color(G[0x3fba8] + 0x7, 0x0, 0x0, 0xffffff)
+                    gfx_blit_color(G[0x3fba8] + 0x7, 0x0, G[0x3fbcd], 0xff, -(0x1))
+                }
+                G[0x3fb88] = get_auto_message()
+                G[0x3fb86] = get_message_skip_enabled()
+                G[0x3fb87] = get_read_message_skip()
+                if G[0x3fb88] {
+                    gfx_draw_color(0xad0c + 0xe, 0x1, 0x0, 0xffffff)
+                    gfx_blit_color(0xad0c + 0xe, 0x0, G[0x3fbcd], 0xff, -(0x1))
+                }
+                if G[0x3fb86] {
+                    gfx_draw_color(0xad0c + 0xf, 0x1, 0x0, 0xffffff)
+                    gfx_blit_color(0xad0c + 0xf, 0x0, G[0x3fbcd], 0xff, -(0x1))
+                }
+                if G[0x3fb87] {
+                    gfx_draw_color(0xad0c + 0x10, 0x1, 0x0, 0xffffff)
+                    gfx_blit_color(0xad0c + 0x10, 0x0, G[0x3fbcd], 0xff, -(0x1))
+                }
+            }
+        } else {
+            gfx_blit_color(0xabe0, 0x0, G[0x3fbcd], 0x0, -(0x1))
+            gfx_blit_color(0xabe0 + 0x1, 0x0, G[0x3fbcd], 0x0, -(0x1))
+            if G[0x3140] >= 0x0 {
+                gfx_blit_color(0xac44, 0x0, G[0x3fbcd], 0x0, -(0x1))
+                gfx_blit_color(0xac44 + 0x1, 0x0, G[0x3fbcd], 0x0, -(0x1))
+            }
+            if G[0x3145] >= 0x0 {
+                gfx_blit_color(0xaca8, 0x0, G[0x3fbcd], 0x0, -(0x1))
+            }
+            if G[0x5ce] {
+                for G[0x3fba8] = 0xad0c; G[0x3fba8] <= 0xad0c + 0x10; G[0x3fba8] += 0x1 {
+                    gfx_blit_color(G[0x3fba8], 0x0, G[0x3fbcd], 0x0, -(0x1))
+                }
+            }
+            G[0x5d6] = 0x0
+            G[0x5d7] = 0x0
+            G[0x5d8] = 0x0
+            G[0x5d9] = 0x0
+            G[0x5da] = 0x0
+            G[0x5db] = 0x0
+            G[0x5dc] = 0x0
+            G[0x3fb8c] = 0x0
+        }
+        gfx_elem_erase(0xaf64, 0x1)
+        clear_message_text()
+        G[0x3fbd1] = 0x1
+        return
+        exit
+    present_window_transition:
+        set_tick_presentation(0x1)
+        if G[0x3fbd1] {
+            if G[0x3fbfc] {
+                G[0x3fbfd] = 0x0
+                for G[0x3fba7] = 0x0; G[0x3fba7] <= 0x7; G[0x3fba7] += 0x1 {
+                    if G[0x3fbfd] < G[0x35bf][G[0x3fba7]] {
+                        G[0x3fbfd] = G[0x35bf][G[0x3fba7]]
+                    }
+                }
+                if G[0x3fbfd] {
+                    set_anim_clock(G[0x3fbfd])
+                }
+                G[0x3fbfc] = 0x0
+            }
+            G[0x3fb86] = get_message_skip()
+            G[0x3fb87] = get_adv_read_skip_state()
+            if G[0x3fb86] | G[0x3fb87] {
+                reset_anim_clock()
+                present_frame()
+            } else {
+                mark_frame_yield()
+            }
+            clear_gfx_command_queue()
+            if G[0x3fc01] {
+                G[0x3fc01] = 0x0
+                gfx_elem_erase(0xa7f8, 0x1)
+            }
+            for G[0x3fba7] = 0x0; G[0x3fba7] <= 0x7; G[0x3fba7] += 0x1 {
+                if G[0x3fbad][G[0x3fba7]] {
+                    G[0x3fba9] = op_0x215(G[0x3fbad][G[0x3fba7]] + 0x1)
+                    if G[0x3fba9] >= 0x0 {
+                        gfx_elem_erase(G[0x3fbad][G[0x3fba7]] + 0x1, 0x1)
+                        G[0x21480c] = op_0x215(G[0x3fbad][G[0x3fba7]])
+                        if G[0x3fba9] != G[0x21480c] {
+                            gfx_elem_release(G[0x3fba9])
+                        }
+                    }
+                    G[0x3fba9] = op_0x215(G[0x3fbad][G[0x3fba7]] + 0x2)
+                    if G[0x3fba9] >= 0x0 {
+                        gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x0, -(0x1), -(0x1))
+                        gfx_elem_erase(G[0x3fbad][G[0x3fba7]] + 0x2, 0x1)
+                        gfx_elem_release(G[0x3fba9])
+                    }
+                    if G[0x3fbd3][G[0x3fba7]] == 0x1 {
+                        gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x0, 0x0, -(0x1))
+                        goto begin_window_transition_3
+                    }
+                    if G[0x3fbd3][G[0x3fba7]] == 0x2 {
+                        gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x0, -(0x1), -(0x1))
+                    }
+                }
+            begin_window_transition_3:
+            }
+            G[0x3fbd1] = 0x0
+            zero_int_range(G[0x3fbd3], 0x14)
+            publish_message_text()
+        }
+        if G[0x3fbd2] {
+            if G[0x3fbd2] & 0x1 {
+                gfx_elem_erase(0xab7c, 0x2)
+                gfx_elem_release(0x1)
+                gfx_elem_release(0x3b)
+            }
+            if G[0x3fbd2] & 0x2 {
+                gfx_elem_erase(0xa7f8 + 0x1, 0x1)
+                gfx_elem_release(0x3c)
+                if G[0x3fbef] == 0x1 {
+                    gfx_draw_color(0xa7f8, G[0x35fb], 0x0, -(0x1))
+                }
+            }
+            if G[0x3fbd2] & 0x4 {
+                for G[0x3fba7] = 0x0; G[0x3fba7] <= 0x7; G[0x3fba7] += 0x1 {
+                    if G[0x3fbad][G[0x3fba7]] {
+                        gfx_elem_erase(G[0x3fbad][G[0x3fba7]] + 0x1, 0x1)
+                        gfx_elem_release(G[0x3546:0x3][G[0x3fba7]][0x2])
+                        if G[0x3fbe7][G[0x3fba7]] == 0x1 {
+                            gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x0, 0x0, -(0x1))
+                        }
+                    }
+                }
+            }
+            G[0x3fbd2] = 0x0
+            zero_int_range(G[0x3fbe7], 0x14)
+        }
+        if G[0x3fbfb] {
+            G[0x3fbfb] = 0x0
+            if G[0x36ca] == 0x0 {
+                set_gfx_range_transform(0x0, 0x0, 0x0, 0x0, 0x0)
+            }
+        }
+        zero_int_range(G[0x35bf], 0x14)
+    }
+    return
+}
+@guard sub redraw_message_window {
+    draw_message_window()
+    draw_nameplate()
+    publish_message_text()
+    return
+}
+@guard sub clear_speaker_shown_flags {
+    zero_int_range(G[0x3147], 0x3e8)
+    return
+}
+@guard sub set_speaker_shown_flags {
+    fill_int_array(G[0x3147], 0x1, 0x3e8)
+    return
+}
+@guard sub init_adv_layer_slots {
+    G[0x3546] = 0x4
+    G[0x3547] = 0x2b
+    G[0x3548] = 0x33
+    G[0x3549] = 0x5
+    G[0x354a] = 0x2c
+    G[0x354b] = 0x34
+    G[0x354c] = 0x6
+    G[0x354d] = 0x2d
+    G[0x354e] = 0x35
+    G[0x354f] = 0x7
+    G[0x3550] = 0x2e
+    G[0x3551] = 0x36
+    G[0x3552] = 0x8
+    G[0x3553] = 0x2f
+    G[0x3554] = 0x37
+    G[0x3555] = 0x9
+    G[0x3556] = 0x30
+    G[0x3557] = 0x38
+    G[0x3558] = 0xa
+    G[0x3559] = 0x31
+    G[0x355a] = 0x39
+    G[0x355b] = 0xb
+    G[0x355c] = 0x32
+    G[0x355d] = 0x3a
+    return
+}
+@guard sub draw_nameplate {
+    gfx_elem_erase(0xac44, 0x2)
+    gfx_elem_erase(0xaca8, 0x1)
+    if G[0x5cc] {
+        if G[0x3140] >= 0x0 {
+            draw_texture(0xac44, 0x11, 0x4d, 0x202, 0x193, 0x2b, 0x43, 0x1a3)
+            G[0x5d0] = get_message_window_alpha()
+            G[0x3fb8b] = 0x10 - G[0x5d0] << 0x4
+            gfx_draw_color(0xac44, 0x0, G[0x3fb8b], G[0x36ea])
+            draw_texture(0xac44 + 0x1, 0x11, 0x1e1, 0x202, 0x196, 0x31, 0x43, 0x19f)
+        }
+        if G[0x3145] >= 0x0 {
+            G[0x3fba3] = (G[0x3140] != 0x1) * 0x6
+            if G[0x36ca] == 0x0 {
+                G[0x3fba3] += 0x2
+            }
+            G[0x21480c] = 0x1 << G[0x3fba3]
+            G[0x21480d] = 0x1 << G[0x3fba3] + 0x1
+            if G[0x36e7] & G[0x21480d] {
+                G[0x3142] = 0x0
+            } else if G[0x36e7] & G[0x21480c] {
+                G[0x3142] = 0x1
+            } else if G[0x3140] < 0x0 {
+                G[0x3142] = 0x1
+            } else {
+                L[0x0] = 0x1 - G[0x3147][G[0x3140]]
+                G[0x3142] = L[0x0]
+            }
+            if G[0x3142] {
+                get_texture_size(0xd, out G[0x3fbaa], out G[0x3fbab])
+                draw_texture(0xaca8, 0xd, 0x0, 0x0, G[0x3fbaa], G[0x3fbab], 0x78 - G[0x3fbaa] / 0x2, 0x225 - G[0x3fbab])
+            }
+        }
+    } else {
+        G[0x5d6] = 0x0
+        G[0x5d7] = 0x0
+        G[0x5d8] = 0x0
+        G[0x5d9] = 0x0
+        G[0x5da] = 0x0
+        G[0x5db] = 0x0
+        G[0x5dc] = 0x0
+        G[0x3fb8c] = 0x0
+    }
+    return
+}
+@guard sub clear_message_text {
+    gfx_elem_erase(0xafc8, 0x1f4)
+    gfx_elem_erase(0xbf68, 0x64)
+    G[0x3141] = 0x0
+    if G[0x36eb] == 0x0 {
+        reset_message_voice_state()
+    }
+    return
+}
+@guard sub place_layer_graphic {
+    op_0x21a(G[0x3fbad][G[0x3fba7]], out G[0x3fbc5], out G[0x3fbc6], out G[0x3fbc7])
+    op_0x218(G[0x3fbad][G[0x3fba7]], out G[0x3fbc8], out G[0x3fbc9], out G[0x3fbca])
+    G[0x3fba9] = op_0x215(G[0x3fbad][G[0x3fba7]])
+    if G[0x3fba9] < 0x0 {
+        G[0x3fba9] = G[0x3546:0x3][G[0x3fba7]][0x0]
+        if G[0x3fba7] <= 0x7 {
+            G[0x3fbc8] = 0x400 / 0x2
+            G[0x3fbc9] = 0x240
+        }
+        set_gfx_geom3(G[0x3fbad][G[0x3fba7]], G[0x3fbc8], G[0x3fbc9], G[0x3fbca])
+        if G[0x3fba7] == 0x1 {
+            set_speaker_shown_flags()
+        }
+    } else if G[0x3fba7] <= 0x7 {
+        get_texture_size(G[0x3fba9], out G[0x3fbaa], out G[0x3fbab])
+        G[0x3fbc8] = G[0x3fbc5] + G[0x3fbaa] / 0x2
+        G[0x3fbc9] = G[0x3fbc6] + G[0x3fbab]
+    }
+    G[0x3fbac] = op_0x216(G[0x3fba9])
+    if G[0x3fbac] != G[0x3fb90] {
+        set_texture(G[0x3fb90], G[0x3fba9], -(0x1))
+    }
+    get_texture_size(G[0x3fba9], out G[0x3fbaa], out G[0x3fbab])
+    if G[0x3fba7] <= 0x7 {
+        G[0x3fbc5] = G[0x3fbc8] - G[0x3fbaa] / 0x2
+        G[0x3fbc6] = G[0x3fbc9] - G[0x3fbab]
+    } else {
+        G[0x3fbc5] = 0x0
+        G[0x3fbc6] = 0x0
+    }
+    draw_texture(G[0x3fbad][G[0x3fba7]], G[0x3fba9], 0x0, 0x0, G[0x3fbaa], G[0x3fbab], G[0x3fbc5], G[0x3fbc6])
+    set_object_animation_detached(G[0x3fbad][G[0x3fba7]], 0x0)
+    G[0x3583][G[0x3fba7]] = 0x0
+    G[0x3597][G[0x3fba7]] = 0x0
+    G[0x35bf][G[0x3fba7]] = 0x0
+    return
+}
+@guard sub begin_page_voice {
+    atomic {
+        if G[0x36eb] == 0x0 {
+            reset_message_voice_state()
+        }
+    }
+    return
+}
+@guard sub clear_speaker_face {
+    G[0x3144] = 0x0
+    if G[0x3145] >= 0x0 {
+        G[0x3145] = -(0x1)
+        gfx_elem_release(0xd)
+    }
+    return
+}
+@guard sub clear_speaker {
+    G[0x3140] = -(0x1)
+    draw_nameplate()
+    apply_speaker_text_style()
+    set_auto_message_count_offset(0x0)
+    return
+}
+@guard sub set_page_face {
+    if G[0x3146] != G[0x3fb90] {
+        G[0x3146] = G[0x3fb90]
+        G[0x21480c] = G[0x3fb90] / 0x1000000
+        G[0x21480d] = G[0x3fb90] % 0x1000000
+        if G[0x3fc08:0x7530][G[0x21480c]][G[0x21480d]] > 0x0 {
+            G[0x3140] = G[0x3fc08:0x7530][G[0x21480c]][G[0x21480d]]
+            G[0x3144] = G[0x12a208:0x7530][G[0x21480c]][G[0x21480d]]
+            goto set_page_face_1
+        }
+        G[0x3140] = -(0x1)
+        G[0x3144] = 0x0
+    }
+set_page_face_1:
+    G[0x3fba9] = op_0x215(0xa41a)
+    if G[0x3fba9] >= 0x0 {
+        clear_speaker_face()
+    } else if G[0x3145] != G[0x3146] {
+        G[0x3145] = G[0x3146]
+        set_texture(G[0x3145], 0xd, -(0x1))
+    }
+    if G[0x3140] >= 0x0 {
+        show_speaker()
+    } else {
+        clear_speaker()
+    }
+    return
+}
+@guard sub get_layer_anchor {
+    G[0x3fba9] = op_0x215(G[0x3fbad][G[0x3fba7]])
+    if G[0x3fba9] < 0x0 {
+        if G[0x3fba7] <= 0x7 {
+            G[0x3fbc8] = 0x400 / 0x2
+            G[0x3fbc9] = 0x240
+        } else {
+            G[0x3fbc8] = 0x0
+            G[0x3fbc9] = 0x0
+        }
+        goto get_layer_anchor_1
+    }
+    op_0x21a(G[0x3fbad][G[0x3fba7]], out G[0x3fbc5], out G[0x3fbc6], out G[0x3fbc7])
+    op_0x218(G[0x3fbad][G[0x3fba7]], out G[0x3fbc8], out G[0x3fbc9], out G[0x3fbca])
+    get_texture_size(G[0x3fba9], out G[0x3fbaa], out G[0x3fbab])
+    if G[0x3fbcb] == 0x0 {
+        G[0x3fbc8] = G[0x3fbc5]
+        G[0x3fbc9] = G[0x3fbc6]
+        goto get_layer_anchor_1
+    }
+    if G[0x3fbcb] == 0x1 {
+        G[0x3fbc8] = G[0x3fbc5] + G[0x3fbaa] / 0x2
+        G[0x3fbc9] = G[0x3fbc6]
+        goto get_layer_anchor_1
+    }
+    if G[0x3fbcb] == 0x2 {
+        G[0x3fbc8] = G[0x3fbc5] + G[0x3fbaa]
+        G[0x3fbc9] = G[0x3fbc6]
+        goto get_layer_anchor_1
+    }
+    if G[0x3fbcb] == 0x3 {
+        G[0x3fbc8] = G[0x3fbc5]
+        G[0x3fbc9] = G[0x3fbc6] + G[0x3fbab] / 0x2
+        goto get_layer_anchor_1
+    }
+    if G[0x3fbcb] == 0x4 {
+        G[0x3fbc8] = G[0x3fbc5] + G[0x3fbaa] / 0x2
+        G[0x3fbc9] = G[0x3fbc6] + G[0x3fbab] / 0x2
+        goto get_layer_anchor_1
+    }
+    if G[0x3fbcb] == 0x5 {
+        G[0x3fbc8] = G[0x3fbc5] + G[0x3fbaa]
+        G[0x3fbc9] = G[0x3fbc6] + G[0x3fbab] / 0x2
+        goto get_layer_anchor_1
+    }
+    if G[0x3fbcb] == 0x6 {
+        G[0x3fbc8] = G[0x3fbc5]
+        G[0x3fbc9] = G[0x3fbc6] + G[0x3fbab]
+        goto get_layer_anchor_1
+    }
+    if G[0x3fbcb] == 0x7 {
+        G[0x3fbc8] = G[0x3fbc5] + G[0x3fbaa] / 0x2
+        G[0x3fbc9] = G[0x3fbc6] + G[0x3fbab]
+        goto get_layer_anchor_1
+    }
+    if G[0x3fbcb] == 0x8 {
+        G[0x3fbc8] = G[0x3fbc5] + G[0x3fbaa]
+        G[0x3fbc9] = G[0x3fbc6] + G[0x3fbab]
+    }
+get_layer_anchor_1:
+    G[0x3fbca] = 0x0
+    return
+}
+@guard sub hide_message_window_150ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_150ms_2 {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub show_layer_graphic {
+    G[0x3fba9] = op_0x215(G[0x3fbad][G[0x3fba7]])
+    if G[0x3fba9] < 0x0 {
+        place_layer_graphic()
+        gfx_blit_color(G[0x3fbad][G[0x3fba7]], G[0x3fbcc], G[0x3fbcd], 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x2, -(0x1), -(0x1))
+        clone_gfx_object(G[0x3fbad][G[0x3fba7]], G[0x3fbad][G[0x3fba7]] + 0x1)
+        if G[0x3fba7] <= 0x7 {
+            op_0x21a(G[0x3fbad][G[0x3fba7]], out G[0x3fbc5], out G[0x3fbc6], out G[0x3fbc7])
+            op_0x218(G[0x3fbad][G[0x3fba7]], out G[0x3fbc8], out G[0x3fbc9], out G[0x3fbca])
+            get_texture_size(G[0x3fba9], out G[0x3fbaa], out G[0x3fbab])
+            G[0x3fbc8] = G[0x3fbc5] + G[0x3fbaa] / 0x2
+            G[0x3fbc9] = G[0x3fbc6] + G[0x3fbab]
+        }
+        if G[0x3fba9] == G[0x3546:0x3][G[0x3fba7]][0x0] {
+            G[0x3fba9] = G[0x3546:0x3][G[0x3fba7]][0x1]
+        } else {
+            G[0x3fba9] = G[0x3546:0x3][G[0x3fba7]][0x0]
+        }
+        set_texture(G[0x3fb90], G[0x3fba9], -(0x1))
+        get_texture_size(G[0x3fba9], out G[0x3fbaa], out G[0x3fbab])
+        if G[0x3fba7] <= 0x7 {
+            G[0x3fbc5] = G[0x3fbc8] - G[0x3fbaa] / 0x2
+            G[0x3fbc6] = G[0x3fbc9] - G[0x3fbab]
+        } else {
+            G[0x3fbc5] = 0x0
+            G[0x3fbc6] = 0x0
+        }
+        draw_texture(G[0x3fbad][G[0x3fba7]], G[0x3fba9], 0x0, 0x0, G[0x3fbaa], G[0x3fbab], G[0x3fbc5], G[0x3fbc6])
+        create_texture(G[0x3546:0x3][G[0x3fba7]][0x2], 0x400, 0x240, 0x1)
+        queue_surface_alpha_transition(G[0x3fbad][G[0x3fba7]] + 0x2, G[0x3546:0x3][G[0x3fba7]][0x2], G[0x3fbad][G[0x3fba7]] + 0x1, 0x1, G[0x3fbad][G[0x3fba7]], 0x1, G[0x3fbcc], G[0x3fbcd])
+        draw_texture(G[0x3fbad][G[0x3fba7]] + 0x2, G[0x3546:0x3][G[0x3fba7]][0x2], 0x0, 0x0, 0x400, 0x240, 0x0, 0x0)
+    }
+    return
+}
+@guard sub show_message_window_500ms {
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub show_message_window_150ms {
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub show_message_window_150ms_2 {
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub clear_message_layer {
+    clear_message_text()
+    return
+}
+@guard sub create_layer_canvas {
+    G[0x3fba9] = op_0x215(G[0x3fbad][G[0x3fba7]])
+    if G[0x3fba7] <= 0x7 {
+        if G[0x3fba9] < 0x0 {
+            G[0x3fbc8] = 0x400 / 0x2
+            G[0x3fbc9] = 0x240
+            set_gfx_geom3(G[0x3fbad][G[0x3fba7]], G[0x3fbc8], G[0x3fbc9], G[0x3fbca])
+            goto create_layer_canvas_1
+        }
+        op_0x218(G[0x3fbad][G[0x3fba7]], out G[0x3fbc8], out G[0x3fbc9], out G[0x3fbca])
+    }
+create_layer_canvas_1:
+    G[0x3fba9] = G[0x3546:0x3][G[0x3fba7]][0x0]
+    create_texture(G[0x3fba9], G[0x3fbaa], G[0x3fbab], 0x0)
+    if G[0x3fba7] <= 0x7 {
+        G[0x3fbc5] = G[0x3fbc8] - G[0x3fbaa] / 0x2
+        G[0x3fbc6] = G[0x3fbc9] - G[0x3fbab]
+    } else {
+        G[0x3fbc5] = 0x0
+        G[0x3fbc6] = 0x0
+    }
+    draw_texture(G[0x3fbad][G[0x3fba7]], G[0x3fba9], 0x0, 0x0, G[0x3fbaa], G[0x3fbab], G[0x3fbc5], G[0x3fbc6])
+    set_object_animation_detached(G[0x3fbad][G[0x3fba7]], 0x0)
+    G[0x35d3][G[0x3fba7]] = G[0x3fbaa]
+    G[0x35e7][G[0x3fba7]] = G[0x3fbab]
+    return
+}
+@guard sub hide_message_window_500ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub fade_to_black_1390ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_in_890ms_and_show_message_window_500ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub fade_to_black_890ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_500ms_and_fade_to_black_890ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_500ms_and_fade_to_black_600ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x258, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x258, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub publish_message_text {
+    gfx_elem_erase(0xafc8, 0x1f4)
+    gfx_elem_erase(0xbf68, 0x64)
+    if G[0x5cc] & G[0x3141] {
+        publish_adv_text_layout(0x1)
+    }
+    return
+}
+@guard sub apply_speaker_text_style {
+    G[0x3fc03] = 0x3a3a3a
+    G[0x3fc04] = 0x3
+    G[0x3fc05] = 0x1
+    if G[0x36ec] == 0x1 && G[0x3140] >= 0x0 {
+        G[0x3fba3] = G[0x2981a1][G[0x297db9][G[0x3140]]]
+        if G[0x36ed][G[0x3fba3]] >= 0x0 {
+            G[0x3fc03] = G[0x36ed][G[0x3fba3]]
+        }
+    } else if G[0x36ec] == -(0x1) {
+        G[0x3fc03] = 0xffffff
+        G[0x3fc04] = 0x1
+        G[0x3fc05] = 0x0
+    }
+    set_text_effect_color(G[0x3fc03])
+    set_text_render_mode(G[0x3fc04])
+    set_text_effect_offset(G[0x3fc05], G[0x3fc05])
+    return
+}
+@guard sub show_speaker {
+    append_text_history_metadata(0x2, G[0x3140])
+    append_text_history_metadata(0x3, G[0x3144])
+    if G[0x4527de] == 0x0 && G[0x4527e0] == 0x0 && G[0x4527df] == 0x0 {
+        if G[0x1af90][G[0x3140]] == 0x0 && G[0x3143] == 0x0 {
+            G[0x1af90][G[0x3140]] = 0x1
+            store_shared_profile_int(G[0x1af90][G[0x3140]])
+        }
+    }
+    draw_nameplate()
+    apply_speaker_text_style()
+    set_text_history_recording(0x0)
+    draw_speaker_name()
+    set_text_history_recording(0x1)
+    set_auto_message_count_offset(0x2 + G[0x3fc07])
+    set_adv_text_cursor(0x1, 0x4e - 0x17, 0x34)
+    return
+}
+@guard sub draw_speaker_name {
+    G[0x3fb8d] = get_message_glyph_delay()
+    set_message_glyph_delay(0x0)
+    set_font_size(0x14)
+    set_text_history_recording(0x1)
+    set_adv_text_cursor(0x1, 0x46, 0x8)
+    if G[0x3143] >= 0x0 && G[0x3143] < 0x6 {
+        show_text(0x1, GS[0x4154:0x6][G[0x3140]][G[0x3143]])
+        G[0x3fc07] = half_byte_string_length(GS[0x4154:0x6][G[0x3140]][G[0x3143]])
+    } else {
+        show_text(0x1, "？？？？")
+        G[0x3fc07] = 0x4
+    }
+    set_font_size(0x16)
+    set_message_glyph_delay(G[0x3fb8d])
+    return
+}
+@guard sub fade_in_600ms_and_show_message_window_500ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x258, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x258, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub show_message_window_300ms {
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x12c
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_300ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x12c
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub wipe_layer_graphic {
+    G[0x3fba9] = op_0x215(G[0x3fbad][G[0x3fba7]])
+    if G[0x3fba9] >= 0x0 {
+        G[0x3fb90] = op_0x216(G[0x3fba9])
+        place_layer_graphic()
+        gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x2, G[0x3fbce] * 0xff, 0xffffff)
+        clone_gfx_object(G[0x3fbad][G[0x3fba7]], G[0x3fbad][G[0x3fba7]] + 0x1)
+        gfx_draw_color(G[0x3fbad][G[0x3fba7]] + 0x1, 0x2, (0x1 - G[0x3fbce]) * 0xff, 0xffffff)
+        if G[0x3fbcf] % 0x4 < 0x2 {
+            G[0x3fbd0] = (0x400 - 0x1) / G[0x3fbd0] + 0x1
+        } else {
+            G[0x3fbd0] = (0x240 - 0x1) / G[0x3fbd0] + 0x1
+        }
+        if G[0x3fbaa] > 0x400 {
+            G[0x3fbaa] = 0x400
+            G[0x3fbc5] = 0x0
+        }
+        if G[0x3fbab] > 0x240 {
+            G[0x3fbab] = 0x240
+            G[0x3fbc6] = 0x0
+        }
+        create_texture(G[0x3546:0x3][G[0x3fba7]][0x2], G[0x3fbaa], G[0x3fbab], 0x1)
+        queue_patterned_surface_transition(G[0x3fbad][G[0x3fba7]] + 0x2, G[0x3546:0x3][G[0x3fba7]][0x2], G[0x3fbad][G[0x3fba7]] + 0x1, 0x1, G[0x3fbad][G[0x3fba7]], 0x1, G[0x3fbcf], G[0x3fbd0], G[0x3fbcc], G[0x3fbcd])
+        draw_texture(G[0x3fbad][G[0x3fba7]] + 0x2, G[0x3546:0x3][G[0x3fba7]][0x2], 0x0, 0x0, G[0x3fbaa], G[0x3fbab], G[0x3fbc5], G[0x3fbc6])
+        G[0x3fbd1] = 0x1
+    }
+    return
+}
+@guard sub fade_in_1390ms_and_show_message_window_500ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_150ms_and_begin_transition {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    begin_window_transition()
+    return
+}
+@guard sub clear_layers_from_1_fade_in_and_show_message_window {
+    if 0x0 {
+        gfx_blit_color(G[0x3fbae], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbae], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbae], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbaf], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbaf], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbaf], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb0], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb0], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb0], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb1], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb1], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb1], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb2], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb2], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb2], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb3], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb3], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb3], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb4], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb4], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb4], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    if 0x1 == 0x3 {
+        gfx_elem_erase(G[0x3fbad], 0xa)
+        gfx_elem_release(G[0x3546])
+        gfx_elem_release(G[0x3547])
+        gfx_elem_release(G[0x3548])
+        G[0x3583] = 0x0
+        G[0x3597] = 0x0
+        G[0x35bf] = 0x0
+        if 0x0 == 0x1 {
+            if G[0x36ca] {
+                clear_speaker_shown_flags()
+                goto clear_layers_from_1_fade_in_and_show_message_window_1
+            }
+            set_speaker_shown_flags()
+            G[0x3148] = 0x0
+        }
+    clear_layers_from_1_fade_in_and_show_message_window_1:
+        gfx_elem_erase(G[0x3fbae], 0xa)
+        gfx_elem_release(G[0x3549])
+        gfx_elem_release(G[0x354a])
+        gfx_elem_release(G[0x354b])
+        G[0x3584] = 0x0
+        G[0x3598] = 0x0
+        G[0x35c0] = 0x0
+        if 0x1 == 0x1 {
+            if G[0x36ca] {
+                clear_speaker_shown_flags()
+                goto clear_layers_from_1_fade_in_and_show_message_window_2
+            }
+            set_speaker_shown_flags()
+            G[0x3148] = 0x0
+        }
+    }
+clear_layers_from_1_fade_in_and_show_message_window_2:
+    if 0x1 == 0x2 {
+        gfx_elem_erase(G[0x3fbad], 0xa)
+        gfx_elem_release(G[0x3546])
+        gfx_elem_release(G[0x3547])
+        gfx_elem_release(G[0x3548])
+        G[0x3583] = 0x0
+        G[0x3597] = 0x0
+        G[0x35bf] = 0x0
+        if 0x0 == 0x1 {
+            if G[0x36ca] {
+                clear_speaker_shown_flags()
+                goto clear_layers_from_1_fade_in_and_show_message_window_3
+            }
+            set_speaker_shown_flags()
+            G[0x3148] = 0x0
+        }
+    }
+clear_layers_from_1_fade_in_and_show_message_window_3:
+    if 0x1 == 0x1 {
+        gfx_elem_erase(G[0x3fbae], 0xa)
+        gfx_elem_release(G[0x3549])
+        gfx_elem_release(G[0x354a])
+        gfx_elem_release(G[0x354b])
+        G[0x3584] = 0x0
+        G[0x3598] = 0x0
+        G[0x35c0] = 0x0
+        if 0x1 == 0x1 {
+            if G[0x36ca] {
+                clear_speaker_shown_flags()
+                goto clear_layers_from_1_fade_in_and_show_message_window_4
+            }
+            set_speaker_shown_flags()
+            G[0x3148] = 0x0
+        }
+    }
+clear_layers_from_1_fade_in_and_show_message_window_4:
+    gfx_elem_erase(G[0x3fbaf], 0xa)
+    gfx_elem_release(G[0x354c])
+    gfx_elem_release(G[0x354d])
+    gfx_elem_release(G[0x354e])
+    G[0x3585] = 0x0
+    G[0x3599] = 0x0
+    G[0x35c1] = 0x0
+    if 0x2 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_1_fade_in_and_show_message_window_5
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_1_fade_in_and_show_message_window_5:
+    gfx_elem_erase(G[0x3fbb0], 0xa)
+    gfx_elem_release(G[0x354f])
+    gfx_elem_release(G[0x3550])
+    gfx_elem_release(G[0x3551])
+    G[0x3586] = 0x0
+    G[0x359a] = 0x0
+    G[0x35c2] = 0x0
+    if 0x3 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_1_fade_in_and_show_message_window_6
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_1_fade_in_and_show_message_window_6:
+    gfx_elem_erase(G[0x3fbb1], 0xa)
+    gfx_elem_release(G[0x3552])
+    gfx_elem_release(G[0x3553])
+    gfx_elem_release(G[0x3554])
+    G[0x3587] = 0x0
+    G[0x359b] = 0x0
+    G[0x35c3] = 0x0
+    if 0x4 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_1_fade_in_and_show_message_window_7
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_1_fade_in_and_show_message_window_7:
+    gfx_elem_erase(G[0x3fbb2], 0xa)
+    gfx_elem_release(G[0x3555])
+    gfx_elem_release(G[0x3556])
+    gfx_elem_release(G[0x3557])
+    G[0x3588] = 0x0
+    G[0x359c] = 0x0
+    G[0x35c4] = 0x0
+    if 0x5 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_1_fade_in_and_show_message_window_8
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_1_fade_in_and_show_message_window_8:
+    gfx_elem_erase(G[0x3fbb3], 0xa)
+    gfx_elem_release(G[0x3558])
+    gfx_elem_release(G[0x3559])
+    gfx_elem_release(G[0x355a])
+    G[0x3589] = 0x0
+    G[0x359d] = 0x0
+    G[0x35c5] = 0x0
+    if 0x6 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_1_fade_in_and_show_message_window_9
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_1_fade_in_and_show_message_window_9:
+    gfx_elem_erase(G[0x3fbb4], 0xa)
+    gfx_elem_release(G[0x355b])
+    gfx_elem_release(G[0x355c])
+    gfx_elem_release(G[0x355d])
+    G[0x358a] = 0x0
+    G[0x359e] = 0x0
+    G[0x35c6] = 0x0
+    if 0x7 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_1_fade_in_and_show_message_window_10
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_1_fade_in_and_show_message_window_10:
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_500ms_and_fade_to_black_1390ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_in_2390ms_and_show_message_window_500ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x956, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x956, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub fade_in_890ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_to_black_2390ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x956, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x956, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_800ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x320
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_500ms_and_fade_to_black_2390ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x1f4
+    fade_message_window()
+    present_window_transition()
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x956, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x956, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub clear_layers_from_0_fade_in_and_show_message_window {
+    if 0x0 {
+        gfx_blit_color(G[0x3fbad], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbad], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbad], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbaf], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbaf], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbaf], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb0], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb0], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb0], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb1], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb1], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb1], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb2], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb2], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb2], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb3], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb3], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb3], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        gfx_blit_color(G[0x3fbb4], 0x0, 0x37a, 0xff, 0xffffff)
+        gfx_draw_color(G[0x3fbb4], 0x0, 0x0, 0xffffff)
+    } else {
+        gfx_blit_color(G[0x3fbb4], 0x0, 0x37a, 0x0, -(0x1))
+    }
+    G[0x3fbd1] = 0x1
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    if 0x2 == 0x3 {
+        gfx_elem_erase(G[0x3fbad], 0xa)
+        gfx_elem_release(G[0x3546])
+        gfx_elem_release(G[0x3547])
+        gfx_elem_release(G[0x3548])
+        G[0x3583] = 0x0
+        G[0x3597] = 0x0
+        G[0x35bf] = 0x0
+        if 0x0 == 0x1 {
+            if G[0x36ca] {
+                clear_speaker_shown_flags()
+                goto clear_layers_from_0_fade_in_and_show_message_window_1
+            }
+            set_speaker_shown_flags()
+            G[0x3148] = 0x0
+        }
+    clear_layers_from_0_fade_in_and_show_message_window_1:
+        gfx_elem_erase(G[0x3fbae], 0xa)
+        gfx_elem_release(G[0x3549])
+        gfx_elem_release(G[0x354a])
+        gfx_elem_release(G[0x354b])
+        G[0x3584] = 0x0
+        G[0x3598] = 0x0
+        G[0x35c0] = 0x0
+        if 0x1 == 0x1 {
+            if G[0x36ca] {
+                clear_speaker_shown_flags()
+                goto clear_layers_from_0_fade_in_and_show_message_window_2
+            }
+            set_speaker_shown_flags()
+            G[0x3148] = 0x0
+        }
+    }
+clear_layers_from_0_fade_in_and_show_message_window_2:
+    if 0x2 == 0x2 {
+        gfx_elem_erase(G[0x3fbad], 0xa)
+        gfx_elem_release(G[0x3546])
+        gfx_elem_release(G[0x3547])
+        gfx_elem_release(G[0x3548])
+        G[0x3583] = 0x0
+        G[0x3597] = 0x0
+        G[0x35bf] = 0x0
+        if 0x0 == 0x1 {
+            if G[0x36ca] {
+                clear_speaker_shown_flags()
+                goto clear_layers_from_0_fade_in_and_show_message_window_3
+            }
+            set_speaker_shown_flags()
+            G[0x3148] = 0x0
+        }
+    }
+clear_layers_from_0_fade_in_and_show_message_window_3:
+    if 0x2 == 0x1 {
+        gfx_elem_erase(G[0x3fbae], 0xa)
+        gfx_elem_release(G[0x3549])
+        gfx_elem_release(G[0x354a])
+        gfx_elem_release(G[0x354b])
+        G[0x3584] = 0x0
+        G[0x3598] = 0x0
+        G[0x35c0] = 0x0
+        if 0x1 == 0x1 {
+            if G[0x36ca] {
+                clear_speaker_shown_flags()
+                goto clear_layers_from_0_fade_in_and_show_message_window_4
+            }
+            set_speaker_shown_flags()
+            G[0x3148] = 0x0
+        }
+    }
+clear_layers_from_0_fade_in_and_show_message_window_4:
+    gfx_elem_erase(G[0x3fbaf], 0xa)
+    gfx_elem_release(G[0x354c])
+    gfx_elem_release(G[0x354d])
+    gfx_elem_release(G[0x354e])
+    G[0x3585] = 0x0
+    G[0x3599] = 0x0
+    G[0x35c1] = 0x0
+    if 0x2 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_0_fade_in_and_show_message_window_5
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_0_fade_in_and_show_message_window_5:
+    gfx_elem_erase(G[0x3fbb0], 0xa)
+    gfx_elem_release(G[0x354f])
+    gfx_elem_release(G[0x3550])
+    gfx_elem_release(G[0x3551])
+    G[0x3586] = 0x0
+    G[0x359a] = 0x0
+    G[0x35c2] = 0x0
+    if 0x3 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_0_fade_in_and_show_message_window_6
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_0_fade_in_and_show_message_window_6:
+    gfx_elem_erase(G[0x3fbb1], 0xa)
+    gfx_elem_release(G[0x3552])
+    gfx_elem_release(G[0x3553])
+    gfx_elem_release(G[0x3554])
+    G[0x3587] = 0x0
+    G[0x359b] = 0x0
+    G[0x35c3] = 0x0
+    if 0x4 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_0_fade_in_and_show_message_window_7
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_0_fade_in_and_show_message_window_7:
+    gfx_elem_erase(G[0x3fbb2], 0xa)
+    gfx_elem_release(G[0x3555])
+    gfx_elem_release(G[0x3556])
+    gfx_elem_release(G[0x3557])
+    G[0x3588] = 0x0
+    G[0x359c] = 0x0
+    G[0x35c4] = 0x0
+    if 0x5 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_0_fade_in_and_show_message_window_8
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_0_fade_in_and_show_message_window_8:
+    gfx_elem_erase(G[0x3fbb3], 0xa)
+    gfx_elem_release(G[0x3558])
+    gfx_elem_release(G[0x3559])
+    gfx_elem_release(G[0x355a])
+    G[0x3589] = 0x0
+    G[0x359d] = 0x0
+    G[0x35c5] = 0x0
+    if 0x6 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_0_fade_in_and_show_message_window_9
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_0_fade_in_and_show_message_window_9:
+    gfx_elem_erase(G[0x3fbb4], 0xa)
+    gfx_elem_release(G[0x355b])
+    gfx_elem_release(G[0x355c])
+    gfx_elem_release(G[0x355d])
+    G[0x358a] = 0x0
+    G[0x359e] = 0x0
+    G[0x35c6] = 0x0
+    if 0x7 == 0x1 {
+        if G[0x36ca] {
+            clear_speaker_shown_flags()
+            goto clear_layers_from_0_fade_in_and_show_message_window_10
+        }
+        set_speaker_shown_flags()
+        G[0x3148] = 0x0
+    }
+clear_layers_from_0_fade_in_and_show_message_window_10:
+    present_window_transition()
+    return
+}
+@guard sub fade_in_490ms_and_show_message_window_150ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x1ea, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x1ea, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub show_message_window_800ms {
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x320
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub fade_to_white_890ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0xffffff)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0xffffff
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x37a, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_in_1390ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_to_white_100ms_and_fade_in_150ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0xffffff)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0xffffff
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x64, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x64, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x96, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x96, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub crossfade_layer_graphic {
+    G[0x3fba9] = op_0x215(G[0x3fbad][G[0x3fba7]])
+    if G[0x3fba9] < 0x0 {
+        place_layer_graphic()
+        gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x2, 0xff, 0xffffff)
+        clone_gfx_object(G[0x3fbad][G[0x3fba7]], G[0x3fbad][G[0x3fba7]] + 0x1)
+        gfx_draw_color(G[0x3fbad][G[0x3fba7]] + 0x1, 0x2, 0x0, 0xffffff)
+        goto crossfade_layer_graphic_1
+    }
+    gfx_draw_color(G[0x3fbad][G[0x3fba7]], 0x2, -(0x1), -(0x1))
+    clone_gfx_object(G[0x3fbad][G[0x3fba7]], G[0x3fbad][G[0x3fba7]] + 0x1)
+    if G[0x3fba7] <= 0x7 {
+        op_0x21a(G[0x3fbad][G[0x3fba7]], out G[0x3fbc5], out G[0x3fbc6], out G[0x3fbc7])
+        op_0x218(G[0x3fbad][G[0x3fba7]], out G[0x3fbc8], out G[0x3fbc9], out G[0x3fbca])
+        get_texture_size(G[0x3fba9], out G[0x21480c], out G[0x21480d])
+        G[0x3fbc8] = G[0x3fbc5] + G[0x21480c] / 0x2
+        G[0x3fbc9] = G[0x3fbc6] + G[0x21480d]
+    }
+    if G[0x3fba9] == G[0x3546:0x3][G[0x3fba7]][0x0] {
+        G[0x3fba9] = G[0x3546:0x3][G[0x3fba7]][0x1]
+    } else {
+        G[0x3fba9] = G[0x3546:0x3][G[0x3fba7]][0x0]
+    }
+    set_texture(G[0x3fb90], G[0x3fba9], -(0x1))
+    get_texture_size(G[0x3fba9], out G[0x3fbaa], out G[0x3fbab])
+    if G[0x3fba7] <= 0x7 {
+        G[0x3fbc5] = G[0x3fbc8] - G[0x3fbaa] / 0x2
+        G[0x3fbc6] = G[0x3fbc9] - G[0x3fbab]
+    } else {
+        G[0x3fbc5] = 0x0
+        G[0x3fbc6] = 0x0
+    }
+    draw_texture(G[0x3fbad][G[0x3fba7]], G[0x3fba9], 0x0, 0x0, G[0x3fbaa], G[0x3fbab], G[0x3fbc5], G[0x3fbc6])
+    if G[0x3fbaa] < G[0x21480c] {
+        G[0x3fbaa] = G[0x21480c]
+    }
+    if G[0x3fbab] < G[0x21480d] {
+        G[0x3fbab] = G[0x21480d]
+    }
+    if G[0x3fba7] <= 0x7 {
+        G[0x3fbc5] = G[0x3fbc8] - G[0x3fbaa] / 0x2
+        G[0x3fbc6] = G[0x3fbc9] - G[0x3fbab]
+    }
+crossfade_layer_graphic_1:
+    if G[0x3fbcf] % 0x4 < 0x2 {
+        G[0x3fbd0] = (0x400 - 0x1) / G[0x3fbd0] + 0x1
+    } else {
+        G[0x3fbd0] = (0x240 - 0x1) / G[0x3fbd0] + 0x1
+    }
+    if G[0x3fbaa] > 0x400 {
+        G[0x3fbaa] = 0x400
+        G[0x3fbc5] = 0x0
+    }
+    if G[0x3fbab] > 0x240 {
+        G[0x3fbab] = 0x240
+        G[0x3fbc6] = 0x0
+    }
+    create_texture(G[0x3546:0x3][G[0x3fba7]][0x2], G[0x3fbaa], G[0x3fbab], 0x1)
+    queue_patterned_surface_transition(G[0x3fbad][G[0x3fba7]] + 0x2, G[0x3546:0x3][G[0x3fba7]][0x2], G[0x3fbad][G[0x3fba7]] + 0x1, 0x1, G[0x3fbad][G[0x3fba7]], 0x1, G[0x3fbcf], G[0x3fbd0], G[0x3fbcc], G[0x3fbcd])
+    draw_texture(G[0x3fbad][G[0x3fba7]] + 0x2, G[0x3546:0x3][G[0x3fba7]][0x2], 0x0, 0x0, G[0x3fbaa], G[0x3fbab], G[0x3fbc5], G[0x3fbc6])
+    G[0x3fbd1] = 0x1
+    return
+}
+@guard sub fade_to_red_additive_300ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x1, 0xff, 0xff0000)
+    G[0x35fb] = 0x1
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0xff0000
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x12c, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x12c, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_150ms_and_fade_to_black_490ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x1ea, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x1ea, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_to_white_50ms_and_fade_in_75ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0xffffff)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0xffffff
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x32, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x32, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x4b, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x4b, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_to_black_240ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_in_240ms_and_show_message_window_150ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x1 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x1
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub fade_to_black_490ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x1ea, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x1ea, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_in_240ms {
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_150ms_and_fade_to_black_240ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x96
+    fade_message_window()
+    present_window_transition()
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0x0
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_to_white_1390ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0xffffff)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0xffffff
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x56e, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub hide_message_window_100ms {
+    begin_window_transition()
+    if 0x0 {
+        G[0x3140] = -(0x1)
+        G[0x3145] = -(0x1)
+        G[0x3146] = -(0x1)
+    }
+    G[0x5cc] = 0x1
+    draw_message_window()
+    draw_nameplate()
+    G[0x5cc] = 0x0
+    G[0x3fbcd] = 0x64
+    fade_message_window()
+    present_window_transition()
+    return
+}
+@guard sub fade_to_white_240ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x0, 0xff, 0xffffff)
+    G[0x35fb] = 0x0
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0xffffff
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0xf0, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}
+@guard sub fade_to_red_additive_50ms_and_fade_in_75ms {
+    begin_window_transition()
+    GF[0x4] = mov_float(0x0)
+    GF[0x5] = mov_float(0x400)
+    GF[0x6] = mov_float(0x0)
+    GF[0x7] = mov_float(0x400)
+    GF[0x8] = mov_float(0x0)
+    GF[0x9] = mov_float(0x0)
+    GF[0xa] = mov_float(0x240)
+    GF[0xb] = mov_float(0x240)
+    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+    set_polygon_color(0xa7f8, 0x1, 0xff, 0xff0000)
+    G[0x35fb] = 0x1
+    G[0x35fc] = 0xff
+    G[0x35fd] = 0xff0000
+    G[0x35fe] = G[0x35fc]
+    G[0x35ff] = G[0x35fd]
+    if 0x1 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x32, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x32, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    begin_window_transition()
+    if 0x0 {
+        set_polygon_color(0xa7f8, G[0x35fb], 0x0, G[0x35ff])
+        fade_polygon_color(0xa7f8, 0x0, 0x4b, G[0x35fe], G[0x35ff])
+        G[0x35fc] = G[0x35fe]
+    } else {
+        fade_polygon_color(0xa7f8, 0x0, 0x4b, 0x0, G[0x35ff])
+        G[0x35fc] = 0x0
+    }
+    G[0x35fd] = G[0x35ff]
+    G[0x3fbd1] = 0x1
+    present_window_transition()
+    return
+}

@@ -20,7 +20,8 @@ public class OmsCoreTests
 
     private static readonly OpcodeTable Table = new(new Dictionary<int, (string, int)>
     {
-        [0x02] = ("exit", 0), [0x03] = ("call-script", 1), [0x05] = ("ret", 0), [0x50] = ("add", 3),
+        [0x02] = ("exit", 0), [0x03] = ("call-script", 1), [0x05] = ("ret", 0), [0x09] = ("exit-script", 0),
+        [0x50] = ("add", 3),
         [0x51] = ("sub", 3), [0x52] = ("mul", 3), [0x55] = ("mov", 2), [0x56] = ("and", 3), [0x57] = ("or", 3),
         [0x5a] = ("eq", 3), [0x5b] = ("ne", 3), [0x5c] = ("lt", 3), [0x5e] = ("gt", 3), [0x61] = ("lookup-array", 3),
         [0x6e] = ("show-text", 2), [0x7b] = ("coroutine-save-yield-handlers", 2), [0x7c] = ("coroutine-resume", 0),
@@ -283,6 +284,37 @@ public class OmsCoreTests
         Assert.Equal("61(c:1,3:1,3:2) 5a(9:0,c:1,0:0) a0(9:0,-1,@4) 2() "
                      + "61(c:1,3:2,3:3) 61(c:0,3:1,c:1) a0(c:0,-1,@8) 2() "
                      + "50(9:1,3:2,0:1) 61(c:0,3:1,9:1) 1a2(c:0) 2()", Shape(script));
+    }
+
+    [Fact]
+    public void ExitScriptEndsTheCodeBeforeAPlacedSub()
+    {
+        // Op 0x9 discards the script stack and loads the root again, so nothing after it runs. 創刻のアテリアル's
+        // DEBUGADV2 ends its main code with it, before the linked library; a sub or coroutine may follow it, and a
+        // sub that ends with it gets no implicit return. (This test's intrinsics do not name the opcode.)
+        Assert.True(OmsCompiler.IsTerminator(OmsCompiler.ExitScript));
+        var (first, second, _) = SourceRoundTrip("""
+            coroutine_save_yield_handlers(on_yield, on_yield)
+            helper()
+            @op(0x9)
+            coroutine on_yield {
+                G[4] = 1
+                resume
+            }
+            sub helper {
+                G[1] = 1
+                @op(0x9)
+            }
+            """);
+        Assert.Equal(first, second);
+        IrScript script = Compile("""
+            helper()
+            @op(0x9)
+            sub helper {
+                @op(0x9)
+            }
+            """);
+        Assert.Equal("8f(@2) 9() 9()", Shape(script));   // no return after the sub's exit-script
     }
 
     [Fact]

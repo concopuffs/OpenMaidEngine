@@ -32,7 +32,7 @@ below P3 is still being added and is not playable. The levels' gates are in
 | Boot script | `SYSTEM4.BIN` |
 | Conventional install | `games/arterial/` beside the repository |
 | Port saves | enabled, in `games/arterial/` |
-| OMS modules | `arterial.globals`, `arterial.scripts` (generated) |
+| OMS modules | `arterial.globals`, `arterial.scripts` (generated); `arterial.adv` (`oms/arterial/adv.oms`) |
 | Speakers | no dialogue prelude yet |
 | Tables | none yet |
 | Named patch points | none yet (fragments use offsets) |
