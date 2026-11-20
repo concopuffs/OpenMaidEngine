@@ -11,13 +11,13 @@ public sealed record NativeSaveBankDimensions
         int floatGlobals,
         int stringGlobals,
         int pointerGlobals,
-        int pointerStrings,
-        int localPointerScratch)
+        int floatPointers,
+        int stringPointers)
     {
         int[] values =
         [
             integerGlobals, floatGlobals, stringGlobals,
-            pointerGlobals, pointerStrings, localPointerScratch,
+            pointerGlobals, floatPointers, stringPointers,
         ];
         if (values.Any(value => value < 0))
             throw new ArgumentOutOfRangeException(
@@ -27,21 +27,21 @@ public sealed record NativeSaveBankDimensions
         FloatGlobals = floatGlobals;
         StringGlobals = stringGlobals;
         PointerGlobals = pointerGlobals;
-        PointerStrings = pointerStrings;
-        LocalPointerScratch = localPointerScratch;
+        FloatPointers = floatPointers;
+        StringPointers = stringPointers;
     }
 
     public int IntegerGlobals { get; }
     public int FloatGlobals { get; }
     public int StringGlobals { get; }
     public int PointerGlobals { get; }
-    public int PointerStrings { get; }
-    public int LocalPointerScratch { get; }
+    public int FloatPointers { get; }
+    public int StringPointers { get; }
 
     public int[] ToArray()
         =>
         [
             IntegerGlobals, FloatGlobals, StringGlobals,
-            PointerGlobals, PointerStrings, LocalPointerScratch,
+            PointerGlobals, FloatPointers, StringPointers,
         ];
 }

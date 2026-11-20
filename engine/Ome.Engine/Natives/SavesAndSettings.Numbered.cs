@@ -106,7 +106,7 @@ public sealed partial class SavesAndSettings
             NativeTextHistoryCodec.Decoded? history = restoreHistory && file.HistoryTail.Length != 0
                 ? NativeTextHistoryCodec.Decode(file.HistoryTail)
                 : null;
-            records.Memory.ReadSaveRecords(state);
+            records.Memory.ReadSaveRecords(state, _store.Identity.NumberedSaveKeepsFloats);
             records.Audio.ReadSaveRecords(state);
             records.Graphics.ReadSaveRecords(gfxSnapshot, records.ReleaseSurfacesOnLoad);
             _retained = state;
@@ -204,10 +204,9 @@ public sealed partial class SavesAndSettings
         NativeNumberedSaveState state = (_retained ?? NativeNumberedSaveCodec.Empty(frames, gfxRecordSize)) with
         {
             Frames = frames,
-            LocalPointerScratch = new int[dimensions.LocalPointerScratch],
         };
         state = records.Audio.WriteSaveRecords(state);
-        state = records.Memory.WriteSaveRecords(state, dimensions);
+        state = records.Memory.WriteSaveRecords(state, dimensions, store.Identity.NumberedSaveKeepsFloats);
         return records.Graphics.WriteSaveRecords(state, gfxRecordSize, records.Text.SourceTextObjects);
     }
 }

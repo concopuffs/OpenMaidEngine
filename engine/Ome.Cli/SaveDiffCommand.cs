@@ -1,12 +1,14 @@
 using Ome.Engine.Persistence;
 using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
+using Ome.Engine.Vm;
 using Ome.Script.Modules;
 
 /// <summary><c>save-diff A B [--game ID] [--section NAME]... [--limit N]</c>: compare two native save containers
 /// (numbered SAVEnn.DAT, or any S3SD/S4SD file) by their decoded payloads (NativeSaveDiff). With --game (or its alias
-/// --profile, the last of either winning), global differences carry the names of that game's registry. Exit code 0
-/// when the saves match, 1 when they differ, 2 on a usage or decode error.</summary>
+/// --profile, the last of either winning), global differences carry the names of that game's registry, and the bank
+/// sections its engine build never writes are left out (NativeSaveDiff.UnwrittenSections). Exit code 0 when the saves
+/// match, 1 when they differ, 2 on a usage or decode error.</summary>
 internal static class SaveDiffCommand
 {
     private const int DefaultLimit = 40;
@@ -54,18 +56,26 @@ internal static class SaveDiffCommand
         }
 
         GameModule? names = null;
+        IReadOnlyList<string>? unwritten = null;
         if (profileId is not null)
         {
             string globals = Paths.GlobalsJson(profileId);
             if (File.Exists(globals)) names = GameModule.LoadGlobals(profileId, globals);
             else Console.Error.WriteLine($"save-diff: no {globals}; globals stay unnamed (globals_build.py --build)");
+            // The build says which bank sections its writer steps over; the save says its own minor version.
+            if (GameProfileRegistry.BuiltIn.Find(profileId) is { } profile)
+                unwritten = NativeSaveDiff.UnwrittenSections(
+                    EngineBuilds.ForProfile(profile).Rules.Saves, a.Metadata.SaveVersion2);
+            else Console.Error.WriteLine($"save-diff: no profile '{profileId}'; every section is compared");
         }
 
         Console.WriteLine($"A  {Describe(files[0], a)}");
         Console.WriteLine($"B  {Describe(files[1], b)}");
-        NativeSaveComparison comparison = NativeSaveDiff.Compare(a, b);
+        NativeSaveComparison comparison = NativeSaveDiff.Compare(a, b, unwritten);
         if (!comparison.Numbered)
             Console.WriteLine($"not a numbered save ({comparison.NumberedDecodeError}); payload dwords compared");
+        else if (unwritten is not null)
+            Console.WriteLine($"not compared, since native never writes them: {string.Join(", ", unwritten)}");
 
         var shown = comparison.Differences
             .Where(d => sections.Count == 0 || sections.Contains(d.Section)).ToList();

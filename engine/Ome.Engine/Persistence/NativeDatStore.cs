@@ -16,7 +16,8 @@ public sealed record NativeSaveIdentity(
     int SaveVersion2,
     NativeSaveBankDimensions? BankDimensions = null,
     int NumberedGfxRecordSize = NativeGfxSaveLayout.BaseRecordSize,
-    IReadOnlyList<string>? LegacyGameIds = null)
+    IReadOnlyList<string>? LegacyGameIds = null,
+    bool NumberedSaveKeepsFloats = false)
 {
     public NativeSaveMetadata CreateMetadata(NativeSystemTime timestamp, uint accumulatedPlaySeconds)
         => new(Magic, CompatibilityId, GameId, timestamp, accumulatedPlaySeconds, SaveVersion1, SaveVersion2);

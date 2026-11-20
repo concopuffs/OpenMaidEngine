@@ -83,7 +83,8 @@ public sealed record GamePersistencePolicy
             SaveVersion2: packed % 100,
             BankDimensions: BankDimensions,
             NumberedGfxRecordSize: engineSaves.NumberedGfxRecordSize,
-            LegacyGameIds: LegacyGameIds);
+            LegacyGameIds: LegacyGameIds,
+            NumberedSaveKeepsFloats: engineSaves.KeepsFloatSections(packed % 100));
 }
 
 /// <summary>All Godot-owned writable locations and native persistence policy for one selection.</summary>

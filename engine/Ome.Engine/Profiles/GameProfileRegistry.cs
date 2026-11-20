@@ -232,13 +232,13 @@ public sealed partial class GameProfileRegistry
         public int FloatGlobals { get; init; }
         public int StringGlobals { get; init; }
         public int PointerGlobals { get; init; }
-        public int PointerStrings { get; init; }
-        public int LocalPointerScratch { get; init; }
+        public int FloatPointers { get; init; }
+        public int StringPointers { get; init; }
 
         public NativeSaveBankDimensions ToDimensions()
             => new(
                 IntegerGlobals, FloatGlobals, StringGlobals,
-                PointerGlobals, PointerStrings, LocalPointerScratch);
+                PointerGlobals, FloatPointers, StringPointers);
     }
 
     private sealed class CatalogIdentityDocument

@@ -519,12 +519,29 @@ and the operand accessors pair each count with its bank (`engine-re.md`, "Float 
 references"): the sixth sizes the bank operand type 8 binds, and the fifth the bank between it and the integer
 pointers, which AGE 4.38D uses for operand type 7.
 
-Layout 3 fills three of the six sections. `context_state_serialize@0x40d320` writes the integers, the string blob
-and the integer pointers, and steps over the float section and the last two pointer sections;
-`save_data_deserialize_and_begin_restore@0x40fd10` copies the same three back and steps over the others, after
-zeroing every bank (read in Himegari's 4.24J image, 2026-11-19; not yet in 4.33G or 4.38D). The port writes and
-restores the float section and one pointer section more than that (`backlog.md`, "Numbered saves: the sections
-native steps over").
+Layout 3 always fills three of the six sections, and two more on the later builds (read in all three images,
+2026-11-19):
+
+| build | writer, reader | integers, strings, integer pointers | floats, float pointers | string pointers |
+|---|---|---|---|---|
+| 4.24J | `context_state_serialize@0x40d320`, `save_data_deserialize_and_begin_restore@0x40fd10` | written and restored | stepped over | stepped over |
+| 4.33G | `0x40d1e0`, `0x40faa0` | written and restored | written and restored when the save's minor version is above `0x13` | stepped over |
+| 4.38D | `0x40d5a0`, `0x40fe90` | written and restored | as 4.33G | stepped over |
+
+The minor version is SYS4INI's `SAVEVERSION` modulo 100: 10 for Himegari (310), 20 for Kamidori and 創刻のアテリアル
+(320). So Himegari's saves hold no float, and the other two games' hold their float prefix and their float
+pointers.
+
+The writer takes its buffer from `operator new` and never clears it, so a section it steps over holds whatever the
+heap held. The reader zeroes every bank first, so a bank whose
+section it steps over is zero after a load. 4.33G's and 4.38D's reader, for a minor version below `0x14`, advances
+past the integer pointers by the sixth count twice instead of the fifth and the sixth; the two counts are both 1 in
+every game read.
+
+The port does the same (`SaveRules.KeepsFloatSections`, set for each build in `EngineBuilds.cs`;
+`ScriptMemory.WriteSaveRecords` and `ReadSaveRecords`). It writes zero where native steps over, and zero for the
+float pointers too, a bank it does not have: no script of the three games has a global float pointer operand
+(type 7). `Ome.Cli save-diff --game <game>` leaves the unwritten sections out of its comparison.
 
 The integer and float arrays follow their counts. String count comes from bank count 3, but its storage
 begins with an additional `string_blob_dwords` followed by that many DWORDs of concatenated NUL-terminated

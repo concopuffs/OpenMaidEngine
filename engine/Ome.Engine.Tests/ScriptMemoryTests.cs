@@ -93,7 +93,8 @@ public class ScriptMemoryTests
         memory.SetPointer(0, 0x30);
         var dimensions = new NativeSaveBankDimensions(4, 1, 2, 1, 1, 1);
 
-        NativeNumberedSaveState saved = memory.WriteSaveRecords(NativeNumberedSaveCodec.Empty([]), dimensions);
+        NativeNumberedSaveState saved = memory.WriteSaveRecords(NativeNumberedSaveCodec.Empty([]), dimensions,
+                                                               keepsFloats: false);
 
         Assert.Equal([1, 0, 3, 0], saved.IntegerGlobals);
         Assert.Equal(["", "保存"], saved.StringGlobals);
@@ -101,11 +102,41 @@ public class ScriptMemoryTests
 
         var loaded = new ScriptMemory();
         loaded.SetInteger(9, 99);   // a load zeroes the whole bank first
-        loaded.ReadSaveRecords(saved);
+        loaded.ReadSaveRecords(saved, keepsFloats: false);
 
         Assert.Equal(new Dictionary<int, long> { [0] = 1, [2] = 3 }, loaded.Integers);
         Assert.Equal("保存", loaded.String(1));
         Assert.Equal(0x30, loaded.IntegerPointer(0));
         Assert.Empty(loaded.Floats);
+    }
+
+    /// <summary>Layout 3's six sections (docs/sys4-format-notes.md, the six counts): the floats are written and come
+    /// back only on a build that keeps them, and the string pointers never.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheFloatsAreSavedOnlyWhereTheBuildKeepsThemAndTheStringPointersNever(bool keepsFloats)
+    {
+        int bits = BitConverter.SingleToInt32Bits(2.5f);
+        var memory = new ScriptMemory();
+        memory.SetFloat(0, bits);
+        memory.SetStringPointer(0, 0x44);
+        var dimensions = new NativeSaveBankDimensions(1, 1, 1, 1, 1, 1);
+
+        NativeNumberedSaveState saved = memory.WriteSaveRecords(NativeNumberedSaveCodec.Empty([]), dimensions, keepsFloats);
+
+        Assert.Equal([keepsFloats ? bits : 0], saved.FloatGlobals);
+        Assert.Equal([0], saved.FloatPointers);
+        Assert.Equal([0], saved.StringPointers);
+
+        // A save that holds something in every section, as a native one may where its buffer was not clear.
+        NativeNumberedSaveState full = saved with { FloatGlobals = [bits], FloatPointers = [7], StringPointers = [-1] };
+        var loaded = new ScriptMemory();
+        loaded.SetFloat(0, BitConverter.SingleToInt32Bits(9f));
+        loaded.SetStringPointer(0, 0x55);
+        loaded.ReadSaveRecords(full, keepsFloats);
+
+        Assert.Equal(keepsFloats ? bits : 0, loaded.Float(0));
+        Assert.Empty(loaded.StringPointers);
     }
 }

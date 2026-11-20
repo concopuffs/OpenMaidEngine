@@ -10,6 +10,22 @@ using Ome.Engine.Vm;
 /// <summary>Engine builds (docs/superpowers/specs/2026-11-12-engine-layering-design.md §7).</summary>
 public sealed class EngineBuildTests
 {
+    /// <summary>A numbered save's float sections (docs/sys4-format-notes.md, the six counts): 4.24J's layout 3 steps
+    /// over them whatever the save's version, and 4.33G and 4.38D copy them from minor version 20.</summary>
+    [Fact]
+    public void TheFloatSectionsOfASaveAreKeptFromMinorTwentyOnTheBuildsThatHaveTheBranch()
+    {
+        Assert.False(EngineBuilds.Age424J.Rules.Saves.KeepsFloatSections(10));    // Himegari's SAVEVERSION is 310
+        Assert.False(EngineBuilds.Age424J.Rules.Saves.KeepsFloatSections(20));
+        Assert.False(EngineBuilds.Age433G.Rules.Saves.KeepsFloatSections(19));
+        Assert.True(EngineBuilds.Age433G.Rules.Saves.KeepsFloatSections(20));     // Kamidori's is 320
+        Assert.True(EngineBuilds.Age438D.Rules.Saves.KeepsFloatSections(20));     // and 創刻のアテリアル's
+
+        Assert.Equal(["float-global", "float-pointer", "string-pointer"],
+                     NativeSaveDiff.UnwrittenSections(EngineBuilds.Age424J.Rules.Saves, 10));
+        Assert.Equal(["string-pointer"], NativeSaveDiff.UnwrittenSections(EngineBuilds.Age438D.Rules.Saves, 20));
+    }
+
     [Fact]
     public void EveryProfileNamesADeclaredBuildThatRunsItsAbi()
     {

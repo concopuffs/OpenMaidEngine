@@ -30,8 +30,8 @@ public enum ScriptCollectionStatus
 /// <para>An integer cell holds one form, <see cref="IntegerCell"/>: the integer bank is written only through
 /// <see cref="SetInteger"/>, <see cref="SeedInteger"/> and a load, and a frame's integer locals through
 /// <c>Frame.SetInteger</c>.</para>
-/// <para>The banks are five sections of a numbered save (<see cref="WriteSaveRecords"/>, <see cref="ReadSaveRecords"/>);
-/// the save native decides when they are written and read (spec §5.1, rule 6).</para>
+/// <para>The banks fill the first four of a numbered save's six sections (<see cref="WriteSaveRecords"/>,
+/// <see cref="ReadSaveRecords"/>); the save native decides when they are written and read (spec §5.1, rule 6).</para>
 /// <para>Engine thread only (spec §5.1, rule 4); the driver's <see cref="SeedDeterministicRandom"/> comes as a
 /// request (InputAndWaits.Invoke).</para>
 /// </remarks>
@@ -272,16 +272,25 @@ public sealed partial class ScriptMemory
     /// </summary>
     public void ResetScene() => _scene = new();
 
-    /// <summary>The five banks' sections of a numbered save, each the dense prefix the profile's dimensions give.
+    /// <summary>
+    /// The banks' sections of a numbered save, each the dense prefix the profile's dimensions give. The integers, the
+    /// strings and the integer pointers are always written. The floats are written when the build keeps them
+    /// (<paramref name="keepsFloats"/>: <see cref="SaveRules.KeepsFloatSections"/>); with them native writes the float
+    /// pointers, a bank the port does not have, since no script of a profiled game has a global float pointer operand
+    /// (type 7), so that section is zero. The string pointers are never written. A section native steps over holds
+    /// what its buffer held; the port writes zero there.
     /// </summary>
-    public NativeNumberedSaveState WriteSaveRecords(NativeNumberedSaveState state, NativeSaveBankDimensions dimensions)
+    public NativeNumberedSaveState WriteSaveRecords(NativeNumberedSaveState state, NativeSaveBankDimensions dimensions,
+                                                    bool keepsFloats)
         => state with
         {
             IntegerGlobals = DenseValues(_scene.Integers, dimensions.IntegerGlobals),
-            FloatGlobals = DenseValues(_scene.Floats, dimensions.FloatGlobals),
+            FloatGlobals = keepsFloats ? DenseValues(_scene.Floats, dimensions.FloatGlobals)
+                                       : new int[dimensions.FloatGlobals],
             StringGlobals = DenseStrings(_scene.Strings, dimensions.StringGlobals),
             PointerGlobals = DensePointerValues(_scene.Pointers, dimensions.PointerGlobals),
-            PointerStrings = DensePointerValues(_scene.StringPointers, dimensions.PointerStrings),
+            FloatPointers = new int[dimensions.FloatPointers],
+            StringPointers = new int[dimensions.StringPointers],
         };
 
     /// <summary>
@@ -293,13 +302,17 @@ public sealed partial class ScriptMemory
     /// such as G[0x62428], which SC0000 sets around its MENU.BIN call and a load from MENU never clears, read zero again
     /// (native-read 2026-11-05; docs/engine-re.md, "Native menu bar").
     /// </summary>
-    public void ReadSaveRecords(NativeNumberedSaveState state)
+    public void ReadSaveRecords(NativeNumberedSaveState state, bool keepsFloats)
     {
         ReplaceBank(_scene.Integers, state.IntegerGlobals.Select(value => (long)value).ToArray(), value => value != 0);
-        ReplaceBank(_scene.Floats, state.FloatGlobals.Select(value => (long)value).ToArray(), value => value != 0);
+        // The floats come back only when the build keeps their section; the string pointers never do. Both banks are
+        // zeroed first either way.
+        ReplaceBank(_scene.Floats,
+                    keepsFloats ? state.FloatGlobals.Select(value => (long)value).ToArray() : Array.Empty<long>(),
+                    value => value != 0);
         ReplaceBank(_scene.Strings, state.StringGlobals, value => value.Length != 0);
         ReplaceBank(_scene.Pointers, state.PointerGlobals, value => value != 0);
-        ReplaceBank(_scene.StringPointers, state.PointerStrings, value => value != 0);
+        _scene.StringPointers.Clear();
     }
 
     private static Stack<int>[] CreateStacks()

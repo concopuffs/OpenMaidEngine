@@ -638,18 +638,13 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Not proven:** its save layout. The build's save stamp (`438D`) follows the version and its record size is
     4.33G's; the revision diff shows other constants in the numbered save and load opcodes. The image holds the
     same `S4SD` and `S3SD` magics as 4.33G's.
-  - **Numbered saves: the sections native steps over.** To resolve on this branch, before it merges. Reading the
-    float references showed that 4.24J's layout 3 writes and restores three of its six bank sections: the
-    integers, the strings and the integer pointers (`sys4-format-notes.md`, the six counts). It steps over the
-    float section, the float pointers' and the string pointers'. The port writes the float globals and the string
-    pointers, the latter into the fifth section, which is the float pointers' (`NativeNumberedSaveState` and
-    `NativeSaveBankDimensions` still call the fifth `PointerStrings` and the sixth `LocalPointerScratch`, and so
-    do the manifests' `bankDimensions` and `save-diff`'s section names), and restores both. No script of Himegari
-    or Kamidori has a global float, pointer or string pointer operand (counted with `Ome.Cli intake`), so nothing
-    shows there. 創刻のアテリアル has 49,876 global float operands, and its saved float prefix is one cell: after a
-    load the port would keep float global 0 where native has 0. Done when the same is read in 4.33G and 4.38D,
-    the port writes and restores what native does, the two sections carry their right names, and what native
-    leaves in a section it steps over is known (a test fixture has -1 in the sixth).
+  - **Numbered saves: the six bank sections are native's (2026-11-19).** The fifth and sixth carry their right
+    names (`FloatPointers`, `StringPointers`; the manifests' `floatPointers` and `stringPointers`), and each build
+    writes and restores what its writer and reader were read to (`sys4-format-notes.md`, the six counts;
+    `SaveRules.KeepsFloatSections`; `ScriptMemoryTests`, `EngineBuildTests`). 創刻のアテリアル's float global 0
+    is saved and comes back, as native's does. One thing stays open:
+    - **Global float pointer operands (type 7) have no bank in the port**, so that section is written as zero. No
+      script of the three games has one (`Ome.Cli intake` counts them).
   - **Left out of steps 2 and 3:** whether the Ghidra image's packer API sites are restored and its imports typed
     was not checked (`engine-re.md`, "Runbook"). The Python corpus tools have nothing to read yet: there is no
     `extracted-arterial/`, so `extract_phase2.py` and `compiler_census.py` have not run, and the census is what

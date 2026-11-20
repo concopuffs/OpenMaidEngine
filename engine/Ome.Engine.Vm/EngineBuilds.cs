@@ -66,8 +66,11 @@ public static class EngineBuilds
             Settings = Age424J.Rules.Settings
                 .BindingAfter("LimitAero", new Sys4RegIniKey("display", "VirtualFullScreenType", "0"))
                 .BindingAfter("UseAntiFont", new Sys4RegIniKey("message", "AntiFontLevel", "0")),
-            // Numbered saves append a rotation cache to every graphics record.
-            Saves = new SaveRules(versionStamp: "433G", numberedGfxRecordSize: NativeGfxSaveLayout.RotationCacheRecordSize),
+            // Numbered saves append a rotation cache to every graphics record. context_state_serialize@0x40d1e0 and
+            // save_data_deserialize_and_begin_restore@0x40faa0 copy the float globals and the float pointers when the
+            // save's minor version is above 0x13; 4.24J's have no such branch.
+            Saves = new SaveRules(versionStamp: "433G", numberedGfxRecordSize: NativeGfxSaveLayout.RotationCacheRecordSize,
+                                  floatSectionsFromMinor: 20),
         },
     };
 
@@ -100,7 +103,9 @@ public static class EngineBuilds
                 .BindingAfter("AutoMessagePitch1", new Sys4RegIniKey("message", "AutoMessageOption", "0")),
             // The stamp follows the version, as 4.24J's and 4.33G's do; no 4.38D save has been read. The record size
             // is 4.33G's, unproven: the profile's writes stay off until a native save is read.
-            Saves = new SaveRules(versionStamp: "438D", numberedGfxRecordSize: NativeGfxSaveLayout.RotationCacheRecordSize),
+            // The float sections are 4.33G's, read in 0x40d5a0 and 0x40fe90.
+            Saves = new SaveRules(versionStamp: "438D", numberedGfxRecordSize: NativeGfxSaveLayout.RotationCacheRecordSize,
+                                  floatSectionsFromMinor: 20),
         },
     };
 

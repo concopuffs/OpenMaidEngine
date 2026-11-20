@@ -31,8 +31,8 @@ public class NativeNumberedSaveCodecTests
             FloatGlobals = new[] { BitConverter.SingleToInt32Bits(1.25f) },
             StringGlobals = new[] { "姫狩り", "", "save" },
             PointerGlobals = new[] { 2 },
-            PointerStrings = new[] { 0 },
-            LocalPointerScratch = new[] { -1 },
+            FloatPointers = new[] { 0 },
+            StringPointers = new[] { -1 },
             GfxObjects =
             [
                 new NativeSavedGfxObject(0xcf08,
@@ -417,7 +417,7 @@ public class NativeNumberedSaveCodecTests
         Assert.Equal(decoded.FloatGlobals, roundTrip.FloatGlobals);
         Assert.Equal(decoded.StringGlobals, roundTrip.StringGlobals);
         Assert.Equal(decoded.PointerGlobals, roundTrip.PointerGlobals);
-        Assert.Equal(decoded.PointerStrings, roundTrip.PointerStrings);
+        Assert.Equal(decoded.FloatPointers, roundTrip.FloatPointers);
         Assert.Equal(decoded.RangeTransformRecord, roundTrip.RangeTransformRecord);
         Assert.Equal(handles, roundTrip.GfxObjects.Select(item => (int)item.Handle));
         for (int index = 0; index < objectCount; index++)

@@ -183,8 +183,8 @@ public class NumberedSaveVmTests
                 FloatGlobals = [BitConverter.SingleToInt32Bits(3.5f)],
                 StringGlobals = ["復帰"],
                 PointerGlobals = [0x123],
-                PointerStrings = [0],
-                LocalPointerScratch = [0],
+                FloatPointers = [0],
+                StringPointers = [0],
                 SurfaceRecords = NativeSurfaceRecords(3, 0x1234, 0xff00ff),
                 GfxObjects = [new NativeSavedGfxObject(100, record)],
             };

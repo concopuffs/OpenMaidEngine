@@ -25,8 +25,8 @@
       "floatGlobals": 1,
       "stringGlobals": 802,
       "pointerGlobals": 1,
-      "pointerStrings": 1,
-      "localPointerScratch": 1
+      "floatPointers": 1,
+      "stringPointers": 1
     }
   },
   "launcher": {

@@ -31,8 +31,8 @@ public static class NativeSaveDiff
     public const string FloatGlobals = "float-global";
     public const string StringGlobals = "string-global";
     public const string PointerGlobals = "pointer-global";
-    public const string PointerStrings = "pointer-string";
-    public const string LocalPointerScratch = "local-scratch";
+    public const string FloatPointers = "float-pointer";
+    public const string StringPointers = "string-pointer";
     public const string GfxObjects = "gfx";
     public const string RangeTransform = "range-transform";
     public const string Payload = "payload";
@@ -41,15 +41,32 @@ public static class NativeSaveDiff
     public static readonly IReadOnlyList<string> Sections =
     [
         Metadata, Header, SoundEffects, ResourceRecords, SurfaceRecords, Frames, IntegerGlobals, FloatGlobals,
-        StringGlobals, PointerGlobals, PointerStrings, LocalPointerScratch, GfxObjects, RangeTransform, Payload,
+        StringGlobals, PointerGlobals, FloatPointers, StringPointers, GfxObjects, RangeTransform, Payload,
     ];
+
+    /// <summary>
+    /// The bank sections a build's layout 3 leaves unwritten in a save of <paramref name="minorVersion"/>: the string
+    /// pointers always, and the float globals and float pointers unless the build keeps them
+    /// (<see cref="SaveRules.KeepsFloatSections"/>). Native allocates its save buffer without clearing it, so such a
+    /// section holds whatever the heap held, and a difference in it says nothing about the game's state.
+    /// </summary>
+    public static IReadOnlyList<string> UnwrittenSections(SaveRules rules, int minorVersion)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        return rules.KeepsFloatSections(minorVersion)
+            ? [StringPointers]
+            : [FloatGlobals, FloatPointers, StringPointers];
+    }
 
     // The 20-byte surface record (docs/sys4-format-notes.md, "Surface-record bookkeeping").
     private static readonly string[] SurfaceFields = ["id", "key", "reload", "lifecycle", "created"];
     private const int SurfaceRecordSize = 20;
     private const int ResourceRecordSize = 12;
 
-    public static NativeSaveComparison Compare(NativeSaveDocument a, NativeSaveDocument b)
+    /// <param name="unwritten">Sections of a numbered save to leave out of the comparison
+    /// (<see cref="UnwrittenSections"/>); null compares every section.</param>
+    public static NativeSaveComparison Compare(NativeSaveDocument a, NativeSaveDocument b,
+                                               IReadOnlyCollection<string>? unwritten = null)
     {
         ArgumentNullException.ThrowIfNull(a);
         ArgumentNullException.ThrowIfNull(b);
@@ -72,6 +89,8 @@ public static class NativeSaveDiff
             return new NativeSaveComparison(false, error, differences);
         }
         CompareNumbered(left, right, differences);
+        if (unwritten is { Count: > 0 })
+            differences.RemoveAll(difference => unwritten.Contains(difference.Section));
         return new NativeSaveComparison(true, null, differences);
     }
 
@@ -102,8 +121,8 @@ public static class NativeSaveDiff
                     bits => BitConverter.Int32BitsToSingle(bits).ToString("R"), d);
         CompareBank(StringGlobals, a.StringGlobals, b.StringGlobals, text => Quote(text), d);
         CompareInts(PointerGlobals, a.PointerGlobals, b.PointerGlobals, d);
-        CompareInts(PointerStrings, a.PointerStrings, b.PointerStrings, d);
-        CompareInts(LocalPointerScratch, a.LocalPointerScratch, b.LocalPointerScratch, d);
+        CompareInts(FloatPointers, a.FloatPointers, b.FloatPointers, d);
+        CompareInts(StringPointers, a.StringPointers, b.StringPointers, d);
         CompareGfx(a.GfxObjects, b.GfxObjects, d);
         Add(d, RangeTransform, 0, "first", Hex(a.RangeTransformFirst), Hex(b.RangeTransformFirst));
         Add(d, RangeTransform, 0, "count", a.RangeTransformCount.ToString(), b.RangeTransformCount.ToString());

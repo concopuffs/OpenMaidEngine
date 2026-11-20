@@ -31,8 +31,8 @@ public sealed record NativeNumberedSaveState(
     IReadOnlyList<int> FloatGlobals,
     IReadOnlyList<string> StringGlobals,
     IReadOnlyList<int> PointerGlobals,
-    IReadOnlyList<int> PointerStrings,
-    IReadOnlyList<int> LocalPointerScratch,
+    IReadOnlyList<int> FloatPointers,
+    IReadOnlyList<int> StringPointers,
     IReadOnlyList<NativeSavedGfxObject> GfxObjects,
     long RangeTransformFirst,
     int RangeTransformCount,
@@ -66,7 +66,7 @@ public static class NativeNumberedSaveCodec
         int stringDwords = strings.Length / 4;
         int bankDwords = checked(
             state.IntegerGlobals.Count + state.FloatGlobals.Count + state.StringGlobals.Count
-            + state.PointerGlobals.Count + state.PointerStrings.Count + state.LocalPointerScratch.Count);
+            + state.PointerGlobals.Count + state.FloatPointers.Count + state.StringPointers.Count);
         int totalDwords = checked(
             cutoff * 0x105 + 0x53ea + bankDwords + stringDwords
             + layout.AllocationConstantDwords + state.GfxObjects.Count * layout.AllocationDwordsPerObject);
@@ -86,7 +86,7 @@ public static class NativeNumberedSaveCodec
         int[] counts =
         [
             state.IntegerGlobals.Count, state.FloatGlobals.Count, state.StringGlobals.Count,
-            state.PointerGlobals.Count, state.PointerStrings.Count, state.LocalPointerScratch.Count,
+            state.PointerGlobals.Count, state.FloatPointers.Count, state.StringPointers.Count,
         ];
         WriteIntList(payload, at, counts);
         at += 24;
@@ -100,10 +100,10 @@ public static class NativeNumberedSaveCodec
         at += strings.Length;
         WriteIntList(payload, at, state.PointerGlobals);
         at += state.PointerGlobals.Count * 4;
-        WriteIntList(payload, at, state.PointerStrings);
-        at += state.PointerStrings.Count * 4;
-        WriteIntList(payload, at, state.LocalPointerScratch);
-        at += state.LocalPointerScratch.Count * 4;
+        WriteIntList(payload, at, state.FloatPointers);
+        at += state.FloatPointers.Count * 4;
+        WriteIntList(payload, at, state.StringPointers);
+        at += state.StringPointers.Count * 4;
 
         WriteInt(payload, at, layout.RecordSize);
         WriteInt(payload, at + 4, state.GfxObjects.Count);
@@ -153,9 +153,9 @@ public static class NativeNumberedSaveCodec
         at += stringBytes;
         int[] pointers = ReadInts(payload, at, counts[3]);
         at = checked(at + counts[3] * 4);
-        int[] pointerStrings = ReadInts(payload, at, counts[4]);
+        int[] floatPointers = ReadInts(payload, at, counts[4]);
         at = checked(at + counts[4] * 4);
-        int[] localPointerScratch = ReadInts(payload, at, counts[5]);
+        int[] stringPointers = ReadInts(payload, at, counts[5]);
         at = checked(at + counts[5] * 4);
 
         int gfxRecordSize = ReadNonNegative(payload, at, "gfx record size");
@@ -188,7 +188,7 @@ public static class NativeNumberedSaveCodec
 
         return new NativeNumberedSaveState(
             ReadInt(payload, 4), ReadInt(payload, 8), soundEffects, resources, surfaces, frames,
-            integers, floats, strings, pointers, pointerStrings, localPointerScratch, objects,
+            integers, floats, strings, pointers, floatPointers, stringPointers, objects,
             rangeFirst, rangeCount, rangeRecord, legacyTightGfxLayout, gfxRecordSize);
     }
 

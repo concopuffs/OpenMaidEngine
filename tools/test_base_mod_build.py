@@ -60,7 +60,7 @@ confidence = "low"
 
 # The saved prefix of each bank: G cells below 0x50, GS below 0x10 and GF below 1 are kept by a save.
 PROFILE = {"persistence": {"bankDimensions": {"integerGlobals": 0x50, "floatGlobals": 1, "stringGlobals": 0x10,
-                                              "pointerGlobals": 1, "pointerStrings": 1, "localPointerScratch": 1}}}
+                                              "pointerGlobals": 1, "floatPointers": 1, "stringPointers": 1}}}
 
 
 def workspace(directory: Path, registry: str = REGISTRY, version: str = "1.0.0",
