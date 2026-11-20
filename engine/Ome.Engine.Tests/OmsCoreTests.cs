@@ -286,6 +286,28 @@ public class OmsCoreTests
     }
 
     [Fact]
+    public void AComparisonOfACellWithItselfStaysAPlainAssignment()
+    {
+        // 創刻のアテリアル's PH03_PLR_ACTION compares a global with zero in place. A comparison has no compound
+        // spelling, so the statement must not read `G[0x1] === 0x0`.
+        var (first, second, decompiled) = SourceRoundTrip("""
+            G[1] = G[1] == 0
+            L[2] = L[2] < G[3]
+            G[4] = G[4] + 1
+            G[1][G[2]] = G[1][G[2]] != 4
+            exit
+            """);
+        Assert.Equal(first, second);
+        Assert.Contains("G[0x1] = G[0x1] == 0x0", decompiled);
+        Assert.Contains("L[0x2] = L[0x2] < G[0x3]", decompiled);
+        Assert.Contains("G[0x4] += 0x1", decompiled);   // an arithmetic operator keeps its shorthand
+        Assert.Contains("G[0x1][G[0x2]] = G[0x1][G[0x2]] != 0x4", decompiled);
+        Assert.DoesNotContain("===", decompiled);
+        Assert.DoesNotContain("<=", decompiled);
+        Assert.DoesNotContain("@op(", decompiled);
+    }
+
+    [Fact]
     public void ElementTargetsOrderTheirLookupsByAssignmentForm()
     {
         IrScript script = Compile("""

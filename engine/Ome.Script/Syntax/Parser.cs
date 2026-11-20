@@ -685,6 +685,10 @@ public sealed class Parser
         "+=", "-=", "*=", "/=", "%=", "&=", "|=", "<<=", ">>=",
     };
 
+    /// <summary>Whether <c>target op= value</c> is a statement for this binary operator: the arithmetic and bit
+    /// operators have the form, the comparisons do not.</summary>
+    public static bool HasCompoundAssignment(string binaryOperator) => CompoundOperators.Contains(binaryOperator + "=");
+
     public Expr ParseExpression() => ParseBinary(0);
 
     private Expr ParseBinary(int level)

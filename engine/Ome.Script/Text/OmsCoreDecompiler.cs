@@ -629,7 +629,11 @@ public static class OmsCoreDecompiler
         private bool TryAccept(int root, bool compound)
         {
             LStatement statement = Statement(root, compound);
-            if (compound && !(statement is LAssign { Value: LBinary value } assign && Same(value.Left, assign.Target)))
+            // A comparison has no compound spelling (`x === 0` is no statement): a cell compared with itself in
+            // place stays a plain assignment, which lowers to the same instruction for a plain cell.
+            if (compound && !(statement is LAssign { Value: LBinary value } assign && Same(value.Left, assign.Target)
+                              && BinaryOperators.TryGetValue(value.Opcode, out string? symbol)
+                              && Syntax.Parser.HasCompoundAssignment(symbol)))
                 return false;
             List<int> origins = Origins(statement, root);
             int start = origins.Count == 0 ? root : Math.Min(origins.Min(), root);
