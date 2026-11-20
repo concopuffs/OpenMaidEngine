@@ -23,6 +23,7 @@ Usage:
   py -3.11 -X utf8 tools/operand_access.py [--game ID] [--check-corpus]
   py -3.11 -X utf8 tools/operand_access.py --game kamidori --align-accessors
   py -3.11 -X utf8 tools/operand_access.py --engine arterial --align-accessors --align-to kamidori
+  py -3.11 -X utf8 tools/operand_access.py --apply | --check
 
 Output: build/games/<game>/operand-access.json
 See docs/tools-reference.md ("Native operand access") and docs/engine-re.md.
@@ -31,6 +32,7 @@ from __future__ import annotations
 
 import argparse
 import collections
+import difflib
 import hashlib
 import json
 from dataclasses import dataclass
@@ -508,8 +510,10 @@ def apply_to_registry(text: str, plan: dict[int, dict[int, dict[str, list]]],
                       census: dict[int, dict[int, set[int]]]) -> str:
     """Rewrite access lines in opcodes.toml text; append operand entries an opcode lacks.
 
-    Only `access`/`access_by_abi` lines inside `[[opcode.semantics.args]]` blocks are owned by
-    this function; every other line is preserved byte-for-byte.
+    Only `access`/`access_by_abi` lines inside the `[[opcode.semantics.args]]` blocks of an opcode
+    the plan covers are owned by this function; every other line is preserved byte-for-byte and in
+    its place, the access lines of an opcode no script uses (read by hand) among them. A contract
+    takes the place of the access line it replaces, and an operand entry without one gets it at its end.
     """
     lines = text.split("\n")
     out: list[str] = []
@@ -565,7 +569,10 @@ def apply_to_registry(text: str, plan: dict[int, dict[int, dict[str, list]]],
             out.append(line)
             continue
         if arg_index and (stripped.startswith("access = ") or stripped.startswith("access_by_abi = ")):
-            continue
+            if op in plan:
+                emit_due()                               # the new contract in the old one's place
+                continue
+            pending_insert = None                        # no report covers the opcode: its line stays
         if arg_index and stripped == "":
             emit_due()
             arg_index = None
@@ -609,7 +616,7 @@ def build(profile_id: str) -> dict:
     }
 
 
-def apply_main() -> int:
+def apply_main(check: bool = False) -> int:
     toml_path = paths.VM_MAP / "opcodes.toml"
     model = M.load(toml_path)
     reports, census = {}, collections.defaultdict(lambda: collections.defaultdict(set))
@@ -622,8 +629,17 @@ def apply_main() -> int:
             for index, types in enumerate(positions, start=1):
                 census[op][index].update(types)
     plan = registry_contracts(model, reports)
-    text = toml_path.read_text(encoding="utf-8")
+    text = toml_path.read_bytes().decode("utf-8")
     updated = apply_to_registry(text, plan, census)
+    if check:
+        diff = [line for line in difflib.unified_diff(text.splitlines(), updated.splitlines(), lineterm="", n=0)
+                if line[:1] in "+-" and not line.startswith(("+++", "---"))]
+        print(f"check: {len(plan)} observed opcodes; the registry's access contracts "
+              + ("match the reports" if text == updated else f"differ from the reports ({len(diff)} lines); "
+                 "run --apply"))
+        for line in diff[:20]:
+            print("  " + line)
+        return 0 if text == updated else 1
     toml_path.write_bytes(updated.encode("utf-8"))   # keep the registry LF on Windows
     errors, _ = M.lint(M.load(toml_path))
     access_errors = [error for error in errors if "access" in error or "operand" in error]
@@ -645,14 +661,16 @@ def main(argv=None) -> int:
                         help="propose this revision's accessor VAs by aligning with the reference image")
     parser.add_argument("--apply", action="store_true",
                         help="write access contracts from every profile's report into vm-map/opcodes.toml")
+    parser.add_argument("--check", action="store_true",
+                        help="report whether --apply would change vm-map/opcodes.toml, and write nothing")
     parser.add_argument("--output", type=Path, default=None)
     parser.add_argument("--engine", choices=sorted(ENGINES),
                         help="an engine dump other than the selected profile's (ENGINES key)")
     parser.add_argument("--align-to", default=REFERENCE_PROFILE, choices=sorted(ENGINES),
                         help="the image --align-accessors aligns against (default himegari)")
     args = parser.parse_args(argv)
-    if args.apply:
-        return apply_main()
+    if args.apply or args.check:
+        return apply_main(check=args.check)
     profile_id = args.engine or paths.CONTEXT.profile_id
     if profile_id not in ENGINES:
         raise SystemExit(f"{profile_id}: no engine facts recorded in tools/operand_access.py")

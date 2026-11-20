@@ -181,11 +181,24 @@ def test_apply_to_registry():
     check([len(o["semantics"]["args"]) for o in data["opcode"]] == [2, 2], "result is valid TOML")
 
 
+def test_apply_keeps_the_lines_it_does_not_own_in_place():
+    registry = REGISTRY.replace('access = ["stale"]\n',
+                                'access = ["stale"]\nunchecked_index = { table = "surface", count = 1000 }\n')
+    out = A.apply_to_registry(registry, PLAN, {})
+    check('access = ["write"]\nunchecked_index = { table = "surface", count = 1000 }\n' in out,
+          "a contract takes its old line's place, above a line after it")
+    check(A.apply_to_registry(out, PLAN, {}) == out, "apply is idempotent there too")
+    unobserved = registry.replace("op = 0x55\n", "op = 0x56\n")
+    check(A.apply_to_registry(unobserved, PLAN, {}).startswith(unobserved.split("[[opcode]]\nop = 0x22e")[0]),
+          "an opcode the plan does not cover keeps its access line")
+
+
 def main():
     test_synthetic_x86()
     test_packer_stub_junk_byte()
     test_contracts_reject_out_of_range()
     test_apply_to_registry()
+    test_apply_keeps_the_lines_it_does_not_own_in_place()
     print("FAILURES:", len(FAILS))
     return 1 if FAILS else 0
 

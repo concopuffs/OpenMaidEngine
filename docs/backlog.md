@@ -550,9 +550,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The name port reaches only what an opcode or a unique string reaches.** 397 of 4.33G's 1,015 named or
     commented functions found no partner in 4.38D: start-up code, the frame loop, the renderer. More starting
     pairs (the window procedure, the main tick, import call sites) would reach them.
-  - **`operand_access.py --apply` reorders lines it does not own.** It moved 67 `access` lines below the
-    `unchecked_index` lines added on 2026-11-18. The change is harmless, and shows that `--apply` was not rerun
-    after that edit; `--check` does not exist for it.
 
   Done when each is fixed or dropped with a reason, and `adding-a-game.md` describes no workaround.
 - **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P3**
