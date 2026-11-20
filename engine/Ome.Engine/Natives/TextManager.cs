@@ -60,6 +60,7 @@ public sealed partial class TextManager : ISurfaceListener
     private readonly PageLocatorState? _locator;
     private readonly TimelineLog? _timeline;
     private readonly RubyLayoutRules _rubyRules;
+    private readonly AspectCalibration _aspectCalibration;
     private readonly bool _blankExtentMode;
     private Func<bool> _inputWaiting = static () => false;
     private ITextListener[] _listeners = [];
@@ -172,12 +173,15 @@ public sealed partial class TextManager : ISurfaceListener
     /// <param name="extendedGlyphFace">The engine build's <c>TextRules.ExtendedGlyphFace</c>: the face that draws
     /// the user-defined code area, or null. A build that has one also joins that area's two dashes
     /// (<see cref="ExtendedDashJoin"/>).</param>
+    /// <param name="aspectCalibration">The engine build's <c>TextRules.AspectCalibration</c>.</param>
     public TextManager(Graphics graphics, SkipAndAuto skip, FrameClock clock, TextDevices? devices,
                        RubyLayoutRules ruby, bool blankExtentMode = false, Sys4RegIniStore? settings = null,
                        PageLocatorState? locator = null, TimelineLog? timeline = null, AdvTextHistory? history = null,
-                       LineEndCharacters? lineEnd = null, string? extendedGlyphFace = null)
+                       LineEndCharacters? lineEnd = null, string? extendedGlyphFace = null,
+                       AspectCalibration aspectCalibration = AspectCalibration.BlackBoxOverCellIncrement)
     {
         lineEnd ??= LineEndCharacters.FixedThree;
+        _aspectCalibration = aspectCalibration;
         IGlyphMaskRasterizer Faces(IGlyphMaskRasterizer rasterizer)
             => extendedGlyphFace == null ? rasterizer : new ExtendedFaceGlyphRasterizer(rasterizer, extendedGlyphFace);
         History = history ?? new AdvTextHistory();
@@ -232,7 +236,7 @@ public sealed partial class TextManager : ISurfaceListener
     /// <summary>Aspect mode's fonts measured with <paramref name="probe"/>, over the installed-font list the scripts
     /// see; none without a probe.</summary>
     private AspectFontRealization? Realization(IFontMetricsProbe? probe)
-        => probe != null ? new AspectFontRealization(_fontFamilies.Value, probe) : null;
+        => probe != null ? new AspectFontRealization(_fontFamilies.Value, probe, _aspectCalibration) : null;
 
     /// <summary>A text manager that draws nothing, for a VM given none and for headless runs: it keeps every layout,
     /// cursor, setting and indicator, and records the shown text, as a host without text pixels did.</summary>

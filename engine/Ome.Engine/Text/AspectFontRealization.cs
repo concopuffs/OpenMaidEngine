@@ -38,7 +38,9 @@ public interface IFontMetricsProbe
 /// reference glyph (ＭＳ ゴシック at the size, half width and the weight) and <c>nat</c> the face's glyph at its natural
 /// width (lfWidth 0), the width is <c>ref.gmBlackBoxX / nat.gmCellIncX * -nat.tmAveCharWidth</c> when the reference
 /// black box is no wider, and <c>nat.gmBlackBoxX / ref.gmCellIncX * -nat.tmAveCharWidth</c> otherwise, truncated.
-/// Kamidori's メイリオ bold comes out at -18 for both 20 and 22 pixels.</item>
+/// Kamidori's メイリオ bold comes out at -18 for both 20 and 22 pixels. That is 4.33G's division
+/// (<see cref="AspectCalibration.BlackBoxOverCellIncrement"/>); 4.38D divides the two black boxes instead
+/// (<see cref="AspectCalibration.BlackBoxRatio"/>), and the same font comes out at -19.</item>
 /// </list>
 /// A single-byte glyph is drawn in a font calibrated against itself (<see cref="SingleByteWidth"/>).
 /// Not modelled: mode 2 (text_calibrate_mode2_glyph_font@0x451910), which no shipped game selects; and the
@@ -54,15 +56,20 @@ public sealed class AspectFontRealization
 
     private readonly Dictionary<string, byte> _pitchByFace = new(StringComparer.Ordinal);
     private readonly IFontMetricsProbe _probe;
+    private readonly AspectCalibration _calibration;
     private readonly Dictionary<(string Face, int Height, int Weight), int> _calibrated = new();
     private readonly Dictionary<(string Face, int Height, int Weight, ushort Code), int> _singleByte = new();
     private readonly Dictionary<(int Height, int Weight), int> _referenceBlackBox = new();
     private readonly object _gate = new();
 
-    public AspectFontRealization(IReadOnlyList<EnumeratedFontFamily> installedFamilies, IFontMetricsProbe probe)
+    /// <param name="calibration">How mode 1 divides the two glyphs' measures (the build's
+    /// <c>TextRules.AspectCalibration</c>).</param>
+    public AspectFontRealization(IReadOnlyList<EnumeratedFontFamily> installedFamilies, IFontMetricsProbe probe,
+                                 AspectCalibration calibration = AspectCalibration.BlackBoxOverCellIncrement)
     {
         ArgumentNullException.ThrowIfNull(installedFamilies);
         _probe = probe ?? throw new ArgumentNullException(nameof(probe));
+        _calibration = calibration;
         // text_find_font_family_index@0x423a50 returns the first exact match.
         foreach (EnumeratedFontFamily family in installedFamilies)
             _pitchByFace.TryAdd(family.FaceName, family.PitchAndFamily);
@@ -183,9 +190,31 @@ public sealed class AspectFontRealization
     {
         FontProbeMetrics reference = _probe.MeasureReference(pixelHeight, -(pixelHeight / 2), weight, ReferenceCode);
         FontProbeMetrics natural = _probe.Measure(faceName, pixelHeight, 0, weight, ReferenceCode);
-        double width = reference.BlackBoxX <= natural.BlackBoxX
-            ? (double)reference.BlackBoxX / natural.CellIncrementX * -natural.AverageCharWidth
-            : (double)natural.BlackBoxX / reference.CellIncrementX * -natural.AverageCharWidth;
+        bool referenceNarrower = reference.BlackBoxX <= natural.BlackBoxX;
+        double narrower = referenceNarrower ? reference.BlackBoxX : natural.BlackBoxX;
+        double divisor = _calibration switch
+        {
+            AspectCalibration.BlackBoxRatio => referenceNarrower ? natural.BlackBoxX : reference.BlackBoxX,
+            _ => referenceNarrower ? natural.CellIncrementX : reference.CellIncrementX,
+        };
+        double width = narrower / divisor * -natural.AverageCharWidth;
         return double.IsFinite(width) ? (int)width : null;
     }
+}
+
+/// <summary>
+/// How aspect mode 1 sets a double-byte font's width from the reference glyph and the face's own at its natural
+/// width (<see cref="AspectFontRealization"/>). Both builds take the narrower of the two black boxes, divide it,
+/// multiply by the face's negated average character width and truncate; they differ in what they divide by.
+/// </summary>
+public enum AspectCalibration
+{
+    /// <summary>By the other glyph's cell increment: 4.33G's text_calibrate_mode1_glyph_font@0x451270 loads
+    /// <c>gmCellIncX</c> (0x4515e6, 0x451624).</summary>
+    BlackBoxOverCellIncrement,
+
+    /// <summary>By the wider black box: 4.38D's text_calibrate_mode1_glyph_font@0x454ab0 loads the other
+    /// <c>gmBlackBoxX</c> (0x454e26, 0x454e6a). Native 4.38D creates 創刻のアテリアル's メイリオ bold at 22 pixels
+    /// with a width of -19 (a capture of its CreateFontIndirectA calls, 2026-11-19).</summary>
+    BlackBoxRatio,
 }

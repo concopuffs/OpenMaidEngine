@@ -23,5 +23,8 @@ namespace Ome.Engine.Text;
 /// user-defined area, whatever face the text is in (<see cref="ExtendedFaceGlyphRasterizer"/>). 4.38D's glyph
 /// drawers select <c>AGE Extend</c>, a font the game ships in its catalog; null draws such a character in the
 /// text's own face (4.24J, 4.33G).</param>
+/// <param name="AspectCalibration">What aspect mode 1 divides a font's narrower black box by to set its width
+/// (<see cref="Text.AspectCalibration"/>). 4.24J has no aspect mode and never reads it.</param>
 public sealed record TextRules(GlyphCoverageAlpha GlyphCoverage, RubyRule Ruby, bool FuriganaArmsGlyphTimer,
-                               bool HistoryLookupTestsSign, LineEndRule LineEnd, string? ExtendedGlyphFace);
+                               bool HistoryLookupTestsSign, LineEndRule LineEnd, string? ExtendedGlyphFace,
+                               AspectCalibration AspectCalibration);

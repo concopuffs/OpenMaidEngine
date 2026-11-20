@@ -49,6 +49,20 @@ public class AspectFontRealizationTests
     }
 
     [Fact]
+    public void TheBlackBoxRatioDividesByTheWiderBlackBox()
+    {
+        // AGE 4.38D: 19 / 21 * -21 = -19 where 4.33G's 19 / 22 * -21 gives -18. Native 4.38D creates this font at -19.
+        var probe = new FakeProbe();
+        Assert.Equal(-19, new AspectFontRealization(Installed, probe, AspectCalibration.BlackBoxRatio)
+            .RequestedWidth("メイリオ", 22, 700, aspectMode: 1));
+
+        // A wider reference black box: 17 / 19 * -21 = -18.8, truncated.
+        probe.ByFace["メイリオ"] = new FontProbeMetrics(21, 17, 22);
+        Assert.Equal(-18, new AspectFontRealization(Installed, probe, AspectCalibration.BlackBoxRatio)
+            .RequestedWidth("メイリオ", 22, 700, aspectMode: 1));
+    }
+
+    [Fact]
     public void AWiderReferenceBlackBoxDividesTheFacesByTheReferenceAdvance()
     {
         var probe = new FakeProbe();

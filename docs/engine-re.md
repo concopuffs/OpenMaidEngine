@@ -304,8 +304,8 @@ with the build's own addresses and context offsets masked. Addresses are written
 | The same code, compiled differently | ops `0x2`, `0xae` (names only), `0x15`, `0x216` (one index expression), `0x70` (`adv_text_layout_define` is the same line for line), `0x85` (the erase loop became a library call), `0x258` (its body moved into `0x417540` unchanged); helpers `0x40ab90`=`0x40aa90`, `0x483cd0`=`0x492940` (one string paired differently), `0x40e6b0`=`0x40ea70`, `0x40b680`=`0x40b900` (the save folder helper: 4.38D's image does not resolve its imports, so the decompiler ends the function early) | noise |
 
 **Text.** 4.38D's text code is 4.33G's with these changes. The port has the first as the build's
-`TextRules.LineEnd` and the second as `TextRules.ExtendedGlyphFace`, with the dash join that goes with it
-("The dash join" below).
+`TextRules.LineEnd`, the second as `TextRules.ExtendedGlyphFace`, with the dash join that goes with it ("The dash
+join" below), and the third as `TextRules.AspectCalibration`.
 
 - **The characters that may pass the right edge come from the catalog.** 4.33G's
   `adv_text_append_horizontal_glyph_records@0x45b710` keeps `、`, `。` and `」` on the line they overflow by
@@ -325,6 +325,14 @@ with the build's own addresses and context offsets masked. Addresses are written
   `AGE-EXTEND.TTF`, and `engine_initialize@0x416c00` registers that file for the process
   (`sys4-format-notes.md`, "The font list"). `text_set_font_face@0x42ec40` (ops `0x82` and `0x1a5`) reports a face
   missing from the catalog's font list as a script error, except this one.
+- **Aspect mode 1 divides the two black boxes.** With the aspect mode on, `text_calibrate_mode1_glyph_font` sets a
+  proportional face's width from 激 in the reference ＭＳ ゴシック (`ref`) and in the face at its natural width
+  (`nat`): the narrower of the two `gmBlackBoxX`, divided, times `-nat.tmAveCharWidth`, truncated. 4.33G
+  (`@0x451270`) divides by the other glyph's `gmCellIncX`; 4.38D (`@0x454ab0`) by the other glyph's `gmBlackBoxX`.
+  For メイリオ bold at 22 pixels (`ref` 19 wide, `nat` 21 wide with an increment of 22 and an average of 21) that
+  is `19 / 22 × -21 = -18.1` in 4.33G and `19 / 21 × -21 = -19` in 4.38D. A capture of native 4.38D's
+  `CreateFontIndirectA` calls on 創刻のアテリアル's first pages shows the font created at a width of -19 (and
+  `AGE Extend` at -11, uncalibrated). The single-byte calibration is the same in both builds.
 - **A segment record carries its style.** The record a layout keeps per drawn run grew from `0x30` to `0x74`
   bytes: `adv_text_append_segment_record@0x459d50` (4.33G `0x454e90`) stores the face, size, colours and effect
   with the rectangle and the text, where 4.33G stored them once in the layout. The port's records have carried a
@@ -355,8 +363,8 @@ truncated, and `next` the pen after the glyph's advance:
 So `0xF043` draws its dash again over the gap before it, and `0xF042` also carries it to where the next glyph
 starts. `gfx_copy_surface_rect` clips the destination to the surface and moves the source by as much, then the
 source likewise, and copies nothing when what is left is empty; it writes the clipped rectangles back, and the
-second copy starts from them. 創刻のアテリアル's first page begins with two dashes: the first is neither of the
-two codes, and the second is `0xF043`.
+second copy starts from them. 創刻のアテリアル's first page begins with two dashes: the first is `0xF041`, which is
+not joined, and the second is `0xF043` (`tools/frida/capture_gdi_fonts.py`).
 
 The port wraps each glyph rasterizer (`ExtendedFaceGlyphRasterizer`): a code of the range is drawn with the face,
 at the uncalibrated width, and the mask keeps the text font's ascent. `ExtendedDashJoin` makes the copies after
@@ -420,7 +428,7 @@ grew by 21,660 bytes. One thing is new: after it releases the surfaces,
 polygon map (`ctx+0x4ed2c`) when `set:CreateObject` has bit 1. So a load leaves no polygon, and a save holds
 none. No 4.38D save has been read yet.
 
-**Unread.** Three points the triage did not settle; each is listed in the game's backlog item:
+**Unread.** Two points the triage did not settle; each is listed in the game's backlog item:
 
 - `gfx_draw_surface_through_sprite@0x48c6d0` now sets render state 15 (`D3DRS_ALPHATESTENABLE`) to 0 before it
   draws. Whether 4.33G draws with the alpha test on was not read. With it on, a texel of alpha 0 is not written
@@ -428,9 +436,11 @@ none. No 4.38D save has been read yet.
 - The same function treats a draw whose target is surface `0x27` as it treats one to the back buffer: the
   display's matrix applies and the text scale's inverse does not. What uses surface `0x27` as a target was not
   read.
-- The two glyph string drawers are 564 and 379 lines against 4.33G's 220 and 150. Past the `AGE Extend` range and
-  the dash join their differences were not read, and `text_calibrate_mode1_glyph_font` (`0x451270`=`0x454ab0`) was
-  compared only as far as its reference-face test. The port's glyph edges differ from native's on this game.
+
+The two glyph string drawers are 564 and 379 lines against 4.33G's 220 and 150, and past the `AGE Extend` range
+and the dash join their differences were not read. With the calibration above, the port's frames of
+創刻のアテリアル's first and fourth pages (text, ruby, window and background, GDI backend) equal native's in every
+pixel (2026-11-19), so nothing on those pages depends on what is unread.
 
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 

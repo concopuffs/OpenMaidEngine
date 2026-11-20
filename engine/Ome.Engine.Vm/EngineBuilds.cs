@@ -34,7 +34,8 @@ public static class EngineBuilds
                 FuriganaArmsGlyphTimer: false,
                 HistoryLookupTestsSign: false,
                 LineEnd: LineEndRule.FixedThree,
-                ExtendedGlyphFace: null),
+                ExtendedGlyphFace: null,
+                AspectCalibration: AspectCalibration.BlackBoxOverCellIncrement),
             Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
             Settings: SettingsRules.LoaderKeys,
             Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize)));
@@ -87,6 +88,8 @@ public static class EngineBuilds
                 // text_draw_glyph_string_plain@0x4692f0 and text_draw_glyph_string_effect@0x46b1d0 select the font
                 // text_rebuild_primary_font_resources@0x456800 creates with this face for codes 0xF040 to 0xF9FC.
                 ExtendedGlyphFace = "AGE Extend",
+                // text_calibrate_mode1_glyph_font@0x454ab0 divides the two black box widths.
+                AspectCalibration = AspectCalibration.BlackBoxRatio,
             },
             // engine_settings_save@0x47d1d0 writes four more keys; a SYS4REG.INI native 4.38D wrote has them in
             // these places.

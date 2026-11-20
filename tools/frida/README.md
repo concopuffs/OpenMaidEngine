@@ -33,6 +33,9 @@ Prereq: `py -3.11 -m pip install frida` (core only — `frida-tools` CLI is not 
   matches our engine's `set-texture(resId)` order 1:1). Attach by pid, replay the scene, Ctrl-C, `--analyze`.
 - `capture_graphics.py` — original `ReadFile` logger for `DATA2/DATA5` (`path<TAB>offset<TAB>size` →
   `build/games/<game>/frida-reads.log`); pair with `tools/resolve_frida_reads.py`.
+- `capture_gdi_fonts.py` — records every font native creates (`CreateFontIndirectA`) and every glyph it asks GDI
+  for (`GetGlyphOutlineA`, with the font selected and the metrics returned). Attach to the game driver's native
+  session, run a scenario, then `--summary`. Usage and I/O: `docs/tools-reference.md`.
 - `locate_resource_load.py` — phase-1 locator (back-trace asset-opens → native load chain).
 - `capture_resid_args.py` — phase-2 probe (decoder args/context; showed the loader carries only offsets).
 - `find_globals_base.py`, `find_global_by_sequence.py` — **runtime global-variable RE (SHELVED)**. Full

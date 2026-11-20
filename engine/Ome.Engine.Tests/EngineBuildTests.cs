@@ -44,8 +44,13 @@ public sealed class EngineBuildTests
         Assert.Same(LineEndRule.FixedThree, EngineBuilds.Age424J.Rules.Text.LineEnd);
         Assert.Same(LineEndRule.FixedThree, parent.Text.LineEnd);
         Assert.Same(LineEndRule.CatalogList, child.Text.LineEnd);
-        Assert.Equal(parent.Text with { LineEnd = LineEndRule.CatalogList, ExtendedGlyphFace = "AGE Extend" },
-                     child.Text);
+        Assert.Equal(AspectCalibration.BlackBoxOverCellIncrement, parent.Text.AspectCalibration);
+        Assert.Equal(parent.Text with
+        {
+            LineEnd = LineEndRule.CatalogList,
+            ExtendedGlyphFace = "AGE Extend",
+            AspectCalibration = AspectCalibration.BlackBoxRatio,
+        }, child.Text);
         Assert.Equal(parent.Gfx, child.Gfx);
 
         // The settings writer writes the parent's keys in order, with four more: the file native 4.38D writes.

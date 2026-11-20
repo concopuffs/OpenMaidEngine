@@ -576,16 +576,16 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       off for this game).
     - **Op `0x2c7` on 4.33G** is a plain byte substring; the port runs 4.38D's `SBSubstr` on every build. No script
       of Kamidori has a site.
-    - **Three points left unread:** whether 4.33G draws a surface through a sprite with the alpha test on (4.38D
-      turns it off), what draws into surface `0x27` (4.38D treats that target as the back buffer), and the two
-      glyph string drawers past the `AGE Extend` range (see "Glyph edges differ" below).
+    - **Two points left unread:** whether 4.33G draws a surface through a sprite with the alpha test on (4.38D
+      turns it off), and what draws into surface `0x27` (4.38D treats that target as the back buffer).
 
     In since the triage (2026-11-19): the `JUSTIFYCHAR` list as the build's `TextRules.LineEnd`, the four
     `SYS4REG.INI` keys 4.38D adds in its `SettingsRules`, and Auto's per-character delay with its three settings
     and four opcodes (`engine-re.md`, the same section; `LineEndCharactersTests`, `AutoMessagePitchTests`). None of
     the three is compared with native yet: no page of the game was driven with a `）` at a line's end or with a
-    pitch set (its CONFIG2 sets the pitch). The catalog's font, the extended face and the dash join are in too,
-    and compared (`ExtendedGlyphTests`; the first page's dashes equal native's). Open there:
+    pitch set (its CONFIG2 sets the pitch). The catalog's font, the extended face, the dash join and 4.38D's
+    aspect-mode font calibration are in too, and compared (`ExtendedGlyphTests`, `AspectFontRealizationTests`; the
+    frames of pages 1 and 4 equal native's in every pixel). Open there:
     - **The portable text backend's extended glyphs are not looked at.** It takes the font file
       (`GodotTextServerGlyphMaskRasterizer.AddGameFont`), and no run has drawn the game's text with it.
     - **The ruby drawer does not join dashes.** Native's ruby goes through the same glyph drawers, so a `0xF042`
@@ -644,16 +644,11 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     AGE and on the port at the same VM positions: SC0000's first page waits at `SC0000@0xfff` 18.1 s after Game
     Start on native and 18.2 s on the port, and three clicks later both are at `SC0000@0x12cf`. Stepped second by
     second through SC0000's opening, the two show the same VM position each second, and their frames are equal in
-    every pixel wherever nothing is in motion (the white screen, "Eushully Presents...", the black screen). What
-    differs at the pages:
-    - **Glyph edges differ.** The text sits in the same place with the same ruby, and its glyphs' edges differ:
-      1,223 pixels of page 1's line and 3,061 of page 4's by more than 8 of 255. Along one row of 重 native's ink
-      is one column wider than the port's, with a soft column at each end where the port has one at the right
-      only. The two dashes of page 1, drawn with the catalog's font, are equal in every pixel, so the difference
-      is in how the text's own face is made or drawn. Not looked into; `text_geometry_compare.py` is the tool, and
-      the unread parts of 4.38D's glyph drawers and its font calibration are where to read (`engine-re.md`,
-      "Unread").
-    - **The title's leaves** (its own item, "The title's 3D leaves are not drawn"): 5,336 pixels of the title.
+    every pixel wherever nothing is in motion (the white screen, "Eushully Presents...", the black screen), and
+    since 2026-11-19 at the pages too: the scenario's shots of pages 1 and 4 equal native's in every pixel. What
+    differs:
+    - **The title's leaves** (its own item, "The title's 3D leaves are not drawn"): about 2,000 to 5,000 pixels of
+      the title, as the leaves move.
   - **The polygon objects are in (2026-11-19):** ops `0x320` to `0x323`, 22,324 sites, with the reference
     renderer; the logo's frames and fade timing were compared with native
     (`superpowers/specs/2026-11-19-polygon-objects-design.md` §7). Open:
