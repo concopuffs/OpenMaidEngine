@@ -12421,7 +12421,7 @@ abi_source = "kelebek"
 name = "add-float"
 category = "compute"
 summary = "(destination)(a)(b) — destination = a + b, in floats."
-details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run."
+details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack. The operation itself rounds the exact result to a float: Direct3D runs that thread's x87 at single precision (docs/engine-re.md, \"The x87 runs at single precision\"), and vm_operand_write_float stores the value unchanged. The port rounds the exact result once as well (SinglePrecision); computing in double and storing a float would round twice, which differs only when an integer operand has more than 24 significant bits. A float-pointer operand (type 0xd) is a local float reference (docs/engine-re.md, \"Float cells as arrays, and float references\")."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -12430,6 +12430,8 @@ confidence = "high"
 depends_on = []
 evidence = [
   { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2d0_add_float@0x42dcc0 stores the instruction length (7 dwords), fetches operand 3, then operand 2, and writes their sum to operand 1. 創刻のアテリアル has 1,943 sites." },
+  { method = "native-re", artifact = "Ghidra /arterial/4.38D, /v2 and /kamidori/4.33G", scope = "the Direct3D device's creation", profile_ids = ["arterial", "himegari", "kamidori"], engine_revisions = ["SYS4438", "SYS4422", "SYS4433"], confidence = "high", text = "gfx_create_d3d9_device (4.38D 0x484690, 4.22 0x470960, 4.33G 0x476e80) creates the device with D3DCREATE_MULTITHREADED and without D3DCREATE_FPU_PRESERVE, so Direct3D sets the creating thread, which also runs the script VM, to single precision." },
+  { method = "frida", artifact = "tools/drive.py native and port with a scratch patch at DEBUG.BIN's polygon test", scope = "the float ops' rounding on native", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "The patch (2026-11-20) had native compute 33554434 + 2^-40 - 33554436 and (2130706814 / 2130706433 - 1) * 8388608 and colour two polygons by the results: native gave 0 and 1, the values one rounding to a float gives (two roundings give -4 and 2), and the port with SinglePrecision gave the same." },
 ]
 
 [[opcode.semantics.args]]
@@ -12460,7 +12462,7 @@ abi_source = "kelebek"
 name = "sub-float"
 category = "compute"
 summary = "(destination)(a)(b) — destination = a - b, in floats."
-details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run."
+details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack. The operation itself rounds the exact result to a float: Direct3D runs that thread's x87 at single precision (docs/engine-re.md, \"The x87 runs at single precision\"), and vm_operand_write_float stores the value unchanged. The port rounds the exact result once as well (SinglePrecision); computing in double and storing a float would round twice, which differs only when an integer operand has more than 24 significant bits. A float-pointer operand (type 0xd) is a local float reference (docs/engine-re.md, \"Float cells as arrays, and float references\")."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -12469,6 +12471,8 @@ confidence = "high"
 depends_on = []
 evidence = [
   { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2d1_sub_float@0x42dd20 stores the instruction length (7 dwords), fetches operand 2, then operand 3, and writes operand 2 minus operand 3 to operand 1. 創刻のアテリアル has 100 sites." },
+  { method = "native-re", artifact = "Ghidra /arterial/4.38D, /v2 and /kamidori/4.33G", scope = "the Direct3D device's creation", profile_ids = ["arterial", "himegari", "kamidori"], engine_revisions = ["SYS4438", "SYS4422", "SYS4433"], confidence = "high", text = "gfx_create_d3d9_device (4.38D 0x484690, 4.22 0x470960, 4.33G 0x476e80) creates the device with D3DCREATE_MULTITHREADED and without D3DCREATE_FPU_PRESERVE, so Direct3D sets the creating thread, which also runs the script VM, to single precision." },
+  { method = "frida", artifact = "tools/drive.py native and port with a scratch patch at DEBUG.BIN's polygon test", scope = "the float ops' rounding on native", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "The patch (2026-11-20) had native compute 33554434 + 2^-40 - 33554436 and (2130706814 / 2130706433 - 1) * 8388608 and colour two polygons by the results: native gave 0 and 1, the values one rounding to a float gives (two roundings give -4 and 2), and the port with SinglePrecision gave the same." },
 ]
 
 [[opcode.semantics.args]]
@@ -12499,7 +12503,7 @@ abi_source = "kelebek"
 name = "mul-float"
 category = "compute"
 summary = "(destination)(a)(b) — destination = a * b, in floats."
-details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run."
+details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack. The operation itself rounds the exact result to a float: Direct3D runs that thread's x87 at single precision (docs/engine-re.md, \"The x87 runs at single precision\"), and vm_operand_write_float stores the value unchanged. The port rounds the exact result once as well (SinglePrecision); computing in double and storing a float would round twice, which differs only when an integer operand has more than 24 significant bits. A float-pointer operand (type 0xd) is a local float reference (docs/engine-re.md, \"Float cells as arrays, and float references\")."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -12508,6 +12512,8 @@ confidence = "high"
 depends_on = []
 evidence = [
   { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2d2_mul_float@0x42dd80 stores the instruction length (7 dwords), fetches operand 3, then operand 2, and writes their product to operand 1. 創刻のアテリアル has 50 sites." },
+  { method = "native-re", artifact = "Ghidra /arterial/4.38D, /v2 and /kamidori/4.33G", scope = "the Direct3D device's creation", profile_ids = ["arterial", "himegari", "kamidori"], engine_revisions = ["SYS4438", "SYS4422", "SYS4433"], confidence = "high", text = "gfx_create_d3d9_device (4.38D 0x484690, 4.22 0x470960, 4.33G 0x476e80) creates the device with D3DCREATE_MULTITHREADED and without D3DCREATE_FPU_PRESERVE, so Direct3D sets the creating thread, which also runs the script VM, to single precision." },
+  { method = "frida", artifact = "tools/drive.py native and port with a scratch patch at DEBUG.BIN's polygon test", scope = "the float ops' rounding on native", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "The patch (2026-11-20) had native compute 33554434 + 2^-40 - 33554436 and (2130706814 / 2130706433 - 1) * 8388608 and colour two polygons by the results: native gave 0 and 1, the values one rounding to a float gives (two roundings give -4 and 2), and the port with SinglePrecision gave the same." },
 ]
 
 [[opcode.semantics.args]]
@@ -12538,7 +12544,7 @@ abi_source = "kelebek"
 name = "div-float"
 category = "compute"
 summary = "(destination)(a)(b) — destination = a / b, in floats. A zero divisor is not tested: the quotient is the IEEE infinity or NaN."
-details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run."
+details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack. The operation itself rounds the exact result to a float: Direct3D runs that thread's x87 at single precision (docs/engine-re.md, \"The x87 runs at single precision\"), and vm_operand_write_float stores the value unchanged. The port rounds the exact result once as well (SinglePrecision); computing in double and storing a float would round twice, which differs only when an integer operand has more than 24 significant bits. A float-pointer operand (type 0xd) is a local float reference (docs/engine-re.md, \"Float cells as arrays, and float references\")."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -12547,6 +12553,8 @@ confidence = "high"
 depends_on = []
 evidence = [
   { method = "native-re", artifact = "Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog", scope = "SYS4438 float arithmetic handlers; 4.33G's handlers pair with them at similarity 1.00 and are not read", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "op_0x2d3_div_float@0x42dde0 stores the instruction length (7 dwords), fetches operand 2, then operand 3, and writes operand 2 divided by operand 3 to operand 1, with no test of the divisor. 創刻のアテリアル has 22 sites." },
+  { method = "native-re", artifact = "Ghidra /arterial/4.38D, /v2 and /kamidori/4.33G", scope = "the Direct3D device's creation", profile_ids = ["arterial", "himegari", "kamidori"], engine_revisions = ["SYS4438", "SYS4422", "SYS4433"], confidence = "high", text = "gfx_create_d3d9_device (4.38D 0x484690, 4.22 0x470960, 4.33G 0x476e80) creates the device with D3DCREATE_MULTITHREADED and without D3DCREATE_FPU_PRESERVE, so Direct3D sets the creating thread, which also runs the script VM, to single precision." },
+  { method = "frida", artifact = "tools/drive.py native and port with a scratch patch at DEBUG.BIN's polygon test", scope = "the float ops' rounding on native", profile_ids = ["arterial"], engine_revisions = ["SYS4438"], confidence = "high", text = "The patch (2026-11-20) had native compute 33554434 + 2^-40 - 33554436 and (2130706814 / 2130706433 - 1) * 8388608 and colour two polygons by the results: native gave 0 and 1, the values one rounding to a float gives (two roundings give -4 and 2), and the port with SinglePrecision gave the same." },
 ]
 
 [[opcode.semantics.args]]
@@ -12577,7 +12585,7 @@ abi_source = "kelebek"
 name = "mov-float"
 category = "compute"
 summary = "(destination)(source) — destination = source, as a float."
-details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run."
+details = "The operand comes through the float accessor (vm_operand_fetch_float), which leaves an integer exact on the x87 stack; vm_operand_write_float rounds it to a float once as it stores it, and so does the port. A float-pointer operand (type 0xd) is a local float reference (docs/engine-re.md, \"Float cells as arrays, and float references\")."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
@@ -12610,7 +12618,7 @@ abi_source = "kelebek"
 name = "float-to-int"
 category = "compute"
 summary = "(destination)(source) — destination = source truncated toward zero, as an integer."
-details = "Both operands come through the float accessor (vm_operand_fetch_float), which leaves an integer operand exact on the x87 stack; the result is rounded to a float once, by vm_operand_write_float. The port computes in double and stores a float, which is the same value. Native's x87 precision control during a script (Direct3D may lower it) is not checked. A float-pointer operand (type 0xd), which 創刻のアテリアル's scripts pass, is not supported by the port's float accessors yet and halts the run."
+details = "The operand comes through the float accessor (vm_operand_fetch_float), which leaves an integer exact on the x87 stack; the truncation does no arithmetic, so the x87's single precision does not reach it. A float-pointer operand (type 0xd) is a local float reference (docs/engine-re.md, \"Float cells as arrays, and float references\")."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]

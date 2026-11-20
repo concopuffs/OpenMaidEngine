@@ -68,6 +68,46 @@ public class FloatArithmeticOpsTests
     }
 
     [Fact]
+    public void EachResultIsRoundedToAFloatOnceAsTheSinglePrecisionX87Does()
+    {
+        // Direct3D runs native's x87 at single precision, so the exact result is rounded to a float once. Each case
+        // has an integer operand of more than 24 significant bits, and the double nearest the exact result is the
+        // midpoint of two floats while the exact result is not: rounding through a double would give the other float.
+        float tiny = MathF.ScaleB(1f, -40);
+        VirtualMachine vm = Run(
+            (AddFloat, [GF(1), I(33_554_434), F(tiny)]),            // 2^25 + 2 + 2^-40; through a double 33,554,432
+            (SubFloat, [GF(2), I(33_554_438), F(tiny)]),            // 2^25 + 6 - 2^-40; through a double 33,554,440
+            (MulFloat, [GF(3), I(1_619_001_343), F(8_388_609f)]),   // a midpoint plus 1, near 2^53.6
+            (DivFloat, [GF(4), I(2_130_706_814), I(2_130_706_433)]), // 3 * 2^-55 below 1 + 3 * 2^-24
+            (AddFloat, [GF(5), F(1.5f), F(2.25f)]));                // an exact result is untouched
+
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.Equal((33_554_436f, 33_554_436f), (FloatAt(vm, 1), FloatAt(vm, 2)));
+        Assert.Equal(1.3581168700030976e16f, FloatAt(vm, 3));
+        Assert.Equal(1f + MathF.ScaleB(1f, -23), FloatAt(vm, 4));
+        Assert.Equal(3.75f, FloatAt(vm, 5));
+        // What rounding through a double gives, so the cases do test the difference.
+        double sumLeft = 33_554_434, differenceLeft = 33_554_438, factor = 1_619_001_343, dividend = 2_130_706_814;
+        Assert.Equal((33_554_432f, 33_554_440f), ((float)(sumLeft + tiny), (float)(differenceLeft - tiny)));
+        Assert.Equal(1.35811697737728e16f, (float)(factor * 8_388_609d));
+        Assert.Equal(1f + MathF.ScaleB(1f, -22), (float)(dividend / 2_130_706_433d));
+    }
+
+    [Theory]
+    [InlineData(-33_554_434.0, -1)]
+    [InlineData(16_777_217.0, 0.5)]
+    [InlineData(1e30, 1e30)]
+    [InlineData(float.MaxValue, float.MaxValue)]
+    public void SinglePrecisionAgreesWithExactRounding(double a, double b)
+    {
+        // Against the one-rounding definition, on cases where rounding through a double gives the same float.
+        Assert.Equal((float)(a + b), SinglePrecision.Add(a, b));
+        Assert.Equal((float)(a - b), SinglePrecision.Subtract(a, b));
+        Assert.Equal((float)(a * b), SinglePrecision.Multiply(a, b));
+        Assert.Equal((float)(a / b), SinglePrecision.Divide(a, b));
+    }
+
+    [Fact]
     public void ADivisorOfZeroIsNotTested()
     {
         VirtualMachine vm = Run(

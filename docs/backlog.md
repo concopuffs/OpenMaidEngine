@@ -624,12 +624,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     (move) and `0x2d7` (float to integer), 33,164 sites, read in the 4.38D image (`vm-map/opcodes.toml`;
     `FloatArithmeticOpsTests`). So are the local float references its scripts pass at 584 operands (type `0xd`)
     and float cells as array bases (`engine-re.md`, "Float cells as arrays, and float references", which lists
-    the four ways the port differs from native where no retail script goes). One thing is open:
-    - **x87 precision.** The port computes in double and stores a float. Whether native runs scripts with the
-      x87's precision lowered (Direct3D can lower it) is not checked; it could change a result by one unit in the
-      last place only when an operand is an integer too large for a float. The same holds for the 3D effects'
-      motion, which native computes on the x87 and the port in floats and doubles (`engine-re.md`, "The 3D scene:
-      the rain and the snow").
+    the four ways the port differs from native where no retail script goes). Their precision is native's (2026-11-20):
+    Direct3D runs the engine thread's x87 at single precision, which a probe on native confirmed, and the port rounds
+    as it does, in the float ops, the 3D effects' motion and the polygon colour fade (`engine-re.md`, "The x87 runs
+    at single precision").
   - **Op `0x252` is implemented (2026-11-19):** `set-present-clear`, which makes a present clear its render target
     first (`engine-re.md`, the Arterial paragraph; `GfxLifecycleOpsTests`). Not compared with native: the port
     clears where op `0x20e` would, and no frame of the two was put side by side.

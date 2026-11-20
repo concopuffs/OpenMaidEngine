@@ -144,31 +144,31 @@ public sealed partial class VirtualMachine
     }
 
     // 0x2d0-0x2d3, 0x2d5, 0x2d7: float arithmetic (AGE 4.33 and later; 創刻のアテリアル's scripts are the first to use
-    // it). Native fetches each operand through the float accessor, which leaves an integer exact, and rounds to a
-    // float once, at the store: computing in double and storing a float gives the same value.
+    // it). Native fetches each operand through the float accessor, which leaves an integer exact, and computes on an
+    // x87 that Direct3D set to single precision, so each result is rounded to a float once (SinglePrecision).
     private StepResult OpAddFloat(Instruction ins, int pc)
     {
         var a = ins.Args;
-        WriteFloat(a[0], (float)(ReadFloatExact(a[1]) + ReadFloatExact(a[2]))); return StepResult.Next;
+        WriteFloat(a[0], SinglePrecision.Add(ReadFloatExact(a[1]), ReadFloatExact(a[2]))); return StepResult.Next;
     }
 
     private StepResult OpSubFloat(Instruction ins, int pc)
     {
         var a = ins.Args;
-        WriteFloat(a[0], (float)(ReadFloatExact(a[1]) - ReadFloatExact(a[2]))); return StepResult.Next;
+        WriteFloat(a[0], SinglePrecision.Subtract(ReadFloatExact(a[1]), ReadFloatExact(a[2]))); return StepResult.Next;
     }
 
     private StepResult OpMulFloat(Instruction ins, int pc)
     {
         var a = ins.Args;
-        WriteFloat(a[0], (float)(ReadFloatExact(a[1]) * ReadFloatExact(a[2]))); return StepResult.Next;
+        WriteFloat(a[0], SinglePrecision.Multiply(ReadFloatExact(a[1]), ReadFloatExact(a[2]))); return StepResult.Next;
     }
 
     // Native does not test the divisor: a zero gives the IEEE infinity or NaN.
     private StepResult OpDivFloat(Instruction ins, int pc)
     {
         var a = ins.Args;
-        WriteFloat(a[0], (float)(ReadFloatExact(a[1]) / ReadFloatExact(a[2]))); return StepResult.Next;
+        WriteFloat(a[0], SinglePrecision.Divide(ReadFloatExact(a[1]), ReadFloatExact(a[2]))); return StepResult.Next;
     }
 
     private StepResult OpMovFloat(Instruction ins, int pc)

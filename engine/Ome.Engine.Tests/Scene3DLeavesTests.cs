@@ -172,19 +172,20 @@ public class Scene3DLeavesTests
         var draws = new Draws(7);
         foreach (Scene3DLeaf leaf in graphics.Scene3D.Leaf!.Leaves)
         {
-            float x = (float)((double)draws.Centered() * 10), y = (float)(draws.Unit() * 5);
-            float z = (float)((double)draws.Centered() * 10);
+            // Every operation rounded to a float, in native's order, as its single-precision x87 does.
+            float x = draws.Centered() * 10f, y = draws.Unit() * 5f;
+            float z = draws.Centered() * 10f;
             Assert.Equal(new Vector3(x, y, z), leaf.Position);
-            float vx = (float)((double)draws.Centered() * 0.01f);
-            float vy = (float)((-0.02f - (double)-0.01f) * draws.Unit() + -0.01f);
-            float vz = (float)((double)draws.Centered() * 0.01f);
+            float vx = draws.Centered() * 0.01f;
+            float vy = (-0.02f - -0.01f) * draws.Unit() + -0.01f;
+            float vz = draws.Centered() * 0.01f;
             Assert.Equal(new Vector3(vx, vy, vz), leaf.Velocity);
             Assert.InRange(vy, -0.02f, -0.01f);
             for (int axis = 0; axis < 3; axis++)
-                Assert.Equal((float)((float)(draws.Unit() * 3.1415927410125732) * 2.0), leaf.Rotation[axis]);
+                Assert.Equal(draws.Unit() * 3.14159274f * 2f, leaf.Rotation[axis]);
             for (int axis = 0; axis < 3; axis++)
-                Assert.Equal((float)(0.03f * (double)(float)draws.Centered()), leaf.AngularVelocity[axis]);
-            Assert.Equal((float)(2.0 * draws.Unit() + 1), leaf.Scale);
+                Assert.Equal(0.03f * draws.Centered(), leaf.AngularVelocity[axis]);
+            Assert.Equal((3f - 1f) * draws.Unit() + 1f, leaf.Scale);
             Assert.Equal(draws.Raw() % 2, leaf.Mesh);
         }
     }

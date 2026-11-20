@@ -222,14 +222,16 @@ public sealed partial class GfxState
     }
 
     /// <summary>gfx_polygon_calc_diffuse@0x48b9d0's colour at <paramref name="progress"/>: each channel is
-    /// <c>target * progress + current * (1 - progress)</c>, truncated.</summary>
+    /// <c>target * progress + current * (1 - progress)</c>, truncated. In floats: native's x87 runs at single precision
+    /// and rounds each operation to a float (engine-re.md, "The x87 runs at single precision"), so a channel that does
+    /// not change can still drop by one mid-fade (127 at 0.003 gives 126).</summary>
     public static uint MixPolygonColor(uint current, uint target, float progress)
     {
-        double weight = progress, rest = 1.0 - weight;
+        float rest = 1f - progress;
         uint mixed = 0;
         for (int shift = 24; shift >= 0; shift -= 8)
         {
-            double channel = ((target >> shift) & 0xff) * weight + ((current >> shift) & 0xff) * rest;
+            float channel = ((target >> shift) & 0xff) * progress + ((current >> shift) & 0xff) * rest;
             mixed |= (unchecked((uint)(int)channel) & 0xff) << shift;
         }
         return mixed;

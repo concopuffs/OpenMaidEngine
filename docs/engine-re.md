@@ -794,9 +794,9 @@ patch that removed that op left native idle in the effect wait, drawing nothing,
 their meshes, went on.
 
 **Not modelled.** The port draws a line as a parallelogram a pixel across (`LowerLine`), so the pixel where two of
-a ring's lines meet may be covered twice. Native runs the effects' arithmetic in Direct3D's single-precision x87
-mode, the port in .NET's floats and doubles (`backlog.md`). Point and spot lights, a screen transition's source and
-a movie mask's capture draw no effect (`backlog.md`, "The 3D scene's other cases are not drawn").
+a ring's lines meet may be covered twice. The effects' sine is .NET's, which may differ from the runtime's in the last
+place; the rest of their arithmetic is native's single precision ("The x87 runs at single precision"). Point and spot
+lights, a screen transition's source and a movie mask's capture draw no effect (`backlog.md`, "The 3D scene's other cases are not drawn").
 
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 
@@ -3530,7 +3530,10 @@ equals the media duration, explaining why every observed consumer uses it as a l
 Native multiplies the returned `REFTIME` seconds by the double `1000.0` at `0x5713e8`, passes the x87
 value to the compiler helper at `0x550850`, and writes the low 32-bit integer to operand 1. The helper's
 SSE2 branch uses `CVTTSD2SI`; its x87 fallback corrects the current rounding result to the same behavior,
-so conversion is truncation toward zero. The COM `HRESULT` is ignored and the local output is not
+so conversion is truncation toward zero. The x87 runs at single precision ("The x87 runs at single precision"), so
+the product is rounded to a float first. That cannot move the truncation for a stop time on MPEG's 90 kHz clock
+below 262,144 ms: half a unit in the last place there is under 1/90 ms, the closest such a time comes to the next
+millisecond. The COM `HRESULT` is ignored and the local output is not
 preinitialized: the handler assumes any non-null movie surface has a usable `IMediaPosition`. It is a
 pure query—no run-state bit, service boundary, seek, or playback mutation occurs.
 
@@ -8386,6 +8389,43 @@ reference. It differs in four ways, none of which a retail script reaches:
   `float-reference-names`) instead of crashing or reading encoded integers as floats;
 - its one string read formats what a float reference names, where two of native's three string accessors throw;
 - it has no global float reference (type 7), which no script of the three games uses.
+
+**The x87 runs at single precision (2026-11-20).** Every engine build creates its Direct3D 9 device in
+`gfx_create_d3d9_device`: 4.38D `@0x484690`, 4.22 `@0x470960` and 4.33G `@0x476e80`. Its behaviour flags are `0x40`,
+`0x20` or `0x80` (hardware, software or mixed vertex processing) ORed with `D3DCREATE_MULTITHREADED` (4), never with
+`D3DCREATE_FPU_PRESERVE` (2). Direct3D therefore sets the creating thread's x87 to single precision with round to
+nearest, and keeps it there. That thread is `age_win_main`'s, which runs `engine_initialize` and every
+`engine_main_tick`, so the script VM, the 3D effects and the rest of the CPU-side drawing all compute at single
+precision. The runtime's `__setdefaultprecision` (53 bits) runs at start-up, before the device exists. The
+`_controlfp` callers after it are D3DX's, which restore the control word they found.
+
+At single precision, `fadd`, `fsub`, `fmul`, `fdiv` and `fsqrt` round their result to 24 bits. Loads stay exact, so
+an integer or a double operand enters unrounded. `fsin` and the runtime's sine (`_CIsin@0x586ba0`) keep their result
+unrounded until it is stored. The exponent keeps the x87's wide range, which matters only for a value a float cannot
+hold. Three things follow:
+
+- **The float opcodes** `0x2d0`–`0x2d3` work on an integer operand that is exact on the stack and round the exact
+  result once. A double rounded to a float rounds twice, which differs only when an integer operand has more than 24
+  significant bits. A probe patch at DEBUG.BIN's polygon test had native compute `33554434 + 2^-40 - 33554436` and
+  `(2130706814 / 2130706433 - 1) · 8388608`. Native gave 0 and 1, the values of a single rounding; two roundings give
+  -4 and 2. The port's `SinglePrecision` rounds each result once from the exact one and gives the same (the same
+  probe on the port; `FloatArithmeticOpsTests`).
+- **A chain of operations** rounds after each one. The effects' motion used to be computed in double and rounded at
+  the end, as in `(fastest - slowest) · u + slowest`, `tilt + jitter · u` and `(height - y) · π / height`. A fifth of
+  the rain's fall speeds and a quarter of the fade angles came out one unit in the last place away from native. The
+  port now computes them in floats, in native's order, which .NET rounds the same way. The order was read in the
+  instructions of `rain_drop_init@0x47a5d0`, `rain_drop_draw@0x47a800`, `snow_flake_construct@0x49bec0`,
+  `snow_flake_step@0x49ba70`, `snow_flake_draw@0x49bc30`, `leaf_particle_respawn@0x471a90` and
+  `leaf_particle_draw@0x471c80`.
+- **A polygon's colour fade** (`gfx_polygon_calc_diffuse@0x48b9d0`) is `target · p + current · (1 - p)` per
+  channel, truncated. Each operation rounds, so a channel that does not change can still drop by one: 127 at
+  p = 0.003 gives 126. The port computes it in floats too (`PolygonObjectsTests`).
+
+The port keeps doubles for the drawing's other interpolation: a transition's progress, an object's matrix channels
+and cycles, and the blur parameters. Those values feed the renderers' own blending and vertex positions. There
+native's arithmetic is the GPU's, and the comparisons with native already run at a tolerance, so a unit in the last
+place is not modelled. The port's sine is .NET's, which may differ from the runtime's in the last place. Op `0x147`
+asks GDI (`CreatePolygonRgn`, `PtInRegion`), not the x87.
 
 **Operators.**
 

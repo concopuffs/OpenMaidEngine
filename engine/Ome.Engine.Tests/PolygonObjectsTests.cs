@@ -199,6 +199,16 @@ public class PolygonObjectsTests
     }
 
     [Fact]
+    public void TheColourMixRoundsEachOperationToAFloatAsNativesSinglePrecisionX87Does()
+    {
+        // 127 · 0.003 + 127 · (1 - 0.003), each product and the sum rounded to a float, is 126.99999: a channel that
+        // does not change still drops by one mid-fade, as on native. A double gives 127.
+        Assert.Equal(0x7e7e7e7eu, GfxState.MixPolygonColor(0x7f7f7f7f, 0x7f7f7f7f, 0.003f));
+        // 200 · 0.005 rounds up to 1 in a float, where a double gives 0.99999998.
+        Assert.Equal(0x00000001u, GfxState.MixPolygonColor(0x00000000, 0x000000c8, 0.005f));
+    }
+
+    [Fact]
     public void EraseClearAndCloneTreatAHandlesPolygonAsItsObject()
     {
         VirtualMachine erased = Run(

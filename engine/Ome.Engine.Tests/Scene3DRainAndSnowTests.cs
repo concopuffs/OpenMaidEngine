@@ -48,23 +48,24 @@ public class Scene3DRainAndSnowTests
         var draws = new Draws(11);
         foreach (Scene3DRainDrop drop in graphics.Scene3D.Rain!.Drops)
         {
-            float x = (float)((double)draws.Centered() * 20), y = (float)((double)draws.Unit() * 10);
-            float z = (float)((double)draws.Centered() * 20);
+            // Every operation rounded to a float, in native's order, as its single-precision x87 does.
+            float x = draws.Centered() * 20f, y = draws.Unit() * 10f;
+            float z = draws.Centered() * 20f;
             Assert.Equal(new Vector3(x, y, z), drop.Position);
-            float vx = (float)((double)draws.Unit() * 0.05f);
-            float vy = (float)((-0.2f - (double)-0.1f) * draws.Unit() + -0.1f);
-            float vz = (float)((double)draws.Unit() * 0.05f);
+            float vx = draws.Unit() * 0.05f;
+            float vy = (-0.2f - -0.1f) * draws.Unit() + -0.1f;
+            float vz = draws.Unit() * 0.05f;
             Assert.Equal(new Vector3(vx, vy, vz), drop.Velocity);
             Assert.InRange(vy, -0.2f, -0.1f);
-            // The acceleration: the same three draws' kind again, each kept as a float, times the float 0.01.
-            float ax = (float)((double)(float)((double)draws.Unit() * 0.05f) * 0.01f);
-            float ay = (float)((double)(float)((-0.2f - (double)-0.1f) * draws.Unit() + -0.1f) * 0.01f);
-            float az = (float)(0.01f * (double)(float)((double)draws.Unit() * 0.05f));
+            // The acceleration: the same three draws' kind again, times the float 0.01.
+            float ax = draws.Unit() * 0.05f * 0.01f;
+            float ay = ((-0.2f - -0.1f) * draws.Unit() + -0.1f) * 0.01f;
+            float az = draws.Unit() * 0.05f * 0.01f;
             Assert.Equal(new Vector3(ax, ay, az), drop.Acceleration);
-            float yaw = (float)(0.01f * (double)draws.Unit()), pitch = (float)(0.01f * (double)draws.Unit());
-            float roll = (float)(0.1f + 0.01f * (double)draws.Unit());
+            float yaw = 0f + 0.01f * draws.Unit(), pitch = 0f + 0.01f * draws.Unit();
+            float roll = 0.1f + 0.01f * draws.Unit();
             Assert.Equal(new Vector3(yaw, pitch, roll), drop.Rotation);
-            Assert.Equal((float)((1.1f - (double)1f) * draws.Unit() + 1f), drop.Scale);
+            Assert.Equal((1.1f - 1f) * draws.Unit() + 1f, drop.Scale);
             Assert.False(drop.Rippling);
         }
     }
@@ -107,6 +108,20 @@ public class Scene3DRainAndSnowTests
     }
 
     [Fact]
+    public void TheEffectsRoundEveryOperationToAFloatAsNativesSinglePrecisionX87Does()
+    {
+        // (-0.2 - -0.1) · 0.3 + -0.1: the product rounded to a float first gives a fall one unit in the last place
+        // from the one a double sum rounded once gives (-0.13000001).
+        Assert.Equal(-0.12999999523162842f, Scene3DRainEffect.Fall(0.3f));
+        // A streak 0.1 above the floor: its angle (10 - y) · π / 10, rounded after each operation, is 3.1101766, where
+        // a double rounded once gives 3.1101768.
+        var drop = new Scene3DRainDrop(new Vector3(0, 0.1f, 0), Vector3.Zero, Vector3.Zero, Vector3.Zero, 1f, false, 0, 0);
+        float alpha = Scene3DRainEffect.Alpha(drop);
+        Assert.Equal((float)Math.Sin(3.1101765632629395f) * 0.5f, alpha);
+        Assert.NotEqual((float)Math.Sin(3.1101768016815186f) * 0.5f, alpha);
+    }
+
+    [Fact]
     public void AFlakeIsBornFromFourDrawsAndFallsAndDriftsBySpeedTimesAHundredth()
     {
         Graphics graphics = NewGraphics(5);
@@ -120,23 +135,21 @@ public class Scene3DRainAndSnowTests
         {
             float a = draws.Unit(), b = draws.Unit(), c = draws.Centered();
             // x starts on the negative side alone: -a · speed · 20.
-            Assert.Equal(new Vector3((float)(-(double)a * 2f * 20f), (float)((double)b * 5), (float)((double)c * 20)),
-                         flake.Position);
-            Assert.Equal((float)((0.06f - (double)0.03f) * draws.Unit() + 0.03f), flake.Size);
+            Assert.Equal(new Vector3(-a * 2f * 20f, b * 5f, c * 20f), flake.Position);
+            Assert.Equal((0.06f - 0.03f) * draws.Unit() + 0.03f, flake.Size);
         }
 
         var placed = new Scene3DSnowFlake(new Vector3(1, 0.03f, 3), 0.04f);
         snow.Place(0, placed);
         snow.Step(graphics.GameRandom);
-        Assert.Equal(new Vector3((float)(1 - 2.0 * -0.01f), (float)(2.0 * -0.01f + 0.03f), 3),
-                     snow.Flakes[0].Position);
+        Assert.Equal(new Vector3(1f - 2f * -0.01f, 2f * -0.01f + 0.03f, 3), snow.Flakes[0].Position);
         Assert.Equal(8L, graphics.GameRandom.Draws);
 
         // Below the floor: three draws, a centred x and z and the size, and the flake is at the top.
         snow.Step(graphics.GameRandom);
         var again = new Draws(5, 8);
-        float x = (float)((double)again.Centered() * 20), z = (float)((double)again.Centered() * 20);
-        float size = (float)((0.06f - (double)0.03f) * again.Unit() + 0.03f);
+        float x = again.Centered() * 20f, z = again.Centered() * 20f;
+        float size = (0.06f - 0.03f) * again.Unit() + 0.03f;
         Assert.Equal(new Scene3DSnowFlake(new Vector3(x, 5, z), size), snow.Flakes[0]);
         Assert.Equal(11L, graphics.GameRandom.Draws);
     }
@@ -391,9 +404,9 @@ public class Scene3DRainAndSnowTests
         graphics.LowerFrame(1017);            // one tick
 
         var draws = new Draws(9, 17);
-        Assert.Equal((int)(draws.Unit() * 5.0 + 15.0), graphics.Scene3D.Rain.Drops[0].RippleLife);
-        float x = (float)((double)draws.Centered() * 20), z = (float)((double)draws.Centered() * 20);
-        float size = (float)((0.06f - (double)0.03f) * draws.Unit() + 0.03f);
+        Assert.Equal((int)(draws.Unit() * 5f + 15f), graphics.Scene3D.Rain.Drops[0].RippleLife);
+        float x = draws.Centered() * 20f, z = draws.Centered() * 20f;
+        float size = (0.06f - 0.03f) * draws.Unit() + 0.03f;
         Assert.Equal(new Scene3DSnowFlake(new Vector3(x, 5, z), size), graphics.Scene3D.Snow.Flakes[0]);
         Assert.Equal(21L, graphics.GameRandom.Draws);
     }

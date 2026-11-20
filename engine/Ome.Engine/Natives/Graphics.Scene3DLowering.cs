@@ -125,8 +125,9 @@ public sealed partial class Graphics
             Matrix4x4 world = Matrix4x4.CreateScale(leaf.Scale)
                               * Matrix4x4.CreateFromYawPitchRoll(leaf.Rotation.X, leaf.Rotation.Y, leaf.Rotation.Z)
                               * Matrix4x4.CreateTranslation(leaf.Position);
-            float fade = (float)Math.Sin((float)(((double)Scene3DLeafEffect.Height - leaf.Position.Y)
-                                                 * Scene3DLeafEffect.NativePi / Scene3DLeafEffect.Height));
+            // leaf_particle_draw@0x471c80: the angle in floats, as native's single-precision x87 computes it.
+            float fade = (float)Math.Sin((Scene3DLeafEffect.Height - leaf.Position.Y) * Scene3DLeafEffect.NativePi
+                                         / Scene3DLeafEffect.Height);
             if (LowerLeaf(mesh, world, world * viewProjection, ambient, fade) is { } geometry)
                 items.Add(FrameItem.PolygonItem(geometry, 1f));
         }

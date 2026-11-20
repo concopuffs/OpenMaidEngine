@@ -29,8 +29,8 @@ public sealed class Scene3DLeafEffect
     /// <summary>A factor on the starting rotation's 2π.</summary>
     public const float Spin = 1f;
     public const float AngularSpeed = 0.03f;
-    /// <summary>The π native multiplies by: a double holding the float nearest π (0x5ac780).</summary>
-    internal const double NativePi = 3.1415927410125732;
+    /// <summary>The π native multiplies by: a double holding the float nearest π (0x5ac780), so a float here.</summary>
+    internal const float NativePi = 3.14159274f;
 
     private readonly Scene3DLeaf[] _leaves;
 
@@ -62,14 +62,16 @@ public sealed class Scene3DLeafEffect
                 _leaves[index] = Step(_leaves[index], random);
     }
 
-    // leaf_particle_step@0x471c10: move, turn, jitter the drift in x then z, and start again at the top below 0.
+    // leaf_particle_step@0x471c10: move, turn, jitter the drift in x then z, and start again at the top below 0. Like
+    // all of the effects' arithmetic, in floats: native's x87 runs at single precision and rounds every operation to a
+    // float (engine-re.md, "The x87 runs at single precision"), which .NET's float arithmetic does too.
     private Scene3DLeaf Step(Scene3DLeaf leaf, CrtRandom random)
     {
         Vector3 position = leaf.Position + leaf.Velocity;
         Vector3 rotation = leaf.Rotation + leaf.AngularVelocity;
         Vector3 velocity = leaf.Velocity;
-        velocity.X = (float)(Centered(random) * DriftJitter + velocity.X);
-        velocity.Z = (float)(Centered(random) * DriftJitter + velocity.Z);
+        velocity.X = Centered(random) * DriftJitter + velocity.X;
+        velocity.Z = Centered(random) * DriftJitter + velocity.Z;
         leaf = leaf with { Position = position, Rotation = rotation, Velocity = velocity };
         if (position.Y < 0)
         {
@@ -82,29 +84,20 @@ public sealed class Scene3DLeafEffect
     // leaf_particle_respawn@0x471a90: fourteen draws, in this order.
     private Scene3DLeaf Respawn(CrtRandom random)
     {
-        double x = Centered(random), y = Unit(random), z = Centered(random);
-        var position = new Vector3((float)(x * BoxWidth), (float)(y * Height), (float)(z * BoxWidth));
-        double vx = Centered(random), vy = Unit(random), vz = Centered(random);
-        var velocity = new Vector3((float)(vx * Drift),
-                                   (float)(((double)FallFastest - FallSlowest) * vy + FallSlowest),
-                                   (float)(vz * Drift));
+        float x = Centered(random), y = Unit(random), z = Centered(random);
+        var position = new Vector3(x * BoxWidth, y * Height, z * BoxWidth);
+        float vx = Centered(random), vy = Unit(random), vz = Centered(random);
+        var velocity = new Vector3(vx * Drift, (FallFastest - FallSlowest) * vy + FallSlowest, vz * Drift);
         float yaw = StartingAngle(Unit(random)), pitch = StartingAngle(Unit(random)), roll = StartingAngle(Unit(random));
-        double turnYaw = Centered(random), turnPitch = Centered(random), turnRoll = Centered(random);
-        var angularVelocity = new Vector3((float)(AngularSpeed * turnYaw),
-                                          (float)(AngularSpeed * turnPitch),
-                                          (float)(AngularSpeed * turnRoll));
-        float scale = (float)(((double)ScaleLargest - ScaleSmallest) * Unit(random) + ScaleSmallest);
+        float turnYaw = Centered(random), turnPitch = Centered(random), turnRoll = Centered(random);
+        var angularVelocity = new Vector3(AngularSpeed * turnYaw, AngularSpeed * turnPitch, AngularSpeed * turnRoll);
+        float scale = (ScaleLargest - ScaleSmallest) * Unit(random) + ScaleSmallest;
         int mesh = random.Next() % Meshes.Count;
         return new Scene3DLeaf(position, velocity, new Vector3(yaw, pitch, roll), angularVelocity, scale, mesh);
     }
 
-    // The x87 code rounds to a float after each product: u·π, then ·2, then ·the spin factor.
-    private static float StartingAngle(float unit)
-    {
-        float half = (float)(unit * NativePi);
-        float whole = (float)(half * 2.0);
-        return (float)(whole * (double)Spin);
-    }
+    // u·π, then ·2 (a double 2.0), then ·the spin factor.
+    private static float StartingAngle(float unit) => unit * NativePi * 2f * Spin;
 
     private static float Unit(CrtRandom random) => Scene3DRandom.Unit(random);
 

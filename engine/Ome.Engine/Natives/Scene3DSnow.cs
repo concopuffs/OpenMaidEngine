@@ -81,20 +81,19 @@ public sealed class Scene3DSnowEffect
         return (int)(Math.Ceiling((double)d) + Math.Floor((double)d));
     }
 
-    /// <summary>A flake's alpha (<c>snow_flake_draw@0x49bc30</c>): 1 without the fade, else sin(π(top - y)/top), the
-    /// angle rounded to a float as the x87 code stores it.</summary>
+    /// <summary>A flake's alpha (<c>snow_flake_draw@0x49bc30</c>): 1 without the fade, else sin(π(top - y)/top).
+    /// </summary>
     public float Alpha(Scene3DSnowFlake flake)
-        => Fades
-            ? (float)Math.Sin((float)(((double)Top - flake.Position.Y) * Scene3DLeafEffect.NativePi / Top))
-            : 1f;
+        => Fades ? (float)Math.Sin((Top - flake.Position.Y) * Scene3DLeafEffect.NativePi / Top) : 1f;
 
-    // snow_flake_construct: four draws, the first two units and a centred one for the place, a unit for the size. x
-    // starts at -a · speed · spread, so on the negative side alone.
+    // snow_flake_construct@0x49bec0: four draws, the first two units and a centred one for the place, a unit for the
+    // size. x starts at -a · speed · spread, so on the negative side alone. Like all of the effects' arithmetic, in
+    // floats: native's x87 runs at single precision and rounds every operation to a float (engine-re.md, "The x87 runs
+    // at single precision"), which .NET's float arithmetic does too.
     private Scene3DSnowFlake Born(CrtRandom random)
     {
         float a = Scene3DRandom.Unit(random), b = Scene3DRandom.Unit(random), c = Scene3DRandom.Centered(random);
-        var position = new Vector3((float)(-(double)a * Speed * Spread), (float)((double)b * Top),
-                                   (float)((double)c * Spread));
+        var position = new Vector3(-a * Speed * Spread, b * Top, c * Spread);
         return new Scene3DSnowFlake(position, Size(random));
     }
 
@@ -102,14 +101,14 @@ public sealed class Scene3DSnowEffect
     // the top, a centred x and z and a unit for the size.
     private Scene3DSnowFlake Step(Scene3DSnowFlake flake, CrtRandom random)
     {
-        float y = (float)((double)Speed * Fall + flake.Position.Y);
-        float x = (float)(flake.Position.X - (double)Speed * Fall);
+        float y = Speed * Fall + flake.Position.Y;
+        float x = flake.Position.X - Speed * Fall;
         if (y >= 0) return flake with { Position = flake.Position with { X = x, Y = y } };
         float across = Scene3DRandom.Centered(random), deep = Scene3DRandom.Centered(random);
-        var position = new Vector3((float)((double)across * Spread), Top, (float)((double)deep * Spread));
+        var position = new Vector3(across * Spread, Top, deep * Spread);
         return new Scene3DSnowFlake(position, Size(random));
     }
 
     private static float Size(CrtRandom random)
-        => (float)(((double)SizeLargest - SizeSmallest) * Scene3DRandom.Unit(random) + SizeSmallest);
+        => (SizeLargest - SizeSmallest) * Scene3DRandom.Unit(random) + SizeSmallest;
 }

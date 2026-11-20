@@ -34,9 +34,9 @@ public sealed class Scene3DRainEffect
     public const float ScaleSmallest = 1f, ScaleLargest = 1.1f;
     /// <summary>The float 0.01 native keeps as a double (0x5addd0): the acceleration is the velocity's start times it,
     /// and a ring grows by it a step.</summary>
-    internal const double Hundredth = 0.009999999776482582;
-    /// <summary>A ring's life is 15 plus up to 5 steps (0x5addd8, 0x5adde0).</summary>
-    internal const double RingLifeShortest = 15.0, RingLifeSpread = 5.0;
+    internal const float Hundredth = 0.01f;
+    /// <summary>A ring's life is 15 plus up to 5 steps (the doubles at 0x5addd8 and 0x5adde0).</summary>
+    internal const float RingLifeShortest = 15f, RingLifeSpread = 5f;
 
     /// <summary>A streak's two ends, before the drop's world (effect_rain_construct's line list).</summary>
     public static readonly Vector3 StreakTop = new(0f, 0.5f, 0f), StreakBottom = new(0f, -0.5f, 0f);
@@ -80,37 +80,34 @@ public sealed class Scene3DRainEffect
         for (int index = 0; index < _drops.Length; index++) _drops[index] = Step(_drops[index], random);
     }
 
-    /// <summary>A streak's alpha (<c>rain_drop_draw@0x47a800</c>): sin(π(10 - y)/10) / 2, the angle and the sine each
-    /// rounded to a float as the x87 code stores them; a ring's: its steps left over its life.</summary>
+    /// <summary>A streak's alpha (<c>rain_drop_draw@0x47a800</c>): sin(π(10 - y)/10) / 2; a ring's: its steps left over
+    /// its life.</summary>
     public static float Alpha(Scene3DRainDrop drop)
     {
-        if (drop.Rippling) return (float)((double)(drop.RippleLife - drop.RippleAge) / drop.RippleLife);
-        float angle = (float)(((double)Height - drop.Position.Y) * Scene3DLeafEffect.NativePi / Height);
-        return (float)((float)Math.Sin(angle) * 0.5);
+        if (drop.Rippling) return (float)(drop.RippleLife - drop.RippleAge) / drop.RippleLife;
+        float angle = (Height - drop.Position.Y) * Scene3DLeafEffect.NativePi / Height;
+        return (float)Math.Sin(angle) * 0.5f;
     }
 
-    // rain_drop_init@0x47a5d0: thirteen draws, in this order. Each product is kept as a float, as the x87 code stores
-    // it, before the acceleration's factor.
+    // rain_drop_init@0x47a5d0: thirteen draws, in this order. Like all of the effects' arithmetic, in floats: native's
+    // x87 runs at single precision and rounds every operation to a float (engine-re.md, "The x87 runs at single
+    // precision"), which .NET's float arithmetic does too.
     private static Scene3DRainDrop Born(CrtRandom random)
     {
         float c0 = Scene3DRandom.Centered(random), u1 = Scene3DRandom.Unit(random), c2 = Scene3DRandom.Centered(random);
-        var position = new Vector3((float)((double)c0 * Width), (float)((double)u1 * Height),
-                                   (float)((double)c2 * Width));
+        var position = new Vector3(c0 * Width, u1 * Height, c2 * Width);
         float u3 = Scene3DRandom.Unit(random), u4 = Scene3DRandom.Unit(random), u5 = Scene3DRandom.Unit(random);
-        var velocity = new Vector3((float)((double)u3 * Drift), Fall(u4), (float)((double)u5 * Drift));
+        var velocity = new Vector3(u3 * Drift, Fall(u4), u5 * Drift);
         float u6 = Scene3DRandom.Unit(random), u7 = Scene3DRandom.Unit(random), u8 = Scene3DRandom.Unit(random);
-        const float factor = (float)Hundredth;
-        var acceleration = new Vector3((float)((double)(float)((double)u6 * Drift) * factor),
-                                       (float)((double)Fall(u7) * factor),
-                                       (float)((double)factor * (float)((double)u8 * Drift)));
+        var acceleration = new Vector3(u6 * Drift * Hundredth, Fall(u7) * Hundredth, u8 * Drift * Hundredth);
         float u9 = Scene3DRandom.Unit(random), u10 = Scene3DRandom.Unit(random), u11 = Scene3DRandom.Unit(random);
-        var rotation = new Vector3((float)(Tilt.X + (double)TiltJitter * u9), (float)(Tilt.Y + (double)TiltJitter * u10),
-                                   (float)(Tilt.Z + (double)TiltJitter * u11));
-        float scale = (float)(((double)ScaleLargest - ScaleSmallest) * Scene3DRandom.Unit(random) + ScaleSmallest);
+        var rotation = new Vector3(Tilt.X + TiltJitter * u9, Tilt.Y + TiltJitter * u10, Tilt.Z + TiltJitter * u11);
+        float scale = (ScaleLargest - ScaleSmallest) * Scene3DRandom.Unit(random) + ScaleSmallest;
         return new Scene3DRainDrop(position, velocity, acceleration, rotation, scale, false, 0, 0);
-
-        static float Fall(float unit) => (float)(((double)FallFastest - FallSlowest) * unit + FallSlowest);
     }
+
+    /// <summary>A fall speed from a unit draw: (fastest - slowest) · unit + slowest.</summary>
+    internal static float Fall(float unit) => (FallFastest - FallSlowest) * unit + FallSlowest;
 
     // rain_drop_step@0x47a730. In flight: move, then add the acceleration to the velocity; past the floor, a draw for
     // the ring's life, and the drop lies at the ring's height with no scale or rotation. A ring: one step older and
@@ -122,6 +119,7 @@ public sealed class Scene3DRainEffect
             Vector3 position = drop.Position + drop.Velocity;
             drop = drop with { Position = position, Velocity = drop.Acceleration + drop.Velocity };
             if (position.Y >= 0) return drop;
+            // The float sum truncated, as native's _ftol truncates its single-precision sum.
             int life = (int)(Scene3DRandom.Unit(random) * RingLifeSpread + RingLifeShortest);
             return drop with
             {
@@ -135,6 +133,6 @@ public sealed class Scene3DRainEffect
             Scene3DRainDrop born = Born(random);
             return born with { Position = born.Position with { Y = Height } };
         }
-        return drop with { RippleAge = age, Scale = (float)(age * Hundredth) };
+        return drop with { RippleAge = age, Scale = age * Hundredth };
     }
 }
