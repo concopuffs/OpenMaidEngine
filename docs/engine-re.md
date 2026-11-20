@@ -7994,7 +7994,11 @@ reachable overlays nor movement targets existed; `ATSEEK` was blocked identicall
 The port keeps native's ten queues and implements reset/enqueue/try-dequeue with native signed-dword behavior.
 Id 10, which the handlers' test lets through into stack 0, halts the run; ids above 10 are traced as
 `ResetQの引数が不正です．` (and its siblings) and skipped, as native does ("Indices outside their tables",
-2026-11-17). A queue never reset halts the run; shipped scripts always reset queue 0 first. On empty dequeue it
+2026-11-17). The engine's start and every scene reset build all ten queues empty, as they build the stacks
+(`scene_context_init_reset`: SYS4422 `0x40b689`, 4.38D `0x40c962`; it deletes each one first), so a queue no script
+has reset is an empty FIFO, and op `0x9` empties every queue. Arterial's `VISEEK.BIN` (the map's sight search)
+enqueues into queue 0 without resetting it; the port halted there until 2026-11-20, when the debug menu first took
+a run to the whole map before any battle. On empty dequeue it
 writes `success=0` and retains the value destination rather than reproducing the native handler's unusable
 implementation-pointer value. Focused tests cover independent slots, FIFO order,
 signed values, empty reads, and reset replacement. Real-script tests seed a bounded passable grid and prove

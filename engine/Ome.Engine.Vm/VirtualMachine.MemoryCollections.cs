@@ -279,21 +279,12 @@ public sealed partial class VirtualMachine
         => IndexRefused(ins, kind + " id", id, ScriptMemory.CollectionSlots,
                         IndexTest.Traced(BadArgumentTrace(command), 11));
 
-    /// <summary>An integer queue or stack op's step: a queue never reset halts the run.
-    /// </summary>
+    /// <summary>An integer queue or stack op's step: an id past the ten slots halts the run.</summary>
     private StepResult CollectionStep(ScriptCollectionStatus status, string kind, int id)
     {
-        switch (status)
-        {
-            case ScriptCollectionStatus.OutOfRange:
-                HaltReason ??= $"int-{kind}-id-out-of-range:{id}";
-                return StepResult.Halt;
-            case ScriptCollectionStatus.Uninitialized:
-                HaltReason ??= $"int-{kind}-uninitialized:{id}";
-                return StepResult.Halt;
-            default:
-                return StepResult.Next;
-        }
+        if (status != ScriptCollectionStatus.OutOfRange) return StepResult.Next;
+        HaltReason ??= $"int-{kind}-id-out-of-range:{id}";
+        return StepResult.Halt;
     }
 
     // Ops 0x135, 0x136 and 0x13f test the bit below 32, unsigned (op_0x135_handler@0x4296c0 and its siblings), and

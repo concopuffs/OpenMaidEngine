@@ -12,9 +12,6 @@ public enum ScriptCollectionStatus
 
     /// <summary>The id names none of the ten slots (the interpreter checks the id first).</summary>
     OutOfRange,
-
-    /// <summary>The queue was never reset (op 0x132); the op halts the run.</summary>
-    Uninitialized,
 }
 
 /// <summary>
@@ -50,7 +47,10 @@ public sealed partial class ScriptMemory
         public readonly Dictionary<int, string> Strings = new();
         public readonly Dictionary<int, int> Pointers = new();
         public readonly Dictionary<int, int> StringPointers = new();
-        // Native constructs the stacks on every scene reset.
+        // Native constructs the queues and the stacks, empty, on every scene reset and when the engine starts
+        // (scene_context_init_reset: SYS4422 0x40b689, 4.38D 0x40c962), so a queue no script has reset is empty, not
+        // missing: Arterial's VISEEK uses queue 0 without resetting it.
+        public readonly Queue<int>[] Queues = CreateQueues();
         public readonly Stack<int>[] Stacks = CreateStacks();
     }
 
@@ -61,8 +61,6 @@ public sealed partial class ScriptMemory
     private CellJournal? _journal;
 
     private readonly Encoding _encoding;
-    // Op 0x132 creates a queue; ATSEEK/MVSEEK use queue 0. A queue lives for the run (a scene reset keeps it).
-    private readonly Queue<int>?[] _queues = new Queue<int>?[CollectionSlots];
 
     /// <param name="codePage">The code page the string ops measure bytes and characters in (VmOptions'
     /// NativeStringCodePage; 932 for both games).</param>
@@ -216,17 +214,16 @@ public sealed partial class ScriptMemory
     /// <summary>Op 0x132: an empty queue at <paramref name="id"/>.</summary>
     public ScriptCollectionStatus ResetQueue(int id)
     {
-        if ((uint)id >= (uint)_queues.Length) return ScriptCollectionStatus.OutOfRange;
-        _queues[id] = new Queue<int>(0x100);
+        if ((uint)id >= (uint)_scene.Queues.Length) return ScriptCollectionStatus.OutOfRange;
+        _scene.Queues[id] = new Queue<int>(0x100);
         return ScriptCollectionStatus.Done;
     }
 
     /// <summary>Op 0x133.</summary>
     public ScriptCollectionStatus Enqueue(int id, int value)
     {
-        if ((uint)id >= (uint)_queues.Length) return ScriptCollectionStatus.OutOfRange;
-        if (_queues[id] is not { } queue) return ScriptCollectionStatus.Uninitialized;
-        queue.Enqueue(value);
+        if ((uint)id >= (uint)_scene.Queues.Length) return ScriptCollectionStatus.OutOfRange;
+        _scene.Queues[id].Enqueue(value);
         return ScriptCollectionStatus.Done;
     }
 
@@ -235,9 +232,8 @@ public sealed partial class ScriptMemory
     {
         taken = false;
         value = 0;
-        if ((uint)id >= (uint)_queues.Length) return ScriptCollectionStatus.OutOfRange;
-        if (_queues[id] is not { } queue) return ScriptCollectionStatus.Uninitialized;
-        taken = queue.TryDequeue(out value);
+        if ((uint)id >= (uint)_scene.Queues.Length) return ScriptCollectionStatus.OutOfRange;
+        taken = _scene.Queues[id].TryDequeue(out value);
         return ScriptCollectionStatus.Done;
     }
 
@@ -272,7 +268,7 @@ public sealed partial class ScriptMemory
     /// integer global becomes the encoded zero, and the float, string, integer-pointer and string-pointer banks are
     /// zeroed (both bank sets under set:EnableMemFlip). Resource 0 re-authors what it needs from the configuration and
     /// the shared profile, so state a scene left behind (Kamidori's field flag 0x428c) is gone. scene_context_init_reset
-    /// then constructs the stacks again; the queues stay.
+    /// then constructs the queues and the stacks again, empty.
     /// </summary>
     public void ResetScene() => _scene = new();
 
@@ -317,6 +313,14 @@ public sealed partial class ScriptMemory
         ReplaceBank(_scene.Strings, state.StringGlobals, value => value.Length != 0);
         ReplaceBank(_scene.Pointers, state.PointerGlobals, value => value != 0);
         _scene.StringPointers.Clear();
+    }
+
+    private static Queue<int>[] CreateQueues()
+    {
+        var queues = new Queue<int>[CollectionSlots];
+        for (int i = 0; i < queues.Length; i++)
+            queues[i] = new Queue<int>(0x100);
+        return queues;
     }
 
     private static Stack<int>[] CreateStacks()

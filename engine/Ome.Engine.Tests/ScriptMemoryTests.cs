@@ -36,7 +36,10 @@ public class ScriptMemoryTests
     {
         var memory = new ScriptMemory();
 
-        Assert.Equal(ScriptCollectionStatus.Uninitialized, memory.Enqueue(2, 5));
+        // Every queue is there, empty, before any reset: native builds them when the engine starts.
+        Assert.Equal(ScriptCollectionStatus.Done, memory.TryDequeue(3, out bool none, out _));
+        Assert.False(none);
+        Assert.Equal(ScriptCollectionStatus.Done, memory.Enqueue(3, 4));
         Assert.Equal(ScriptCollectionStatus.OutOfRange, memory.ResetQueue(11));
         Assert.Equal(ScriptCollectionStatus.OutOfRange, memory.Push(-1, 5));
         Assert.Equal(ScriptCollectionStatus.Done, memory.ResetQueue(2));
@@ -56,7 +59,7 @@ public class ScriptMemoryTests
     }
 
     [Fact]
-    public void ASceneResetClearsTheBanksAndStacksButKeepsTheQueues()
+    public void ASceneResetClearsTheBanksTheQueuesAndTheStacks()
     {
         var memory = new ScriptMemory();
         memory.SetInteger(1, 2);
@@ -77,9 +80,8 @@ public class ScriptMemoryTests
         Assert.Empty(memory.StringPointers);
         memory.TryPop(0, out bool popped, out _);
         Assert.False(popped);
-        memory.TryDequeue(0, out bool dequeued, out int value);
-        Assert.True(dequeued);
-        Assert.Equal(9, value);
+        memory.TryDequeue(0, out bool dequeued, out _);
+        Assert.False(dequeued);
     }
 
     [Fact]
