@@ -661,9 +661,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - **Global float pointer operands (type 7) have no bank in the port**, so that section is written as zero. No
       script of the three games has one (`Ome.Cli intake` counts them).
   - **Left out of steps 2 and 3:** whether the Ghidra image's packer API sites are restored and its imports typed
-    was not checked (`engine-re.md`, "Runbook"). The Python corpus tools have nothing to read yet: there is no
-    `extracted-arterial/`, so `extract_phase2.py` and `compiler_census.py` have not run, and the census is what
-    Open Maid Script needs before M1.
+    was not checked (`engine-re.md`, "Runbook"). The archives are extracted since 2026-11-20
+    (`../extracted-arterial/`) and `extract_phase2.py` has run; `compiler_census.py` has not.
   - **Native AGE is driven (step 5, 2026-11-19).** `tools/drive/arterial.toml` and
     `tools/drive/scenarios/arterial-opening.steps`: the logo, the title, Game Start and SC0000's first pages, in a
     save sandbox, with the install unchanged afterwards (`engine-re.md`, "Driving native AGE").
@@ -700,12 +699,11 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     library subs and 25,438 pages, 41.0% of the instructions. `example.arterial-prologue-line` links, shows its
     line as the first page on native AGE and on the port, and has a workspace test. A three-line language package
     ran in the port. The guide and the launcher's art entry are in. What M1 leaves open:
-    - **No speaker names.** A line names its speaker by a face picture's id (`face: 0x16a`). An `enum` of faces
-      or speakers needs the character and face tables, which step 9 decodes. Done when a decompiled line names
-      its speaker.
-    - **No patch points and no globals registry.** `vm-map/patch-points-arterial.toml` and
-      `vm-map/globals-arterial.toml` do not exist, so fragments use offsets and addresses and there is no
-      `arterial.globals` module. Both come with steps 9 and 10's base mod survey.
+    - **No speaker names.** A line names its speaker by a face picture's id (`face: 0x16a`). The character and
+      face tables are decoded (`arterial-data-tables.md`, "CFINIT"), and nothing turns a face id into a name in
+      a decompiled line yet. Done when a decompiled line names its speaker.
+    - **No patch points.** `vm-map/patch-points-arterial.toml` does not exist, so fragments use offsets. It
+      comes with step 10's base mod survey.
     - **About 12,000 pages stay core statements** (37,568 page starts were counted in the scenes, 25,438 lift):
       pages with furigana, a name put into the text, several `show_text` calls, or commands between the page's
       start and its text. The same kinds stay core in the other two games ("Prelude coverage" above).
@@ -713,12 +711,34 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       2026-11-20, the families by their constants (`hide_message_window_150ms`, `fade_to_black_890ms`); which
       scene command each stands for was not traced. Rename where a better reading turns up; a module sub's name
       is not an export.
-    - **Nothing that adds a script or a scene was tried**, on either target, and the Python script tools
-      (`sys4load.py`, `locate_page.py`'s listing) cannot read the game: its scripts are inside its archives and
-      it has no extracted copy. Step 9 needs the extraction first.
-  - **Next, by the plan:** the data tables (M2, step 9), then the base mod (M3), and the sweep (P4). Step 7 is
-    done: the opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page; `engine-re.md`, "4.38D's
-    menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept window position").
+    - **Nothing that adds a script or a scene was tried**, on either target.
+  - **The data level, M2, is started and not reached (2026-11-20).** In: the extraction, the executed boot
+    image (145 scripts), the layout tool `tools/init_arterial.py` with its tests, the layout of all 278 arrays
+    of the 29 boot tables and the scene dispatch's protocol (`arterial-data-tables.md`), and the registry
+    `vm-map/globals-arterial.toml` with 93 names and seven record tables (`character`, `card`, `talent`, `skill`,
+    `item`, `area`, `deck`). No table lies in the saved prefix, and a card's numbers in play are worked out from
+    the tables each time (`CALCARM`), not kept in a save. The manifest stays at M1. What M2's gate still asks,
+    each done when `arterial-data-tables.md` and the registry say it:
+    - **What most numeric fields mean.** 139 of the 278 arrays have a reading: text, references between tables,
+      resource ids, a card's numbers by the card panel's own labels with their growth by level, and what an
+      item asks of the card that carries it. The cards' kinds, half of the items' 31 arrays, 奥義's per-level
+      numbers, and all of `DUINIT`, `RTINIT`, `RFINIT`, `CCINIT`, `FAINIT`, `REINIT` and `SHINIT`'s numbers have
+      a layout and no meaning. The battle scripts (`BTL`, `ATTACK`, `PH03_PLR_ACTION`) are where to read them.
+    - **`AGF2BMP2AGF.exe` does not convert this game's pictures** (`tools/convert_agf.py`; it failed on
+      `SO019.AGF`, the card panel's sheet, which the port's decoder reads). The panel's labels were looked at
+      with a scratch port of `AgfDecoder.cs`. Done when a tool of the repository writes a picture of any of the
+      three games as an image file.
+    - **Five boot tables have no leader** (`IMINIT`, `RFINIT`, `DUINIT`, `RTINIT`, `EUINIT`): they are listed by
+      the arrays the scripts index, which can lump two arrays into one.
+    - **The four on-demand tables** (`BGINIT`, `MPINIT`, `ROINIT`, `UNINIT`) have no field layout, and the area
+      they load by (`G[0x9883]`) is not declared as a `[[scope]]`.
+    - **Copies in saved state.** Checked for a card's numbers only (none is kept); no other field was.
+    - **`SCJUMP`** is read as far as its protocol and its rule counts. Its seven contexts, the cell each rule
+      tests and the story flags are not (`story_flags.py` and `scjump_decode.py` were not run on the game).
+  - **Next, by the plan:** the rest of the data tables (M2, step 9), then the base mod (M3), and the sweep (P4).
+    Step 7 is done: the opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page;
+    `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept
+    window position").
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

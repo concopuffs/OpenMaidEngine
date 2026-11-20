@@ -1,0 +1,988 @@
+# vm-map/globals-arterial.toml -- CANONICAL living global-variable registry for Arterial
+# (創刻のアテリアル, SYS4438; hand-edited). Global addresses are per game, so this is separate from the
+# other games' registries; the schema is identical (the type implies the bank: `string...` entries are
+# string-bank cells, everything else integer cells).
+# Generated artifacts (build/games/arterial/globals.json, docs/global-reference-arterial.md) come from
+# this file via `tools/globals_build.py --game arterial --build`. Do not edit those.
+# Layouts and evidence: docs/arterial-data-tables.md. Only what is understood has a name here: most of
+# the tables' numeric arrays are laid out in that document and not named yet.
+[meta]
+note = "Curated Arterial global addresses. Names started 2026-11-20 from the table layouts of tools/init_arterial.py."
+
+
+# ---- ADV page state (oms/arterial/adv.oms) ----
+
+[[global]]
+address = "0x3140"
+name = "adv_speaker_character_id"
+category = "index-pointer"
+type = "int"
+usage = "The page's speaker: a character id, or -1 for narration. set_page_face sets it from the page's face; draw_nameplate and the page's voice block read it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3141"
+name = "adv_page_has_text"
+category = "ui-toggle"
+type = "int"
+usage = "1 once a page has text: every dialogue page sets it first, clear_message_text clears it, and publish_message_text publishes the layout only while it is set."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3143"
+name = "adv_name_form"
+category = "index-pointer"
+type = "int"
+usage = "Which column of character_names the name plate shows (0 to 5); any other value shows ？？？？ (draw_speaker_name)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3fb90"
+name = "adv_face_id"
+category = "index-pointer"
+type = "int"
+usage = "A page's face id before set_page_face (a row of CFINIT); other library subs pass a picture id in the same cell."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3fb91"
+name = "adv_voice_id"
+category = "index-pointer"
+type = "int"
+usage = "The page's voice clip: the page's voice block sets it, clears it when the speaker's voice setting mutes it, and plays it."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Characters (CHINIT), faces (CFINIT), voice settings (CVINIT), profiles (CIINIT) ----
+
+[[global]]
+address = "0x4154"
+name = "character_names"
+category = "string-table"
+type = "string[1000][6]"
+usage = "CHINIT. The name plate's text: draw_speaker_name shows character_names[adv_speaker_character_id][adv_name_form]."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "name", "1" = "descriptor", "2" = "descriptor_2", "3" = "descriptor_3", "4" = "descriptor_4", "5" = "descriptor_5" }
+
+[[global]]
+address = "0x7994"
+name = "character_full_names"
+category = "string-table"
+type = "string[1000]"
+usage = "CHINIT: the full name with its reading (仙崎秀哉／せんざきしゅうや), on 27 characters."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x297db9"
+name = "character_voice_character_ids"
+category = "data-table"
+type = "int[1000]"
+usage = "CHINIT: the character whose voice setting this one uses (itself for 91 of 107). The page's voice block reads character_voice_setting_slots through it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29ee8e"
+name = "character_voice_kinds"
+category = "data-table"
+type = "int[1000]"
+usage = "CHINIT: 1, 2 or 3. The page's voice block plays a voice, and records it in the text history, only for a character with 2."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x266c91"
+name = "character_face_ids"
+category = "data-table"
+type = "int[1000][100]"
+usage = "CFINIT: a character's faces, slots 1 to 99: the picture ids a dialogue line's face names. INIT2 inverts the array into face_character_ids and face_slots."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x27f331"
+name = "character_face_history_pictures"
+category = "data-table"
+type = "int[1000][100]"
+usage = "CFINIT: a second picture for the face in the same slot of character_face_ids. HISTORY alone reads it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3fc08"
+name = "face_character_ids"
+category = "data-table"
+type = "int[32][30000]"
+usage = "Built by INIT2 from character_face_ids: the character of a face, at [layer][id] where layer is the face id's top byte (an append's selector) and id the rest. set_page_face takes the page's speaker from it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x12a208"
+name = "face_slots"
+category = "data-table"
+type = "int[32][30000]"
+usage = "Built by INIT2 beside face_character_ids: the face's slot in its character's row. set_page_face keeps it in 0x3144."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2979d1"
+name = "voice_setting_text_colors"
+category = "data-table"
+type = "int[1000]"
+usage = "CVINIT, indexed from 0: a voice setting's text colour. INIT2 copies it to the player's colour (0x36ed) where that is unset."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2981a1"
+name = "character_voice_setting_slots"
+category = "data-table"
+type = "int[1000]"
+usage = "CVINIT: a character's voice setting. The page's voice block plays the voice only while the player's switch for that setting (0x2d57) is 0."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x298589"
+name = "voice_setting_character_ids"
+category = "data-table"
+type = "int[1000]"
+usage = "CVINIT: a voice setting's character (an id in CHINIT's range)."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x58c4"
+name = "voice_setting_labels"
+category = "string-table"
+type = "string[1000][3]"
+usage = "CVINIT: a voice setting's three labels (エキストラ; 仙崎 秀哉 …)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x6864"
+name = "profile_names"
+category = "string-table"
+type = "string[200]"
+usage = "CIINIT: a character profile's name."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x692c"
+name = "profile_lines"
+category = "string-table"
+type = "string[200][16]"
+usage = "CIINIT: a profile's sixteen lines."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Cards (CDINIT): id = row * 30 + slot, 200 rows of 30 slots ----
+
+[[global]]
+address = "0x7d7c"
+name = "card_names"
+category = "string-table"
+type = "string[6000]"
+usage = "CDINIT: a card's name. The card panel draws it (DRAWCARDINFO)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x94ec"
+name = "card_flavor_lines"
+category = "string-table"
+type = "string[6000][3]"
+usage = "CDINIT: up to three lines of flavour text."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2b338f"
+name = "card_append_numbers"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: the append (1 to 4) that added the card; unset for the base data's."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2b79df"
+name = "card_rarities"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: 1 to 5. The card panel draws one of five marks for it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x2bc02f"
+name = "card_race_flags"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: 種族, one bit a race (bits 0 to 6: 無機, 人間, 怪物, 天使, 悪魔, 魔神, 英雄). The card panel prints race_names for each bit set on its 種族 row."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x12a7c"
+name = "race_names"
+category = "string-table"
+type = "string[8]"
+usage = "Set by INIT2: the names of the seven races of card_race_flags, by bit; the eighth string is バトル."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2c4ccf"
+name = "card_slots"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: スロット, 1 to 3 (the card panel's row of that name shows card_current_slots)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2bef0f"
+name = "card_control"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: 支配力, 1 to 3 (the card panel's row of that name shows card_current_control)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2bd79f"
+name = "card_costs"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: コスト, 1 to 8 (the card panel's row of that name shows card_current_costs)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2c067f"
+name = "card_attack"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: 攻撃力, 1 to 28 (the card panel's row of that name shows card_current_attack)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2c1def"
+name = "card_leader_lp"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: ＬＰ, 8 to 400 on 338 cards. For a leader card the panel draws the LP sprite on the row where another card has HP, and shows card_current_leader_lp there."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2c355f"
+name = "card_hp"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: ＨＰ, 1 to 70 on 585 cards (the card panel's HP row shows card_current_hp)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2c643f"
+name = "card_talent_ids"
+category = "data-table"
+type = "int[6000][2]"
+usage = "CDINIT: two ids of TAINIT. The card panel prints talent_names and talent_descriptions for them under 所持能力1 and 所持能力2."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2c931f"
+name = "card_prices"
+category = "data-table"
+type = "int[6000][2]"
+usage = "CDINIT: two prices, the second a fifth of the first. ADDCARD sells what the player holds over 99 at the second; SHOPP and SHOPS read both."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "buy", "1" = "sell" }
+
+[[global]]
+address = "0x4f30"
+name = "card_owned_counts"
+category = "data-table"
+type = "int[6000]"
+usage = "How many of a card the player holds, kept by a save: ADDCARD adds card_arg_count and keeps it within 0 to 99."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x43f666"
+name = "card_arg_count"
+category = "index-pointer"
+type = "int"
+usage = "How many ADDCARD adds."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3ad7"
+name = "money"
+category = "counter"
+type = "int"
+usage = "The player's money, kept within 0 to 99999: SHOPP takes a purchase's price from it, and ADDCARD and ADDITEM add the second price of what is held over 99."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x7e10"
+name = "card_experience"
+category = "data-table"
+type = "int[6000]"
+usage = "A card's experience, 100 to a level, and the one number of a card a save keeps: CALCARM takes the level as value / 100 + 1 and the progress as value % 100, and RESULT adds to it after a battle."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x43f664"
+name = "card_arg_row"
+category = "index-pointer"
+type = "int"
+usage = "The row of the card CALCARM and the card panel work on; a caller sets it and card_arg_slot before calling CALCARM through preloaded script slot 0x1c."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x43f665"
+name = "card_arg_slot"
+category = "index-pointer"
+type = "int"
+usage = "The slot of that card."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x43f6e6"
+name = "card_max_levels"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: 1, or 2 + the highest step at which one of the four growth arrays has a number for the card."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x440e56"
+name = "card_levels"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: card_experience / 100 + 1, at most card_max_levels."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x4425c6"
+name = "card_level_progress"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: card_experience % 100, or 0 at the highest level. The card panel draws it as a bar."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x446c16"
+name = "card_current_costs"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: card_costs, kept within 0 to 9."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x4454a6"
+name = "card_current_slots"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: card_slots and card_slot_growth for the card's level, kept within 0 to 3."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x448386"
+name = "card_current_control"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: card_control, kept within 0 to 9."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x449af6"
+name = "card_current_attack"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: card_attack and card_attack_growth for the card's level, kept within 0 to 999."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x44b266"
+name = "card_current_leader_lp"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: card_leader_lp and card_leader_lp_growth for the card's level, kept within 0 to 999."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x44c9d6"
+name = "card_current_hp"
+category = "data-table"
+type = "int[6000]"
+usage = "Computed by CALCARM: card_hp and card_hp_growth for the card's level, kept within 0 to 999."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2e0a1f"
+name = "card_attack_growth"
+category = "data-table"
+type = "int[6000][10]"
+usage = "IMINIT: what reaching level step + 2 adds to card_attack; CALCARM sums steps 0 to level - 2."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2ef47f"
+name = "card_leader_lp_growth"
+category = "data-table"
+type = "int[6000][10]"
+usage = "IMINIT: what reaching level step + 2 adds to card_leader_lp."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2fdedf"
+name = "card_hp_growth"
+category = "data-table"
+type = "int[6000][10]"
+usage = "IMINIT: what reaching level step + 2 adds to card_hp."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x30c93f"
+name = "card_slot_growth"
+category = "data-table"
+type = "int[6000][10]"
+usage = "IMINIT: what reaching level step + 2 adds to card_slots."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2cd96f"
+name = "card_pictures"
+category = "data-table"
+type = "int[6000][2]"
+usage = "CDINIT: two pictures (resource ids); the card panel draws the first."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Talents (TAINIT), 奥義 (COINIT), skills (SKINIT), conditions (ILINIT) ----
+
+[[global]]
+address = "0xdb3c"
+name = "talent_names"
+category = "string-table"
+type = "string[1000]"
+usage = "TAINIT: a talent's name."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xdf24"
+name = "talent_descriptions"
+category = "string-table"
+type = "string[1000]"
+usage = "TAINIT: its description (特殊：…)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31b3a0"
+name = "talent_append_numbers"
+category = "data-table"
+type = "int[1000]"
+usage = "TAINIT: the append that added the talent."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe30c"
+name = "ultimate_names"
+category = "string-table"
+type = "string[100]"
+usage = "COINIT: a 奥義's name."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xe370"
+name = "ultimate_level_lines"
+category = "string-table"
+type = "string[100][30]"
+usage = "COINIT: three lines of text for each of nine levels, at column 3 * level + line."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xef28"
+name = "skill_names"
+category = "string-table"
+type = "string[1000]"
+usage = "SKINIT: a skill's name."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0xf310"
+name = "skill_lines"
+category = "string-table"
+type = "string[1000][3]"
+usage = "SKINIT: three lines of text; the first is the heading (【移動】　飛行)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x11e08"
+name = "condition_names"
+category = "string-table"
+type = "string[32]"
+usage = "ILINIT: a condition's name (操血, 封印, 幻覚 …)."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Items (ITINIT) ----
+
+[[global]]
+address = "0xfec8"
+name = "item_names"
+category = "string-table"
+type = "string[2000]"
+usage = "ITINIT: an item's name."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x10698"
+name = "item_lines"
+category = "string-table"
+type = "string[2000][3]"
+usage = "ITINIT: three lines of text; the first is the heading (【重要】美來のハンカチ)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31f79a"
+name = "item_append_numbers"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: the append that added the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3216da"
+name = "item_rarities"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: 1 to 5. The card panel draws it with the marks it draws a card's rarity with."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x32b31a"
+name = "item_prices"
+category = "data-table"
+type = "int[2000][2]"
+usage = "ITINIT: two prices, the second a fifth of the first where there is one. ADDITEM sells what the player holds over 99 at the second; SHOPP and SHOPS read both."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "buy", "1" = "sell" }
+
+[[global]]
+address = "0x3f90"
+name = "item_owned_counts"
+category = "data-table"
+type = "int[2000]"
+usage = "How many of an item the player holds, kept by a save: ADDITEM adds item_arg_count and keeps it within 0 to 99."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x43f662"
+name = "item_arg_id"
+category = "index-pointer"
+type = "int"
+usage = "The item ADDITEM and the card panel work on."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x43f663"
+name = "item_arg_count"
+category = "index-pointer"
+type = "int"
+usage = "How many ADDITEM adds (or takes, when negative)."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x326cca"
+name = "item_card_rows"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: where set, the one card row whose cards can carry the item (INIT2 takes an item off a card that fails)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32749a"
+name = "item_card_slots"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: where set, the one slot of a row whose card can carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32267a"
+name = "item_required_slots"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: the least card_current_slots a card may have to carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x327c6a"
+name = "item_required_races"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: bits of card_race_flags of which a card must have one to carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32843a"
+name = "item_excluded_races"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: bits of card_race_flags a card must not have to carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x328c0a"
+name = "item_required_costs"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: the least card_current_costs a card may have to carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3293da"
+name = "item_required_control"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: the least card_current_control a card may have to carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x329baa"
+name = "item_required_attack"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: the least card_current_attack a card may have to carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32a37a"
+name = "item_required_leader_lp"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: the least card_current_leader_lp a card may have to carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32ab4a"
+name = "item_required_hp"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: the least card_current_hp a card may have to carry the item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32c2ba"
+name = "item_pictures"
+category = "data-table"
+type = "int[2000][2]"
+usage = "ITINIT: two pictures (resource ids); the card panel draws the second."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Decks (DEINIT), areas (AMINIT), scenes (SCINIT), music (MUINIT), glossary (VIINIT) ----
+
+[[global]]
+address = "0x1201c"
+name = "deck_names"
+category = "string-table"
+type = "string[1000]"
+usage = "DEINIT: a deck's name."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x334856"
+name = "deck_card_rows"
+category = "data-table"
+type = "int[1000][30]"
+usage = "DEINIT: the row in CDINIT (1 to 167) of each card of the deck, slots 1 to 20."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x33bd86"
+name = "deck_card_slots"
+category = "data-table"
+type = "int[1000][30]"
+usage = "DEINIT: the slot in that row (1 to 23) of the same card: card id = row * 30 + slot."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x11e28"
+name = "area_names"
+category = "string-table"
+type = "string[300]"
+usage = "AMINIT: an area's name (歪秤世界, 天慶市 …)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x9883"
+name = "current_area_id"
+category = "index-pointer"
+type = "int"
+usage = "The area in play, an id of AMINIT: scripts index AMINIT's arrays with it, MPINIT, ROINIT and UNINIT fill their arrays for it (MPINIT has a branch for each of AMINIT's 150 ids), and most SCJUMP rules test it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x214b71"
+name = "scene_script_ids"
+category = "data-table"
+type = "int[10000]"
+usage = "SCINIT: the script (a packed script id) that plays scene id, from scene 0; 323 is SC0000.BIN."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x18880"
+name = "scene_seen_flags"
+category = "data-table"
+type = "int[10000]"
+usage = "Each scene script sets [current_scene_id] to 1 when it plays and stores the cell in the shared profile."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x21480a"
+name = "current_scene_id"
+category = "choice-output"
+type = "int"
+usage = "The scene being played, an id of SCINIT. A SCJUMP rule sets it, and a scene script branches on it to the scene's code."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x21480b"
+name = "scjump_chain_pending"
+category = "choice-output"
+type = "int"
+usage = "The caller of the SCJUMP chain sets it to 0x7fffffff; the first rule whose condition holds sets current_scene_id and clears it, so no later rule fires."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x352f"
+name = "scjump_context_id"
+category = "index-pointer"
+type = "int"
+usage = "Which of SCJUMP's seven rule lists runs (1 to 7); the caller sets it before running the chain. What each context is has not been read."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x4525dd"
+name = "scjump_chain_script_ids"
+category = "data-table"
+type = "int[32]"
+usage = "The scripts a caller runs to pick the next scene: INIT2 puts SCJUMP in slot 0 and each $n$AUTORUN its $n$SCJUMP in slot n."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29b2"
+name = "music_titles"
+category = "string-table"
+type = "string[50]"
+usage = "MUINIT: a track's title."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x647c"
+name = "glossary_titles"
+category = "string-table"
+type = "string[1000]"
+usage = "VIINIT: a glossary entry's title (【用語】ＭＨＩ)."
+source = "investigation"
+confidence = "high"
+
+# ---- Open Maid Script tables (design spec §5.3): the parallel arrays that hold one kind of record ----
+
+[[table]]
+name = "character"
+records = 1000
+built_by = "boot"
+usage = "CHINIT characters keyed by character id: whoever can speak a page. `character[12].name` is character_names[12][0]."
+
+[table.fields]
+name = "character_names"
+full_name = "character_full_names"
+voice_character_id = "character_voice_character_ids"
+voice_kind = "character_voice_kinds"
+voice_setting_slot = "character_voice_setting_slots"
+face_id = "character_face_ids"
+face_history_picture = "character_face_history_pictures"
+
+[[table]]
+name = "card"
+records = 6000
+built_by = "boot"
+usage = "CDINIT cards keyed by row * 30 + slot (200 rows of 30 slots; a deck names a card by its row and its slot)."
+
+[table.fields]
+name = "card_names"
+flavor = "card_flavor_lines"
+append_number = "card_append_numbers"
+rarity = "card_rarities"
+race_flags = "card_race_flags"
+slots = "card_slots"
+control = "card_control"
+cost = "card_costs"
+hp = "card_hp"
+leader_lp = "card_leader_lp"
+attack = "card_attack"
+talent_id = "card_talent_ids"
+price = "card_prices"
+picture = "card_pictures"
+slot_growth = "card_slot_growth"
+hp_growth = "card_hp_growth"
+leader_lp_growth = "card_leader_lp_growth"
+attack_growth = "card_attack_growth"
+owned_count = "card_owned_counts"
+experience = "card_experience"
+level = "card_levels"
+max_level = "card_max_levels"
+level_progress = "card_level_progress"
+current_slots = "card_current_slots"
+current_control = "card_current_control"
+current_cost = "card_current_costs"
+current_hp = "card_current_hp"
+current_leader_lp = "card_current_leader_lp"
+current_attack = "card_current_attack"
+
+[[table]]
+name = "talent"
+records = 1000
+built_by = "boot"
+usage = "TAINIT talents keyed by talent id."
+
+[table.fields]
+name = "talent_names"
+description = "talent_descriptions"
+append_number = "talent_append_numbers"
+
+[[table]]
+name = "skill"
+records = 1000
+built_by = "boot"
+usage = "SKINIT skills keyed by skill id."
+
+[table.fields]
+name = "skill_names"
+text = "skill_lines"
+
+[[table]]
+name = "item"
+records = 2000
+built_by = "boot"
+usage = "ITINIT items keyed by item id."
+
+[table.fields]
+name = "item_names"
+text = "item_lines"
+append_number = "item_append_numbers"
+rarity = "item_rarities"
+price = "item_prices"
+picture = "item_pictures"
+owned_count = "item_owned_counts"
+card_row = "item_card_rows"
+card_slot = "item_card_slots"
+required_slots = "item_required_slots"
+required_races = "item_required_races"
+excluded_races = "item_excluded_races"
+required_cost = "item_required_costs"
+required_control = "item_required_control"
+required_hp = "item_required_hp"
+required_leader_lp = "item_required_leader_lp"
+required_attack = "item_required_attack"
+
+[[table]]
+name = "area"
+records = 300
+built_by = "boot"
+usage = "AMINIT areas keyed by area id; current_area_id is the one in play."
+
+[table.fields]
+name = "area_names"
+
+[[table]]
+name = "deck"
+records = 1000
+built_by = "boot"
+usage = "DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a slot of CDINIT."
+
+[table.fields]
+name = "deck_names"
+card_row = "deck_card_rows"
+card_slot = "deck_card_slots"

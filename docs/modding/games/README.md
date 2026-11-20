@@ -32,9 +32,9 @@ below P3 is still being added and is not playable. The levels' gates are in
 | Boot script | `SYSTEM4.BIN` |
 | Conventional install | `games/arterial/` beside the repository |
 | Port saves | enabled, in `games/arterial/` |
-| OMS modules | `arterial.scripts` (generated; no `arterial.globals`, the game has no registry yet); `arterial.adv` (`oms/arterial/adv.oms`) |
+| OMS modules | `arterial.globals`, `arterial.scripts` (generated); `arterial.adv` (`oms/arterial/adv.oms`) |
 | Speakers | no dialogue prelude yet |
-| Tables | none yet |
+| Tables | `character[1000]` (7 fields), `card[6000]` (29 fields), `talent[1000]` (3 fields), `skill[1000]` (2 fields), `item[2000]` (17 fields), `area[300]` (1 fields), `deck[1000]` (3 fields) ([reference](../../global-reference-arterial.md)) |
 | Named patch points | none yet (fragments use offsets) |
 | Publisher's page | <https://www.eukleia.co.jp/eushully/> |
 | Guide | [arterial.md](arterial.md) |

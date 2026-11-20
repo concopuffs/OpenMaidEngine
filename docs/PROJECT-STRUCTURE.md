@@ -13,7 +13,8 @@ Every read-only install sits in `games/`, each under a name of its own. A game's
 `run-godot.ps1`), so a new game adds no entry to any of them. The installs moved there on 2026-11-19 from
 `Himegari_Game/`, `Kamidori/`, `Kamidori_Translated/` and `Arterial/創刻のアテリアル/`; documents written before
 then name those folders. Himegari's legacy extracted archive tree is `extracted/`; Kamidori's is
-`extracted-kamidori/` (needed by the Python data-table tooling; production catalog scans read archives directly).
+`extracted-kamidori/` and Arterial's `extracted-arterial/` (needed by the Python data-table tooling; production
+catalog scans read archives directly).
 Additional extracted roots may be selected explicitly.
 
 ```
@@ -48,6 +49,10 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
 │   │                                          `bin/BinExtractALF.exe SYS4INI.BIN <dir>` / `APPENDnn.AAI <dir>`.
 │   ├── DATA1/ … DATA5/                         DATA1 = 542 base .BIN scripts + AGF/WAV/CUR
 │   └── APPEND01/ … APPEND03/                   append catalogs, literal `$n$NAME` record names
+│
+├── extracted-arterial/                      ← DERIVED — Arterial archives, regenerable the same way
+│   ├── DATA1/ … DATA6/                         DATA1 = the base .BIN scripts
+│   └── APPEND01/ … APPEND04/                   append catalogs, records flat in each folder
 │
 └── age-reimpl/                              ← OUR WORK (everything we made lives here)
     │
@@ -122,6 +127,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       *INIT / ID-dispatched message parsers (Kamidori
     │   │                                       specializations: init_kamidori_<domain>.py),
     │   │                                       global-var map builder
+    │   ├── init_arterial.py                    Arterial's *INIT table layouts, inferred from the write order
     │   ├── native_scratch.py (+ test_native_scratch.py)  gate-6 scratch install (hard-linked archives) + pristine check
     │   ├── revision_diff.py                    compare two engine builds' native code opcode by opcode (+ test_revision_diff.py)
     │   ├── decomp_pair_diff.py                 compare two builds' decompiled functions pair by pair, build numbers masked (+ test_decomp_pair_diff.py)
@@ -152,6 +158,7 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── globals.toml                        ★ CANONICAL Himegari global-variable registry (hand-edited: name + category
     │   │                                        + value_domain + provenance). Single source of truth for globals/story-flags.
     │   ├── globals-kamidori.toml               ★ CANONICAL Kamidori global registry (same schema; addresses are per game)
+    │   ├── globals-arterial.toml               ★ CANONICAL Arterial global registry (same schema)
     │   ├── patch-points-<game>.toml         ★ CANONICAL named patch points (stable fragment site names, one site per
     │   │                                        script revision; mod loader spec §5); patch_points_build.py generates the rest
     │   └── opcode-leads.json, small-script-listings.md
@@ -216,6 +223,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   ├── global-reference.md                 GENERATED from globals.toml (human-readable global registry)
     │   ├── global-reference-kamidori.md        GENERATED from globals-kamidori.toml
     │   ├── kamidori-data-tables.md             Kamidori *INIT data tables: layering, layouts, semantics
+    │   ├── global-reference-arterial.md        GENERATED from globals-arterial.toml
+    │   ├── arterial-data-tables.md             Arterial *INIT data tables: layering, layouts, what is read of them
     │   ├── localization-import-test.md         localization import test results (spec §18.1, gates 10/11)
     │   ├── scjump-progression.md               SCJUMP progression decode + SCINIT decision→scene registry
     │   └── engine-re.md                        native-engine RE (Ghidra+MCP): dispatch table, decompiled ops

@@ -202,8 +202,8 @@ class GatePlanTests(unittest.TestCase):
         )
 
     def test_a_game_is_asked_only_what_its_levels_promise(self) -> None:
-        # Arterial is at M1 (its manifest's support entry) and has no global registry yet: its catalog decodes, its
-        # installed-data tests run and its scenes are rebuilt, from its ADV module too; no global reference is
+        # Arterial is at M1 (its manifest's support entry) and has a global registry: its catalog decodes, its
+        # installed-data tests run, its scenes are rebuilt, from its ADV module too, and its global reference is
         # checked.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -212,6 +212,10 @@ class GatePlanTests(unittest.TestCase):
             # A game below M1 is still being added: no scene of it is rebuilt.
             with mock.patch.object(validate, "has_script_modding", return_value=False):
                 adding = validate.build_gate_plan("workspace", game_root=context.game_root, tool_context=context)
+            # A game with no global registry yet has no reference to check.
+            with mock.patch.object(validate.paths, "VM_MAP", root / "vm-map"):
+                unregistered = validate.build_gate_plan("workspace", game_root=context.game_root,
+                                                        tool_context=context)
             manifests = root / "manifests"
             manifests.mkdir()
             (manifests / "adding.json").write_text('{"support": {"play": "P2", "modding": "none"}}', encoding="utf-8")
@@ -226,7 +230,8 @@ class GatePlanTests(unittest.TestCase):
         self.assertIn("engine-workspace-tests", keys)
         self.assertIn("oms-canonical-rebuild", keys)
         self.assertIn("oms-idiomatic-rebuild", keys)   # oms/arterial/adv.oms
-        self.assertNotIn("globals-check", keys)
+        self.assertIn("globals-check", keys)           # vm-map/globals-arterial.toml
+        self.assertNotIn("globals-check", {gate.key for gate in unregistered})
         installed = next(gate for gate in plan if gate.key == "engine-workspace-tests")
         self.assertIn("Category=Workspace&Profile=arterial", installed.command)
         adding_keys = {gate.key for gate in adding}

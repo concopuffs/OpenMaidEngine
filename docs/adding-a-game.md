@@ -251,6 +251,12 @@ This step is static and can start once P1 is reached.
   use. Add the game's own extractors where a shape mode is not enough (`tools/init_<id>*.py`).
 - Build the auto shape map (`global_map.py`), mine story flags (`story_flags.py`), and decode `SCJUMP` if the game
   has one (`scjump_decode.py`).
+- Check a layout before naming from it. An array's base is the one the scripts index (`lookup-array` operands).
+  The arrays of one table line up: where they lie back to back, their bases agree modulo the table's capacity.
+  A write ahead of a record's first field may belong to that record, not the one before. Arterial's first
+  layouts failed each of the three once (`arterial-data-tables.md`, "Tooling").
+- Compare the tables' addresses with the saved prefix (the manifest's `persistence.bankDimensions`): a table
+  below it is kept by a save, a table above it is rebuilt at boot.
 - Name what is understood in `vm-map/globals-<id>.toml`, declare the record tables and scopes, and run
   `globals_build.py --game <id> --build`. For each field, say whether the game copies it into saved state.
 - **Facts go to:** `docs/<id>-data-tables.md` (layouts and how the data is stored), the registry, and the generated
