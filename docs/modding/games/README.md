@@ -15,7 +15,7 @@ below P3 is still being added and is not playable. The levels' gates are in
 
 | Game | Id | Engine ABI | Play | Modding | Guide |
 |---|---|---|---|---|---|
-| Soukoku no Arterial | `arterial` | `SYS4438` | P3 (complete) | M1 (scripts) | [arterial.md](arterial.md) |
+| Soukoku no Arterial | `arterial` | `SYS4438` | P3 (complete) | M2 (data) | [arterial.md](arterial.md) |
 | Himegari Dungeon Meister | `himegari` | `SYS4422` | P3 (complete) | M3 (base mod) | [himegari.md](himegari.md) |
 | Kamidori Alchemy Meister | `kamidori` | `SYS4433` | P3 (complete) | M3 (base mod) | [kamidori.md](kamidori.md) |
 
@@ -25,7 +25,7 @@ below P3 is still being added and is not playable. The levels' gates are in
 |---|---|
 | Game id | `arterial` (`--game arterial`) |
 | Title | Soukoku no Arterial (創刻のアテリアル) |
-| Support | play P3 (complete); modding M1 (scripts) |
+| Support | play P3 (complete); modding M2 (data) |
 | Engine build | AGE `4.38D` |
 | Engine ABI | `SYS4438` |
 | Catalog revision | `S4IC438` |
@@ -34,7 +34,7 @@ below P3 is still being added and is not playable. The levels' gates are in
 | Port saves | enabled, in `games/arterial/` |
 | OMS modules | `arterial.globals`, `arterial.scripts` (generated); `arterial.adv` (`oms/arterial/adv.oms`) |
 | Speakers | no dialogue prelude yet |
-| Tables | `character[1000]` (7 fields), `card[6000]` (29 fields), `talent[1000]` (3 fields), `skill[1000]` (2 fields), `item[2000]` (17 fields), `area_point[200]` (5 fields), `area_route[200]` (1 fields), `area_unit[200]` (1 fields), `deck[1000]` (3 fields) ([reference](../../global-reference-arterial.md)) |
+| Tables | `character[1000]` (17 fields), `card[6000]` (40 fields), `talent[1000]` (6 fields), `skill[1000]` (7 fields), `item[2000]` (33 fields), `area_point[200]` (5 fields), `area_route[200]` (1 fields), `area_unit[200]` (9 fields), `deck[1000]` (14 fields), `party_member[100]` (12 fields), `ultimate[100]` (12 fields), `condition[32]` (7 fields), `battle[1000]` (11 fields), `battle_rule[100]` (13 fields), `recipe[2000]` (22 fields), `shop_entry[1000]` (14 fields), `opponent[1000]` (16 fields), `goal[1000]` (18 fields), `area_map[300]` (7 fields), `unit_routine[1000]` (7 fields), `cpu_profile[1000]` (5 fields), `scene[10000]` (3 fields), `profile[200]` (6 fields), `glossary[1000]` (7 fields), `tip[1000]` (7 fields), `cg[3000]` (4 fields), `music[50]` (2 fields) ([reference](../../global-reference-arterial.md)) |
 | Named patch points | none yet (fragments use offsets) |
 | Publisher's page | <https://www.eukleia.co.jp/eushully/> |
 | Guide | [arterial.md](arterial.md) |

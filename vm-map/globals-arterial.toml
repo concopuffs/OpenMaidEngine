@@ -4,10 +4,11 @@
 # string-bank cells, everything else integer cells).
 # Generated artifacts (build/games/arterial/globals.json, docs/global-reference-arterial.md) come from
 # this file via `tools/globals_build.py --game arterial --build`. Do not edit those.
-# Layouts and evidence: docs/arterial-data-tables.md. Only what is understood has a name here: most of
-# the tables' numeric arrays are laid out in that document and not named yet.
+# Layouts and evidence: docs/arterial-data-tables.md. Only what is understood has a name here: every array
+# of the boot tables with a reading in that document, save the few whose reading names no use, and the
+# saved cells the tables are read through.
 [meta]
-note = "Curated Arterial global addresses. Names started 2026-11-20 from the table layouts of tools/init_arterial.py."
+note = "Curated Arterial global addresses. Names started 2026-11-20 from the table layouts of tools/init_arterial.py and the scripts that read them."
 
 
 # ---- ADV page state (oms/arterial/adv.oms) ----
@@ -222,9 +223,9 @@ address = "0x2b79df"
 name = "card_rarities"
 category = "data-table"
 type = "int[6000]"
-usage = "CDINIT: 1 to 5. The card panel draws one of five marks for it."
+usage = "CDINIT: 1 to 5, C, UC, R, SR, EU (INIT2 sets the names in 0x12a77 + rarity - 1); the card panel draws one of five marks for it."
 source = "investigation"
-confidence = "med"
+confidence = "high"
 
 [[global]]
 address = "0x2bc02f"
@@ -616,7 +617,7 @@ address = "0x3216da"
 name = "item_rarities"
 category = "data-table"
 type = "int[2000]"
-usage = "ITINIT: 1 to 5. The card panel draws it with the marks it draws a card's rarity with."
+usage = "ITINIT: 1 to 5. The card panel draws it with the marks it draws card_rarities with."
 source = "investigation"
 confidence = "med"
 
@@ -950,6 +951,2389 @@ usage = "VIINIT: a glossary entry's title (【用語】ＭＨＩ)."
 source = "investigation"
 confidence = "high"
 
+
+# ---- Party characters (CCINIT) and their saved state, keyed by character id ----
+
+[[global]]
+address = "0x29eaa4"
+name = "character_arg_id"
+category = "index-pointer"
+type = "int"
+usage = "The character UNITECH, LEAVECH, CALCCC and the panels work on; a caller sets it before running them."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29fa46"
+name = "party_member_start_skill_lines"
+category = "data-table"
+type = "int[100][4]"
+usage = "CCINIT: which of the character's four skill lines are open (1) at the start. UNITECH copies them into party_member_skill_lines when the character first joins."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2ab5c7"
+name = "party_member_level_card_rows"
+category = "data-table"
+type = "int[100][40]"
+usage = "CCINIT: a card the character brings at each level (the column, 2 to 35): its row. CALCCC gives it with ADDCARD once, when the level is reached."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2ac567"
+name = "party_member_level_card_slots"
+category = "data-table"
+type = "int[100][40]"
+usage = "CCINIT: and that card's slot."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2ad507"
+name = "party_member_level_items"
+category = "data-table"
+type = "int[100][40]"
+usage = "An item the character brings at each level: CALCCC gives it with ADDITEM once, when the level is reached. No record of the game writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x2ae4a7"
+name = "party_member_level_skills"
+category = "data-table"
+type = "int[100][160]"
+usage = "CCINIT: the skills (SKINIT ids) the character has at each level, one for each skill line, at column 4 * level + line. COUNTSKILL counts one only while its line is open."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2b2327"
+name = "party_member_level_ultimate_levels"
+category = "data-table"
+type = "int[100][40]"
+usage = "CCINIT: the 奥義 level (1 to 9) the character reaches at each level; COUNTSKILL raises party_member_ultimate_levels to it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3ae0"
+name = "party_member_flags"
+category = "data-table"
+type = "int[100]"
+usage = "Saved. Bit 1 while the character is in the party: UNITECH sets bits 0 and 1, LEAVECH clears bit 1 (only bit 0 while bit 0 of 0x36e0 is set). CHECKCARD and the shops' and recipes' tests read bit 1."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3ba8"
+name = "party_member_levels"
+category = "data-table"
+type = "int[100]"
+usage = "Saved: the character's level. RESULT raises it by party_member_experience, to 9, or to 35 once 0x36d1 is set."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3c0c"
+name = "party_member_experience"
+category = "data-table"
+type = "int[100]"
+usage = "Saved: the character's experience; RESULT adds a battle's to it and compares it with character_level_experience."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3c70"
+name = "party_member_ultimate_levels"
+category = "data-table"
+type = "int[100]"
+usage = "Saved: the level at which the scripts read the character's 奥義 (character_ultimate_ids)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3d38"
+name = "party_member_picture_sets"
+category = "data-table"
+type = "int[100]"
+usage = "Saved: which column (0 to 4) of the character's pictures by picture set is used; UNITECH sets it to 0 when the character joins."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3d9c"
+name = "party_member_skill_lines"
+category = "data-table"
+type = "int[100][4]"
+usage = "Saved: which of the character's four skill lines are open, copied from party_member_start_skill_lines when the character first joins."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3ada"
+name = "party_leader_id"
+category = "index-pointer"
+type = "int"
+usage = "Saved: a party character FELLOW picks (INITDECK sets 1). The map shows it as the player's unit unless map_agent_character_id is set, and RESULT gives it half as much experience again."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3adb"
+name = "party_ultimate_character_id"
+category = "index-pointer"
+type = "int"
+usage = "Saved: the party character whose 奥義 the player uses, picked in FELLOW; LEAVECH picks another one that has a 奥義 when it leaves. RESULT gives it half as much experience again."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3adc"
+name = "map_agent_character_id"
+category = "index-pointer"
+type = "int"
+usage = "Saved: the character SETAGENT shows as the player's unit on the map, where set; party_leader_id otherwise."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x4502a1"
+name = "party_skill_counts"
+category = "data-table"
+type = "int[1000]"
+usage = "Built by COUNTSKILL: how many open skill lines of the party's characters have each skill (an SKINIT id). The shops', recipes' and arenas' tests read it."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Characters (CHINIT): more fields ----
+
+[[global]]
+address = "0x29eaa6"
+name = "character_sort_keys"
+category = "data-table"
+type = "int[1000]"
+usage = "CHINIT: a sort number; the party lists (FELLOW, RESULT, the books) are in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29f65e"
+name = "character_ultimate_ids"
+category = "data-table"
+type = "int[1000]"
+usage = "CHINIT: the character's 奥義, a COINIT id (26 characters have one)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2a09e6"
+name = "character_voice_clips"
+category = "data-table"
+type = "int[1000][9]"
+usage = "CHINIT: nine voice clips; RESULT plays column 0 when the character's level rises, ALLMAP column 5 and BTL column 7."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2a2d0e"
+name = "character_book_pictures"
+category = "data-table"
+type = "int[1000][5]"
+usage = "CHINIT: pictures; the 奥義 and skill books (INFOCO, INFOSK) draw column 0."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2a4096"
+name = "character_pictures"
+category = "data-table"
+type = "int[1000][5]"
+usage = "CHINIT: pictures, a column for each picture set (party_member_picture_sets); FELLOW, GAMESTART and GAMECLEAR draw them."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2a541e"
+name = "character_fellow_pictures"
+category = "data-table"
+type = "int[1000][5]"
+usage = "CHINIT: pictures by picture set that FELLOW draws."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2a67a6"
+name = "character_unit_pictures"
+category = "data-table"
+type = "int[1000][5]"
+usage = "CHINIT: the character's unit on the map, by picture set: SETAGENT and SETMAPDATA copy it into the player unit's area_unit_pictures column 0."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2a7b2e"
+name = "character_unit_pictures_2"
+category = "data-table"
+type = "int[1000][5]"
+usage = "CHINIT: the unit's second picture, copied into area_unit_pictures column 1."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2a8eb6"
+name = "character_unit_extra_pictures"
+category = "data-table"
+type = "int[1000][5]"
+usage = "CHINIT: the unit's third picture, copied into area_unit_extra_pictures."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2aa23e"
+name = "character_menu_pictures"
+category = "data-table"
+type = "int[1000][5]"
+usage = "CHINIT: pictures by picture set that FELLOW and MENU draw."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Cards (CDINIT): more fields, and saved card state ----
+
+[[global]]
+address = "0x2b4aff"
+name = "card_sort_keys"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: a sort number; the card lists (the book, the deck builder, the shop) are in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2b626f"
+name = "card_requires_party_flags"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: 1 on 300 cards that may be in a deck only while their row's character (card_row_character_ids) is in the party (CHECKCARD)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2b914f"
+name = "card_book_flags"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: 1 on the 903 cards the card book (INFOCD) lists."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2ba8bf"
+name = "card_copyable_flags"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: 1 on the 229 cards the skills 複製 and 捕縛 can win from an opponent (DECKBUILD marks them)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2cc1ff"
+name = "card_subtractive_effect_flags"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: 1 where ATTACK draws the card's attack effect subtractively (gfx_draw_color mode 3) instead of additively (mode 1)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2d084f"
+name = "card_leader_pictures"
+category = "data-table"
+type = "int[6000][2]"
+usage = "CDINIT: pictures of the card as a battle's leader, a column for each side (PHASECONTROLLER)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2d372f"
+name = "card_attack_pictures"
+category = "data-table"
+type = "int[6000][2]"
+usage = "CDINIT: two pictures ATTACK draws when the card attacks."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2d660f"
+name = "card_recipe_icons"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: the icon DRAWRECIPE draws for the card on a recipe."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2d7d7f"
+name = "card_attack_effects"
+category = "data-table"
+type = "int[6000]"
+usage = "CDINIT: the card's attack effect, a resource id ATTACK plays."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2d94ef"
+name = "card_voice_clips"
+category = "data-table"
+type = "int[6000][5]"
+usage = "CDINIT: five voice clips the battle plays for the card: column 0 in the player's actions, 1 and 3 when it attacks, 4 when its talent acts."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x66a0"
+name = "card_obtained_flags"
+category = "data-table"
+type = "int[6000]"
+usage = "Saved: 1 once the player has obtained the card (ADDCARD sets it). The recipes' tests read it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x183d0"
+name = "card_row_locks"
+category = "story-flag"
+type = "int[200]"
+usage = "Saved: a scene sets [row] to 1 to bar a card row from decks for a while and clears it later (SC0180, row 5); CHECKCARD refuses the row's cards meanwhile."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Talents (TAINIT), 奥義 (COINIT), skills (SKINIT), conditions (ILINIT): more fields ----
+
+[[global]]
+address = "0x31b788"
+name = "talent_sort_keys"
+category = "data-table"
+type = "int[1000]"
+usage = "TAINIT: a sort number; the talent book (INFOTA) lists in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31bb70"
+name = "talent_book_flags"
+category = "data-table"
+type = "int[1000]"
+usage = "TAINIT: 1 for every talent: the talent book lists those that have it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31bf58"
+name = "talent_timings"
+category = "data-table"
+type = "int[1000]"
+usage = "TAINIT: when the talent acts, 1 to 9: 特殊, 移動, 登場, 行動, 攻撃, 退却, 前衛エリア, 後衛エリア, 全エリア (the word its description opens with)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31c72a"
+name = "ultimate_append_numbers"
+category = "data-table"
+type = "int[100]"
+usage = "COINIT: the append that added the 奥義; it picks the 奥義's scripts in ultimate_script_ids."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31c78e"
+name = "ultimate_sort_keys"
+category = "data-table"
+type = "int[100]"
+usage = "COINIT: a sort number; the 奥義 book (INFOCO) lists in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31c7f2"
+name = "ultimate_book_flags"
+category = "data-table"
+type = "int[100]"
+usage = "COINIT: 1 for every 奥義: the 奥義 book lists those that have it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31c8ba"
+name = "ultimate_gauge_gains"
+category = "data-table"
+type = "int[100][10]"
+usage = "COINIT, by level (columns 1 to 9): how much the 奥義 gauge fills each turn; PHASECONTROLLER adds it to the gauge (100 at most)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31cca2"
+name = "ultimate_amounts"
+category = "data-table"
+type = "int[100][10]"
+usage = "COINIT, by level: the number the level's text gives (damage, turns, a percent or a count); COUPACT uses it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31d08a"
+name = "ultimate_picture_x"
+category = "data-table"
+type = "int[100][10]"
+usage = "COINIT, by level: the x at which COUP places the 奥義's picture."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31d472"
+name = "ultimate_picture_y"
+category = "data-table"
+type = "int[100][10]"
+usage = "COINIT, by level: and its y."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31d85a"
+name = "ultimate_pictures"
+category = "data-table"
+type = "int[100][10]"
+usage = "COINIT, by level: the 奥義's picture (DECKBUILD, BTL)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31dc42"
+name = "ultimate_pictures_2"
+category = "data-table"
+type = "int[100][10]"
+usage = "COINIT, by level: a second picture DECKBUILD takes for the 奥義."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31e02a"
+name = "ultimate_movies"
+category = "data-table"
+type = "int[100][10]"
+usage = "COINIT, by level: the movie COUP plays for the 奥義."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31e412"
+name = "skill_sort_keys"
+category = "data-table"
+type = "int[1000]"
+usage = "SKINIT: a sort number; the skill book (INFOSK) lists in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31e7fa"
+name = "skill_book_flags"
+category = "data-table"
+type = "int[1000]"
+usage = "SKINIT: 1 for every skill: the skill book lists those that have it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31ebe2"
+name = "skill_kinds"
+category = "data-table"
+type = "int[1000]"
+usage = "SKINIT: where the skill works: 1 outside battle, 2 in battle, 3 on the battlefield. COUNTSKILL counts a kind-3 skill only for the three role characters (party_leader_id, party_ultimate_character_id, map_agent_character_id)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31efca"
+name = "skill_amounts"
+category = "data-table"
+type = "int[1000]"
+usage = "SKINIT: the number the skill's text gives (交渉術Ⅰ: 5 for ５％ＯＦＦ); COUNTSKILL and the battle scripts read it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32f96a"
+name = "condition_kinds"
+category = "data-table"
+type = "int[32]"
+usage = "ILINIT: 1 for a helpful condition (再生, 必中 …), 2 for a harmful one (操血, 封印 …)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32f9ca"
+name = "condition_attack_changes"
+category = "data-table"
+type = "int[32]"
+usage = "ILINIT: what the condition adds to a card's 攻撃力 in battle while it holds (攻１ to 攻４: 1 to 4; 操血: -1)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32f9ea"
+name = "condition_hp_changes"
+category = "data-table"
+type = "int[32]"
+usage = "ILINIT: what the condition adds to a card's ＨＰ or ＬＰ in battle while it holds (操血: -1)."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x32fa2a"
+name = "condition_turn_hp_changes"
+category = "data-table"
+type = "int[32]"
+usage = "ILINIT: a change each turn (強酸 -1, 再生 +1); PHASECONTROLLER adds 再生's to a card's ＨＰ at the start of a turn."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x32fa4a"
+name = "condition_turn_hp_changes_2"
+category = "data-table"
+type = "int[32]"
+usage = "ILINIT: 再生 1; PHASECONTROLLER adds it to a card's ＨＰ like condition_turn_hp_changes, on another branch."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x32fa6a"
+name = "condition_icons"
+category = "data-table"
+type = "int[32]"
+usage = "ILINIT: the condition's icon, 1 to 19: its row in a strip of 15 × 15 icons DRAWFIELD and DRAWTALENT draw from, at the column of its kind."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Items (ITINIT): more fields, and saved item state ----
+
+[[global]]
+address = "0x31ff6a"
+name = "item_sort_keys"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: a sort number; the item lists (ITEM, the book, the shops, SELITEM) are in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32073a"
+name = "item_kinds"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: 1 to 5, 重要, 消費, 売却, 素材, 装備 (INIT2 sets the names in 0x12a84 + kind - 1). A card carries a 装備 item; SELITEM offers 消費 items in battle."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x320f0a"
+name = "item_no_carry_over_flags"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: 1 on 59 of the 62 重要 items: the ones GAMESTART does not carry over into a new game when it carries the items over."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x321eaa"
+name = "item_book_flags"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: 1 for every item: the item book (INFOIT) lists those that have it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x322e4a"
+name = "item_cost_bonuses"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: what the item adds to the コスト of the card that carries it (the card panel, CHECKCARD)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32361a"
+name = "item_control_bonuses"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: what it adds to the card's 支配力."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x323dea"
+name = "item_attack_bonuses"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: what it adds to the card's 攻撃力."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3245ba"
+name = "item_leader_lp_bonuses"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: what it adds to a leader card's ＬＰ."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x324d8a"
+name = "item_hp_bonuses"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: what it adds to the card's ＨＰ."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32555a"
+name = "item_condition_ids"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: a condition (an ILINIT id) the 消費 item gives its target in battle (SELITEM)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x325d2a"
+name = "item_targets"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: which battlefield cells the 消費 item can target: 1 the first side's, 2 the second's, 3 both; 4 and 5 the empty cells of the first or the second side (SELITEM)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3264fa"
+name = "item_talent_ids"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: a talent (a TAINIT id) the item gives the card that carries it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32d25a"
+name = "item_effect_styles"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: how SELITEM plays the 消費 item's effect movie: 1 on the target cell, 2 in the middle at 512 × 512, 3 at a fixed place."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32da2a"
+name = "item_effect_draw_modes"
+category = "data-table"
+type = "int[2000]"
+usage = "ITINIT: the gfx_draw_color mode the effect movie is drawn in (1, additive, on all 31)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32e1fa"
+name = "item_effect_movies"
+category = "data-table"
+type = "int[2000][3]"
+usage = "ITINIT: the effect movies; style 1 takes the target column's."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x4760"
+name = "item_obtained_flags"
+category = "data-table"
+type = "int[2000]"
+usage = "Saved: 1 once the player has obtained the item (ADDITEM sets it). The recipes' tests read it."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Decks (DEINIT): more fields, and a map unit's saved deck ----
+
+[[global]]
+address = "0x3432b6"
+name = "deck_card_max_copies"
+category = "data-table"
+type = "int[1000][30]"
+usage = "DEINIT: the most copies of each card a map unit's deck holds."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x34a7e6"
+name = "deck_card_copies"
+category = "data-table"
+type = "int[1000][30]"
+usage = "DEINIT: how many copies of each card the deck holds: a battle's deck takes this many (DECKBUILD), and a map unit's starts from it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x351d16"
+name = "deck_card_copy_chances"
+category = "data-table"
+type = "int[1000][30]"
+usage = "DEINIT: a percent for each card slot; for each copy between deck_card_copies and deck_card_max_copies ALLMAP draws 0 to 99 and adds the copy where the draw is at least this."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x367ca6"
+name = "deck_start_boards"
+category = "data-table"
+type = "int[1000][6]"
+usage = "DEINIT: the opponent's battlefield at the start, two rows of three: 0 or less goes into the cell as it is, a positive value is a slot of the deck whose card starts there (PHASECONTROLLER)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x369416"
+name = "deck_cpu_profiles"
+category = "data-table"
+type = "int[1000]"
+usage = "DEINIT: the CPU profile (cpu_profile) the deck is played with; SETREGULATION passes it on."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3697fe"
+name = "deck_drop_weights"
+category = "data-table"
+type = "int[1000][4]"
+usage = "DEINIT: four drops, each one's weight. RESULT makes weight sum / 100 drops (one more with the rest's percent), each drawn by weight."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x36a79e"
+name = "deck_drop_items"
+category = "data-table"
+type = "int[1000][4]"
+usage = "DEINIT: a drop that is an item: its id."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x36b73e"
+name = "deck_drop_card_rows"
+category = "data-table"
+type = "int[1000][4]"
+usage = "DEINIT: a drop that is a card: its row."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x36c6de"
+name = "deck_drop_card_slots"
+category = "data-table"
+type = "int[1000][4]"
+usage = "DEINIT: and its slot."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x359246"
+name = "deck_card_max_unless_scenes"
+category = "data-table"
+type = "int[1000][30]"
+usage = "A scene (id + 1) for each card slot: ALLMAP gives a map unit the most copies of the slot while it has not been played. No record writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x360776"
+name = "deck_card_max_once_scenes"
+category = "data-table"
+type = "int[1000][30]"
+usage = "A scene for each card slot: ALLMAP gives a map unit the most copies of the slot once it has been played. No record writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x16217"
+name = "area_unit_deck_copies"
+category = "data-table"
+type = "int[200][30]"
+usage = "Saved: a map unit's copies of each card of its deck, which ALLMAP fills between deck_card_copies and deck_card_max_copies."
+source = "investigation"
+confidence = "med"
+
+
+# ---- Battles (DUINIT) and battle rules (REINIT) ----
+
+[[global]]
+address = "0x3ad5"
+name = "battle_id"
+category = "index-pointer"
+type = "int"
+usage = "Saved: the battle to fight, a DUINIT id; scene code sets it, or an arena opponent does."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x469105"
+name = "battle_rule_id"
+category = "index-pointer"
+type = "int"
+usage = "The rule in play, a REINIT id: SETREGULATION takes it from battle_rules, or for a battle on the map from area_battle_rules."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x36d67e"
+name = "battle_uses_player_deck_flags"
+category = "data-table"
+type = "int[1000]"
+usage = "DUINIT: 1 where the player fights with their own deck and leader; elsewhere the battle sets the player's side too (SETREGULATION)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x36da66"
+name = "battle_leader_cards"
+category = "data-table"
+type = "int[1000][4]"
+usage = "DUINIT: the leader card of each side, as a row and a slot."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "side_0_row", "1" = "side_0_slot", "2" = "side_1_row", "3" = "side_1_slot" }
+
+[[global]]
+address = "0x36ea06"
+name = "battle_decks"
+category = "data-table"
+type = "int[1000][2]"
+usage = "DUINIT: each side's deck (a DEINIT id)."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "side_0", "1" = "side_1" }
+
+[[global]]
+address = "0x36f1d6"
+name = "battle_opponent_ultimates"
+category = "data-table"
+type = "int[1000]"
+usage = "DUINIT: the opponent's 奥義 (a COINIT id)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x36f5be"
+name = "battle_opponent_ultimate_levels"
+category = "data-table"
+type = "int[1000]"
+usage = "DUINIT: and its level."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x36f9a6"
+name = "battle_opponent_ultimate_pictures"
+category = "data-table"
+type = "int[1000]"
+usage = "DUINIT: the opponent's 奥義 picture."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x36fd8e"
+name = "battle_opponent_ultimate_picture_x"
+category = "data-table"
+type = "int[1000]"
+usage = "DUINIT: and its x."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x370176"
+name = "battle_opponent_ultimate_picture_y"
+category = "data-table"
+type = "int[1000]"
+usage = "DUINIT: and its y."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x37055e"
+name = "battle_rules"
+category = "data-table"
+type = "int[1000]"
+usage = "DUINIT: the battle's rule (a REINIT id); SETREGULATION takes it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x370946"
+name = "battle_music"
+category = "data-table"
+type = "int[1000]"
+usage = "DUINIT: the battle's music (BTL plays it)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x371116"
+name = "battle_backgrounds"
+category = "data-table"
+type = "int[1000][2]"
+usage = "DUINIT: two pictures PHASECONTROLLER sets behind the battlefield."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3718e6"
+name = "battle_rule_outcomes"
+category = "data-table"
+type = "int[100][5]"
+usage = "REINIT: what five events do to the battle, 0 nothing, 1 a win, 2 a loss (by the rules' texts). Without a rule SETREGULATION uses 0, 0, 2, 1, 2."
+source = "investigation"
+confidence = "med"
+columns = { "0" = "player_deck_out", "1" = "opponent_deck_out", "2" = "player_lp_zero", "3" = "opponent_lp_zero", "4" = "turn_limit" }
+
+[[global]]
+address = "0x371ada"
+name = "battle_rule_hp_recovery_flags"
+category = "data-table"
+type = "int[100]"
+usage = "REINIT: 1 where the cards' ＨＰ recovers at the start of a turn (ターン開始時にＨＰ回復)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x371ec2"
+name = "battle_rule_turn_limits"
+category = "data-table"
+type = "int[100]"
+usage = "REINIT: the turn limit (99 for none)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x371f26"
+name = "battle_rule_hand_sizes"
+category = "data-table"
+type = "int[100]"
+usage = "REINIT: the most cards in hand (6 but for 最大手札４)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x371f8a"
+name = "battle_rule_deck_sizes"
+category = "data-table"
+type = "int[100]"
+usage = "REINIT: the most cards in a deck (30 but for 編成最大枚数 rules)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x371fee"
+name = "battle_rule_use_bans"
+category = "data-table"
+type = "int[100]"
+usage = "REINIT: two bits; PH03_PLR_ACTION tests the first, BTL and SETBTSKILL the second. アイテム・奥義使用不可 has 3."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3723d6"
+name = "battle_rule_cost_ranges"
+category = "data-table"
+type = "int[100][2]"
+usage = "REINIT: a card's コスト (with its item's bonus) must lie in [least, most], a most of 0 for none (CHECKCARD)."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "least", "1" = "most" }
+
+[[global]]
+address = "0x37249e"
+name = "battle_rule_control_ranges"
+category = "data-table"
+type = "int[100][2]"
+usage = "REINIT: the same for 支配力."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "least", "1" = "most" }
+
+[[global]]
+address = "0x372566"
+name = "battle_rule_attack_ranges"
+category = "data-table"
+type = "int[100][2]"
+usage = "REINIT: the same for 攻撃力."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "least", "1" = "most" }
+
+[[global]]
+address = "0x37262e"
+name = "battle_rule_hp_ranges"
+category = "data-table"
+type = "int[100][2]"
+usage = "REINIT: the same for ＨＰ."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "least", "1" = "most" }
+
+[[global]]
+address = "0x3726f6"
+name = "battle_rule_race_masks"
+category = "data-table"
+type = "int[100][2]"
+usage = "REINIT: bits of card_race_flags. A card with a race of the first may not be used, nor a card all of whose races are in the second."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "any_banned", "1" = "all_banned" }
+
+[[global]]
+address = "0x3727be"
+name = "battle_rule_banned_card_rows"
+category = "data-table"
+type = "int[100][10]"
+usage = "REINIT: card rows whose cards may not be used (CHECKCARD)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x12404"
+name = "battle_rule_lines"
+category = "string-table"
+type = "string[100][6]"
+usage = "REINIT: six lines of text; the first is the heading ◆特殊勝敗条件・編成制限◆."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Recipes (ALINIT), shop entries (SHINIT), and the state their tests read ----
+
+[[global]]
+address = "0x36cd"
+name = "chapter"
+category = "story-flag"
+type = "int"
+usage = "Saved: the chapter, which the chapters' first scenes set. The recipes', shop entries' and goals' tests compare it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3ad8"
+name = "points"
+category = "counter"
+type = "int"
+usage = "Saved: a points total, 0 to 99999; ALCHEMY adds recipe_points to it, and CALCPR sets rank from it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3ad9"
+name = "rank"
+category = "counter"
+type = "int"
+usage = "Saved: the rank, 1 to 99, which CALCPR sets from points by rank_point_thresholds."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x987b"
+name = "day"
+category = "counter"
+type = "int"
+usage = "Saved: the day; its day of the week is day % 7, which the weekday bits test."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x987c"
+name = "time_slot"
+category = "index-pointer"
+type = "int"
+usage = "Saved: the time of day, 0 to 4; area_map_pictures has a picture for each, and BGINIT substitutes pictures by it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x4525d8"
+name = "shop_place_id"
+category = "index-pointer"
+type = "int"
+usage = "The shop or alchemy place in use: recipe_places and shop_entry_shops have one bit a place."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x372ba6"
+name = "recipe_items"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: the item the recipe makes, on 185 recipes."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x373376"
+name = "recipe_card_rows"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: or the card it makes: its row, on the other 432."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x373b46"
+name = "recipe_card_slots"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: and its slot."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x374316"
+name = "recipe_points"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: points the recipe earns each time it is made (ALCHEMY adds them to points)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x374ae6"
+name = "recipe_places"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: the alchemy places that offer the recipe, one bit a place (shop_place_id)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3752b6"
+name = "recipe_least_chapters"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: the least chapter."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x375a86"
+name = "recipe_least_days"
+category = "data-table"
+type = "int[2000]"
+usage = "The least day; ALCHEMY's test reads it and no record writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x376256"
+name = "recipe_weekdays"
+category = "data-table"
+type = "int[2000]"
+usage = "The days of the week (bits of day % 7); ALCHEMY's test reads it and no record writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x376a26"
+name = "recipe_time_slots"
+category = "data-table"
+type = "int[2000]"
+usage = "The time slots (bits of time_slot); ALCHEMY's test reads it and no record writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3771f6"
+name = "recipe_least_ranks"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: the least rank."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3779c6"
+name = "recipe_party_characters"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: a character who must be in the party."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x378196"
+name = "recipe_party_character_levels"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: and that character's least level."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x378966"
+name = "recipe_skills"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: a skill the party must have (party_skill_counts)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x379136"
+name = "recipe_required_items"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: an item the player must have obtained (item_obtained_flags)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x379906"
+name = "recipe_required_card_rows"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: a card the player must have obtained (card_obtained_flags): its row."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x37a0d6"
+name = "recipe_required_card_slots"
+category = "data-table"
+type = "int[2000]"
+usage = "ALINIT: and its slot."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x37a8a6"
+name = "recipe_scenes_played"
+category = "data-table"
+type = "int[2000][5]"
+usage = "ALINIT: scenes (each id + 1) that must all have been played."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x37cfb6"
+name = "recipe_scenes_not_played"
+category = "data-table"
+type = "int[2000][5]"
+usage = "Scenes none of which may have been played; ALCHEMY's test reads it and no record writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x37f6c6"
+name = "recipe_ingredient_items"
+category = "data-table"
+type = "int[2000][4]"
+usage = "ALINIT: the four ingredients: an item id where the ingredient is an item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x381606"
+name = "recipe_ingredient_card_rows"
+category = "data-table"
+type = "int[2000][4]"
+usage = "ALINIT: or a card's row where it is a card."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x383546"
+name = "recipe_ingredient_card_slots"
+category = "data-table"
+type = "int[2000][4]"
+usage = "ALINIT: and its slot."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x385486"
+name = "recipe_ingredient_counts"
+category = "data-table"
+type = "int[2000][4]"
+usage = "ALINIT: how many of each ingredient the recipe takes."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3873c6"
+name = "shop_entry_items"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: the item the entry sells, on 135 entries."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3877ae"
+name = "shop_entry_card_rows"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: or the card it sells: its row, on the other 97."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x387b96"
+name = "shop_entry_card_slots"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: and its slot."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x387f7e"
+name = "shop_entry_shops"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: the shops that sell it, one bit a shop (shop_place_id)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x388366"
+name = "shop_entry_least_chapters"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: the least chapter."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38874e"
+name = "shop_entry_least_days"
+category = "data-table"
+type = "int[1000]"
+usage = "The least day; SHOPP's test reads it and no entry writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x388b36"
+name = "shop_entry_weekdays"
+category = "data-table"
+type = "int[1000]"
+usage = "The days of the week; SHOPP's test reads it and no entry writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x388f1e"
+name = "shop_entry_time_slots"
+category = "data-table"
+type = "int[1000]"
+usage = "The time slots; SHOPP's test reads it and no entry writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x389306"
+name = "shop_entry_least_ranks"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: the least rank."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3896ee"
+name = "shop_entry_party_characters"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: a character who must be in the party."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x389ad6"
+name = "shop_entry_party_character_levels"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: and that character's least level."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x389ebe"
+name = "shop_entry_skills"
+category = "data-table"
+type = "int[1000]"
+usage = "SHINIT: a skill the party must have (party_skill_counts). ARENA's test also reads this array, at an opponent's id."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x38a2a6"
+name = "shop_entry_scenes_played"
+category = "data-table"
+type = "int[1000][2]"
+usage = "SHINIT: scenes (each id + 1) that must all have been played."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38aa76"
+name = "shop_entry_scenes_not_played"
+category = "data-table"
+type = "int[1000][2]"
+usage = "SHINIT: scenes none of which may have been played."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Arena opponents (ARINIT) and goals (FAINIT) ----
+
+[[global]]
+address = "0x18323"
+name = "current_opponent_id"
+category = "index-pointer"
+type = "int"
+usage = "Saved: the arena opponent in play, an ARINIT id."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x1831e"
+name = "arena_place_id"
+category = "index-pointer"
+type = "int"
+usage = "Saved: the arena place in use; opponent_places has one bit a place."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x17f36"
+name = "opponent_states"
+category = "story-flag"
+type = "int[1000]"
+usage = "Saved: bit 0 once the opponent's conditions have held (ARENA), bit 1 once beaten (BTL)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x1268e"
+name = "opponent_names"
+category = "string-table"
+type = "string[1000]"
+usage = "ARINIT: the opponent's name."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38b246"
+name = "opponent_battles"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: the battle (a DUINIT id) the opponent is fought in."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38b62e"
+name = "opponent_arenas"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: the arena the opponent fights in, 1 to 9."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38ba16"
+name = "opponent_sort_keys"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: a sort number; ARENA lists the opponents in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38bdfe"
+name = "opponent_reward_items"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: the reward when it is an item."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38c1e6"
+name = "opponent_reward_card_rows"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: the reward when it is a card: its row."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38c5ce"
+name = "opponent_reward_card_slots"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: and its slot."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38c9b6"
+name = "opponent_reward_counts"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: how many of the reward the player gets."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38d186"
+name = "opponent_scenes"
+category = "data-table"
+type = "int[1000][3]"
+usage = "ARINIT: three scenes: column 0 is played before the battle, BTL plays column 1 after a win and column 2 after a loss."
+source = "investigation"
+confidence = "med"
+columns = { "0" = "before", "1" = "after_win", "2" = "after_loss" }
+
+[[global]]
+address = "0x38dd3e"
+name = "opponent_places"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: the places that hold the opponent, one bit a place (arena_place_id)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38e126"
+name = "opponent_required_opponents"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: another opponent who must have been beaten (bit 1 of opponent_states)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x38ecde"
+name = "opponent_weekdays"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: the days of the week (bits of day % 7) the opponent is there."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x39044e"
+name = "opponent_scenes_played"
+category = "data-table"
+type = "int[1000][2]"
+usage = "ARINIT: scenes (each id + 1) that must all have been played."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x390c1e"
+name = "opponent_scenes_not_played"
+category = "data-table"
+type = "int[1000][2]"
+usage = "ARINIT: scenes none of which may have been played."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3913ee"
+name = "opponent_tournament_groups"
+category = "data-table"
+type = "int[1000]"
+usage = "ARINIT: a group (2 to 8) ARENA draws a tournament arena's opponents from."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x260700"
+name = "current_goal_id"
+category = "index-pointer"
+type = "int"
+usage = "The goal GETFATE makes current: the open kind-1 goal latest in the sort order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x18498"
+name = "goal_states"
+category = "story-flag"
+type = "int[1000]"
+usage = "Saved: bit 0 once the goal is open, and bits 1 and 2 by two more pairs of scene lists (SETFATE)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29e4"
+name = "goal_titles"
+category = "string-table"
+type = "string[1000]"
+usage = "FAINIT: a line of text (『天慶第二学園』へ)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2dcc"
+name = "goal_titles_2"
+category = "string-table"
+type = "string[1000]"
+usage = "FAINIT: a second line, the same as the first on 449 of the 454 entries."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x31b4"
+name = "goal_lines"
+category = "string-table"
+type = "string[1000][4]"
+usage = "FAINIT: four lines; the first is a chapter's heading (【共通ルート】　序章)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x260701"
+name = "goal_sort_keys"
+category = "data-table"
+type = "int[1000]"
+usage = "FAINIT: a sort number; the goal lists (INFOFA, GETFATE, ALLMAP) are in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x260ae9"
+name = "goal_least_chapters"
+category = "data-table"
+type = "int[1000]"
+usage = "A least chapter; SETFATE's test reads it and no entry writes it."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x260ed1"
+name = "goal_open_scenes_played"
+category = "data-table"
+type = "int[1000][3]"
+usage = "FAINIT: three scenes (each id + 1) that must all have been played for the goal to open."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x261a89"
+name = "goal_open_scenes_not_played"
+category = "data-table"
+type = "int[1000][3]"
+usage = "FAINIT: three scenes none of which may have been played for it to open."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x262641"
+name = "goal_bit2_scenes_played"
+category = "data-table"
+type = "int[1000][3]"
+usage = "FAINIT: three scenes that, all played, set bit 2 of goal_states."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2631f9"
+name = "goal_bit2_scenes_not_played"
+category = "data-table"
+type = "int[1000][3]"
+usage = "FAINIT: three scenes none of which may have been played for that."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x263db1"
+name = "goal_bit1_scenes_played"
+category = "data-table"
+type = "int[1000][3]"
+usage = "FAINIT: three scenes that, all played, set bit 1 of goal_states."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x264969"
+name = "goal_bit1_scenes_not_played"
+category = "data-table"
+type = "int[1000][3]"
+usage = "FAINIT: three scenes none of which may have been played for that."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x265521"
+name = "goal_kinds"
+category = "data-table"
+type = "int[1000]"
+usage = "FAINIT: 1 to 3; SETFATE counts the open goals of each kind into 0x3d46c + kind."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x265909"
+name = "goal_reward_items"
+category = "data-table"
+type = "int[1000]"
+usage = "FAINIT: the goal's reward when it is an item (RECEIPT)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x265cf1"
+name = "goal_reward_card_rows"
+category = "data-table"
+type = "int[1000]"
+usage = "FAINIT: the reward when it is a card: its row."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2660d9"
+name = "goal_reward_card_slots"
+category = "data-table"
+type = "int[1000]"
+usage = "FAINIT: and its slot."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2664c1"
+name = "goal_reward_counts"
+category = "data-table"
+type = "int[1000]"
+usage = "FAINIT: a count RECEIPT prints beside the reward (1 on 71)."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x2668a9"
+name = "goal_reward_money"
+category = "data-table"
+type = "int[1000]"
+usage = "FAINIT: money the goal gives, 20 to 200: RECEIPT prints it and adds it to money."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Areas (AMINIT), map units (UNINIT) and their routines, CPU profiles (RTINIT) ----
+
+[[global]]
+address = "0x32fbc5"
+name = "area_places"
+category = "data-table"
+type = "int[300]"
+usage = "AMINIT: the place (an AMINIT id) the area belongs to; scene code tests whether the area in play is in the same place as a given area."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32fcf1"
+name = "area_map_pictures"
+category = "data-table"
+type = "int[300][6]"
+usage = "AMINIT: the area's map pictures: columns 0 to 4 by time_slot, column 5 another (SETMAPTEX, ALLMAP)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3303f9"
+name = "area_music"
+category = "data-table"
+type = "int[300][2]"
+usage = "AMINIT: the area's two tracks of music, by 0x987a (READY)."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x330651"
+name = "area_unit_scales"
+category = "data-table"
+type = "int[300][2]"
+usage = "AMINIT: a unit's size at the top and at the bottom of the map, in percent; DRAWOBJ scales a unit between the two by its point's y."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "top", "1" = "bottom" }
+
+[[global]]
+address = "0x3308a9"
+name = "area_battle_backgrounds"
+category = "data-table"
+type = "int[300][2]"
+usage = "AMINIT: two pictures PHASECONTROLLER sets behind the battlefield for a battle in the area."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x330b01"
+name = "area_battle_rules"
+category = "data-table"
+type = "int[300]"
+usage = "AMINIT: the rule (a REINIT id) of a battle in the area (16 areas)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x332dc6"
+name = "area_unit_kinds"
+category = "data-table"
+type = "int[200]"
+usage = "UNINIT, for the area in play: the unit's kind, 1 to 4; ALLMAP and DRAWOBJ treat kinds 1 and 4 apart."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x332e8e"
+name = "area_unit_icons"
+category = "data-table"
+type = "int[200]"
+usage = "UNINIT, for the area in play: the unit's icon, 1-based, in a strip DRAWFRAME draws from."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x332f56"
+name = "area_unit_decks"
+category = "data-table"
+type = "int[200]"
+usage = "UNINIT, for the area in play: the unit's deck (a DEINIT id): a battle with the unit has it (SETREGULATION), and UNITINFO shows its drops."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x333276"
+name = "area_unit_routines"
+category = "data-table"
+type = "int[200]"
+usage = "UNINIT, for the area in play: the unit's routine (unit_routine), which MVRTN runs."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3342de"
+name = "area_unit_battle_music"
+category = "data-table"
+type = "int[200]"
+usage = "UNINIT, for the area in play: the music of a battle with the unit (BTL)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3345fe"
+name = "area_unit_pictures"
+category = "data-table"
+type = "int[200][2]"
+usage = "UNINIT, for the area in play: two pictures of the unit (SETMAPTEX); for the player's unit, slot 1, SETAGENT copies them from CHINIT."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x33478e"
+name = "area_unit_extra_pictures"
+category = "data-table"
+type = "int[200]"
+usage = "UNINIT, for the area in play: a third picture of the unit."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x333406"
+name = "area_unit_state_ids"
+category = "data-table"
+type = "int[200]"
+usage = "UNINIT, for the area in play: the unit's id in saved state (1 to 126); ALLMAP copies it into the save's 0x9ba7 + slot when it sets the unit up and tests the bits of 0x17cd8 + id."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x391fa9"
+name = "unit_routine_actions"
+category = "data-table"
+type = "int[1000][50]"
+usage = "RTINIT: a map unit's routine step by step: the step's action, 1 to 8 for RTN_M001 to RTN_M008; 0 ends the routine (MVRTN)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x39e2f9"
+name = "unit_routine_chances"
+category = "data-table"
+type = "int[1000][50]"
+usage = "RTINIT: the percent chance the step runs (MVRTN draws 0 to 99)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3aa649"
+name = "unit_routine_args"
+category = "data-table"
+type = "int[1000][50]"
+usage = "RTINIT: the step's first argument (RTN_M001 waits that long, 20 without one)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3b6999"
+name = "unit_routine_args_2"
+category = "data-table"
+type = "int[1000][50]"
+usage = "RTINIT: the step's second argument."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3c2ce9"
+name = "unit_routine_args_3"
+category = "data-table"
+type = "int[1000][50]"
+usage = "RTINIT: the step's third argument."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x3e76d9"
+name = "unit_routine_scenes_played"
+category = "data-table"
+type = "int[1000][150]"
+usage = "RTINIT: for each step, three scenes (each id + 1) that must all have been played, at column 3 * step + n."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x40c0c9"
+name = "unit_routine_scenes_not_played"
+category = "data-table"
+type = "int[1000][150]"
+usage = "RTINIT: for each step, three scenes none of which may have been played."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x430ab9"
+name = "cpu_profile_settings"
+category = "data-table"
+type = "int[1000][20]"
+usage = "RTINIT: a CPU profile's twenty settings, which PH12_CPU_MOVE and PH13_CPU_ACTION read."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x4358d9"
+name = "cpu_profile_move_choices"
+category = "data-table"
+type = "int[1000][10]"
+usage = "RTINIT: the profile's choices for moving (PH12_CPU_MOVE)."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x437fe9"
+name = "cpu_profile_action_choices"
+category = "data-table"
+type = "int[1000][10]"
+usage = "RTINIT: its choices for acting (PH13_CPU_ACTION)."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x43a6f9"
+name = "cpu_profile_attack_choices"
+category = "data-table"
+type = "int[1000][10]"
+usage = "RTINIT: its choices for attacking (PH14_CPU_ATTACK)."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x43ce09"
+name = "cpu_profile_attack_lists"
+category = "data-table"
+type = "int[1000][10]"
+usage = "RTINIT: a list ATTACK reads for the profile."
+source = "investigation"
+confidence = "med"
+
+
+# ---- Constants (RFINIT) ----
+
+[[global]]
+address = "0x32fa8a"
+name = "battle_experience"
+category = "data-table"
+type = "int[4][10]"
+usage = "RFINIT: four rows of nine numbers: the experience RESULT gives the party for each enemy card defeated, at the cell two numbers of that card pick."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x32fab2"
+name = "rank_point_thresholds"
+category = "data-table"
+type = "int[100]"
+usage = "RFINIT: the points each rank needs (CALCPR): rank r at cell 10 * (r % 10) + r / 10, ranks 1 to 99, up to 99999."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32fb16"
+name = "character_level_experience"
+category = "data-table"
+type = "int[10]"
+usage = "RFINIT: the experience a character needs for each level, 0 to 9999 (RESULT, FELLOW)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32fb57"
+name = "random_condition_switches"
+category = "data-table"
+type = "int[10][10]"
+usage = "RFINIT: rows of switches: which of random_conditions BTL may give at random, by a row it picks."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x32fbbb"
+name = "random_conditions"
+category = "data-table"
+type = "int[10]"
+usage = "RFINIT: eight conditions (ILINIT ids 17 to 25: 必中, 回避, 攻１ …) BTL gives at random."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Registries (CVINIT, CIINIT, VIINIT, TIINIT, CGINIT, MUINIT) ----
+
+[[global]]
+address = "0x298971"
+name = "voice_setting_sample_voices"
+category = "data-table"
+type = "int[1000]"
+usage = "CVINIT: a sample voice for the setting; CONFIG4 plays it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29c45b"
+name = "profile_sort_keys"
+category = "data-table"
+type = "int[200]"
+usage = "CIINIT: a sort number; INFOCH lists the profiles in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29c523"
+name = "profile_character_ids"
+category = "data-table"
+type = "int[200]"
+usage = "CIINIT: the profile's character (a CHINIT id); INFOCH shows the profile once the shared profile's cell for that character (0x1af90 + character) is set."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29c9d3"
+name = "profile_pictures"
+category = "data-table"
+type = "int[200]"
+usage = "CIINIT: the profile's picture (INFOCH)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29ca9b"
+name = "profile_scripts"
+category = "data-table"
+type = "int[200]"
+usage = "CIINIT: a script INFOCH runs for the profile (CIMES, or $1$CIMES on three)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29a51a"
+name = "glossary_sort_keys"
+category = "data-table"
+type = "int[1000]"
+usage = "VIINIT: a sort number; INFOVI lists the glossary in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29a902"
+name = "glossary_scenes"
+category = "data-table"
+type = "int[1000][3]"
+usage = "VIINIT: up to three scenes (each id + 1); INFOVI lists the entry once one of them is seen, and always where there is none."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29b4ba"
+name = "glossary_picture_x"
+category = "data-table"
+type = "int[1000]"
+usage = "VIINIT: the x at which INFOVI draws the entry's picture."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29b8a2"
+name = "glossary_picture_y"
+category = "data-table"
+type = "int[1000]"
+usage = "VIINIT: and the y."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29bc8a"
+name = "glossary_pictures"
+category = "data-table"
+type = "int[1000]"
+usage = "VIINIT: the entry's picture."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29c072"
+name = "glossary_scripts"
+category = "data-table"
+type = "int[1000]"
+usage = "VIINIT: a script INFOVI runs for the entry (VIMES, or $1$VIMES on one)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x75ac"
+name = "tip_titles"
+category = "string-table"
+type = "string[1000]"
+usage = "TIINIT: the entry's title (日常モード, 拠点アイコン・サムネイル …)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29cb64"
+name = "tip_sort_keys"
+category = "data-table"
+type = "int[1000]"
+usage = "TIINIT: a sort number; INFOTI lists the entries in its order."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29cf4c"
+name = "tip_scenes"
+category = "data-table"
+type = "int[1000][3]"
+usage = "TIINIT: up to three scenes; INFOTI lists the entry once one of them is seen, and always where there is none."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29db04"
+name = "tip_picture_x"
+category = "data-table"
+type = "int[1000]"
+usage = "TIINIT: the x of the entry's picture."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29deec"
+name = "tip_picture_y"
+category = "data-table"
+type = "int[1000]"
+usage = "TIINIT: and the y."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29e2d4"
+name = "tip_pictures"
+category = "data-table"
+type = "int[1000]"
+usage = "TIINIT: the entry's picture."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x29e6bc"
+name = "tip_scripts"
+category = "data-table"
+type = "int[1000]"
+usage = "TIINIT: a script INFOTI runs for the entry (TIMES)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x2283f1"
+name = "cg_pictures"
+category = "data-table"
+type = "int[3000][2]"
+usage = "CGINIT: two pictures: CGMODE shows column 0; where column 1 is set, ALLMAP and SAVE find the entry whose column 0 is the picture last shown (0x36cf) and use column 1 in its place."
+source = "investigation"
+confidence = "med"
+
+[[global]]
+address = "0x229b61"
+name = "cg_sections"
+category = "data-table"
+type = "int[3000]"
+usage = "CGINIT: the entry's section in the gallery, 1 to 9."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x22a719"
+name = "cg_groups"
+category = "data-table"
+type = "int[3000]"
+usage = "CGINIT: its group in the section, 1 to 57."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x22b2d1"
+name = "cg_places"
+category = "data-table"
+type = "int[3000]"
+usage = "CGINIT: its place in the group, 1 to 35."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x260667"
+name = "music_resources"
+category = "data-table"
+type = "int[50]"
+usage = "MUINIT: a resource id SETMEMOIR asks whether the player has unlocked (is_catalog_resource_unlocked)."
+source = "investigation"
+confidence = "high"
+
+
+# ---- Append dispatch (INIT2, $n$AUTORUN): slot 0 the base script, slot n the $n$ one ----
+
+[[global]]
+address = "0x4525dc"
+name = "mounted_append_flags"
+category = "index-pointer"
+type = "int"
+usage = "Bit n is set by $n$AUTORUN: append n is mounted."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x4525fd"
+name = "ready_open_script_ids"
+category = "data-table"
+type = "int[32][2]"
+usage = "The READY and OPEN script of each layer."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "ready", "1" = "open" }
+
+[[global]]
+address = "0x45263d"
+name = "tumes_script_ids"
+category = "data-table"
+type = "int[32]"
+usage = "The TUMES script of each layer."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x45265d"
+name = "item_action_script_ids"
+category = "data-table"
+type = "int[32]"
+usage = "ITEMACT and each $n$ITEMACT: SELITEM runs the slot of the item's append number for an item used in battle."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x45267d"
+name = "ultimate_script_ids"
+category = "data-table"
+type = "int[32][3]"
+usage = "COUPACT, COUPANIME and COUPRTN of each layer: a 奥義 runs the row of its append number."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "act", "1" = "anime", "2" = "rtn" }
+
+[[global]]
+address = "0x4526dd"
+name = "talent_script_ids"
+category = "data-table"
+type = "int[32][3]"
+usage = "TALENT, TALENTACT and TALENTRTN of each layer: a talent runs the row of its append number."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "talent", "1" = "act", "2" = "rtn" }
+
+[[global]]
+address = "0x45273d"
+name = "bginit_script_ids"
+category = "data-table"
+type = "int[32]"
+usage = "BGINIT of each layer."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x45275d"
+name = "mpinit_script_ids"
+category = "data-table"
+type = "int[32]"
+usage = "MPINIT of each layer: SETMAPDATA runs slots 0 to 31 in turn."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x45277d"
+name = "roinit_script_ids"
+category = "data-table"
+type = "int[32]"
+usage = "ROINIT of each layer, run in turn the same way."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x45279d"
+name = "uninit_script_ids"
+category = "data-table"
+type = "int[32]"
+usage = "UNINIT of each layer, run in turn the same way."
+source = "investigation"
+confidence = "high"
+
 # ---- Open Maid Script tables (design spec §5.3): the parallel arrays that hold one kind of record ----
 
 [[table]]
@@ -966,6 +3350,16 @@ voice_kind = "character_voice_kinds"
 voice_setting_slot = "character_voice_setting_slots"
 face_id = "character_face_ids"
 face_history_picture = "character_face_history_pictures"
+sort_key = "character_sort_keys"
+ultimate_id = "character_ultimate_ids"
+voice_clips = "character_voice_clips"
+book_picture = "character_book_pictures"
+picture = "character_pictures"
+fellow_picture = "character_fellow_pictures"
+unit_picture = "character_unit_pictures"
+unit_picture_2 = "character_unit_pictures_2"
+unit_extra_picture = "character_unit_extra_pictures"
+menu_picture = "character_menu_pictures"
 
 [[table]]
 name = "card"
@@ -1003,6 +3397,17 @@ current_cost = "card_current_costs"
 current_hp = "card_current_hp"
 current_leader_lp = "card_current_leader_lp"
 current_attack = "card_current_attack"
+sort_key = "card_sort_keys"
+requires_party = "card_requires_party_flags"
+in_book = "card_book_flags"
+copyable = "card_copyable_flags"
+subtractive_effect = "card_subtractive_effect_flags"
+leader_picture = "card_leader_pictures"
+attack_picture = "card_attack_pictures"
+recipe_icon = "card_recipe_icons"
+attack_effect = "card_attack_effects"
+voice_clips = "card_voice_clips"
+obtained = "card_obtained_flags"
 
 [[table]]
 name = "talent"
@@ -1014,6 +3419,9 @@ usage = "TAINIT talents keyed by talent id."
 name = "talent_names"
 description = "talent_descriptions"
 append_number = "talent_append_numbers"
+sort_key = "talent_sort_keys"
+in_book = "talent_book_flags"
+timing = "talent_timings"
 
 [[table]]
 name = "skill"
@@ -1024,6 +3432,11 @@ usage = "SKINIT skills keyed by skill id."
 [table.fields]
 name = "skill_names"
 text = "skill_lines"
+sort_key = "skill_sort_keys"
+in_book = "skill_book_flags"
+kind = "skill_kinds"
+amount = "skill_amounts"
+party_count = "party_skill_counts"
 
 [[table]]
 name = "item"
@@ -1049,6 +3462,22 @@ required_control = "item_required_control"
 required_hp = "item_required_hp"
 required_leader_lp = "item_required_leader_lp"
 required_attack = "item_required_attack"
+sort_key = "item_sort_keys"
+kind = "item_kinds"
+no_carry_over = "item_no_carry_over_flags"
+in_book = "item_book_flags"
+cost_bonus = "item_cost_bonuses"
+control_bonus = "item_control_bonuses"
+attack_bonus = "item_attack_bonuses"
+leader_lp_bonus = "item_leader_lp_bonuses"
+hp_bonus = "item_hp_bonuses"
+condition_id = "item_condition_ids"
+target = "item_targets"
+talent_id = "item_talent_ids"
+effect_style = "item_effect_styles"
+effect_draw_mode = "item_effect_draw_modes"
+effect_movie = "item_effect_movies"
+obtained = "item_obtained_flags"
 
 [[table]]
 name = "area_point"
@@ -1080,6 +3509,14 @@ usage = "UNINIT's units of the area in play, keyed by unit number."
 
 [table.fields]
 card = "area_unit_cards"
+kind = "area_unit_kinds"
+icon = "area_unit_icons"
+deck = "area_unit_decks"
+routine = "area_unit_routines"
+battle_music = "area_unit_battle_music"
+picture = "area_unit_pictures"
+extra_picture = "area_unit_extra_pictures"
+state_id = "area_unit_state_ids"
 
 [[table]]
 name = "deck"
@@ -1091,6 +3528,334 @@ usage = "DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row
 name = "deck_names"
 card_row = "deck_card_rows"
 card_slot = "deck_card_slots"
+card_max_copies = "deck_card_max_copies"
+card_copies = "deck_card_copies"
+card_copy_chance = "deck_card_copy_chances"
+card_max_unless_scene = "deck_card_max_unless_scenes"
+card_max_once_scene = "deck_card_max_once_scenes"
+start_board = "deck_start_boards"
+cpu_profile = "deck_cpu_profiles"
+drop_weight = "deck_drop_weights"
+drop_item = "deck_drop_items"
+drop_card_row = "deck_drop_card_rows"
+drop_card_slot = "deck_drop_card_slots"
+
+[[table]]
+name = "party_member"
+records = 100
+built_by = "boot"
+usage = "CCINIT party characters keyed by character id (the same ids as character), with their saved state: what each brings at each of its levels, and its level, experience, 奥義 level, picture set and open skill lines."
+
+[table.fields]
+start_skill_lines = "party_member_start_skill_lines"
+level_card_row = "party_member_level_card_rows"
+level_card_slot = "party_member_level_card_slots"
+level_item = "party_member_level_items"
+level_skills = "party_member_level_skills"
+level_ultimate_level = "party_member_level_ultimate_levels"
+flags = "party_member_flags"
+level = "party_member_levels"
+experience = "party_member_experience"
+ultimate_level = "party_member_ultimate_levels"
+picture_set = "party_member_picture_sets"
+skill_lines = "party_member_skill_lines"
+
+[[table]]
+name = "ultimate"
+records = 100
+built_by = "boot"
+usage = "COINIT 奥義 keyed by 奥義 id; the numeric fields have a column for each of the nine levels (1 to 9)."
+
+[table.fields]
+name = "ultimate_names"
+level_lines = "ultimate_level_lines"
+append_number = "ultimate_append_numbers"
+sort_key = "ultimate_sort_keys"
+in_book = "ultimate_book_flags"
+gauge_gain = "ultimate_gauge_gains"
+amount = "ultimate_amounts"
+picture_x = "ultimate_picture_x"
+picture_y = "ultimate_picture_y"
+picture = "ultimate_pictures"
+picture_2 = "ultimate_pictures_2"
+movie = "ultimate_movies"
+
+[[table]]
+name = "condition"
+records = 32
+built_by = "boot"
+usage = "ILINIT battle conditions keyed by condition id."
+
+[table.fields]
+name = "condition_names"
+kind = "condition_kinds"
+attack_change = "condition_attack_changes"
+hp_change = "condition_hp_changes"
+turn_hp_change = "condition_turn_hp_changes"
+turn_hp_change_2 = "condition_turn_hp_changes_2"
+icon = "condition_icons"
+
+[[table]]
+name = "battle"
+records = 1000
+built_by = "boot"
+usage = "DUINIT battles keyed by battle id (battle_id): each side's leader and deck, the opponent's 奥義, the rule, music and pictures."
+
+[table.fields]
+uses_player_deck = "battle_uses_player_deck_flags"
+leader_card = "battle_leader_cards"
+deck = "battle_decks"
+opponent_ultimate = "battle_opponent_ultimates"
+opponent_ultimate_level = "battle_opponent_ultimate_levels"
+opponent_ultimate_picture = "battle_opponent_ultimate_pictures"
+opponent_ultimate_picture_x = "battle_opponent_ultimate_picture_x"
+opponent_ultimate_picture_y = "battle_opponent_ultimate_picture_y"
+rule = "battle_rules"
+music = "battle_music"
+background = "battle_backgrounds"
+
+[[table]]
+name = "battle_rule"
+records = 100
+built_by = "boot"
+usage = "REINIT battle rules keyed by rule id (battle_rule_id): what wins and loses, the limits, and the deck's restrictions."
+
+[table.fields]
+text = "battle_rule_lines"
+outcomes = "battle_rule_outcomes"
+hp_recovery = "battle_rule_hp_recovery_flags"
+turn_limit = "battle_rule_turn_limits"
+hand_size = "battle_rule_hand_sizes"
+deck_size = "battle_rule_deck_sizes"
+use_bans = "battle_rule_use_bans"
+cost_range = "battle_rule_cost_ranges"
+control_range = "battle_rule_control_ranges"
+attack_range = "battle_rule_attack_ranges"
+hp_range = "battle_rule_hp_ranges"
+race_masks = "battle_rule_race_masks"
+banned_card_rows = "battle_rule_banned_card_rows"
+
+[[table]]
+name = "recipe"
+records = 2000
+built_by = "boot"
+usage = "ALINIT recipes keyed by recipe id: what each makes, from which ingredients, and the conditions ALCHEMY offers it under."
+
+[table.fields]
+item = "recipe_items"
+card_row = "recipe_card_rows"
+card_slot = "recipe_card_slots"
+points = "recipe_points"
+places = "recipe_places"
+least_chapter = "recipe_least_chapters"
+least_day = "recipe_least_days"
+weekdays = "recipe_weekdays"
+time_slots = "recipe_time_slots"
+least_rank = "recipe_least_ranks"
+party_character = "recipe_party_characters"
+party_character_level = "recipe_party_character_levels"
+skill = "recipe_skills"
+required_item = "recipe_required_items"
+required_card_row = "recipe_required_card_rows"
+required_card_slot = "recipe_required_card_slots"
+scenes_played = "recipe_scenes_played"
+scenes_not_played = "recipe_scenes_not_played"
+ingredient_item = "recipe_ingredient_items"
+ingredient_card_row = "recipe_ingredient_card_rows"
+ingredient_card_slot = "recipe_ingredient_card_slots"
+ingredient_count = "recipe_ingredient_counts"
+
+[[table]]
+name = "shop_entry"
+records = 1000
+built_by = "boot"
+usage = "SHINIT shop entries keyed by entry id: what each sells, in which shops, and the conditions SHOPP lists it under."
+
+[table.fields]
+item = "shop_entry_items"
+card_row = "shop_entry_card_rows"
+card_slot = "shop_entry_card_slots"
+shops = "shop_entry_shops"
+least_chapter = "shop_entry_least_chapters"
+least_day = "shop_entry_least_days"
+weekdays = "shop_entry_weekdays"
+time_slots = "shop_entry_time_slots"
+least_rank = "shop_entry_least_ranks"
+party_character = "shop_entry_party_characters"
+party_character_level = "shop_entry_party_character_levels"
+skill = "shop_entry_skills"
+scenes_played = "shop_entry_scenes_played"
+scenes_not_played = "shop_entry_scenes_not_played"
+
+[[table]]
+name = "opponent"
+records = 1000
+built_by = "boot"
+usage = "ARINIT arena opponents keyed by opponent id (current_opponent_id), with their saved state."
+
+[table.fields]
+name = "opponent_names"
+battle = "opponent_battles"
+arena = "opponent_arenas"
+sort_key = "opponent_sort_keys"
+reward_item = "opponent_reward_items"
+reward_card_row = "opponent_reward_card_rows"
+reward_card_slot = "opponent_reward_card_slots"
+reward_count = "opponent_reward_counts"
+scenes = "opponent_scenes"
+places = "opponent_places"
+required_opponent = "opponent_required_opponents"
+weekdays = "opponent_weekdays"
+scenes_played = "opponent_scenes_played"
+scenes_not_played = "opponent_scenes_not_played"
+tournament_group = "opponent_tournament_groups"
+state = "opponent_states"
+
+[[table]]
+name = "goal"
+records = 1000
+built_by = "boot"
+usage = "FAINIT goals keyed by goal id, opened and closed by which scenes have been played, with their saved state."
+
+[table.fields]
+title = "goal_titles"
+title_2 = "goal_titles_2"
+lines = "goal_lines"
+sort_key = "goal_sort_keys"
+least_chapter = "goal_least_chapters"
+open_scenes_played = "goal_open_scenes_played"
+open_scenes_not_played = "goal_open_scenes_not_played"
+bit2_scenes_played = "goal_bit2_scenes_played"
+bit2_scenes_not_played = "goal_bit2_scenes_not_played"
+bit1_scenes_played = "goal_bit1_scenes_played"
+bit1_scenes_not_played = "goal_bit1_scenes_not_played"
+kind = "goal_kinds"
+reward_item = "goal_reward_items"
+reward_card_row = "goal_reward_card_rows"
+reward_card_slot = "goal_reward_card_slots"
+reward_count = "goal_reward_counts"
+reward_money = "goal_reward_money"
+state = "goal_states"
+
+[[table]]
+name = "area_map"
+records = 300
+built_by = "boot"
+usage = "AMINIT areas keyed by area id (current_area_id): name, place, map pictures, music, unit scale, and a battle's background and rule."
+
+[table.fields]
+name = "area_names"
+place = "area_places"
+map_pictures = "area_map_pictures"
+music = "area_music"
+unit_scale = "area_unit_scales"
+battle_background = "area_battle_backgrounds"
+battle_rule = "area_battle_rules"
+
+[[table]]
+name = "unit_routine"
+records = 1000
+built_by = "boot"
+usage = "RTINIT map-unit routines keyed by routine id (area_unit_routines), 50 steps each; a field's column is the step."
+
+[table.fields]
+action = "unit_routine_actions"
+chance = "unit_routine_chances"
+arg = "unit_routine_args"
+arg_2 = "unit_routine_args_2"
+arg_3 = "unit_routine_args_3"
+scenes_played = "unit_routine_scenes_played"
+scenes_not_played = "unit_routine_scenes_not_played"
+
+[[table]]
+name = "cpu_profile"
+records = 1000
+built_by = "boot"
+usage = "RTINIT CPU battle profiles keyed by profile id (deck_cpu_profiles)."
+
+[table.fields]
+settings = "cpu_profile_settings"
+move_choices = "cpu_profile_move_choices"
+action_choices = "cpu_profile_action_choices"
+attack_choices = "cpu_profile_attack_choices"
+attack_list = "cpu_profile_attack_lists"
+
+[[table]]
+name = "scene"
+records = 10000
+built_by = "boot"
+usage = "SCINIT scenes keyed by scene id (current_scene_id), with the played and seen cells."
+
+[table.fields]
+script_id = "scene_script_ids"
+played = "scene_played_flags"
+seen = "scene_seen_flags"
+
+[[table]]
+name = "profile"
+records = 200
+built_by = "boot"
+usage = "CIINIT character profiles keyed by profile id."
+
+[table.fields]
+name = "profile_names"
+lines = "profile_lines"
+sort_key = "profile_sort_keys"
+character_id = "profile_character_ids"
+picture = "profile_pictures"
+script = "profile_scripts"
+
+[[table]]
+name = "glossary"
+records = 1000
+built_by = "boot"
+usage = "VIINIT glossary entries keyed by entry id."
+
+[table.fields]
+title = "glossary_titles"
+sort_key = "glossary_sort_keys"
+scenes = "glossary_scenes"
+picture_x = "glossary_picture_x"
+picture_y = "glossary_picture_y"
+picture = "glossary_pictures"
+script = "glossary_scripts"
+
+[[table]]
+name = "tip"
+records = 1000
+built_by = "boot"
+usage = "TIINIT entries keyed by entry id (日常モード …)."
+
+[table.fields]
+title = "tip_titles"
+sort_key = "tip_sort_keys"
+scenes = "tip_scenes"
+picture_x = "tip_picture_x"
+picture_y = "tip_picture_y"
+picture = "tip_pictures"
+script = "tip_scripts"
+
+[[table]]
+name = "cg"
+records = 3000
+built_by = "boot"
+usage = "CGINIT gallery entries keyed by entry id, in sections and groups."
+
+[table.fields]
+pictures = "cg_pictures"
+section = "cg_sections"
+group = "cg_groups"
+place = "cg_places"
+
+[[table]]
+name = "music"
+records = 50
+built_by = "boot"
+usage = "MUINIT tracks keyed by track id."
+
+[table.fields]
+title = "music_titles"
+resource = "music_resources"
 
 # ---- Scopes (data patches spec §6.2): a scope of the game that keys some of its record tables ----
 

@@ -3,8 +3,9 @@
 Arterial-specific facts for the generic guides. The identity block (game id, engine ABI, modules, tables,
 patch points) is generated in [README.md](README.md#soukoku-no-arterial).
 
-Script mods and text packages work for this game (modding level M1). Its data tables are not decoded yet and it
-has no base mod, so Lua mods and data files are not available: the generated page says which level it is at.
+Script mods and text packages work for this game, and its data tables are decoded and named (modding level M2).
+It has no base mod yet, so Lua mods and data files are not available: the generated page says which level it is
+at.
 
 ## Install and options
 
@@ -25,9 +26,9 @@ command needs the game options:
 - The menu bar, the fullscreen strip, the 終了 dialog and 設定 are the port's own. This game's 設定 has a fifth
   page, ｵｰﾄﾒｯｾｰｼﾞ, with Auto mode's delays; the driver's `option` steps set its controls on both targets
   (`auto-pitch-voice`, `auto-pitch-text`, `auto-wait-voice-end`).
-- The globals registry is young: `use arterial.globals` names the page's cells, the scene dispatch and the main
-  tables' text, references and a card's and an item's numbers (102 names; [reference](../../global-reference-arterial.md)). Every
-  other cell has no name yet: name it by its address (`G[0x9883]`), as the decompiled scripts print it.
+- `use arterial.globals` names the page's cells, the scene dispatch, the data tables' arrays and the saved cells
+  the game reads them through (361 names; [reference](../../global-reference-arterial.md)). A cell without a
+  name is written by its address (`G[0x9883]`), as the decompiled scripts print it.
 
 ## First mod values
 
@@ -95,30 +96,47 @@ A language package with three translated lines of the opening scene was checked 
 
 The game has no base mod (modding level M3), so there are no data files, no events and no named patch points.
 A fragment can still patch any instruction by its offset, and it can read and write the tables the registry
-declares: `character`, `card`, `talent`, `skill`, `item` and `deck`, and for the area in play `area_point`,
-`area_route` and `area_unit`.
+declares (the generated page lists them with their fields):
+
+| Kind | Tables |
+|---|---|
+| Cards and what they carry | `card`, `talent`, `item`, `ultimate` (奥義), `skill`, `condition` |
+| Characters | `character`, `party_member` (the party characters, their levels and their saved state) |
+| Battles | `battle`, `battle_rule`, `deck`, `opponent` (arena opponents), `cpu_profile` |
+| Shops and progress | `recipe`, `shop_entry`, `goal`, `scene` |
+| The map | `area_map`, `unit_routine`, and for the area in play `area_point`, `area_route`, `area_unit` |
+| Registries | `profile`, `glossary`, `tip`, `cg`, `music` |
 
 ```text
 use arterial.globals
 
 card[31].cost = 0x1
+battle_rule[1].turn_limit = 0x14
 ```
 
 - A card's id is `row * 30 + slot`: 200 rows of 30 slots, and a deck names a card by its row and its slot
   (`deck[<id>].card_row`, `deck[<id>].card_slot`).
-- The tables are decoded in part (modding level M2 is not reached). Every table's layout is in
-  `docs/arterial-data-tables.md`; names exist for the text, the references between tables, a card's numbers
-  with their growth by level, and what an item asks of the card that carries it. A card's `race_flags`,
-  `slots`, `control`, `cost`, `hp`, `leader_lp` and `attack` are the card panel's 種族, スロット, 支配力, コスト,
-  ＨＰ, ＬＰ and 攻撃力. Many numeric fields have no name.
+- Every table's layout, and what each of its fields holds, is in `docs/arterial-data-tables.md`; a few
+  numbers are read only as far as the script that uses them, and that document's last section lists them. A
+  card's `race_flags`, `slots`, `control`, `cost`, `hp`, `leader_lp` and `attack` are the card panel's 種族,
+  スロット, 支配力, コスト, ＨＰ, ＬＰ and 攻撃力.
+- Several tables name a card by a pair of fields, its row and its slot (`recipe[<id>].card_row`,
+  `recipe[<id>].card_slot`), and a scene by its id plus one (`recipe[<id>].scenes_played`). A field of
+  `recipe`, `shop_entry`, `opponent` or `goal` that the game tests and no record of the game writes (a least
+  day, the days of the week, the time slots) is still read: a mod that sets it adds the condition.
 - A card's numbers in the tables are its numbers at level 1. The game works out what a card has now
   (`card[<id>].current_hp` and the like) from them, the growth fields and the card's level, so write the
   table's field, not the computed one.
-- **Saves.** No table is in a save: boot rebuilds every one, so a changed value is there on an old save too. Of
-  a card a save keeps how many the player holds and its experience (`card[<id>].owned_count`,
-  `card[<id>].experience`, 100 to a level), and of an item how many the player holds
-  (`item[<id>].owned_count`). Whether the game keeps a copy of any other field in a save is not
-  checked.
+- **Saves.** No table is in a save: boot rebuilds every one, and most fields are read from the table where
+  they are used, so a changed value is there on an old save too. A save keeps the player's state the tables are
+  read through: how many of a card and an item the player holds and whether one was ever obtained, a card's
+  experience, a party character's `party_member` fields (`flags`, `level`, `experience`, `ultimate_level`,
+  `picture_set`, `skill_lines`), and `opponent[<id>].state` and `goal[<id>].state`. What the game copies out of
+  a table into a save, so that a change does not reach an old one, is listed in
+  `docs/arterial-data-tables.md`, "Saved state": among it a party character's starting skill lines
+  (`party_member[<id>].start_skill_lines`, copied when the character joins), the cards and items a level
+  brings (given once), the 奥義 level a level brings (`level_ultimate_level`: the saved level is raised to it
+  and never lowered), and a map unit's deck.
 - A fragment's write to a table is not saved, and it lasts until the game builds the tables again, at its next
   start at the latest. No table edit was run in the game, on either target, and no way to make a lasting one
   was tried.

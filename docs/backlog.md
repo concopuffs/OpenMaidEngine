@@ -562,8 +562,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   since 2026-11-20 by the user's word (`adding-a-game.md` §1; its manifest's `support`), on the branch
   `feature/arterial`: the engine names its install, decodes all of it, has a handler for every opcode its scripts
   use, and boots it by its own route through the logo and the title to SC0000's first pages. Its saves load on
-  native AGE as native's load on the port. The launcher lists it. Its modding level is **M1** since 2026-11-20:
-  script mods and text packages work (`modding/games/arterial.md`). It has not been driven past SC0000's first
+  native AGE as native's load on the port. The launcher lists it. Its modding level is **M2** since 2026-11-20:
+  script mods and text packages work, and its data tables are decoded and named (`modding/games/arterial.md`). It has not been driven past SC0000's first
   pages on either target: that is the sweep's (P4).
   - **Done for P0 and P1.** Its dump, its Ghidra image with 658 ported or registry names, its build in
     `operand_access.py` `ENGINES` with a fifteenth accessor, the revision diffs (`engine-re.md`, "Comparing engine
@@ -712,33 +712,34 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       scene command each stands for was not traced. Rename where a better reading turns up; a module sub's name
       is not an export.
     - **Nothing that adds a script or a scene was tried**, on either target.
-  - **The data level, M2, is started and not reached (2026-11-20).** In: the extraction, the executed boot
-    image (145 scripts), the layout tool `tools/init_arterial.py` with its tests, the layout of all 278 arrays
-    of the 29 boot tables and the scene dispatch's protocol (`arterial-data-tables.md`), and the registry
-    `vm-map/globals-arterial.toml` with 102 names, nine record tables (`character`, `card`, `talent`, `skill`,
-    `item`, `deck`, and `area_point`, `area_route`, `area_unit` under the scope `area`). No table lies in the saved prefix, and a card's numbers in play are worked out from
-    the tables each time (`CALCARM`), not kept in a save. The manifest stays at M1. What M2's gate still asks,
-    each done when `arterial-data-tables.md` and the registry say it:
-    - **What most numeric fields mean.** 139 of the 278 arrays have a reading: text, references between tables,
-      resource ids, a card's numbers by the card panel's own labels with their growth by level, and what an
-      item asks of the card that carries it. The cards' kinds, half of the items' 31 arrays, 奥義's per-level
-      numbers, and all of `DUINIT`, `RTINIT`, `RFINIT`, `CCINIT`, `FAINIT`, `REINIT` and `SHINIT`'s numbers have
-      a layout and no meaning. The battle scripts (`BTL`, `ATTACK`, `PH03_PLR_ACTION`) are where to read them.
+  - **The data level, M2, is reached (2026-11-20).** In: the extraction, the executed boot image (145
+    scripts), the layout tool `tools/init_arterial.py` with its tests, the layout of all 280 arrays of the 29 boot
+    tables with a reading for each, the four on-demand tables, the append dispatch and the scene dispatch's
+    protocol (`arterial-data-tables.md`), and the registry `vm-map/globals-arterial.toml` with 361 names and 27
+    record tables under one scope. No table lies in the saved prefix; the copies the game makes into saved cells
+    were found by three scans of the scripts ("Saved state" there). What M2 leaves open, each done when
+    `arterial-data-tables.md` and the registry say it:
+    - **Readings that stop at the reader.** The CPU profiles' settings and choices, a map unit's routine steps'
+      arguments, `RFINIT`'s battle experience table, `REINIT`'s two bits, `DUINIT`'s switch, `FAINIT`'s two state
+      bits and its reward's count, `ARINIT`'s tournament number and `MUINIT`'s list name the script that reads
+      them and not what the number does. `ILINIT`'s `G[0x32f9aa]` adds to a card's number in battle
+      (`G[0x45d145]`) whose meaning is not read. The battle scripts (`PHASECONTROLLER`, `PH12_CPU_MOVE` and the
+      other `PH*` scripts, `ATTACK`) are where to read them.
+    - **The area tables' numbers.** Eleven of `MPINIT`'s arrays, nine of `ROINIT`'s and ten of `UNINIT`'s are not
+      read; `ALLMAP`, `DRAWOBJ` and the routine scripts are their readers.
     - **`AGF2BMP2AGF.exe` does not convert this game's pictures** (`tools/convert_agf.py`; it failed on
       `SO019.AGF`, the card panel's sheet, which the port's decoder reads). The panel's labels were looked at
       with a scratch port of `AgfDecoder.cs`. Done when a tool of the repository writes a picture of any of the
       three games as an image file.
     - **Five boot tables have no leader** (`IMINIT`, `RFINIT`, `DUINIT`, `RTINIT`, `EUINIT`): they are listed by
-      the arrays the scripts index, which can lump two arrays into one.
-    - **The area tables' numbers.** `MPINIT`, `ROINIT` and `UNINIT` have exact layouts (their own range clears
-      give them) and the scope `area`; a point's name, kind, position and target, a route's two points and a
-      unit's card are read, and the other arrays, most of `UNINIT`'s twenty, are not.
-    - **Copies in saved state.** Checked for a card's numbers only (none is kept); no other field was.
+      the arrays the scripts index, which can lump two arrays into one (`RFINIT`'s `G[0x32fb16]` holds such a
+      lump).
     - **`SCJUMP`** is read as far as its protocol, its rule counts and what its rules test: the scenes' played
       cells (`scene_played_flags`), the area in play and the point unit 1 stands on. Its seven contexts are
       not read, nor the story cells outside the played cells (`story_flags.py` lists 836 candidates), and
       `scjump_decode.py`, written for Himegari's `SCJUMP`, was not run on the game.
-  - **Next, by the plan:** the rest of the data tables (M2, step 9), then the base mod (M3), and the sweep (P4).
+    - **No table edit was run in the game**, on either target.
+  - **Next, by the plan:** the base mod (M3, step 10), then the sweep (P4).
     Step 7 is done: the opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page;
     `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept
     window position").

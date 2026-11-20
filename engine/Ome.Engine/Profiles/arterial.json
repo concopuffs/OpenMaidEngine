@@ -12,7 +12,7 @@
   "engineBuild": "4.38D",
   "engineAbiId": "SYS4438",
   "naturalBootScript": "SYSTEM4.BIN",
-  "support": { "play": "P3", "modding": "M1" },
+  "support": { "play": "P3", "modding": "M2" },
   "metadataReferences": {},
   "persistence": {
     "storageNamespace": "arterial",

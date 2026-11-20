@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals-arterial.toml by tools/globals_build.py --build -->
 # Global Variable Reference — arterial (generated)
 
-10219 globals (102 curated, 10117 auto shape-inferred). Source of truth: `vm-map/globals-arterial.toml`.
+10240 globals (361 curated, 9879 auto shape-inferred). Source of truth: `vm-map/globals-arterial.toml`.
 
 ## Tables
 
@@ -22,6 +22,16 @@ CHINIT characters keyed by character id: whoever can speak a page. `character[12
 | voice_setting_slot | character_voice_setting_slots | `0x2981a1` | `int[1000]` |
 | face_id | character_face_ids | `0x266c91` | `int[1000][100]` |
 | face_history_picture | character_face_history_pictures | `0x27f331` | `int[1000][100]` |
+| sort_key | character_sort_keys | `0x29eaa6` | `int[1000]` |
+| ultimate_id | character_ultimate_ids | `0x29f65e` | `int[1000]` |
+| voice_clips | character_voice_clips | `0x2a09e6` | `int[1000][9]` |
+| book_picture | character_book_pictures | `0x2a2d0e` | `int[1000][5]` |
+| picture | character_pictures | `0x2a4096` | `int[1000][5]` |
+| fellow_picture | character_fellow_pictures | `0x2a541e` | `int[1000][5]` |
+| unit_picture | character_unit_pictures | `0x2a67a6` | `int[1000][5]` |
+| unit_picture_2 | character_unit_pictures_2 | `0x2a7b2e` | `int[1000][5]` |
+| unit_extra_picture | character_unit_extra_pictures | `0x2a8eb6` | `int[1000][5]` |
+| menu_picture | character_menu_pictures | `0x2aa23e` | `int[1000][5]` |
 
 ### card[6000]
 
@@ -60,6 +70,17 @@ CDINIT cards keyed by row * 30 + slot (200 rows of 30 slots; a deck names a card
 | current_hp | card_current_hp | `0x44c9d6` | `int[6000]` |
 | current_leader_lp | card_current_leader_lp | `0x44b266` | `int[6000]` |
 | current_attack | card_current_attack | `0x449af6` | `int[6000]` |
+| sort_key | card_sort_keys | `0x2b4aff` | `int[6000]` |
+| requires_party | card_requires_party_flags | `0x2b626f` | `int[6000]` |
+| in_book | card_book_flags | `0x2b914f` | `int[6000]` |
+| copyable | card_copyable_flags | `0x2ba8bf` | `int[6000]` |
+| subtractive_effect | card_subtractive_effect_flags | `0x2cc1ff` | `int[6000]` |
+| leader_picture | card_leader_pictures | `0x2d084f` | `int[6000][2]` |
+| attack_picture | card_attack_pictures | `0x2d372f` | `int[6000][2]` |
+| recipe_icon | card_recipe_icons | `0x2d660f` | `int[6000]` |
+| attack_effect | card_attack_effects | `0x2d7d7f` | `int[6000]` |
+| voice_clips | card_voice_clips | `0x2d94ef` | `int[6000][5]` |
+| obtained | card_obtained_flags | `0x66a0` | `int[6000]` |
 
 ### talent[1000]
 
@@ -72,6 +93,9 @@ TAINIT talents keyed by talent id.
 | name | talent_names | `GS 0xdb3c` | `string[1000]` |
 | description | talent_descriptions | `GS 0xdf24` | `string[1000]` |
 | append_number | talent_append_numbers | `0x31b3a0` | `int[1000]` |
+| sort_key | talent_sort_keys | `0x31b788` | `int[1000]` |
+| in_book | talent_book_flags | `0x31bb70` | `int[1000]` |
+| timing | talent_timings | `0x31bf58` | `int[1000]` |
 
 ### skill[1000]
 
@@ -83,6 +107,11 @@ SKINIT skills keyed by skill id.
 |---|---|---|---|
 | name | skill_names | `GS 0xef28` | `string[1000]` |
 | text | skill_lines | `GS 0xf310` | `string[1000][3]` |
+| sort_key | skill_sort_keys | `0x31e412` | `int[1000]` |
+| in_book | skill_book_flags | `0x31e7fa` | `int[1000]` |
+| kind | skill_kinds | `0x31ebe2` | `int[1000]` |
+| amount | skill_amounts | `0x31efca` | `int[1000]` |
+| party_count | party_skill_counts | `0x4502a1` | `int[1000]` |
 
 ### item[2000]
 
@@ -109,6 +138,22 @@ ITINIT items keyed by item id.
 | required_hp | item_required_hp | `0x32ab4a` | `int[2000]` |
 | required_leader_lp | item_required_leader_lp | `0x32a37a` | `int[2000]` |
 | required_attack | item_required_attack | `0x329baa` | `int[2000]` |
+| sort_key | item_sort_keys | `0x31ff6a` | `int[2000]` |
+| kind | item_kinds | `0x32073a` | `int[2000]` |
+| no_carry_over | item_no_carry_over_flags | `0x320f0a` | `int[2000]` |
+| in_book | item_book_flags | `0x321eaa` | `int[2000]` |
+| cost_bonus | item_cost_bonuses | `0x322e4a` | `int[2000]` |
+| control_bonus | item_control_bonuses | `0x32361a` | `int[2000]` |
+| attack_bonus | item_attack_bonuses | `0x323dea` | `int[2000]` |
+| leader_lp_bonus | item_leader_lp_bonuses | `0x3245ba` | `int[2000]` |
+| hp_bonus | item_hp_bonuses | `0x324d8a` | `int[2000]` |
+| condition_id | item_condition_ids | `0x32555a` | `int[2000]` |
+| target | item_targets | `0x325d2a` | `int[2000]` |
+| talent_id | item_talent_ids | `0x3264fa` | `int[2000]` |
+| effect_style | item_effect_styles | `0x32d25a` | `int[2000]` |
+| effect_draw_mode | item_effect_draw_modes | `0x32da2a` | `int[2000]` |
+| effect_movie | item_effect_movies | `0x32e1fa` | `int[2000][3]` |
+| obtained | item_obtained_flags | `0x4760` | `int[2000]` |
 
 ### area_point[200]
 
@@ -143,6 +188,14 @@ UNINIT's units of the area in play, keyed by unit number.
 | field | global | address | type |
 |---|---|---|---|
 | card | area_unit_cards | `0x33301e` | `int[200][2]` |
+| kind | area_unit_kinds | `0x332dc6` | `int[200]` |
+| icon | area_unit_icons | `0x332e8e` | `int[200]` |
+| deck | area_unit_decks | `0x332f56` | `int[200]` |
+| routine | area_unit_routines | `0x333276` | `int[200]` |
+| battle_music | area_unit_battle_music | `0x3342de` | `int[200]` |
+| picture | area_unit_pictures | `0x3345fe` | `int[200][2]` |
+| extra_picture | area_unit_extra_pictures | `0x33478e` | `int[200]` |
+| state_id | area_unit_state_ids | `0x333406` | `int[200]` |
 
 ### deck[1000]
 
@@ -155,6 +208,352 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | name | deck_names | `GS 0x1201c` | `string[1000]` |
 | card_row | deck_card_rows | `0x334856` | `int[1000][30]` |
 | card_slot | deck_card_slots | `0x33bd86` | `int[1000][30]` |
+| card_max_copies | deck_card_max_copies | `0x3432b6` | `int[1000][30]` |
+| card_copies | deck_card_copies | `0x34a7e6` | `int[1000][30]` |
+| card_copy_chance | deck_card_copy_chances | `0x351d16` | `int[1000][30]` |
+| card_max_unless_scene | deck_card_max_unless_scenes | `0x359246` | `int[1000][30]` |
+| card_max_once_scene | deck_card_max_once_scenes | `0x360776` | `int[1000][30]` |
+| start_board | deck_start_boards | `0x367ca6` | `int[1000][6]` |
+| cpu_profile | deck_cpu_profiles | `0x369416` | `int[1000]` |
+| drop_weight | deck_drop_weights | `0x3697fe` | `int[1000][4]` |
+| drop_item | deck_drop_items | `0x36a79e` | `int[1000][4]` |
+| drop_card_row | deck_drop_card_rows | `0x36b73e` | `int[1000][4]` |
+| drop_card_slot | deck_drop_card_slots | `0x36c6de` | `int[1000][4]` |
+
+### party_member[100]
+
+Built by: `boot`.
+
+CCINIT party characters keyed by character id (the same ids as character), with their saved state: what each brings at each of its levels, and its level, experience, 奥義 level, picture set and open skill lines.
+
+| field | global | address | type |
+|---|---|---|---|
+| start_skill_lines | party_member_start_skill_lines | `0x29fa46` | `int[100][4]` |
+| level_card_row | party_member_level_card_rows | `0x2ab5c7` | `int[100][40]` |
+| level_card_slot | party_member_level_card_slots | `0x2ac567` | `int[100][40]` |
+| level_item | party_member_level_items | `0x2ad507` | `int[100][40]` |
+| level_skills | party_member_level_skills | `0x2ae4a7` | `int[100][160]` |
+| level_ultimate_level | party_member_level_ultimate_levels | `0x2b2327` | `int[100][40]` |
+| flags | party_member_flags | `0x3ae0` | `int[100]` |
+| level | party_member_levels | `0x3ba8` | `int[100]` |
+| experience | party_member_experience | `0x3c0c` | `int[100]` |
+| ultimate_level | party_member_ultimate_levels | `0x3c70` | `int[100]` |
+| picture_set | party_member_picture_sets | `0x3d38` | `int[100]` |
+| skill_lines | party_member_skill_lines | `0x3d9c` | `int[100][4]` |
+
+### ultimate[100]
+
+Built by: `boot`.
+
+COINIT 奥義 keyed by 奥義 id; the numeric fields have a column for each of the nine levels (1 to 9).
+
+| field | global | address | type |
+|---|---|---|---|
+| name | ultimate_names | `GS 0xe30c` | `string[100]` |
+| level_lines | ultimate_level_lines | `GS 0xe370` | `string[100][30]` |
+| append_number | ultimate_append_numbers | `0x31c72a` | `int[100]` |
+| sort_key | ultimate_sort_keys | `0x31c78e` | `int[100]` |
+| in_book | ultimate_book_flags | `0x31c7f2` | `int[100]` |
+| gauge_gain | ultimate_gauge_gains | `0x31c8ba` | `int[100][10]` |
+| amount | ultimate_amounts | `0x31cca2` | `int[100][10]` |
+| picture_x | ultimate_picture_x | `0x31d08a` | `int[100][10]` |
+| picture_y | ultimate_picture_y | `0x31d472` | `int[100][10]` |
+| picture | ultimate_pictures | `0x31d85a` | `int[100][10]` |
+| picture_2 | ultimate_pictures_2 | `0x31dc42` | `int[100][10]` |
+| movie | ultimate_movies | `0x31e02a` | `int[100][10]` |
+
+### condition[32]
+
+Built by: `boot`.
+
+ILINIT battle conditions keyed by condition id.
+
+| field | global | address | type |
+|---|---|---|---|
+| name | condition_names | `GS 0x11e08` | `string[32]` |
+| kind | condition_kinds | `0x32f96a` | `int[32]` |
+| attack_change | condition_attack_changes | `0x32f9ca` | `int[32]` |
+| hp_change | condition_hp_changes | `0x32f9ea` | `int[32]` |
+| turn_hp_change | condition_turn_hp_changes | `0x32fa2a` | `int[32]` |
+| turn_hp_change_2 | condition_turn_hp_changes_2 | `0x32fa4a` | `int[32]` |
+| icon | condition_icons | `0x32fa6a` | `int[32]` |
+
+### battle[1000]
+
+Built by: `boot`.
+
+DUINIT battles keyed by battle id (battle_id): each side's leader and deck, the opponent's 奥義, the rule, music and pictures.
+
+| field | global | address | type |
+|---|---|---|---|
+| uses_player_deck | battle_uses_player_deck_flags | `0x36d67e` | `int[1000]` |
+| leader_card | battle_leader_cards | `0x36da66` | `int[1000][4]` |
+| deck | battle_decks | `0x36ea06` | `int[1000][2]` |
+| opponent_ultimate | battle_opponent_ultimates | `0x36f1d6` | `int[1000]` |
+| opponent_ultimate_level | battle_opponent_ultimate_levels | `0x36f5be` | `int[1000]` |
+| opponent_ultimate_picture | battle_opponent_ultimate_pictures | `0x36f9a6` | `int[1000]` |
+| opponent_ultimate_picture_x | battle_opponent_ultimate_picture_x | `0x36fd8e` | `int[1000]` |
+| opponent_ultimate_picture_y | battle_opponent_ultimate_picture_y | `0x370176` | `int[1000]` |
+| rule | battle_rules | `0x37055e` | `int[1000]` |
+| music | battle_music | `0x370946` | `int[1000]` |
+| background | battle_backgrounds | `0x371116` | `int[1000][2]` |
+
+### battle_rule[100]
+
+Built by: `boot`.
+
+REINIT battle rules keyed by rule id (battle_rule_id): what wins and loses, the limits, and the deck's restrictions.
+
+| field | global | address | type |
+|---|---|---|---|
+| text | battle_rule_lines | `GS 0x12404` | `string[100][6]` |
+| outcomes | battle_rule_outcomes | `0x3718e6` | `int[100][5]` |
+| hp_recovery | battle_rule_hp_recovery_flags | `0x371ada` | `int[100]` |
+| turn_limit | battle_rule_turn_limits | `0x371ec2` | `int[100]` |
+| hand_size | battle_rule_hand_sizes | `0x371f26` | `int[100]` |
+| deck_size | battle_rule_deck_sizes | `0x371f8a` | `int[100]` |
+| use_bans | battle_rule_use_bans | `0x371fee` | `int[100]` |
+| cost_range | battle_rule_cost_ranges | `0x3723d6` | `int[100][2]` |
+| control_range | battle_rule_control_ranges | `0x37249e` | `int[100][2]` |
+| attack_range | battle_rule_attack_ranges | `0x372566` | `int[100][2]` |
+| hp_range | battle_rule_hp_ranges | `0x37262e` | `int[100][2]` |
+| race_masks | battle_rule_race_masks | `0x3726f6` | `int[100][2]` |
+| banned_card_rows | battle_rule_banned_card_rows | `0x3727be` | `int[100][10]` |
+
+### recipe[2000]
+
+Built by: `boot`.
+
+ALINIT recipes keyed by recipe id: what each makes, from which ingredients, and the conditions ALCHEMY offers it under.
+
+| field | global | address | type |
+|---|---|---|---|
+| item | recipe_items | `0x372ba6` | `int[2000]` |
+| card_row | recipe_card_rows | `0x373376` | `int[2000]` |
+| card_slot | recipe_card_slots | `0x373b46` | `int[2000]` |
+| points | recipe_points | `0x374316` | `int[2000]` |
+| places | recipe_places | `0x374ae6` | `int[2000]` |
+| least_chapter | recipe_least_chapters | `0x3752b6` | `int[2000]` |
+| least_day | recipe_least_days | `0x375a86` | `int[2000]` |
+| weekdays | recipe_weekdays | `0x376256` | `int[2000]` |
+| time_slots | recipe_time_slots | `0x376a26` | `int[2000]` |
+| least_rank | recipe_least_ranks | `0x3771f6` | `int[2000]` |
+| party_character | recipe_party_characters | `0x3779c6` | `int[2000]` |
+| party_character_level | recipe_party_character_levels | `0x378196` | `int[2000]` |
+| skill | recipe_skills | `0x378966` | `int[2000]` |
+| required_item | recipe_required_items | `0x379136` | `int[2000]` |
+| required_card_row | recipe_required_card_rows | `0x379906` | `int[2000]` |
+| required_card_slot | recipe_required_card_slots | `0x37a0d6` | `int[2000]` |
+| scenes_played | recipe_scenes_played | `0x37a8a6` | `int[2000][5]` |
+| scenes_not_played | recipe_scenes_not_played | `0x37cfb6` | `int[2000][5]` |
+| ingredient_item | recipe_ingredient_items | `0x37f6c6` | `int[2000][4]` |
+| ingredient_card_row | recipe_ingredient_card_rows | `0x381606` | `int[2000][4]` |
+| ingredient_card_slot | recipe_ingredient_card_slots | `0x383546` | `int[2000][4]` |
+| ingredient_count | recipe_ingredient_counts | `0x385486` | `int[2000][4]` |
+
+### shop_entry[1000]
+
+Built by: `boot`.
+
+SHINIT shop entries keyed by entry id: what each sells, in which shops, and the conditions SHOPP lists it under.
+
+| field | global | address | type |
+|---|---|---|---|
+| item | shop_entry_items | `0x3873c6` | `int[1000]` |
+| card_row | shop_entry_card_rows | `0x3877ae` | `int[1000]` |
+| card_slot | shop_entry_card_slots | `0x387b96` | `int[1000]` |
+| shops | shop_entry_shops | `0x387f7e` | `int[1000]` |
+| least_chapter | shop_entry_least_chapters | `0x388366` | `int[1000]` |
+| least_day | shop_entry_least_days | `0x38874e` | `int[1000]` |
+| weekdays | shop_entry_weekdays | `0x388b36` | `int[1000]` |
+| time_slots | shop_entry_time_slots | `0x388f1e` | `int[1000]` |
+| least_rank | shop_entry_least_ranks | `0x389306` | `int[1000]` |
+| party_character | shop_entry_party_characters | `0x3896ee` | `int[1000]` |
+| party_character_level | shop_entry_party_character_levels | `0x389ad6` | `int[1000]` |
+| skill | shop_entry_skills | `0x389ebe` | `int[1000]` |
+| scenes_played | shop_entry_scenes_played | `0x38a2a6` | `int[1000][2]` |
+| scenes_not_played | shop_entry_scenes_not_played | `0x38aa76` | `int[1000][2]` |
+
+### opponent[1000]
+
+Built by: `boot`.
+
+ARINIT arena opponents keyed by opponent id (current_opponent_id), with their saved state.
+
+| field | global | address | type |
+|---|---|---|---|
+| name | opponent_names | `GS 0x1268e` | `string[1000]` |
+| battle | opponent_battles | `0x38b246` | `int[1000]` |
+| arena | opponent_arenas | `0x38b62e` | `int[1000]` |
+| sort_key | opponent_sort_keys | `0x38ba16` | `int[1000]` |
+| reward_item | opponent_reward_items | `0x38bdfe` | `int[1000]` |
+| reward_card_row | opponent_reward_card_rows | `0x38c1e6` | `int[1000]` |
+| reward_card_slot | opponent_reward_card_slots | `0x38c5ce` | `int[1000]` |
+| reward_count | opponent_reward_counts | `0x38c9b6` | `int[1000]` |
+| scenes | opponent_scenes | `0x38d186` | `int[1000][3]` |
+| places | opponent_places | `0x38dd3e` | `int[1000]` |
+| required_opponent | opponent_required_opponents | `0x38e126` | `int[1000]` |
+| weekdays | opponent_weekdays | `0x38ecde` | `int[1000]` |
+| scenes_played | opponent_scenes_played | `0x39044e` | `int[1000][2]` |
+| scenes_not_played | opponent_scenes_not_played | `0x390c1e` | `int[1000][2]` |
+| tournament_group | opponent_tournament_groups | `0x3913ee` | `int[1000]` |
+| state | opponent_states | `0x17f36` | `int[1000]` |
+
+### goal[1000]
+
+Built by: `boot`.
+
+FAINIT goals keyed by goal id, opened and closed by which scenes have been played, with their saved state.
+
+| field | global | address | type |
+|---|---|---|---|
+| title | goal_titles | `GS 0x29e4` | `string[1000]` |
+| title_2 | goal_titles_2 | `GS 0x2dcc` | `string[1000]` |
+| lines | goal_lines | `GS 0x31b4` | `string[1000][4]` |
+| sort_key | goal_sort_keys | `0x260701` | `int[1000]` |
+| least_chapter | goal_least_chapters | `0x260ae9` | `int[1000]` |
+| open_scenes_played | goal_open_scenes_played | `0x260ed1` | `int[1000][3]` |
+| open_scenes_not_played | goal_open_scenes_not_played | `0x261a89` | `int[1000][3]` |
+| bit2_scenes_played | goal_bit2_scenes_played | `0x262641` | `int[1000][3]` |
+| bit2_scenes_not_played | goal_bit2_scenes_not_played | `0x2631f9` | `int[1000][3]` |
+| bit1_scenes_played | goal_bit1_scenes_played | `0x263db1` | `int[1000][3]` |
+| bit1_scenes_not_played | goal_bit1_scenes_not_played | `0x264969` | `int[1000][3]` |
+| kind | goal_kinds | `0x265521` | `int[1000]` |
+| reward_item | goal_reward_items | `0x265909` | `int[1000]` |
+| reward_card_row | goal_reward_card_rows | `0x265cf1` | `int[1000]` |
+| reward_card_slot | goal_reward_card_slots | `0x2660d9` | `int[1000]` |
+| reward_count | goal_reward_counts | `0x2664c1` | `int[1000]` |
+| reward_money | goal_reward_money | `0x2668a9` | `int[1000]` |
+| state | goal_states | `0x18498` | `int[1000]` |
+
+### area_map[300]
+
+Built by: `boot`.
+
+AMINIT areas keyed by area id (current_area_id): name, place, map pictures, music, unit scale, and a battle's background and rule.
+
+| field | global | address | type |
+|---|---|---|---|
+| name | area_names | `GS 0x11e28` | `string[300]` |
+| place | area_places | `0x32fbc5` | `int[300]` |
+| map_pictures | area_map_pictures | `0x32fcf1` | `int[300][6]` |
+| music | area_music | `0x3303f9` | `int[300][2]` |
+| unit_scale | area_unit_scales | `0x330651` | `int[300][2]` |
+| battle_background | area_battle_backgrounds | `0x3308a9` | `int[300][2]` |
+| battle_rule | area_battle_rules | `0x330b01` | `int[300]` |
+
+### unit_routine[1000]
+
+Built by: `boot`.
+
+RTINIT map-unit routines keyed by routine id (area_unit_routines), 50 steps each; a field's column is the step.
+
+| field | global | address | type |
+|---|---|---|---|
+| action | unit_routine_actions | `0x391fa9` | `int[1000][50]` |
+| chance | unit_routine_chances | `0x39e2f9` | `int[1000][50]` |
+| arg | unit_routine_args | `0x3aa649` | `int[1000][50]` |
+| arg_2 | unit_routine_args_2 | `0x3b6999` | `int[1000][50]` |
+| arg_3 | unit_routine_args_3 | `0x3c2ce9` | `int[1000][50]` |
+| scenes_played | unit_routine_scenes_played | `0x3e76d9` | `int[1000][150]` |
+| scenes_not_played | unit_routine_scenes_not_played | `0x40c0c9` | `int[1000][150]` |
+
+### cpu_profile[1000]
+
+Built by: `boot`.
+
+RTINIT CPU battle profiles keyed by profile id (deck_cpu_profiles).
+
+| field | global | address | type |
+|---|---|---|---|
+| settings | cpu_profile_settings | `0x430ab9` | `int[1000][20]` |
+| move_choices | cpu_profile_move_choices | `0x4358d9` | `int[1000][10]` |
+| action_choices | cpu_profile_action_choices | `0x437fe9` | `int[1000][10]` |
+| attack_choices | cpu_profile_attack_choices | `0x43a6f9` | `int[1000][10]` |
+| attack_list | cpu_profile_attack_lists | `0x43ce09` | `int[1000][10]` |
+
+### scene[10000]
+
+Built by: `boot`.
+
+SCINIT scenes keyed by scene id (current_scene_id), with the played and seen cells.
+
+| field | global | address | type |
+|---|---|---|---|
+| script_id | scene_script_ids | `0x214b71` | `int[10000]` |
+| played | scene_played_flags | `0x5e0` | `int[10000]` |
+| seen | scene_seen_flags | `0x18880` | `int[10000]` |
+
+### profile[200]
+
+Built by: `boot`.
+
+CIINIT character profiles keyed by profile id.
+
+| field | global | address | type |
+|---|---|---|---|
+| name | profile_names | `GS 0x6864` | `string[200]` |
+| lines | profile_lines | `GS 0x692c` | `string[200][16]` |
+| sort_key | profile_sort_keys | `0x29c45b` | `int[200]` |
+| character_id | profile_character_ids | `0x29c523` | `int[200]` |
+| picture | profile_pictures | `0x29c9d3` | `int[200]` |
+| script | profile_scripts | `0x29ca9b` | `int[200]` |
+
+### glossary[1000]
+
+Built by: `boot`.
+
+VIINIT glossary entries keyed by entry id.
+
+| field | global | address | type |
+|---|---|---|---|
+| title | glossary_titles | `GS 0x647c` | `string[1000]` |
+| sort_key | glossary_sort_keys | `0x29a51a` | `int[1000]` |
+| scenes | glossary_scenes | `0x29a902` | `int[1000][3]` |
+| picture_x | glossary_picture_x | `0x29b4ba` | `int[1000]` |
+| picture_y | glossary_picture_y | `0x29b8a2` | `int[1000]` |
+| picture | glossary_pictures | `0x29bc8a` | `int[1000]` |
+| script | glossary_scripts | `0x29c072` | `int[1000]` |
+
+### tip[1000]
+
+Built by: `boot`.
+
+TIINIT entries keyed by entry id (日常モード …).
+
+| field | global | address | type |
+|---|---|---|---|
+| title | tip_titles | `GS 0x75ac` | `string[1000]` |
+| sort_key | tip_sort_keys | `0x29cb64` | `int[1000]` |
+| scenes | tip_scenes | `0x29cf4c` | `int[1000][3]` |
+| picture_x | tip_picture_x | `0x29db04` | `int[1000]` |
+| picture_y | tip_picture_y | `0x29deec` | `int[1000]` |
+| picture | tip_pictures | `0x29e2d4` | `int[1000]` |
+| script | tip_scripts | `0x29e6bc` | `int[1000]` |
+
+### cg[3000]
+
+Built by: `boot`.
+
+CGINIT gallery entries keyed by entry id, in sections and groups.
+
+| field | global | address | type |
+|---|---|---|---|
+| pictures | cg_pictures | `0x2283f1` | `int[3000][2]` |
+| section | cg_sections | `0x229b61` | `int[3000]` |
+| group | cg_groups | `0x22a719` | `int[3000]` |
+| place | cg_places | `0x22b2d1` | `int[3000]` |
+
+### music[50]
+
+Built by: `boot`.
+
+MUINIT tracks keyed by track id.
+
+| field | global | address | type |
+|---|---|---|---|
+| title | music_titles | `GS 0x29b2` | `string[50]` |
+| resource | music_resources | `0x260667` | `int[50]` |
 
 ### Scope area
 
@@ -180,28 +579,96 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | address | name | conf | source | usage |
 |---|---|---|---|---|
 | `0x3ad7` | money | high | investigation | The player's money, kept within 0 to 99999: SHOPP takes a purchase's price from it, and ADDCARD and ADDITEM add the second price of what is held over 99. |
+| `0x3ad8` | points | high | investigation | Saved: a points total, 0 to 99999; ALCHEMY adds recipe_points to it, and CALCPR sets rank from it. |
+| `0x3ad9` | rank | high | investigation | Saved: the rank, 1 to 99, which CALCPR sets from points by rank_point_thresholds. |
+| `0x987b` | day | med | investigation | Saved: the day; its day of the week is day % 7, which the weekday bits test. |
 
 ## data-table
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
+| `0x3ae0` | party_member_flags | high | investigation | Saved. Bit 1 while the character is in the party: UNITECH sets bits 0 and 1, LEAVECH clears bit 1 (only bit 0 while bit 0 of 0x36e0 is set). CHECKCARD and the shops' and recipes' tests read bit 1. |
+| `0x3ba8` | party_member_levels | high | investigation | Saved: the character's level. RESULT raises it by party_member_experience, to 9, or to 35 once 0x36d1 is set. |
+| `0x3c0c` | party_member_experience | high | investigation | Saved: the character's experience; RESULT adds a battle's to it and compares it with character_level_experience. |
+| `0x3c70` | party_member_ultimate_levels | high | investigation | Saved: the level at which the scripts read the character's 奥義 (character_ultimate_ids). |
+| `0x3d38` | party_member_picture_sets | high | investigation | Saved: which column (0 to 4) of the character's pictures by picture set is used; UNITECH sets it to 0 when the character joins. |
+| `0x3d9c` | party_member_skill_lines | high | investigation | Saved: which of the character's four skill lines are open, copied from party_member_start_skill_lines when the character first joins. |
 | `0x3f90` | item_owned_counts | high | investigation | How many of an item the player holds, kept by a save: ADDITEM adds item_arg_count and keeps it within 0 to 99. |
+| `0x4760` | item_obtained_flags | high | investigation | Saved: 1 once the player has obtained the item (ADDITEM sets it). The recipes' tests read it. |
 | `0x4f30` | card_owned_counts | high | investigation | How many of a card the player holds, kept by a save: ADDCARD adds card_arg_count and keeps it within 0 to 99. |
+| `0x66a0` | card_obtained_flags | high | investigation | Saved: 1 once the player has obtained the card (ADDCARD sets it). The recipes' tests read it. |
 | `0x7e10` | card_experience | high | investigation | A card's experience, 100 to a level, and the one number of a card a save keeps: CALCARM takes the level as value / 100 + 1 and the progress as value % 100, and RESULT adds to it after a battle. |
+| `0x16217` | area_unit_deck_copies | med | investigation | Saved: a map unit's copies of each card of its deck, which ALLMAP fills between deck_card_copies and deck_card_max_copies. |
 | `0x18880` | scene_seen_flags | high | investigation | Each scene script sets [current_scene_id] to 1 when it plays and stores the cell in the shared profile. |
 | `0x3fc08` | face_character_ids | high | investigation | Built by INIT2 from character_face_ids: the character of a face, at [layer][id] where layer is the face id's top byte (an append's selector) and id the rest. set_page_face takes the page's speaker from it. |
 | `0x12a208` | face_slots | high | investigation | Built by INIT2 beside face_character_ids: the face's slot in its character's row. set_page_face keeps it in 0x3144. |
 | `0x214b71` | scene_script_ids | high | investigation | SCINIT: the script (a packed script id) that plays scene id, from scene 0; 323 is SC0000.BIN. |
+| `0x2283f1` | cg_pictures | med | investigation | CGINIT: two pictures: CGMODE shows column 0; where column 1 is set, ALLMAP and SAVE find the entry whose column 0 is the picture last shown (0x36cf) and use column 1 in its place. |
+| `0x229b61` | cg_sections | high | investigation | CGINIT: the entry's section in the gallery, 1 to 9. |
+| `0x22a719` | cg_groups | high | investigation | CGINIT: its group in the section, 1 to 57. |
+| `0x22b2d1` | cg_places | high | investigation | CGINIT: its place in the group, 1 to 35. |
+| `0x260667` | music_resources | high | investigation | MUINIT: a resource id SETMEMOIR asks whether the player has unlocked (is_catalog_resource_unlocked). |
+| `0x260701` | goal_sort_keys | high | investigation | FAINIT: a sort number; the goal lists (INFOFA, GETFATE, ALLMAP) are in its order. |
+| `0x260ae9` | goal_least_chapters | med | investigation | A least chapter; SETFATE's test reads it and no entry writes it. |
+| `0x260ed1` | goal_open_scenes_played | high | investigation | FAINIT: three scenes (each id + 1) that must all have been played for the goal to open. |
+| `0x261a89` | goal_open_scenes_not_played | high | investigation | FAINIT: three scenes none of which may have been played for it to open. |
+| `0x262641` | goal_bit2_scenes_played | high | investigation | FAINIT: three scenes that, all played, set bit 2 of goal_states. |
+| `0x2631f9` | goal_bit2_scenes_not_played | high | investigation | FAINIT: three scenes none of which may have been played for that. |
+| `0x263db1` | goal_bit1_scenes_played | high | investigation | FAINIT: three scenes that, all played, set bit 1 of goal_states. |
+| `0x264969` | goal_bit1_scenes_not_played | high | investigation | FAINIT: three scenes none of which may have been played for that. |
+| `0x265521` | goal_kinds | high | investigation | FAINIT: 1 to 3; SETFATE counts the open goals of each kind into 0x3d46c + kind. |
+| `0x265909` | goal_reward_items | high | investigation | FAINIT: the goal's reward when it is an item (RECEIPT). |
+| `0x265cf1` | goal_reward_card_rows | high | investigation | FAINIT: the reward when it is a card: its row. |
+| `0x2660d9` | goal_reward_card_slots | high | investigation | FAINIT: and its slot. |
+| `0x2664c1` | goal_reward_counts | med | investigation | FAINIT: a count RECEIPT prints beside the reward (1 on 71). |
+| `0x2668a9` | goal_reward_money | high | investigation | FAINIT: money the goal gives, 20 to 200: RECEIPT prints it and adds it to money. |
 | `0x266c91` | character_face_ids | high | investigation | CFINIT: a character's faces, slots 1 to 99: the picture ids a dialogue line's face names. INIT2 inverts the array into face_character_ids and face_slots. |
 | `0x27f331` | character_face_history_pictures | med | investigation | CFINIT: a second picture for the face in the same slot of character_face_ids. HISTORY alone reads it. |
 | `0x2979d1` | voice_setting_text_colors | high | investigation | CVINIT, indexed from 0: a voice setting's text colour. INIT2 copies it to the player's colour (0x36ed) where that is unset. |
 | `0x297db9` | character_voice_character_ids | high | investigation | CHINIT: the character whose voice setting this one uses (itself for 91 of 107). The page's voice block reads character_voice_setting_slots through it. |
 | `0x2981a1` | character_voice_setting_slots | high | investigation | CVINIT: a character's voice setting. The page's voice block plays the voice only while the player's switch for that setting (0x2d57) is 0. |
 | `0x298589` | voice_setting_character_ids | med | investigation | CVINIT: a voice setting's character (an id in CHINIT's range). |
+| `0x298971` | voice_setting_sample_voices | high | investigation | CVINIT: a sample voice for the setting; CONFIG4 plays it. |
+| `0x29a51a` | glossary_sort_keys | high | investigation | VIINIT: a sort number; INFOVI lists the glossary in its order. |
+| `0x29a902` | glossary_scenes | high | investigation | VIINIT: up to three scenes (each id + 1); INFOVI lists the entry once one of them is seen, and always where there is none. |
+| `0x29b4ba` | glossary_picture_x | high | investigation | VIINIT: the x at which INFOVI draws the entry's picture. |
+| `0x29b8a2` | glossary_picture_y | high | investigation | VIINIT: and the y. |
+| `0x29bc8a` | glossary_pictures | high | investigation | VIINIT: the entry's picture. |
+| `0x29c072` | glossary_scripts | high | investigation | VIINIT: a script INFOVI runs for the entry (VIMES, or $1$VIMES on one). |
+| `0x29c45b` | profile_sort_keys | high | investigation | CIINIT: a sort number; INFOCH lists the profiles in its order. |
+| `0x29c523` | profile_character_ids | high | investigation | CIINIT: the profile's character (a CHINIT id); INFOCH shows the profile once the shared profile's cell for that character (0x1af90 + character) is set. |
+| `0x29c9d3` | profile_pictures | high | investigation | CIINIT: the profile's picture (INFOCH). |
+| `0x29ca9b` | profile_scripts | high | investigation | CIINIT: a script INFOCH runs for the profile (CIMES, or $1$CIMES on three). |
+| `0x29cb64` | tip_sort_keys | high | investigation | TIINIT: a sort number; INFOTI lists the entries in its order. |
+| `0x29cf4c` | tip_scenes | high | investigation | TIINIT: up to three scenes; INFOTI lists the entry once one of them is seen, and always where there is none. |
+| `0x29db04` | tip_picture_x | high | investigation | TIINIT: the x of the entry's picture. |
+| `0x29deec` | tip_picture_y | high | investigation | TIINIT: and the y. |
+| `0x29e2d4` | tip_pictures | high | investigation | TIINIT: the entry's picture. |
+| `0x29e6bc` | tip_scripts | high | investigation | TIINIT: a script INFOTI runs for the entry (TIMES). |
+| `0x29eaa6` | character_sort_keys | high | investigation | CHINIT: a sort number; the party lists (FELLOW, RESULT, the books) are in its order. |
 | `0x29ee8e` | character_voice_kinds | high | investigation | CHINIT: 1, 2 or 3. The page's voice block plays a voice, and records it in the text history, only for a character with 2. |
+| `0x29f65e` | character_ultimate_ids | high | investigation | CHINIT: the character's 奥義, a COINIT id (26 characters have one). |
+| `0x29fa46` | party_member_start_skill_lines | high | investigation | CCINIT: which of the character's four skill lines are open (1) at the start. UNITECH copies them into party_member_skill_lines when the character first joins. |
+| `0x2a09e6` | character_voice_clips | high | investigation | CHINIT: nine voice clips; RESULT plays column 0 when the character's level rises, ALLMAP column 5 and BTL column 7. |
+| `0x2a2d0e` | character_book_pictures | high | investigation | CHINIT: pictures; the 奥義 and skill books (INFOCO, INFOSK) draw column 0. |
+| `0x2a4096` | character_pictures | high | investigation | CHINIT: pictures, a column for each picture set (party_member_picture_sets); FELLOW, GAMESTART and GAMECLEAR draw them. |
+| `0x2a541e` | character_fellow_pictures | high | investigation | CHINIT: pictures by picture set that FELLOW draws. |
+| `0x2a67a6` | character_unit_pictures | high | investigation | CHINIT: the character's unit on the map, by picture set: SETAGENT and SETMAPDATA copy it into the player unit's area_unit_pictures column 0. |
+| `0x2a7b2e` | character_unit_pictures_2 | high | investigation | CHINIT: the unit's second picture, copied into area_unit_pictures column 1. |
+| `0x2a8eb6` | character_unit_extra_pictures | high | investigation | CHINIT: the unit's third picture, copied into area_unit_extra_pictures. |
+| `0x2aa23e` | character_menu_pictures | high | investigation | CHINIT: pictures by picture set that FELLOW and MENU draw. |
+| `0x2ab5c7` | party_member_level_card_rows | high | investigation | CCINIT: a card the character brings at each level (the column, 2 to 35): its row. CALCCC gives it with ADDCARD once, when the level is reached. |
+| `0x2ac567` | party_member_level_card_slots | high | investigation | CCINIT: and that card's slot. |
+| `0x2ad507` | party_member_level_items | med | investigation | An item the character brings at each level: CALCCC gives it with ADDITEM once, when the level is reached. No record of the game writes it. |
+| `0x2ae4a7` | party_member_level_skills | high | investigation | CCINIT: the skills (SKINIT ids) the character has at each level, one for each skill line, at column 4 * level + line. COUNTSKILL counts one only while its line is open. |
+| `0x2b2327` | party_member_level_ultimate_levels | high | investigation | CCINIT: the 奥義 level (1 to 9) the character reaches at each level; COUNTSKILL raises party_member_ultimate_levels to it. |
 | `0x2b32c7` | card_row_character_ids | high | investigation | CDINIT: the character (a CHINIT id) of a card row, written where the row's first card starts. BTL reads a unit's pictures from CHINIT through it. |
 | `0x2b338f` | card_append_numbers | high | investigation | CDINIT: the append (1 to 4) that added the card; unset for the base data's. |
-| `0x2b79df` | card_rarities | med | investigation | CDINIT: 1 to 5. The card panel draws one of five marks for it. |
+| `0x2b4aff` | card_sort_keys | high | investigation | CDINIT: a sort number; the card lists (the book, the deck builder, the shop) are in its order. |
+| `0x2b626f` | card_requires_party_flags | high | investigation | CDINIT: 1 on 300 cards that may be in a deck only while their row's character (card_row_character_ids) is in the party (CHECKCARD). |
+| `0x2b79df` | card_rarities | high | investigation | CDINIT: 1 to 5, C, UC, R, SR, EU (INIT2 sets the names in 0x12a77 + rarity - 1); the card panel draws one of five marks for it. |
+| `0x2b914f` | card_book_flags | high | investigation | CDINIT: 1 on the 903 cards the card book (INFOCD) lists. |
+| `0x2ba8bf` | card_copyable_flags | high | investigation | CDINIT: 1 on the 229 cards the skills 複製 and 捕縛 can win from an opponent (DECKBUILD marks them). |
 | `0x2bc02f` | card_race_flags | high | investigation | CDINIT: 種族, one bit a race (bits 0 to 6: 無機, 人間, 怪物, 天使, 悪魔, 魔神, 英雄). The card panel prints race_names for each bit set on its 種族 row. |
 | `0x2bd79f` | card_costs | high | investigation | CDINIT: コスト, 1 to 8 (the card panel's row of that name shows card_current_costs). |
 | `0x2bef0f` | card_control | high | investigation | CDINIT: 支配力, 1 to 3 (the card panel's row of that name shows card_current_control). |
@@ -211,15 +678,50 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x2c4ccf` | card_slots | high | investigation | CDINIT: スロット, 1 to 3 (the card panel's row of that name shows card_current_slots). |
 | `0x2c643f` | card_talent_ids | high | investigation | CDINIT: two ids of TAINIT. The card panel prints talent_names and talent_descriptions for them under 所持能力1 and 所持能力2. |
 | `0x2c931f` | card_prices | high | investigation | CDINIT: two prices, the second a fifth of the first. ADDCARD sells what the player holds over 99 at the second; SHOPP and SHOPS read both. Columns: 0=buy, 1=sell. |
+| `0x2cc1ff` | card_subtractive_effect_flags | high | investigation | CDINIT: 1 where ATTACK draws the card's attack effect subtractively (gfx_draw_color mode 3) instead of additively (mode 1). |
 | `0x2cd96f` | card_pictures | high | investigation | CDINIT: two pictures (resource ids); the card panel draws the first. |
+| `0x2d084f` | card_leader_pictures | high | investigation | CDINIT: pictures of the card as a battle's leader, a column for each side (PHASECONTROLLER). |
+| `0x2d372f` | card_attack_pictures | high | investigation | CDINIT: two pictures ATTACK draws when the card attacks. |
+| `0x2d660f` | card_recipe_icons | high | investigation | CDINIT: the icon DRAWRECIPE draws for the card on a recipe. |
+| `0x2d7d7f` | card_attack_effects | high | investigation | CDINIT: the card's attack effect, a resource id ATTACK plays. |
+| `0x2d94ef` | card_voice_clips | high | investigation | CDINIT: five voice clips the battle plays for the card: column 0 in the player's actions, 1 and 3 when it attacks, 4 when its talent acts. |
 | `0x2e0a1f` | card_attack_growth | high | investigation | IMINIT: what reaching level step + 2 adds to card_attack; CALCARM sums steps 0 to level - 2. |
 | `0x2ef47f` | card_leader_lp_growth | high | investigation | IMINIT: what reaching level step + 2 adds to card_leader_lp. |
 | `0x2fdedf` | card_hp_growth | high | investigation | IMINIT: what reaching level step + 2 adds to card_hp. |
 | `0x30c93f` | card_slot_growth | high | investigation | IMINIT: what reaching level step + 2 adds to card_slots. |
 | `0x31b3a0` | talent_append_numbers | high | investigation | TAINIT: the append that added the talent. |
+| `0x31b788` | talent_sort_keys | high | investigation | TAINIT: a sort number; the talent book (INFOTA) lists in its order. |
+| `0x31bb70` | talent_book_flags | high | investigation | TAINIT: 1 for every talent: the talent book lists those that have it. |
+| `0x31bf58` | talent_timings | high | investigation | TAINIT: when the talent acts, 1 to 9: 特殊, 移動, 登場, 行動, 攻撃, 退却, 前衛エリア, 後衛エリア, 全エリア (the word its description opens with). |
+| `0x31c72a` | ultimate_append_numbers | high | investigation | COINIT: the append that added the 奥義; it picks the 奥義's scripts in ultimate_script_ids. |
+| `0x31c78e` | ultimate_sort_keys | high | investigation | COINIT: a sort number; the 奥義 book (INFOCO) lists in its order. |
+| `0x31c7f2` | ultimate_book_flags | high | investigation | COINIT: 1 for every 奥義: the 奥義 book lists those that have it. |
+| `0x31c8ba` | ultimate_gauge_gains | high | investigation | COINIT, by level (columns 1 to 9): how much the 奥義 gauge fills each turn; PHASECONTROLLER adds it to the gauge (100 at most). |
+| `0x31cca2` | ultimate_amounts | high | investigation | COINIT, by level: the number the level's text gives (damage, turns, a percent or a count); COUPACT uses it. |
+| `0x31d08a` | ultimate_picture_x | high | investigation | COINIT, by level: the x at which COUP places the 奥義's picture. |
+| `0x31d472` | ultimate_picture_y | high | investigation | COINIT, by level: and its y. |
+| `0x31d85a` | ultimate_pictures | high | investigation | COINIT, by level: the 奥義's picture (DECKBUILD, BTL). |
+| `0x31dc42` | ultimate_pictures_2 | high | investigation | COINIT, by level: a second picture DECKBUILD takes for the 奥義. |
+| `0x31e02a` | ultimate_movies | high | investigation | COINIT, by level: the movie COUP plays for the 奥義. |
+| `0x31e412` | skill_sort_keys | high | investigation | SKINIT: a sort number; the skill book (INFOSK) lists in its order. |
+| `0x31e7fa` | skill_book_flags | high | investigation | SKINIT: 1 for every skill: the skill book lists those that have it. |
+| `0x31ebe2` | skill_kinds | high | investigation | SKINIT: where the skill works: 1 outside battle, 2 in battle, 3 on the battlefield. COUNTSKILL counts a kind-3 skill only for the three role characters (party_leader_id, party_ultimate_character_id, map_agent_character_id). |
+| `0x31efca` | skill_amounts | high | investigation | SKINIT: the number the skill's text gives (交渉術Ⅰ: 5 for ５％ＯＦＦ); COUNTSKILL and the battle scripts read it. |
 | `0x31f79a` | item_append_numbers | high | investigation | ITINIT: the append that added the item. |
-| `0x3216da` | item_rarities | med | investigation | ITINIT: 1 to 5. The card panel draws it with the marks it draws a card's rarity with. |
+| `0x31ff6a` | item_sort_keys | high | investigation | ITINIT: a sort number; the item lists (ITEM, the book, the shops, SELITEM) are in its order. |
+| `0x32073a` | item_kinds | high | investigation | ITINIT: 1 to 5, 重要, 消費, 売却, 素材, 装備 (INIT2 sets the names in 0x12a84 + kind - 1). A card carries a 装備 item; SELITEM offers 消費 items in battle. |
+| `0x320f0a` | item_no_carry_over_flags | high | investigation | ITINIT: 1 on 59 of the 62 重要 items: the ones GAMESTART does not carry over into a new game when it carries the items over. |
+| `0x3216da` | item_rarities | med | investigation | ITINIT: 1 to 5. The card panel draws it with the marks it draws card_rarities with. |
+| `0x321eaa` | item_book_flags | high | investigation | ITINIT: 1 for every item: the item book (INFOIT) lists those that have it. |
 | `0x32267a` | item_required_slots | high | investigation | ITINIT: the least card_current_slots a card may have to carry the item. |
+| `0x322e4a` | item_cost_bonuses | high | investigation | ITINIT: what the item adds to the コスト of the card that carries it (the card panel, CHECKCARD). |
+| `0x32361a` | item_control_bonuses | high | investigation | ITINIT: what it adds to the card's 支配力. |
+| `0x323dea` | item_attack_bonuses | high | investigation | ITINIT: what it adds to the card's 攻撃力. |
+| `0x3245ba` | item_leader_lp_bonuses | high | investigation | ITINIT: what it adds to a leader card's ＬＰ. |
+| `0x324d8a` | item_hp_bonuses | high | investigation | ITINIT: what it adds to the card's ＨＰ. |
+| `0x32555a` | item_condition_ids | high | investigation | ITINIT: a condition (an ILINIT id) the 消費 item gives its target in battle (SELITEM). |
+| `0x325d2a` | item_targets | high | investigation | ITINIT: which battlefield cells the 消費 item can target: 1 the first side's, 2 the second's, 3 both; 4 and 5 the empty cells of the first or the second side (SELITEM). |
+| `0x3264fa` | item_talent_ids | high | investigation | ITINIT: a talent (a TAINIT id) the item gives the card that carries it. |
 | `0x326cca` | item_card_rows | high | investigation | ITINIT: where set, the one card row whose cards can carry the item (INIT2 takes an item off a card that fails). |
 | `0x32749a` | item_card_slots | high | investigation | ITINIT: where set, the one slot of a row whose card can carry the item. |
 | `0x327c6a` | item_required_races | high | investigation | ITINIT: bits of card_race_flags of which a card must have one to carry the item. |
@@ -231,14 +733,138 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x32ab4a` | item_required_hp | high | investigation | ITINIT: the least card_current_hp a card may have to carry the item. |
 | `0x32b31a` | item_prices | high | investigation | ITINIT: two prices, the second a fifth of the first where there is one. ADDITEM sells what the player holds over 99 at the second; SHOPP and SHOPS read both. Columns: 0=buy, 1=sell. |
 | `0x32c2ba` | item_pictures | high | investigation | ITINIT: two pictures (resource ids); the card panel draws the second. |
+| `0x32d25a` | item_effect_styles | high | investigation | ITINIT: how SELITEM plays the 消費 item's effect movie: 1 on the target cell, 2 in the middle at 512 × 512, 3 at a fixed place. |
+| `0x32da2a` | item_effect_draw_modes | high | investigation | ITINIT: the gfx_draw_color mode the effect movie is drawn in (1, additive, on all 31). |
+| `0x32e1fa` | item_effect_movies | high | investigation | ITINIT: the effect movies; style 1 takes the target column's. |
+| `0x32f96a` | condition_kinds | high | investigation | ILINIT: 1 for a helpful condition (再生, 必中 …), 2 for a harmful one (操血, 封印 …). |
+| `0x32f9ca` | condition_attack_changes | high | investigation | ILINIT: what the condition adds to a card's 攻撃力 in battle while it holds (攻１ to 攻４: 1 to 4; 操血: -1). |
+| `0x32f9ea` | condition_hp_changes | med | investigation | ILINIT: what the condition adds to a card's ＨＰ or ＬＰ in battle while it holds (操血: -1). |
+| `0x32fa2a` | condition_turn_hp_changes | med | investigation | ILINIT: a change each turn (強酸 -1, 再生 +1); PHASECONTROLLER adds 再生's to a card's ＨＰ at the start of a turn. |
+| `0x32fa4a` | condition_turn_hp_changes_2 | med | investigation | ILINIT: 再生 1; PHASECONTROLLER adds it to a card's ＨＰ like condition_turn_hp_changes, on another branch. |
+| `0x32fa6a` | condition_icons | high | investigation | ILINIT: the condition's icon, 1 to 19: its row in a strip of 15 × 15 icons DRAWFIELD and DRAWTALENT draw from, at the column of its kind. |
+| `0x32fa8a` | battle_experience | med | investigation | RFINIT: four rows of nine numbers: the experience RESULT gives the party for each enemy card defeated, at the cell two numbers of that card pick. |
+| `0x32fab2` | rank_point_thresholds | high | investigation | RFINIT: the points each rank needs (CALCPR): rank r at cell 10 * (r % 10) + r / 10, ranks 1 to 99, up to 99999. |
+| `0x32fb16` | character_level_experience | high | investigation | RFINIT: the experience a character needs for each level, 0 to 9999 (RESULT, FELLOW). |
+| `0x32fb57` | random_condition_switches | high | investigation | RFINIT: rows of switches: which of random_conditions BTL may give at random, by a row it picks. |
+| `0x32fbbb` | random_conditions | high | investigation | RFINIT: eight conditions (ILINIT ids 17 to 25: 必中, 回避, 攻１ …) BTL gives at random. |
+| `0x32fbc5` | area_places | high | investigation | AMINIT: the place (an AMINIT id) the area belongs to; scene code tests whether the area in play is in the same place as a given area. |
+| `0x32fcf1` | area_map_pictures | high | investigation | AMINIT: the area's map pictures: columns 0 to 4 by time_slot, column 5 another (SETMAPTEX, ALLMAP). |
+| `0x3303f9` | area_music | med | investigation | AMINIT: the area's two tracks of music, by 0x987a (READY). |
+| `0x330651` | area_unit_scales | high | investigation | AMINIT: a unit's size at the top and at the bottom of the map, in percent; DRAWOBJ scales a unit between the two by its point's y. Columns: 0=top, 1=bottom. |
+| `0x3308a9` | area_battle_backgrounds | high | investigation | AMINIT: two pictures PHASECONTROLLER sets behind the battlefield for a battle in the area. |
+| `0x330b01` | area_battle_rules | high | investigation | AMINIT: the rule (a REINIT id) of a battle in the area (16 areas). |
 | `0x330c2d` | area_point_kinds | high | investigation | MPINIT, for the area in play: a point's kind, 1 to 3. ALLMAP reads area_point_targets for a point of kind 3. |
 | `0x330cf5` | area_point_targets | high | investigation | MPINIT, for the area in play: where a point of kind 3 leads, an area and a point of it. ALLMAP reads the pair when the player is on the point and looks the area up in AMINIT. Columns: 0=area, 1=point. |
 | `0x331015` | area_point_x | high | investigation | MPINIT, for the area in play: a point's x on the map; ALLMAP puts the point's hot area around (x, y). |
 | `0x3310dd` | area_point_y | high | investigation | MPINIT, for the area in play: a point's y on the map. |
 | `0x33207d` | area_route_points | high | investigation | ROINIT, for the area in play: the two points a route joins; DRAWMAP and ALLMAP read the pair. |
+| `0x332dc6` | area_unit_kinds | med | investigation | UNINIT, for the area in play: the unit's kind, 1 to 4; ALLMAP and DRAWOBJ treat kinds 1 and 4 apart. |
+| `0x332e8e` | area_unit_icons | high | investigation | UNINIT, for the area in play: the unit's icon, 1-based, in a strip DRAWFRAME draws from. |
+| `0x332f56` | area_unit_decks | high | investigation | UNINIT, for the area in play: the unit's deck (a DEINIT id): a battle with the unit has it (SETREGULATION), and UNITINFO shows its drops. |
 | `0x33301e` | area_unit_cards | high | investigation | UNINIT, for the area in play: a unit's card, as its row and slot of CDINIT; BTL passes the pair to CALCARM. Columns: 0=row, 1=slot. |
+| `0x333276` | area_unit_routines | high | investigation | UNINIT, for the area in play: the unit's routine (unit_routine), which MVRTN runs. |
+| `0x333406` | area_unit_state_ids | med | investigation | UNINIT, for the area in play: the unit's id in saved state (1 to 126); ALLMAP copies it into the save's 0x9ba7 + slot when it sets the unit up and tests the bits of 0x17cd8 + id. |
+| `0x3342de` | area_unit_battle_music | high | investigation | UNINIT, for the area in play: the music of a battle with the unit (BTL). |
+| `0x3345fe` | area_unit_pictures | high | investigation | UNINIT, for the area in play: two pictures of the unit (SETMAPTEX); for the player's unit, slot 1, SETAGENT copies them from CHINIT. |
+| `0x33478e` | area_unit_extra_pictures | high | investigation | UNINIT, for the area in play: a third picture of the unit. |
 | `0x334856` | deck_card_rows | med | investigation | DEINIT: the row in CDINIT (1 to 167) of each card of the deck, slots 1 to 20. |
 | `0x33bd86` | deck_card_slots | med | investigation | DEINIT: the slot in that row (1 to 23) of the same card: card id = row * 30 + slot. |
+| `0x3432b6` | deck_card_max_copies | high | investigation | DEINIT: the most copies of each card a map unit's deck holds. |
+| `0x34a7e6` | deck_card_copies | high | investigation | DEINIT: how many copies of each card the deck holds: a battle's deck takes this many (DECKBUILD), and a map unit's starts from it. |
+| `0x351d16` | deck_card_copy_chances | high | investigation | DEINIT: a percent for each card slot; for each copy between deck_card_copies and deck_card_max_copies ALLMAP draws 0 to 99 and adds the copy where the draw is at least this. |
+| `0x359246` | deck_card_max_unless_scenes | med | investigation | A scene (id + 1) for each card slot: ALLMAP gives a map unit the most copies of the slot while it has not been played. No record writes it. |
+| `0x360776` | deck_card_max_once_scenes | med | investigation | A scene for each card slot: ALLMAP gives a map unit the most copies of the slot once it has been played. No record writes it. |
+| `0x367ca6` | deck_start_boards | high | investigation | DEINIT: the opponent's battlefield at the start, two rows of three: 0 or less goes into the cell as it is, a positive value is a slot of the deck whose card starts there (PHASECONTROLLER). |
+| `0x369416` | deck_cpu_profiles | high | investigation | DEINIT: the CPU profile (cpu_profile) the deck is played with; SETREGULATION passes it on. |
+| `0x3697fe` | deck_drop_weights | high | investigation | DEINIT: four drops, each one's weight. RESULT makes weight sum / 100 drops (one more with the rest's percent), each drawn by weight. |
+| `0x36a79e` | deck_drop_items | high | investigation | DEINIT: a drop that is an item: its id. |
+| `0x36b73e` | deck_drop_card_rows | high | investigation | DEINIT: a drop that is a card: its row. |
+| `0x36c6de` | deck_drop_card_slots | high | investigation | DEINIT: and its slot. |
+| `0x36d67e` | battle_uses_player_deck_flags | high | investigation | DUINIT: 1 where the player fights with their own deck and leader; elsewhere the battle sets the player's side too (SETREGULATION). |
+| `0x36da66` | battle_leader_cards | high | investigation | DUINIT: the leader card of each side, as a row and a slot. Columns: 0=side_0_row, 1=side_0_slot, 2=side_1_row, 3=side_1_slot. |
+| `0x36ea06` | battle_decks | high | investigation | DUINIT: each side's deck (a DEINIT id). Columns: 0=side_0, 1=side_1. |
+| `0x36f1d6` | battle_opponent_ultimates | high | investigation | DUINIT: the opponent's 奥義 (a COINIT id). |
+| `0x36f5be` | battle_opponent_ultimate_levels | high | investigation | DUINIT: and its level. |
+| `0x36f9a6` | battle_opponent_ultimate_pictures | high | investigation | DUINIT: the opponent's 奥義 picture. |
+| `0x36fd8e` | battle_opponent_ultimate_picture_x | high | investigation | DUINIT: and its x. |
+| `0x370176` | battle_opponent_ultimate_picture_y | high | investigation | DUINIT: and its y. |
+| `0x37055e` | battle_rules | high | investigation | DUINIT: the battle's rule (a REINIT id); SETREGULATION takes it. |
+| `0x370946` | battle_music | high | investigation | DUINIT: the battle's music (BTL plays it). |
+| `0x371116` | battle_backgrounds | high | investigation | DUINIT: two pictures PHASECONTROLLER sets behind the battlefield. |
+| `0x3718e6` | battle_rule_outcomes | med | investigation | REINIT: what five events do to the battle, 0 nothing, 1 a win, 2 a loss (by the rules' texts). Without a rule SETREGULATION uses 0, 0, 2, 1, 2. Columns: 0=player_deck_out, 1=opponent_deck_out, 2=player_lp_zero, 3=opponent_lp_zero, 4=turn_limit. |
+| `0x371ada` | battle_rule_hp_recovery_flags | high | investigation | REINIT: 1 where the cards' ＨＰ recovers at the start of a turn (ターン開始時にＨＰ回復). |
+| `0x371ec2` | battle_rule_turn_limits | high | investigation | REINIT: the turn limit (99 for none). |
+| `0x371f26` | battle_rule_hand_sizes | high | investigation | REINIT: the most cards in hand (6 but for 最大手札４). |
+| `0x371f8a` | battle_rule_deck_sizes | high | investigation | REINIT: the most cards in a deck (30 but for 編成最大枚数 rules). |
+| `0x371fee` | battle_rule_use_bans | med | investigation | REINIT: two bits; PH03_PLR_ACTION tests the first, BTL and SETBTSKILL the second. アイテム・奥義使用不可 has 3. |
+| `0x3723d6` | battle_rule_cost_ranges | high | investigation | REINIT: a card's コスト (with its item's bonus) must lie in [least, most], a most of 0 for none (CHECKCARD). Columns: 0=least, 1=most. |
+| `0x37249e` | battle_rule_control_ranges | high | investigation | REINIT: the same for 支配力. Columns: 0=least, 1=most. |
+| `0x372566` | battle_rule_attack_ranges | high | investigation | REINIT: the same for 攻撃力. Columns: 0=least, 1=most. |
+| `0x37262e` | battle_rule_hp_ranges | high | investigation | REINIT: the same for ＨＰ. Columns: 0=least, 1=most. |
+| `0x3726f6` | battle_rule_race_masks | high | investigation | REINIT: bits of card_race_flags. A card with a race of the first may not be used, nor a card all of whose races are in the second. Columns: 0=any_banned, 1=all_banned. |
+| `0x3727be` | battle_rule_banned_card_rows | high | investigation | REINIT: card rows whose cards may not be used (CHECKCARD). |
+| `0x372ba6` | recipe_items | high | investigation | ALINIT: the item the recipe makes, on 185 recipes. |
+| `0x373376` | recipe_card_rows | high | investigation | ALINIT: or the card it makes: its row, on the other 432. |
+| `0x373b46` | recipe_card_slots | high | investigation | ALINIT: and its slot. |
+| `0x374316` | recipe_points | high | investigation | ALINIT: points the recipe earns each time it is made (ALCHEMY adds them to points). |
+| `0x374ae6` | recipe_places | high | investigation | ALINIT: the alchemy places that offer the recipe, one bit a place (shop_place_id). |
+| `0x3752b6` | recipe_least_chapters | high | investigation | ALINIT: the least chapter. |
+| `0x375a86` | recipe_least_days | med | investigation | The least day; ALCHEMY's test reads it and no record writes it. |
+| `0x376256` | recipe_weekdays | med | investigation | The days of the week (bits of day % 7); ALCHEMY's test reads it and no record writes it. |
+| `0x376a26` | recipe_time_slots | med | investigation | The time slots (bits of time_slot); ALCHEMY's test reads it and no record writes it. |
+| `0x3771f6` | recipe_least_ranks | high | investigation | ALINIT: the least rank. |
+| `0x3779c6` | recipe_party_characters | high | investigation | ALINIT: a character who must be in the party. |
+| `0x378196` | recipe_party_character_levels | high | investigation | ALINIT: and that character's least level. |
+| `0x378966` | recipe_skills | high | investigation | ALINIT: a skill the party must have (party_skill_counts). |
+| `0x379136` | recipe_required_items | high | investigation | ALINIT: an item the player must have obtained (item_obtained_flags). |
+| `0x379906` | recipe_required_card_rows | high | investigation | ALINIT: a card the player must have obtained (card_obtained_flags): its row. |
+| `0x37a0d6` | recipe_required_card_slots | high | investigation | ALINIT: and its slot. |
+| `0x37a8a6` | recipe_scenes_played | high | investigation | ALINIT: scenes (each id + 1) that must all have been played. |
+| `0x37cfb6` | recipe_scenes_not_played | med | investigation | Scenes none of which may have been played; ALCHEMY's test reads it and no record writes it. |
+| `0x37f6c6` | recipe_ingredient_items | high | investigation | ALINIT: the four ingredients: an item id where the ingredient is an item. |
+| `0x381606` | recipe_ingredient_card_rows | high | investigation | ALINIT: or a card's row where it is a card. |
+| `0x383546` | recipe_ingredient_card_slots | high | investigation | ALINIT: and its slot. |
+| `0x385486` | recipe_ingredient_counts | high | investigation | ALINIT: how many of each ingredient the recipe takes. |
+| `0x3873c6` | shop_entry_items | high | investigation | SHINIT: the item the entry sells, on 135 entries. |
+| `0x3877ae` | shop_entry_card_rows | high | investigation | SHINIT: or the card it sells: its row, on the other 97. |
+| `0x387b96` | shop_entry_card_slots | high | investigation | SHINIT: and its slot. |
+| `0x387f7e` | shop_entry_shops | high | investigation | SHINIT: the shops that sell it, one bit a shop (shop_place_id). |
+| `0x388366` | shop_entry_least_chapters | high | investigation | SHINIT: the least chapter. |
+| `0x38874e` | shop_entry_least_days | med | investigation | The least day; SHOPP's test reads it and no entry writes it. |
+| `0x388b36` | shop_entry_weekdays | med | investigation | The days of the week; SHOPP's test reads it and no entry writes it. |
+| `0x388f1e` | shop_entry_time_slots | med | investigation | The time slots; SHOPP's test reads it and no entry writes it. |
+| `0x389306` | shop_entry_least_ranks | high | investigation | SHINIT: the least rank. |
+| `0x3896ee` | shop_entry_party_characters | high | investigation | SHINIT: a character who must be in the party. |
+| `0x389ad6` | shop_entry_party_character_levels | high | investigation | SHINIT: and that character's least level. |
+| `0x389ebe` | shop_entry_skills | med | investigation | SHINIT: a skill the party must have (party_skill_counts). ARENA's test also reads this array, at an opponent's id. |
+| `0x38a2a6` | shop_entry_scenes_played | high | investigation | SHINIT: scenes (each id + 1) that must all have been played. |
+| `0x38aa76` | shop_entry_scenes_not_played | high | investigation | SHINIT: scenes none of which may have been played. |
+| `0x38b246` | opponent_battles | high | investigation | ARINIT: the battle (a DUINIT id) the opponent is fought in. |
+| `0x38b62e` | opponent_arenas | high | investigation | ARINIT: the arena the opponent fights in, 1 to 9. |
+| `0x38ba16` | opponent_sort_keys | high | investigation | ARINIT: a sort number; ARENA lists the opponents in its order. |
+| `0x38bdfe` | opponent_reward_items | high | investigation | ARINIT: the reward when it is an item. |
+| `0x38c1e6` | opponent_reward_card_rows | high | investigation | ARINIT: the reward when it is a card: its row. |
+| `0x38c5ce` | opponent_reward_card_slots | high | investigation | ARINIT: and its slot. |
+| `0x38c9b6` | opponent_reward_counts | high | investigation | ARINIT: how many of the reward the player gets. |
+| `0x38d186` | opponent_scenes | med | investigation | ARINIT: three scenes: column 0 is played before the battle, BTL plays column 1 after a win and column 2 after a loss. Columns: 0=before, 1=after_win, 2=after_loss. |
+| `0x38dd3e` | opponent_places | high | investigation | ARINIT: the places that hold the opponent, one bit a place (arena_place_id). |
+| `0x38e126` | opponent_required_opponents | high | investigation | ARINIT: another opponent who must have been beaten (bit 1 of opponent_states). |
+| `0x38ecde` | opponent_weekdays | high | investigation | ARINIT: the days of the week (bits of day % 7) the opponent is there. |
+| `0x39044e` | opponent_scenes_played | high | investigation | ARINIT: scenes (each id + 1) that must all have been played. |
+| `0x390c1e` | opponent_scenes_not_played | high | investigation | ARINIT: scenes none of which may have been played. |
+| `0x3913ee` | opponent_tournament_groups | med | investigation | ARINIT: a group (2 to 8) ARENA draws a tournament arena's opponents from. |
+| `0x391fa9` | unit_routine_actions | high | investigation | RTINIT: a map unit's routine step by step: the step's action, 1 to 8 for RTN_M001 to RTN_M008; 0 ends the routine (MVRTN). |
+| `0x39e2f9` | unit_routine_chances | high | investigation | RTINIT: the percent chance the step runs (MVRTN draws 0 to 99). |
+| `0x3aa649` | unit_routine_args | high | investigation | RTINIT: the step's first argument (RTN_M001 waits that long, 20 without one). |
+| `0x3b6999` | unit_routine_args_2 | med | investigation | RTINIT: the step's second argument. |
+| `0x3c2ce9` | unit_routine_args_3 | med | investigation | RTINIT: the step's third argument. |
+| `0x3e76d9` | unit_routine_scenes_played | high | investigation | RTINIT: for each step, three scenes (each id + 1) that must all have been played, at column 3 * step + n. |
+| `0x40c0c9` | unit_routine_scenes_not_played | high | investigation | RTINIT: for each step, three scenes none of which may have been played. |
+| `0x430ab9` | cpu_profile_settings | med | investigation | RTINIT: a CPU profile's twenty settings, which PH12_CPU_MOVE and PH13_CPU_ACTION read. |
+| `0x4358d9` | cpu_profile_move_choices | med | investigation | RTINIT: the profile's choices for moving (PH12_CPU_MOVE). |
+| `0x437fe9` | cpu_profile_action_choices | med | investigation | RTINIT: its choices for acting (PH13_CPU_ACTION). |
+| `0x43a6f9` | cpu_profile_attack_choices | med | investigation | RTINIT: its choices for attacking (PH14_CPU_ATTACK). |
+| `0x43ce09` | cpu_profile_attack_lists | med | investigation | RTINIT: a list ATTACK reads for the profile. |
 | `0x43f6e6` | card_max_levels | high | investigation | Computed by CALCARM: 1, or 2 + the highest step at which one of the four growth arrays has a number for the card. |
 | `0x440e56` | card_levels | high | investigation | Computed by CALCARM: card_experience / 100 + 1, at most card_max_levels. |
 | `0x4425c6` | card_level_progress | high | investigation | Computed by CALCARM: card_experience % 100, or 0 at the highest level. The card panel draws it as a bar. |
@@ -248,7 +874,17 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x449af6` | card_current_attack | high | investigation | Computed by CALCARM: card_attack and card_attack_growth for the card's level, kept within 0 to 999. |
 | `0x44b266` | card_current_leader_lp | high | investigation | Computed by CALCARM: card_leader_lp and card_leader_lp_growth for the card's level, kept within 0 to 999. |
 | `0x44c9d6` | card_current_hp | high | investigation | Computed by CALCARM: card_hp and card_hp_growth for the card's level, kept within 0 to 999. |
+| `0x4502a1` | party_skill_counts | high | investigation | Built by COUNTSKILL: how many open skill lines of the party's characters have each skill (an SKINIT id). The shops', recipes' and arenas' tests read it. |
 | `0x4525dd` | scjump_chain_script_ids | high | investigation | The scripts a caller runs to pick the next scene: INIT2 puts SCJUMP in slot 0 and each $n$AUTORUN its $n$SCJUMP in slot n. |
+| `0x4525fd` | ready_open_script_ids | high | investigation | The READY and OPEN script of each layer. Columns: 0=ready, 1=open. |
+| `0x45263d` | tumes_script_ids | high | investigation | The TUMES script of each layer. |
+| `0x45265d` | item_action_script_ids | high | investigation | ITEMACT and each $n$ITEMACT: SELITEM runs the slot of the item's append number for an item used in battle. |
+| `0x45267d` | ultimate_script_ids | high | investigation | COUPACT, COUPANIME and COUPRTN of each layer: a 奥義 runs the row of its append number. Columns: 0=act, 1=anime, 2=rtn. |
+| `0x4526dd` | talent_script_ids | high | investigation | TALENT, TALENTACT and TALENTRTN of each layer: a talent runs the row of its append number. Columns: 0=talent, 1=act, 2=rtn. |
+| `0x45273d` | bginit_script_ids | high | investigation | BGINIT of each layer. |
+| `0x45275d` | mpinit_script_ids | high | investigation | MPINIT of each layer: SETMAPDATA runs slots 0 to 31 in turn. |
+| `0x45277d` | roinit_script_ids | high | investigation | ROINIT of each layer, run in turn the same way. |
+| `0x45279d` | uninit_script_ids | high | investigation | UNINIT of each layer, run in turn the same way. |
 | `0x0` | — | low | auto-shape | array |
 | `0x5` | — | low | auto-shape | array |
 | `0xd7` | — | low | auto-shape | array |
@@ -263,7 +899,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x41f` | — | low | auto-shape | array |
 | `0x4f1` | — | low | auto-shape | array |
 | `0x2d57` | — | low | auto-shape | array |
-| `GS 0x2dcc` | — | low | auto-shape | array |
 | `0x3147` | — | low | auto-shape | array |
 | `0x3583` | — | low | auto-shape | array |
 | `0x3597` | — | low | auto-shape | array |
@@ -271,16 +906,9 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x35bf` | — | low | auto-shape | array |
 | `0x35d3` | — | low | auto-shape | array |
 | `0x35e7` | — | low | auto-shape | array |
-| `0x3ae0` | — | low | auto-shape | array |
 | `0x3b44` | — | low | auto-shape | array |
-| `0x3ba8` | — | low | auto-shape | array |
-| `0x3c0c` | — | low | auto-shape | array |
-| `0x3c70` | — | low | auto-shape | array |
 | `0x3cd4` | — | low | auto-shape | array |
-| `0x3d38` | — | low | auto-shape | array |
 | `0x3f2c` | — | low | auto-shape | array |
-| `0x4760` | — | low | auto-shape | array |
-| `GS 0x75ac` | — | low | auto-shape | array |
 | `0x97a9` | — | low | auto-shape | array |
 | `0x97b0` | — | low | auto-shape | array |
 | `0x994e` | — | low | auto-shape | array |
@@ -290,7 +918,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x9c6f` | — | low | auto-shape | array |
 | `0x9d37` | — | low | auto-shape | array |
 | `GS 0x1265c` | — | low | auto-shape | array |
-| `GS 0x1268e` | — | low | auto-shape | array |
 | `0x1614f` | — | low | auto-shape | array |
 | `0x17988` | — | low | auto-shape | array |
 | `0x17992` | — | low | auto-shape | array |
@@ -304,10 +931,7 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x17cd8` | — | low | auto-shape | array |
 | `0x17da0` | — | low | auto-shape | array |
 | `0x17e68` | — | low | auto-shape | array |
-| `0x17f36` | — | low | auto-shape | array |
 | `0x183c4` | — | low | auto-shape | array |
-| `0x183d0` | — | low | auto-shape | array |
-| `0x18498` | — | low | auto-shape | array |
 | `0x1af90` | — | low | auto-shape | array |
 | `0x1cae8` | — | low | auto-shape | array |
 | `0x1ced0` | — | low | auto-shape | array |
@@ -344,67 +968,16 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x219991` | — | low | auto-shape | array |
 | `0x21c0a1` | — | low | auto-shape | array |
 | `0x225ce1` | — | low | auto-shape | array |
-| `0x229b61` | — | low | auto-shape | array |
-| `0x22a719` | — | low | auto-shape | array |
-| `0x22b2d1` | — | low | auto-shape | array |
 | `0x22be89` | — | low | auto-shape | array |
 | `0x22ca41` | — | low | auto-shape | array |
-| `0x260667` | — | low | auto-shape | array |
 | `0x260699` | — | low | auto-shape | array |
 | `0x2606ce` | — | low | auto-shape | array |
-| `0x260ae9` | — | low | auto-shape | array |
-| `0x265521` | — | low | auto-shape | array |
-| `0x265909` | — | low | auto-shape | array |
-| `0x265cf1` | — | low | auto-shape | array |
-| `0x2660d9` | — | low | auto-shape | array |
-| `0x2664c1` | — | low | auto-shape | array |
-| `0x2668a9` | — | low | auto-shape | array |
-| `0x298971` | — | low | auto-shape | array |
-| `0x29b4ba` | — | low | auto-shape | array |
-| `0x29b8a2` | — | low | auto-shape | array |
-| `0x29bc8a` | — | low | auto-shape | array |
-| `0x29c072` | — | low | auto-shape | array |
-| `0x29c523` | — | low | auto-shape | array |
 | `0x29c843` | — | low | auto-shape | array |
 | `0x29c90b` | — | low | auto-shape | array |
-| `0x29c9d3` | — | low | auto-shape | array |
-| `0x29ca9b` | — | low | auto-shape | array |
-| `0x29db04` | — | low | auto-shape | array |
-| `0x29deec` | — | low | auto-shape | array |
-| `0x29e2d4` | — | low | auto-shape | array |
-| `0x29e6bc` | — | low | auto-shape | array |
 | `0x29f276` | — | low | auto-shape | array |
-| `0x29f65e` | — | low | auto-shape | array |
-| `0x31bb70` | — | low | auto-shape | array |
-| `0x31bf58` | — | low | auto-shape | array |
-| `0x31c72a` | — | low | auto-shape | array |
-| `0x31c7f2` | — | low | auto-shape | array |
-| `0x31e7fa` | — | low | auto-shape | array |
-| `0x31ebe2` | — | low | auto-shape | array |
-| `0x31efca` | — | low | auto-shape | array |
-| `0x32073a` | — | low | auto-shape | array |
-| `0x320f0a` | — | low | auto-shape | array |
-| `0x321eaa` | — | low | auto-shape | array |
-| `0x322e4a` | — | low | auto-shape | array |
-| `0x32361a` | — | low | auto-shape | array |
-| `0x323dea` | — | low | auto-shape | array |
-| `0x3245ba` | — | low | auto-shape | array |
-| `0x324d8a` | — | low | auto-shape | array |
-| `0x32555a` | — | low | auto-shape | array |
-| `0x325d2a` | — | low | auto-shape | array |
-| `0x3264fa` | — | low | auto-shape | array |
-| `0x32d25a` | — | low | auto-shape | array |
-| `0x32da2a` | — | low | auto-shape | array |
-| `0x32f96a` | — | low | auto-shape | array |
 | `0x32f98a` | — | low | auto-shape | array |
 | `0x32f9aa` | — | low | auto-shape | array |
-| `0x32f9ca` | — | low | auto-shape | array |
-| `0x32f9ea` | — | low | auto-shape | array |
 | `0x32fa0a` | — | low | auto-shape | array |
-| `0x32fa6a` | — | low | auto-shape | array |
-| `0x32fbbb` | — | low | auto-shape | array |
-| `0x32fbc5` | — | low | auto-shape | array |
-| `0x330b01` | — | low | auto-shape | array |
 | `0x331975` | — | low | auto-shape | array |
 | `0x331a3d` | — | low | auto-shape | array |
 | `0x331b05` | — | low | auto-shape | array |
@@ -419,82 +992,23 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x33284d` | — | low | auto-shape | array |
 | `0x332915` | — | low | auto-shape | array |
 | `0x3329dd` | — | low | auto-shape | array |
-| `0x332dc6` | — | low | auto-shape | array |
-| `0x332e8e` | — | low | auto-shape | array |
-| `0x332f56` | — | low | auto-shape | array |
 | `0x3331ae` | — | low | auto-shape | array |
-| `0x333276` | — | low | auto-shape | array |
 | `0x33333e` | — | low | auto-shape | array |
-| `0x333406` | — | low | auto-shape | array |
 | `0x3334ce` | — | low | auto-shape | array |
 | `0x333596` | — | low | auto-shape | array |
 | `0x33365e` | — | low | auto-shape | array |
 | `0x334216` | — | low | auto-shape | array |
-| `0x3342de` | — | low | auto-shape | array |
 | `0x3343a6` | — | low | auto-shape | array |
 | `0x33446e` | — | low | auto-shape | array |
 | `0x334536` | — | low | auto-shape | array |
-| `0x33478e` | — | low | auto-shape | array |
-| `0x369416` | — | low | auto-shape | array |
-| `0x36d67e` | — | low | auto-shape | array |
-| `0x36f1d6` | — | low | auto-shape | array |
-| `0x36f5be` | — | low | auto-shape | array |
-| `0x36f9a6` | — | low | auto-shape | array |
-| `0x36fd8e` | — | low | auto-shape | array |
-| `0x370176` | — | low | auto-shape | array |
-| `0x37055e` | — | low | auto-shape | array |
-| `0x370946` | — | low | auto-shape | array |
 | `0x370d2e` | — | low | auto-shape | array |
-| `0x371ada` | — | low | auto-shape | array |
-| `0x371ec2` | — | low | auto-shape | array |
-| `0x371f26` | — | low | auto-shape | array |
-| `0x371f8a` | — | low | auto-shape | array |
-| `0x371fee` | — | low | auto-shape | array |
-| `0x372ba6` | — | low | auto-shape | array |
-| `0x373376` | — | low | auto-shape | array |
-| `0x373b46` | — | low | auto-shape | array |
-| `0x374316` | — | low | auto-shape | array |
-| `0x374ae6` | — | low | auto-shape | array |
-| `0x3752b6` | — | low | auto-shape | array |
-| `0x375a86` | — | low | auto-shape | array |
-| `0x376256` | — | low | auto-shape | array |
-| `0x376a26` | — | low | auto-shape | array |
-| `0x3771f6` | — | low | auto-shape | array |
-| `0x3779c6` | — | low | auto-shape | array |
-| `0x378196` | — | low | auto-shape | array |
-| `0x378966` | — | low | auto-shape | array |
-| `0x379136` | — | low | auto-shape | array |
-| `0x379906` | — | low | auto-shape | array |
-| `0x37a0d6` | — | low | auto-shape | array |
-| `0x3873c6` | — | low | auto-shape | array |
-| `0x3877ae` | — | low | auto-shape | array |
-| `0x387b96` | — | low | auto-shape | array |
-| `0x387f7e` | — | low | auto-shape | array |
-| `0x388366` | — | low | auto-shape | array |
-| `0x38874e` | — | low | auto-shape | array |
-| `0x388b36` | — | low | auto-shape | array |
-| `0x388f1e` | — | low | auto-shape | array |
-| `0x389306` | — | low | auto-shape | array |
-| `0x3896ee` | — | low | auto-shape | array |
-| `0x389ad6` | — | low | auto-shape | array |
-| `0x389ebe` | — | low | auto-shape | array |
-| `0x38b246` | — | low | auto-shape | array |
-| `0x38b62e` | — | low | auto-shape | array |
-| `0x38bdfe` | — | low | auto-shape | array |
-| `0x38c1e6` | — | low | auto-shape | array |
-| `0x38c5ce` | — | low | auto-shape | array |
-| `0x38c9b6` | — | low | auto-shape | array |
-| `0x38dd3e` | — | low | auto-shape | array |
-| `0x38e126` | — | low | auto-shape | array |
 | `0x38e50e` | — | low | auto-shape | array |
 | `0x38e8f6` | — | low | auto-shape | array |
-| `0x38ecde` | — | low | auto-shape | array |
 | `0x38f0c6` | — | low | auto-shape | array |
 | `0x38f4ae` | — | low | auto-shape | array |
 | `0x38f896` | — | low | auto-shape | array |
 | `0x38fc7e` | — | low | auto-shape | array |
 | `0x390066` | — | low | auto-shape | array |
-| `0x3913ee` | — | low | auto-shape | array |
 | `0x3917d6` | — | low | auto-shape | array |
 | `0x391bbe` | — | low | auto-shape | array |
 | `0x43f519` | — | low | auto-shape | array |
@@ -508,17 +1022,10 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x44e241` | — | low | auto-shape | array |
 | `0x44fa6b` | — | low | auto-shape | array |
 | `0x45023b` | — | low | auto-shape | array |
-| `0x4502a1` | — | low | auto-shape | array |
 | `0x450689` | — | low | auto-shape | array |
 | `0x45068f` | — | low | auto-shape | array |
 | `0x451e01` | — | low | auto-shape | array |
 | `0x4525d1` | — | low | auto-shape | array |
-| `0x45263d` | — | low | auto-shape | array |
-| `0x45265d` | — | low | auto-shape | array |
-| `0x45273d` | — | low | auto-shape | array |
-| `0x45275d` | — | low | auto-shape | array |
-| `0x45277d` | — | low | auto-shape | array |
-| `0x45279d` | — | low | auto-shape | array |
 | `0x4527bd` | — | low | auto-shape | array |
 | `0x452921` | — | low | auto-shape | array |
 | `0x452923` | — | low | auto-shape | array |
@@ -568,31 +1075,51 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x3140` | adv_speaker_character_id | high | investigation | The page's speaker: a character id, or -1 for narration. set_page_face sets it from the page's face; draw_nameplate and the page's voice block read it. |
 | `0x3143` | adv_name_form | high | investigation | Which column of character_names the name plate shows (0 to 5); any other value shows ？？？？ (draw_speaker_name). |
 | `0x352f` | scjump_context_id | med | investigation | Which of SCJUMP's seven rule lists runs (1 to 7); the caller sets it before running the chain. What each context is has not been read. |
+| `0x3ad5` | battle_id | high | investigation | Saved: the battle to fight, a DUINIT id; scene code sets it, or an arena opponent does. |
+| `0x3ada` | party_leader_id | med | investigation | Saved: a party character FELLOW picks (INITDECK sets 1). The map shows it as the player's unit unless map_agent_character_id is set, and RESULT gives it half as much experience again. |
+| `0x3adb` | party_ultimate_character_id | med | investigation | Saved: the party character whose 奥義 the player uses, picked in FELLOW; LEAVECH picks another one that has a 奥義 when it leaves. RESULT gives it half as much experience again. |
+| `0x3adc` | map_agent_character_id | med | investigation | Saved: the character SETAGENT shows as the player's unit on the map, where set; party_leader_id otherwise. |
+| `0x987c` | time_slot | med | investigation | Saved: the time of day, 0 to 4; area_map_pictures has a picture for each, and BGINIT substitutes pictures by it. |
 | `0x9883` | current_area_id | high | investigation | The area in play, an id of AMINIT: scripts index AMINIT's arrays with it, MPINIT, ROINIT and UNINIT fill their arrays for it (MPINIT has a branch for each of AMINIT's 150 ids), and most SCJUMP rules test it. |
+| `0x1831e` | arena_place_id | med | investigation | Saved: the arena place in use; opponent_places has one bit a place. |
+| `0x18323` | current_opponent_id | high | investigation | Saved: the arena opponent in play, an ARINIT id. |
 | `0x3fb90` | adv_face_id | med | investigation | A page's face id before set_page_face (a row of CFINIT); other library subs pass a picture id in the same cell. |
 | `0x3fb91` | adv_voice_id | high | investigation | The page's voice clip: the page's voice block sets it, clears it when the speaker's voice setting mutes it, and plays it. |
+| `0x260700` | current_goal_id | high | investigation | The goal GETFATE makes current: the open kind-1 goal latest in the sort order. |
+| `0x29eaa4` | character_arg_id | high | investigation | The character UNITECH, LEAVECH, CALCCC and the panels work on; a caller sets it before running them. |
 | `0x43f662` | item_arg_id | high | investigation | The item ADDITEM and the card panel work on. |
 | `0x43f663` | item_arg_count | med | investigation | How many ADDITEM adds (or takes, when negative). |
 | `0x43f664` | card_arg_row | high | investigation | The row of the card CALCARM and the card panel work on; a caller sets it and card_arg_slot before calling CALCARM through preloaded script slot 0x1c. |
 | `0x43f665` | card_arg_slot | high | investigation | The slot of that card. |
 | `0x43f666` | card_arg_count | med | investigation | How many ADDCARD adds. |
+| `0x4525d8` | shop_place_id | high | investigation | The shop or alchemy place in use: recipe_places and shop_entry_shops have one bit a place. |
+| `0x4525dc` | mounted_append_flags | high | investigation | Bit n is set by $n$AUTORUN: append n is mounted. |
+| `0x469105` | battle_rule_id | high | investigation | The rule in play, a REINIT id: SETREGULATION takes it from battle_rules, or for a battle on the map from area_battle_rules. |
 
 ## story-flag
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
 | `0x5e0` | scene_played_flags | high | investigation | A scene's own code sets [scene] to 1 (SC0000 sets cells 0 to 9), and a save keeps it. SCJUMP's rules test it: 585 of the base script's begin with their own scene's cell != 1, and others ask that another scene's is 1. |
+| `0x36cd` | chapter | high | investigation | Saved: the chapter, which the chapters' first scenes set. The recipes', shop entries' and goals' tests compare it. |
+| `0x17f36` | opponent_states | high | investigation | Saved: bit 0 once the opponent's conditions have held (ARENA), bit 1 once beaten (BTL). |
+| `0x183d0` | card_row_locks | high | investigation | Saved: a scene sets [row] to 1 to bar a card row from decks for a while and clears it later (SC0180, row 5); CHECKCARD refuses the row's cards meanwhile. |
+| `0x18498` | goal_states | high | investigation | Saved: bit 0 once the goal is open, and bits 1 and 2 by two more pairs of scene lists (SETFATE). |
 
 ## string-table
 
 | address | name | conf | source | usage |
 |---|---|---|---|---|
 | `GS 0x29b2` | music_titles | high | investigation | MUINIT: a track's title. |
+| `GS 0x29e4` | goal_titles | high | investigation | FAINIT: a line of text (『天慶第二学園』へ). |
+| `GS 0x2dcc` | goal_titles_2 | high | investigation | FAINIT: a second line, the same as the first on 449 of the 454 entries. |
+| `GS 0x31b4` | goal_lines | high | investigation | FAINIT: four lines; the first is a chapter's heading (【共通ルート】　序章). |
 | `GS 0x4154` | character_names | high | investigation | CHINIT. The name plate's text: draw_speaker_name shows character_names[adv_speaker_character_id][adv_name_form]. Columns: 0=name, 1=descriptor, 2=descriptor_2, 3=descriptor_3, 4=descriptor_4, 5=descriptor_5. |
 | `GS 0x58c4` | voice_setting_labels | high | investigation | CVINIT: a voice setting's three labels (エキストラ; 仙崎 秀哉 …). |
 | `GS 0x647c` | glossary_titles | high | investigation | VIINIT: a glossary entry's title (【用語】ＭＨＩ). |
 | `GS 0x6864` | profile_names | high | investigation | CIINIT: a character profile's name. |
 | `GS 0x692c` | profile_lines | high | investigation | CIINIT: a profile's sixteen lines. |
+| `GS 0x75ac` | tip_titles | high | investigation | TIINIT: the entry's title (日常モード, 拠点アイコン・サムネイル …). |
 | `GS 0x7994` | character_full_names | high | investigation | CHINIT: the full name with its reading (仙崎秀哉／せんざきしゅうや), on 27 characters. |
 | `GS 0x7d7c` | card_names | high | investigation | CDINIT: a card's name. The card panel draws it (DRAWCARDINFO). |
 | `GS 0x94ec` | card_flavor_lines | high | investigation | CDINIT: up to three lines of flavour text. |
@@ -608,6 +1135,8 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `GS 0x11e28` | area_names | high | investigation | AMINIT: an area's name (歪秤世界, 天慶市 …). |
 | `GS 0x11f54` | area_point_names | high | investigation | MPINIT, for the area in play: a point's name (出現地点, 西蒼川商業区 …). |
 | `GS 0x1201c` | deck_names | high | investigation | DEINIT: a deck's name. |
+| `GS 0x12404` | battle_rule_lines | high | investigation | REINIT: six lines of text; the first is the heading ◆特殊勝敗条件・編成制限◆. |
+| `GS 0x1268e` | opponent_names | high | investigation | ARINIT: the opponent's name. |
 | `GS 0x12a7c` | race_names | high | investigation | Set by INIT2: the names of the seven races of card_race_flags, by bit; the eighth string is バトル. |
 | `GS 0xd2` | — | med | auto-shape | string-table (written by DEBUGADV) |
 | `GS 0xd3` | — | med | auto-shape | string-table (written by DEBUGADV) |
@@ -2036,7 +2565,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x36c9` | — | med | auto-shape | string-table (written by FAINIT) |
 | `0x36ca` | — | med | auto-shape | string-table (written by FAINIT) |
 | `GS 0x36cc` | — | med | auto-shape | string-table (written by FAINIT) |
-| `0x36cd` | — | med | auto-shape | string-table (written by FAINIT) |
 | `0x36ce` | — | med | auto-shape | string-table (written by FAINIT) |
 | `0x36cf` | — | med | auto-shape | string-table (written by FAINIT) |
 | `GS 0x36d0` | — | med | auto-shape | string-table (written by FAINIT) |
@@ -4346,7 +4874,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `GS 0x9877` | — | med | auto-shape | string-table (written by CDINIT) |
 | `0x9879` | — | med | auto-shape | string-table (written by CDINIT) |
 | `0x987a` | — | med | auto-shape | string-table (written by CDINIT) |
-| `0x987c` | — | med | auto-shape | string-table (written by CDINIT) |
 | `0x987f` | — | med | auto-shape | string-table (written by CDINIT) |
 | `0x9882` | — | med | auto-shape | string-table (written by CDINIT) |
 | `0x9885` | — | med | auto-shape | string-table (written by CDINIT) |
@@ -9736,12 +10263,7 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x48` | — | med | auto-shape | record-table[stride 4] |
 | `0x78` | — | med | auto-shape | record-table[stride 4] |
 | `0xa8` | — | med | auto-shape | record-table[stride 4] |
-| `GS 0x31b4` | — | med | auto-shape | record-table[stride 4] |
-| `0x3ad5` | — | low | auto-shape | index/counter? |
-| `0x3adb` | — | low | auto-shape | index/counter? |
-| `0x3d9c` | — | med | auto-shape | record-table[stride 4] |
 | `0x4159` | — | high | auto-shape | chinit-name-table |
-| `0x66a0` | — | med | auto-shape | record-table[stride 30] |
 | `0x7993` | — | high | auto-shape | chinit-desc-table |
 | `0x9580` | — | med | auto-shape | current-entity-index? |
 | `0x9581` | — | med | auto-shape | record-table[stride 30] |
@@ -9751,12 +10273,9 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x9ade` | — | low | auto-shape | index/counter? |
 | `0x9dff` | — | med | auto-shape | record-table[stride 50] |
 | `0xc50f` | — | med | auto-shape | record-table[stride 200] |
-| `GS 0x12404` | — | med | auto-shape | record-table[stride 6] |
 | `GS 0x12666` | — | med | auto-shape | record-table[stride 4] |
-| `0x16217` | — | med | auto-shape | record-table[stride 30] |
 | `0x17b47` | — | low | auto-shape | index/counter? |
 | `0x18321` | — | med | auto-shape | current-entity-index? |
-| `0x18323` | — | low | auto-shape | index/counter? |
 | `0x18324` | — | med | auto-shape | record-table[stride 8] |
 | `0x18374` | — | med | auto-shape | record-table[stride 8] |
 | `0x1b378` | — | med | auto-shape | record-table[stride 30] |
@@ -9766,7 +10285,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x3fba3` | — | low | auto-shape | index/counter? |
 | `0x3fba7` | — | low | auto-shape | index/counter? |
 | `0x21480c` | — | low | auto-shape | index/counter? |
-| `0x2283f1` | — | med | auto-shape | record-table[stride 2] |
 | `0x22d5f9` | — | med | auto-shape | record-table[stride 100] |
 | `0x22ddcc` | — | med | auto-shape | record-table[stride 10000] |
 | `0x25eb0c` | — | med | auto-shape | record-table[stride 100] |
@@ -9774,12 +10292,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x25faac` | — | med | auto-shape | record-table[stride 50] |
 | `0x25fe94` | — | med | auto-shape | record-table[stride 50] |
 | `0x26027f` | — | med | auto-shape | record-table[stride 50] |
-| `0x260ed1` | — | med | auto-shape | record-table[stride 3] |
-| `0x261a89` | — | med | auto-shape | record-table[stride 3] |
-| `0x262641` | — | med | auto-shape | record-table[stride 3] |
-| `0x2631f9` | — | med | auto-shape | record-table[stride 3] |
-| `0x263db1` | — | med | auto-shape | record-table[stride 3] |
-| `0x264969` | — | med | auto-shape | record-table[stride 3] |
 | `0x2978d2` | — | low | auto-shape | chinit-field? |
 | `0x2978d8` | — | low | auto-shape | chinit-field? |
 | `0x2978dd` | — | low | auto-shape | chinit-field? |
@@ -9858,10 +10370,8 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x298d59` | — | med | auto-shape | record-table[stride 2] |
 | `0x298d81` | — | med | auto-shape | record-table[stride 2] |
 | `0x298da9` | — | med | auto-shape | record-table[stride 6] |
-| `0x29a902` | — | med | auto-shape | record-table[stride 3] |
 | `0x29c45a` | — | low | auto-shape | index/counter? |
 | `0x29c5eb` | — | med | auto-shape | record-table[stride 3] |
-| `0x29cf4c` | — | med | auto-shape | record-table[stride 3] |
 | `0x29d727` | — | low | auto-shape | chinit-field? |
 | `0x29e5ba` | — | low | auto-shape | chinit-field? |
 | `0x29e5be` | — | low | auto-shape | chinit-field? |
@@ -9955,9 +10465,7 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x29ea9c` | — | low | auto-shape | chinit-field? |
 | `0x29eaa0` | — | low | auto-shape | chinit-field? |
 | `0x29eaa1` | — | low | auto-shape | chinit-field? |
-| `0x29eaa4` | — | low | auto-shape | index/counter? |
 | `0x29eaa5` | — | low | auto-shape | chinit-field? |
-| `0x29eaa6` | — | low | auto-shape | chinit-field? |
 | `0x29eaab` | — | low | auto-shape | chinit-field? |
 | `0x29ec59` | — | low | auto-shape | chinit-field? |
 | `0x29ec5e` | — | low | auto-shape | chinit-field? |
@@ -10041,8 +10549,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x29f653` | — | low | auto-shape | chinit-field? |
 | `0x29f658` | — | low | auto-shape | chinit-field? |
 | `0x29f65d` | — | low | auto-shape | chinit-field? |
-| `0x29fa46` | — | med | auto-shape | record-table[stride 4] |
-| `0x2a09e6` | — | med | auto-shape | record-table[stride 9] |
 | `0x2a09f0` | — | low | auto-shape | chinit-field? |
 | `0x2a09f1` | — | low | auto-shape | chinit-field? |
 | `0x2a09f2` | — | low | auto-shape | chinit-field? |
@@ -10129,7 +10635,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x2a2d0b` | — | low | auto-shape | chinit-field? |
 | `0x2a2d0c` | — | low | auto-shape | chinit-field? |
 | `0x2a2d0d` | — | low | auto-shape | chinit-field? |
-| `0x2a2d0e` | — | low | auto-shape | chinit-field? |
 | `0x2a2d0f` | — | low | auto-shape | chinit-field? |
 | `0x2a2d10` | — | low | auto-shape | chinit-field? |
 | `0x2a2d11` | — | low | auto-shape | chinit-field? |
@@ -10150,7 +10655,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x2a4093` | — | low | auto-shape | chinit-field? |
 | `0x2a4094` | — | low | auto-shape | chinit-field? |
 | `0x2a4095` | — | low | auto-shape | chinit-field? |
-| `0x2a4096` | — | low | auto-shape | chinit-field? |
 | `0x2a4097` | — | low | auto-shape | chinit-field? |
 | `0x2a4098` | — | low | auto-shape | chinit-field? |
 | `0x2a4099` | — | low | auto-shape | chinit-field? |
@@ -10171,7 +10675,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x2a541b` | — | low | auto-shape | chinit-field? |
 | `0x2a541c` | — | low | auto-shape | chinit-field? |
 | `0x2a541d` | — | low | auto-shape | chinit-field? |
-| `0x2a541e` | — | low | auto-shape | chinit-field? |
 | `0x2a541f` | — | low | auto-shape | chinit-field? |
 | `0x2a5420` | — | low | auto-shape | chinit-field? |
 | `0x2a5421` | — | low | auto-shape | chinit-field? |
@@ -10191,7 +10694,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x2a67a3` | — | low | auto-shape | chinit-field? |
 | `0x2a67a4` | — | low | auto-shape | chinit-field? |
 | `0x2a67a5` | — | low | auto-shape | chinit-field? |
-| `0x2a67a6` | — | low | auto-shape | chinit-field? |
 | `0x2a67a7` | — | low | auto-shape | chinit-field? |
 | `0x2a67a8` | — | low | auto-shape | chinit-field? |
 | `0x2a67a9` | — | low | auto-shape | chinit-field? |
@@ -10211,7 +10713,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x2a7b2b` | — | low | auto-shape | chinit-field? |
 | `0x2a7b2c` | — | low | auto-shape | chinit-field? |
 | `0x2a7b2d` | — | low | auto-shape | chinit-field? |
-| `0x2a7b2e` | — | low | auto-shape | chinit-field? |
 | `0x2a7b2f` | — | low | auto-shape | chinit-field? |
 | `0x2a7b30` | — | low | auto-shape | chinit-field? |
 | `0x2a7b31` | — | low | auto-shape | chinit-field? |
@@ -10232,7 +10733,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x2a8eb3` | — | low | auto-shape | chinit-field? |
 | `0x2a8eb4` | — | low | auto-shape | chinit-field? |
 | `0x2a8eb5` | — | low | auto-shape | chinit-field? |
-| `0x2a8eb6` | — | low | auto-shape | chinit-field? |
 | `0x2a8eb7` | — | low | auto-shape | chinit-field? |
 | `0x2a8eb8` | — | low | auto-shape | chinit-field? |
 | `0x2a8eb9` | — | low | auto-shape | chinit-field? |
@@ -10253,42 +10753,10 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x2aa23b` | — | low | auto-shape | chinit-field? |
 | `0x2aa23c` | — | low | auto-shape | chinit-field? |
 | `0x2aa23d` | — | low | auto-shape | chinit-field? |
-| `0x2aa23e` | — | low | auto-shape | chinit-field? |
 | `0x2aa23f` | — | low | auto-shape | chinit-field? |
 | `0x2aa240` | — | low | auto-shape | chinit-field? |
 | `0x2aa241` | — | low | auto-shape | chinit-field? |
-| `0x2ab5c7` | — | med | auto-shape | record-table[stride 40] |
-| `0x2ac567` | — | med | auto-shape | record-table[stride 40] |
-| `0x2ad507` | — | med | auto-shape | record-table[stride 40] |
-| `0x2ae4a7` | — | med | auto-shape | record-table[stride 160] |
-| `0x2b2327` | — | med | auto-shape | record-table[stride 40] |
-| `0x2b4aff` | — | med | auto-shape | record-table[stride 30] |
-| `0x2b626f` | — | med | auto-shape | record-table[stride 30] |
-| `0x2b914f` | — | med | auto-shape | record-table[stride 30] |
-| `0x2ba8bf` | — | med | auto-shape | record-table[stride 30] |
-| `0x2cc1ff` | — | med | auto-shape | record-table[stride 30] |
-| `0x2d084f` | — | med | auto-shape | record-table[stride 60] |
-| `0x2d372f` | — | med | auto-shape | record-table[stride 60] |
-| `0x2d660f` | — | med | auto-shape | record-table[stride 30] |
-| `0x2d7d7f` | — | med | auto-shape | record-table[stride 30] |
-| `0x2d94ef` | — | med | auto-shape | record-table[stride 150] |
 | `0x31c728` | — | med | auto-shape | current-entity-index? |
-| `0x31c8ba` | — | med | auto-shape | record-table[stride 10] |
-| `0x31cca2` | — | med | auto-shape | record-table[stride 10] |
-| `0x31d08a` | — | med | auto-shape | record-table[stride 10] |
-| `0x31d472` | — | med | auto-shape | record-table[stride 10] |
-| `0x31d85a` | — | med | auto-shape | record-table[stride 10] |
-| `0x31dc42` | — | med | auto-shape | record-table[stride 10] |
-| `0x31e02a` | — | med | auto-shape | record-table[stride 10] |
-| `0x32e1fa` | — | med | auto-shape | record-table[stride 3] |
-| `0x32fa8a` | — | med | auto-shape | record-table[stride 10] |
-| `0x32fab2` | — | med | auto-shape | record-table[stride 10] |
-| `0x32fb16` | — | med | auto-shape | record-table[stride 10] |
-| `0x32fb57` | — | med | auto-shape | record-table[stride 10] |
-| `0x32fcf1` | — | med | auto-shape | record-table[stride 6] |
-| `0x3303f9` | — | med | auto-shape | record-table[stride 2] |
-| `0x330651` | — | med | auto-shape | record-table[stride 2] |
-| `0x3308a9` | — | med | auto-shape | record-table[stride 2] |
 | `0x330e85` | — | med | auto-shape | record-table[stride 2] |
 | `0x3311a5` | — | med | auto-shape | record-table[stride 5] |
 | `0x33158d` | — | med | auto-shape | record-table[stride 5] |
@@ -10298,51 +10766,7 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x332dc5` | — | med | auto-shape | current-entity-index? |
 | `0x333726` | — | med | auto-shape | record-table[stride 7] |
 | `0x333c9e` | — | med | auto-shape | record-table[stride 7] |
-| `0x3345fe` | — | med | auto-shape | record-table[stride 2] |
-| `0x3432b6` | — | med | auto-shape | record-table[stride 30] |
-| `0x34a7e6` | — | med | auto-shape | record-table[stride 30] |
-| `0x351d16` | — | med | auto-shape | record-table[stride 30] |
-| `0x359246` | — | med | auto-shape | record-table[stride 30] |
-| `0x360776` | — | med | auto-shape | record-table[stride 30] |
-| `0x367ca6` | — | med | auto-shape | record-table[stride 6] |
-| `0x3697fe` | — | med | auto-shape | record-table[stride 4] |
-| `0x36a79e` | — | med | auto-shape | record-table[stride 4] |
-| `0x36b73e` | — | med | auto-shape | record-table[stride 4] |
-| `0x36c6de` | — | med | auto-shape | record-table[stride 4] |
-| `0x36da66` | — | med | auto-shape | record-table[stride 4] |
-| `0x36ea06` | — | med | auto-shape | record-table[stride 2] |
-| `0x371116` | — | med | auto-shape | record-table[stride 2] |
-| `0x3718e6` | — | med | auto-shape | record-table[stride 5] |
-| `0x3723d6` | — | med | auto-shape | record-table[stride 2] |
-| `0x37249e` | — | med | auto-shape | record-table[stride 2] |
-| `0x372566` | — | med | auto-shape | record-table[stride 2] |
-| `0x37262e` | — | med | auto-shape | record-table[stride 2] |
-| `0x3726f6` | — | med | auto-shape | record-table[stride 2] |
-| `0x3727be` | — | med | auto-shape | record-table[stride 10] |
-| `0x37a8a6` | — | med | auto-shape | record-table[stride 5] |
-| `0x37cfb6` | — | med | auto-shape | record-table[stride 5] |
-| `0x37f6c6` | — | med | auto-shape | record-table[stride 4] |
-| `0x381606` | — | med | auto-shape | record-table[stride 4] |
-| `0x383546` | — | med | auto-shape | record-table[stride 4] |
-| `0x385486` | — | med | auto-shape | record-table[stride 4] |
-| `0x38a2a6` | — | med | auto-shape | record-table[stride 2] |
-| `0x38aa76` | — | med | auto-shape | record-table[stride 2] |
-| `0x38d186` | — | med | auto-shape | record-table[stride 3] |
-| `0x39044e` | — | med | auto-shape | record-table[stride 2] |
-| `0x390c1e` | — | med | auto-shape | record-table[stride 2] |
 | `0x391fa7` | — | med | auto-shape | current-entity-index? |
-| `0x391fa9` | — | med | auto-shape | record-table[stride 50] |
-| `0x39e2f9` | — | med | auto-shape | record-table[stride 50] |
-| `0x3aa649` | — | med | auto-shape | record-table[stride 50] |
-| `0x3b6999` | — | med | auto-shape | record-table[stride 50] |
-| `0x3c2ce9` | — | med | auto-shape | record-table[stride 50] |
-| `0x3e76d9` | — | med | auto-shape | record-table[stride 150] |
-| `0x40c0c9` | — | med | auto-shape | record-table[stride 150] |
-| `0x430ab9` | — | med | auto-shape | record-table[stride 20] |
-| `0x4358d9` | — | med | auto-shape | record-table[stride 10] |
-| `0x437fe9` | — | med | auto-shape | record-table[stride 10] |
-| `0x43a6f9` | — | med | auto-shape | record-table[stride 10] |
-| `0x43ce09` | — | med | auto-shape | record-table[stride 10] |
 | `0x43f667` | — | med | auto-shape | current-entity-index? |
 | `0x43f669` | — | med | auto-shape | current-entity-index? |
 | `0x43f66a` | — | med | auto-shape | current-entity-index? |
@@ -10358,9 +10782,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x44e2fb` | — | med | auto-shape | record-table[stride 30] |
 | `0x4502a0` | — | low | auto-shape | index/counter? |
 | `0x450691` | — | med | auto-shape | record-table[stride 30] |
-| `0x4525fd` | — | med | auto-shape | record-table[stride 2] |
-| `0x45267d` | — | med | auto-shape | record-table[stride 3] |
-| `0x4526dd` | — | med | auto-shape | record-table[stride 3] |
 | `0x4527e1` | — | med | auto-shape | record-table[stride 40] |
 | `0x452831` | — | med | auto-shape | record-table[stride 40] |
 | `0x452881` | — | med | auto-shape | record-table[stride 40] |
@@ -10423,6 +10844,5 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x46891b` | — | med | auto-shape | record-table[stride 2] |
 | `0x468920` | — | low | auto-shape | index/counter? |
 | `0x468933` | — | med | auto-shape | record-table[stride 1000] |
-| `0x469105` | — | med | auto-shape | current-entity-index? |
 | `0x469126` | — | med | auto-shape | record-table[stride 30] |
 | `0x46b89a` | — | med | auto-shape | record-table[stride 30] |
