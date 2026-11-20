@@ -31,7 +31,7 @@ below P3 is still being added and is not playable. The levels' gates are in
 | Catalog revision | `S4IC438` |
 | Boot script | `SYSTEM4.BIN` |
 | Conventional install | `games/arterial/` beside the repository |
-| Port saves | disabled (read-only game) |
+| Port saves | enabled, in `games/arterial/` |
 | OMS modules | `arterial.globals`, `arterial.scripts` (generated) |
 | Speakers | no dialogue prelude yet |
 | Tables | none yet |

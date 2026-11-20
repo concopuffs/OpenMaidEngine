@@ -16,8 +16,7 @@
   "metadataReferences": {},
   "persistence": {
     "storageNamespace": "arterial",
-    "writesEnabled": false,
-    "readOnlyReason": "no native save of AGE 4.38D has been read yet, so its save layout is not proven (docs/adding-a-game.md, step 7)",
+    "writesEnabled": true,
     "magic": "S4SD",
     "gameId": "創刻のアテリアル",
     "expectedPackedSaveVersion": 320,

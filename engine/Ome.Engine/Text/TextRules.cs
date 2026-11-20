@@ -25,6 +25,12 @@ namespace Ome.Engine.Text;
 /// text's own face (4.24J, 4.33G).</param>
 /// <param name="AspectCalibration">What aspect mode 1 divides a font's narrower black box by to set its width
 /// (<see cref="Text.AspectCalibration"/>). 4.24J has no aspect mode and never reads it.</param>
+/// <param name="PublisherGrowsGlyphCells">Whether the glyph publisher makes a glyph object's source rectangle taller
+/// than the glyph's record when a text effect is on, by the effect's vertical offset as the text manager holds it at
+/// that moment. 4.33G's and 4.38D's publishers do (adv_text_publish_next_glyph@0x4509f0 and @0x4541b0 once for a
+/// record that is not ruby; adv_text_publish_layout@0x4503b0 and @0x453990 once, and once more in effect mode 3).
+/// 4.24J's (@0x451220, @0x450c80) bind the record's rectangle as it is (docs/engine-re.md, "The glyph publisher
+/// grows a cell").</param>
 public sealed record TextRules(GlyphCoverageAlpha GlyphCoverage, RubyRule Ruby, bool FuriganaArmsGlyphTimer,
                                bool HistoryLookupTestsSign, LineEndRule LineEnd, string? ExtendedGlyphFace,
-                               AspectCalibration AspectCalibration);
+                               AspectCalibration AspectCalibration, bool PublisherGrowsGlyphCells);

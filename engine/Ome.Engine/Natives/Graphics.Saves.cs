@@ -29,11 +29,14 @@ public sealed partial class Graphics
     /// changes. save_data_deserialize_and_begin_restore: with <paramref name="releaseAllSurfaces"/> ((CreateObject &amp;
     /// 2) &amp;&amp; (AutoFreeTex &amp; 2)) the release worker runs over every slot first (docs/engine-re.md,
     /// "AutoFreeTex"). The restore loop reopens each flagged record through gfx_surface_load_asset, which also rewrites
-    /// that slot's live record; the rest of the live and snapshot tables are not replaced by the load.
+    /// that slot's live record; the rest of the live and snapshot tables are not replaced by the load. After the
+    /// release AGE 4.38D clears its polygon map with <paramref name="clearPolygons"/> (CreateObject &amp; 2): a save
+    /// holds no polygon, so a load leaves none.
     /// </summary>
-    public void ReadSaveRecords(GfxPersistenceSnapshot snapshot, bool releaseAllSurfaces)
+    public void ReadSaveRecords(GfxPersistenceSnapshot snapshot, bool releaseAllSurfaces, bool clearPolygons = false)
     {
         if (releaseAllSurfaces) ReleaseSurfaceRange(0, 1000);
+        if (clearPolygons) State.ClearPolygons();
         var restoredSurfaces = State.CapturePersistenceSnapshot().Surfaces
             .ToDictionary(item => item.Slot);
         foreach (GfxSurfacePersistenceState surface in snapshot.Surfaces

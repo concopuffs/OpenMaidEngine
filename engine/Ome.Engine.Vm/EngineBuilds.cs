@@ -35,7 +35,8 @@ public static class EngineBuilds
                 HistoryLookupTestsSign: false,
                 LineEnd: LineEndRule.FixedThree,
                 ExtendedGlyphFace: null,
-                AspectCalibration: AspectCalibration.BlackBoxOverCellIncrement),
+                AspectCalibration: AspectCalibration.BlackBoxOverCellIncrement,
+                PublisherGrowsGlyphCells: false),
             Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
             Settings: SettingsRules.LoaderKeys,
             Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize)));
@@ -59,6 +60,9 @@ public static class EngineBuilds
                 // text_history_find_typed_value@0x4501b0 and text_history_find_pair@0x450270 return for a negative
                 // record index.
                 HistoryLookupTestsSign = true,
+                // adv_text_publish_next_glyph@0x4509f0 and adv_text_publish_layout@0x4503b0 add the effect's vertical
+                // offset to the bottom of the rectangle they bind.
+                PublisherGrowsGlyphCells = true,
             },
             // Worker 0x486120 tests the record's bound bit before it returns the slot.
             Gfx = Age424J.Rules.Gfx with { UnboundObjectReadsAbsent = true },

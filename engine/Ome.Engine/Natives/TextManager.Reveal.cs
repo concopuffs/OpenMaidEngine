@@ -153,12 +153,24 @@ public sealed partial class TextManager
         if (!IsRevealing)
         {
             _scene.Reveal = null;
-            presentation.PublishThrough(gfx, checked(result.FirstGlyphIndex + revealGlyphCount));
+            presentation.PublishThrough(gfx, checked(result.FirstGlyphIndex + revealGlyphCount), TimedPublishCellGrowth);
             _graphics.RequestPresentation();
             _timeline?.State("running", new() { ["text_reveal_complete"] = true });
         }
         return result;
     }
+
+    /// <summary>What adv_text_publish_next_glyph adds under the cell of a glyph that is not ruby, from the style the
+    /// text manager holds when it publishes: the effect's vertical offset while an effect mode is on (4.33G, 4.38D).
+    /// </summary>
+    private int TimedPublishCellGrowth
+        => _publisherGrowsGlyphCells && Style.RenderMode > 0 ? Style.EffectOffsetY : 0;
+
+    /// <summary>What adv_text_publish_layout (op 0x20a) adds under every cell: the same offset, and once more in
+    /// effect mode 3; null on a build whose publisher binds the cells as they are.</summary>
+    private int? LayoutPublishCellGrowth
+        => !_publisherGrowsGlyphCells ? null
+            : Style.RenderMode > 0 ? Style.EffectOffsetY * (Style.RenderMode == 3 ? 2 : 1) : 0;
 
     /// <summary>
     /// One engine tick of the reveal (adv_text_reveal_service_tick@0x406fa0, draw mode 1): poll the glyph timer and
@@ -177,7 +189,8 @@ public sealed partial class TextManager
         RetainedAdvTextLayoutPresentation presentation = reveal.Presentation;
         int before = presentation.PublishedGlyphCount;
         presentation.PublishThrough(
-            gfx, presentation.PublicationTarget(reveal.FirstGlyphIndex, reveal.GlyphCount, reveal.Ticks));
+            gfx, presentation.PublicationTarget(reveal.FirstGlyphIndex, reveal.GlyphCount, reveal.Ticks),
+            TimedPublishCellGrowth);
         if (presentation.PublishedGlyphCount != before)
             _graphics.RequestPresentation();
         if (!IsRevealing)

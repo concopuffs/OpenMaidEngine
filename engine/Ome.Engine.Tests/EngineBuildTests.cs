@@ -26,6 +26,16 @@ public sealed class EngineBuildTests
         Assert.Equal(["string-pointer"], NativeSaveDiff.UnwrittenSections(EngineBuilds.Age438D.Rules.Saves, 20));
     }
 
+    /// <summary>The glyph publisher adds the text effect's vertical offset under a cell from 4.33G on
+    /// (docs/engine-re.md, "The glyph publisher grows a cell").</summary>
+    [Fact]
+    public void TheGlyphPublisherGrowsCellsFromFourThirtyThreeGOn()
+    {
+        Assert.False(EngineBuilds.Age424J.Rules.Text.PublisherGrowsGlyphCells);
+        Assert.True(EngineBuilds.Age433G.Rules.Text.PublisherGrowsGlyphCells);
+        Assert.True(EngineBuilds.Age438D.Rules.Text.PublisherGrowsGlyphCells);
+    }
+
     [Fact]
     public void EveryProfileNamesADeclaredBuildThatRunsItsAbi()
     {

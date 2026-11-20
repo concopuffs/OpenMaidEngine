@@ -1,0 +1,52 @@
+# 創刻のアテリアル: save on SC0000's fourth page, read on, and load the save back. Unchanged on both targets, on a
+# fresh sandbox (the default). It is the scenario of the game's save gate (docs/adding-a-game.md, step 7): native AGE
+# and the port both pass it since 2026-11-19, and the save each writes loads on the other.
+#   py -3.11 -X utf8 tools/drive.py --game arterial native|port start
+#   py -3.11 -X utf8 tools/drive.py --game arterial native|port run tools/drive/scenarios/arterial-save-load.steps
+#   py -3.11 -X utf8 tools/drive.py --game arterial native|port stop
+# The save is SAVE00.DAT in the sandbox's SAVE folder. Compare two targets' files with
+#   Ome.Cli save-diff A/SAVE00.DAT B/SAVE00.DAT --game arterial
+# which shows the time stamp, the play seconds and three graphics start stamps and nothing else. Seed a new sandbox
+# from the other target's (--seed native:fresh or port:fresh, after that target has stopped, since the shared
+# SAVE.DAT is written when the game closes) to load one target's save on the other.
+
+rand-seed 13
+wait 5
+click adv.next                          # skips the logo
+wait-state script=TITLE timeout=90
+wait 6
+click title.start
+wait-state top=SC0000@0xfff timeout=90  # page 1
+settle timeout=20
+advance 3
+expect top=SC0000@0x12cf                # page 4
+shot arterial-save-page4
+
+rclick adv.next                         # the character menu
+wait-state script=FELLOW timeout=20
+wait 1.5
+click menu.save
+wait-state script=SAVE timeout=20
+wait 1.5
+click slot.0
+wait 2
+click confirm.yes
+wait-state script=FELLOW timeout=20     # the save returns to the menu
+wait 1.5
+click menu.close
+wait-state top=SC0000@0x12cf timeout=20
+settle timeout=20
+
+advance 2
+rclick adv.next
+wait-state script=FELLOW timeout=20
+wait 1.5
+click menu.load
+wait-state script=SAVE timeout=20
+wait 1.5
+click slot.0
+wait 2
+click confirm.yes
+wait-state top=SC0000@0x12cf timeout=60 # the load resumes page 4
+settle timeout=20
+shot arterial-save-loaded

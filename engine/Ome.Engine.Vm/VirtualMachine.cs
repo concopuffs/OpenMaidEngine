@@ -241,7 +241,8 @@ public sealed partial class VirtualMachine
         _shell = shell;
         _saveRecords = new NumberedSaveRecords(
             _memory, _audio, _graphics, _text, CaptureSavedFrames,
-            releaseSurfacesOnLoad: (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0, scripting: _scripting);
+            releaseSurfacesOnLoad: (_o.CreateObject & 2) != 0 && (_o.AutoFreeTex & 2) != 0, scripting: _scripting,
+            clearPolygonsOnLoad: (_o.CreateObject & 2) != 0);
         // The input and waits native routes the front end's input to this interpreter's hotspots and callbacks.
         waits.RouteInputTo(this);
         _stopAndReload = waits.StopAndReload ?? new StopAndReload();

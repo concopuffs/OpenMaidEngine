@@ -155,13 +155,14 @@ it; git history keeps the record.
 
   Done when each is checked frame by frame against native with `drive.py` (the port at a low `speed`; native
   cannot be slowed, so a reveal of a few frames may only be comparable at its ends).
-- **Kamidori: History leaves different objects in a save.** `kamidori-history-after-load.steps` saves slot No.003
-  after opening and closing History on SC0000's first name-plate page. Native's `SAVE03.DAT` and the port's differ
-  under `save-diff` in 29 gfx records (2026-11-12): field `+0x14` of objects `0xd6d8`–`0xd6ef` is 53 natively and
-  51 on the port, `0xe678`–`0xe67a` 26 against 24, and `0xd6f0` and `0xe67b` exist only natively. The port's save is
-  the same on `develop` (`1d7a39e`), so this predates the engine layering work. The scenario's History pictures match
-  native. Done when the records match, or the field is shown to be a stamp and listed with `save-diff`'s expected
-  differences (`tools-reference.md`).
+- **Kamidori: History leaves two objects more in a native save.** `kamidori-history-after-load.steps` saves slot
+  No.003 after opening and closing History on SC0000's first name-plate page. Native's `SAVE03.DAT` has two
+  objects the port's lacks, `0xd6f0` and `0xe67b`, one past the last glyph of each text layout (2026-11-19). The
+  cause is read: op `0x20a`'s `adv_text_publish_layout` binds the records up to the reveal index inclusive, so
+  it binds the layout's pending record too, whose rectangle is the next cursor with no right or bottom edge
+  (`engine-re.md`, "The glyph publisher grows a cell"). The 27 rectangles that were two rows short agree since
+  that section's fix. The scenario's History pictures match native. Done when the port binds the pending record
+  as native does and the two saves agree.
 - **Sweep for ops that are still stubbed.** An op counts as implemented once the handler table binds its name
   (`VirtualMachine.Implements`), and both games' catalog reports list no unsupported op
   (`build/games/<game>/catalog-opcode-coverage.json`). So a handler that only stores its operand, or models one
@@ -560,7 +561,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
 - **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P2**
   since 2026-11-19 (`adding-a-game.md` §1; its manifest's `support`), on the branch `feature/arterial`: the engine
   names its install, decodes all of it, and boots it by its own route through the logo and the title to SC0000's
-  first pages, with no opcode skipped. Nothing of it saves, and the launcher does not list it.
+  first pages, with no opcode skipped. It saves since 2026-11-19, and its saves load on native AGE as native's
+  load on the port. The launcher does not list it.
   - **Done for P0 and P1.** Its dump, its Ghidra image with 658 ported or registry names, its build in
     `operand_access.py` `ENGINES` with a fifteenth accessor, the revision diffs (`engine-re.md`, "Comparing engine
     builds"), its profile and engine build (4.33G with its own names and nothing else changed), its observation and
@@ -577,8 +579,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - **`SAVEWINPOS`.** With it set (1 here) native opens its window where it was left, and keeps the position in
       the registry. The port opens its window where the platform puts it. The port must not write the registry;
       where it keeps the position is to decide (`OME.INI` holds the port's own options).
-    - **A load clears the polygons**, and a save holds none. The port's load does not clear them (its saves are
-      off for this game).
     - **Op `0x2c7` on 4.33G** is a plain byte substring; the port runs 4.38D's `SBSubstr` on every build. No script
       of Kamidori has a site.
     - **Two points left unread:** whether 4.33G draws a surface through a sprite with the alpha test on (4.38D
@@ -635,9 +635,23 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **Op `0x252` is implemented (2026-11-19):** `set-present-clear`, which makes a present clear its render target
     first (`engine-re.md`, the Arterial paragraph; `GfxLifecycleOpsTests`). Not compared with native: the port
     clears where op `0x20e` would, and no frame of the two was put side by side.
-  - **Not proven:** its save layout. The build's save stamp (`438D`) follows the version and its record size is
-    4.33G's; the revision diff shows other constants in the numbered save and load opcodes. The image holds the
-    same `S4SD` and `S3SD` magics as 4.33G's.
+  - **Its saves are proven and on (2026-11-19).** A native save reads as the profile and the build expect, and
+    the codec re-encodes it byte for byte (`Ome.Cli save-info`; `engine-re.md`, the triage's Saves paragraph).
+    `tools/drive/scenarios/arterial-save-load.steps` passes on both targets at the same positions, with frames
+    equal in every pixel before the save and after the load. A save each target makes on SC0000's fourth page of
+    a fresh sandbox differs in the time stamp, the play seconds and three animation start stamps; so does the save
+    each makes after loading the other's. Getting there took one fix that Kamidori shares
+    (`engine-re.md`, "The glyph publisher grows a cell") and the load's polygon clear. Open:
+    - **The publisher's move of a mode-3 glyph is not modelled.** 4.33G's and 4.38D's publishers move a glyph
+      object up and left by the effect offsets in effect mode 3 while the text manager's `+0x548` is zero. The
+      field was not identified in these builds (it is the AntiFont version in 4.24J's), and no page was driven
+      with it zero. If it is the anti-aliasing switch, text with `UseAntiFont` off sits one pixel down and right
+      of native's in Kamidori and here. Done when the field is named and a page drawn with it zero equals
+      native's.
+    - **The History tail's unset field.** Native leaves DWORD 9 of a metadata or voice record as it was; the port
+      writes 0 (`sys4-format-notes.md`, "Appended text-history tail"). Nothing was seen to read it.
+    - **Only one page was saved.** No save from a map, a battle or a later chapter has been compared; that is
+      the sweep's work (P4).
   - **Numbered saves: the six bank sections are native's (2026-11-19).** The fifth and sixth carry their right
     names (`FloatPointers`, `StringPointers`; the manifests' `floatPointers` and `stringPointers`), and each build
     writes and restores what its writer and reader were read to (`sys4-format-notes.md`, the six counts;
@@ -679,8 +693,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The title's 3D scene keeps its state and draws nothing (the user's decision, 2026-11-19).** Ops `0x324` to
     `0x32f`: the handlers keep what the scripts set (`Graphics.Scene3D.cs`). What that leaves undrawn is its own
     item, "The title's 3D leaves are not drawn", under Engine fidelity.
-  - **Next, by the plan:** step 7. The triage's real differences above and the two text points, the 20 opcodes,
-    the build's rules in `EngineBuilds.cs`, the shell compared with the game's `AGERC.DLL`, and the saves.
+  - **Next, by the plan:** what is left of step 7 before the manifest says P3: `SAVEWINPOS` above, and the shell
+    compared with the game's `AGERC.DLL` menu and dialogs. The opcodes, the build's rules and the saves are done.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

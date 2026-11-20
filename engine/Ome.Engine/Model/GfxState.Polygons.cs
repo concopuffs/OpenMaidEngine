@@ -79,6 +79,14 @@ public sealed partial class GfxState
         return true;
     }
 
+    /// <summary>gfx_polygon_map_clear@0x40a760: every polygon goes. A numbered load calls it
+    /// (save_data_deserialize_and_begin_restore@0x40fe90), and a save holds none.</summary>
+    public void ClearPolygons()
+    {
+        _scene.Polygons.Clear();
+        _scene.OrderedPolygonHandles.Clear();
+    }
+
     /// <summary>Op 0x320 (gfx_polygon_create@0x4965c0): build the handle's polygon from <paramref name="vertices"/>.
     /// Bit 0 of <paramref name="flags"/> makes it a triangle fan. The record's textures, blend mode, colour and fade
     /// stay; the new vertices take the polygon's colour at once.</summary>

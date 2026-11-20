@@ -16,10 +16,14 @@ namespace Ome.Engine.Natives;
 /// <param name="releaseSurfacesOnLoad">(CreateObject &amp; 2) &amp;&amp; (AutoFreeTex &amp; 2): a load releases every
 /// surface before it restores the saved ones (docs/engine-re.md, "AutoFreeTex").</param>
 /// <param name="scripting">The scripting native, or null for a VM given none: its saves carry no mod state.</param>
+/// <param name="clearPolygonsOnLoad">CreateObject &amp; 2: a load clears the polygon objects, which only AGE 4.38D has
+/// (docs/engine-re.md, "Kamidori against Arterial, triaged", Saves).</param>
 public sealed class NumberedSaveRecords(
     ScriptMemory memory, Audio audio, Graphics graphics, TextManager text,
-    Func<NativeSavedScriptFrame[]> captureFrames, bool releaseSurfacesOnLoad, Scripting? scripting = null)
+    Func<NativeSavedScriptFrame[]> captureFrames, bool releaseSurfacesOnLoad, Scripting? scripting = null,
+    bool clearPolygonsOnLoad = false)
 {
+    public bool ClearPolygonsOnLoad { get; } = clearPolygonsOnLoad;
     public ScriptMemory Memory { get; } = memory;
     public Audio Audio { get; } = audio;
     public Graphics Graphics { get; } = graphics;
@@ -108,7 +112,7 @@ public sealed partial class SavesAndSettings
                 : null;
             records.Memory.ReadSaveRecords(state, _store.Identity.NumberedSaveKeepsFloats);
             records.Audio.ReadSaveRecords(state);
-            records.Graphics.ReadSaveRecords(gfxSnapshot, records.ReleaseSurfacesOnLoad);
+            records.Graphics.ReadSaveRecords(gfxSnapshot, records.ReleaseSurfacesOnLoad, records.ClearPolygonsOnLoad);
             _retained = state;
             _scene.PendingPlaySeconds = file.Document.Metadata.AccumulatedPlaySeconds;
             if (restoreHistory)

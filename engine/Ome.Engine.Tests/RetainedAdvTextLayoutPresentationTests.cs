@@ -173,6 +173,93 @@ public class RetainedAdvTextLayoutPresentationTests
         Assert.Empty(saved.Objects);
     }
 
+    // ---- the publisher's cell growth (TextRules.PublisherGrowsGlyphCells; AGE 4.33G and 4.38D) ----
+
+    private static RetainedAdvTextLayoutPresentation WithOneRubyGlyph()
+    {
+        var presentation = new RetainedAdvTextLayoutPresentation(
+            new AdvTextLayoutPresentationBinding(1, 21, 100, 8, -1, 10, 20));
+        presentation.AppendRun(
+            [
+                new AdvRetainedGlyphRecord(0, 1, 10, 5, 16),
+                new AdvRetainedGlyphRecord(0, 5, 10, 9, 16),
+                new AdvRetainedGlyphRecord(0, 1, 4, 3, 8),     // a ruby character over the first glyph
+            ],
+            [false, false, true],
+            layoutOriginX: 30, layoutOriginY: 40, chainEveryRubyRecord: true);
+        return presentation;
+    }
+
+    private static int[] Heights(GfxState gfx) => gfx.SnapshotVisibleObjects().Select(item => item.H).ToArray();
+
+    [Fact]
+    public void TheTimedPublisherGrowsEveryCellButARubyOnes()
+    {
+        // adv_text_publish_next_glyph adds the effect's vertical offset to the bottom of a record with chain flag 0.
+        RetainedAdvTextLayoutPresentation presentation = WithOneRubyGlyph();
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+
+        presentation.PublishThrough(gfx, 3, primaryCellGrowth: 1);
+
+        Assert.Equal([7, 7, 4], Heights(gfx));
+        // The cell's place does not move.
+        Assert.All(gfx.SnapshotVisibleObjects().Take(2), item => Assert.Equal((10, 50.0), (item.SrcY, item.DstY)));
+    }
+
+    [Fact]
+    public void AGlyphKeepsItsGrowthThroughALaterRepublish()
+    {
+        RetainedAdvTextLayoutPresentation presentation = WithOneRubyGlyph();
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+        presentation.PublishThrough(gfx, 2, primaryCellGrowth: 1);
+        presentation.PublishThrough(gfx, 3);                      // the effect was turned off before the ruby glyph
+
+        gfx.EraseRange(100, 8);
+        presentation.Republish(gfx);                              // a layout coming back from a suspension
+
+        Assert.Equal([7, 7, 4], Heights(gfx));
+    }
+
+    [Fact]
+    public void TheLayoutPublisherGrowsEveryCellItBindsAgain()
+    {
+        // adv_text_publish_layout (op 0x20a) adds its rows under every record, ruby too.
+        RetainedAdvTextLayoutPresentation presentation = WithOneRubyGlyph();
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+        presentation.PublishThrough(gfx, 3, primaryCellGrowth: 1);
+
+        presentation.Republish(gfx, layoutCellGrowth: 2);
+        Assert.Equal([8, 8, 6], Heights(gfx));
+
+        presentation.Republish(gfx, layoutCellGrowth: 0);         // no effect mode: the cells as recorded
+        Assert.Equal([6, 6, 4], Heights(gfx));
+    }
+
+    [Fact]
+    public void TheSourceGlyphsOfARunGrowAsItsDrawnOnesDid()
+    {
+        // A presented run binds other glyphs than its source text would have; a save writes the source ones, grown as
+        // the publisher would have grown them (localization spec §8).
+        var presentation = new RetainedAdvTextLayoutPresentation(
+            new AdvTextLayoutPresentationBinding(1, 21, 100, 8, -1, 10, 20));
+        presentation.AppendRun(
+            [new AdvRetainedGlyphRecord(0, 1, 10, 9, 16)], [false], 30, 40, chainEveryRubyRecord: true,
+            sourceRecords:
+            [
+                new AdvRetainedGlyphRecord(0, 1, 10, 5, 16),
+                new AdvRetainedGlyphRecord(1, 1, 4, 3, 8),       // the source text's ruby character
+            ]);
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+
+        presentation.PublishThrough(gfx, 1, primaryCellGrowth: 1);
+
+        Assert.Equal([1, 0], presentation.PublishedSourceGlyphs().Select(glyph => glyph.CellGrowth));
+    }
+
     private static RetainedAdvTextLayoutPresentation Presentation(int capacity)
     {
         var presentation = new RetainedAdvTextLayoutPresentation(

@@ -93,8 +93,13 @@ public sealed partial class TextManager
             ? text.Layout.RenderRuby(
                 null, run.Text, laid.Rows, run.SourceRuby, run.Style, text.Policy, _textAntialias, _rubyRules)
             : [];
+        // A ruby record carries chain flag 1 where the build's ruby builder gives every one of them the flag, so the
+        // publisher's cell growth tells the two apart in the source layout as it does in the drawn one.
         glyphs = OrderedGlyphs(laid, ruby, byRow: !string.IsNullOrEmpty(run.SourceRuby) && laid.Rows.Count > 0)
-            .Select(item => item.Record).ToArray();
+            .Select(item => item.Record with
+            {
+                PublicationChainFlag = item.IsRuby && _rubyRules.ChainEveryRubyRecord ? 1 : 0,
+            }).ToArray();
         extent = PresentedTextPlacement.Extent(run.Text, laid.Records);
         _runGeometry = PageGeometry(run, laid, text, realization);
         return new AdvTextSourceLayout(laid.Rows, ruby, laid.CursorX, laid.CursorY);

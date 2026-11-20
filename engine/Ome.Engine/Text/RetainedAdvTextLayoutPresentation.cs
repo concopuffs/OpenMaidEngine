@@ -13,6 +13,9 @@ public sealed class RetainedAdvTextLayoutPresentation
     // each run the drawn glyph count after it and its source glyphs' end.
     private readonly List<AdvRetainedGlyphPlacement> _sourceGlyphs = new();
     private readonly List<(int DrawnEnd, int SourceEnd)> _sourceRuns = new();
+    // For each run, what the publisher last added under its glyphs' cells, and whether under every record or only
+    // under those that are not ruby: its source glyphs grow as its drawn ones did.
+    private readonly List<(int Rows, bool EveryRecord)> _sourceRunGrowth = new();
 
     public RetainedAdvTextLayoutPresentation(AdvTextLayoutPresentationBinding binding)
     {
@@ -76,14 +79,16 @@ public sealed class RetainedAdvTextLayoutPresentation
         if (isRuby.Count != records.Count)
             throw new ArgumentException("Each record needs a ruby marker.", nameof(isRuby));
         int first = _glyphs.Count;
+        var flagged = new AdvRetainedGlyphRecord[records.Count];
         for (int index = 0; index < records.Count; index++)
         {
             bool chained = chainEveryRubyRecord ? isRuby[index] : _lastAppendedIsRuby;
             AdvRetainedGlyphRecord record = records[index] with { PublicationChainFlag = chained ? 1 : 0 };
+            flagged[index] = record;
             _glyphs.Add(new AdvRetainedGlyphPlacement(record, layoutOriginX, layoutOriginY));
             _lastAppendedIsRuby = !chainEveryRubyRecord && isRuby[index];
         }
-        AddSourceRun(sourceRecords ?? records, layoutOriginX, layoutOriginY);
+        AddSourceRun(sourceRecords ?? flagged, layoutOriginX, layoutOriginY);
         SourceDiffers |= sourceRecords != null;
         return first;
     }
@@ -102,6 +107,7 @@ public sealed class RetainedAdvTextLayoutPresentation
         foreach (AdvRetainedGlyphRecord record in records)
             _sourceGlyphs.Add(new AdvRetainedGlyphPlacement(record, layoutOriginX, layoutOriginY));
         _sourceRuns.Add((_glyphs.Count, _sourceGlyphs.Count));
+        _sourceRunGrowth.Add((0, false));
     }
 
     /// <summary>The glyphs the source-language run would have published by now (localization spec §8), up to the
@@ -110,18 +116,27 @@ public sealed class RetainedAdvTextLayoutPresentation
     public IReadOnlyList<AdvRetainedGlyphPlacement> PublishedSourceGlyphs()
     {
         int published = 0, drawnStart = 0, sourceStart = 0;
-        foreach ((int drawnEnd, int sourceEnd) in _sourceRuns)
+        var grown = new List<AdvRetainedGlyphPlacement>();
+        for (int run = 0; run < _sourceRuns.Count; run++)
         {
-            if (PublishedGlyphCount >= drawnEnd)
-                published = sourceEnd;
-            else
+            (int drawnEnd, int sourceEnd) = _sourceRuns[run];
+            bool whole = PublishedGlyphCount >= drawnEnd;
+            published = whole
+                ? sourceEnd
+                : Math.Min(sourceEnd, sourceStart + Math.Max(0, PublishedGlyphCount - drawnStart));
+            (int rows, bool everyRecord) = _sourceRunGrowth[run];
+            for (int index = sourceStart; index < published; index++)
             {
-                published = Math.Min(sourceEnd, sourceStart + Math.Max(0, PublishedGlyphCount - drawnStart));
-                break;
+                AdvRetainedGlyphPlacement glyph = _sourceGlyphs[index];
+                grown.Add(glyph with
+                {
+                    CellGrowth = everyRecord || glyph.Record.PublicationChainFlag == 0 ? rows : 0,
+                });
             }
+            if (!whole) break;
             (drawnStart, sourceStart) = (drawnEnd, sourceEnd);
         }
-        return _sourceGlyphs.Take((int)Math.Min(published, Binding.ObjectCapacity)).ToArray();
+        return grown.Take((int)Math.Min(published, Binding.ObjectCapacity)).ToArray();
     }
 
     private bool _lastAppendedIsRuby;
@@ -159,24 +174,61 @@ public sealed class RetainedAdvTextLayoutPresentation
         return ticks;
     }
 
-    /// <summary>Publish newly revealed glyphs through a layout-global target count.</summary>
-    public int PublishThrough(GfxState gfx, int targetGlyphCount)
+    /// <summary>
+    /// Publish newly revealed glyphs through a layout-global target count, as adv_text_publish_next_glyph does.
+    /// <paramref name="primaryCellGrowth"/> is what the build's publisher adds under the cell of each glyph that is
+    /// not ruby (a record with chain flag 0) as it binds it: the effect's vertical offset while a text effect is on
+    /// (<c>TextRules.PublisherGrowsGlyphCells</c>), else 0.
+    /// </summary>
+    public int PublishThrough(GfxState gfx, int targetGlyphCount, int primaryCellGrowth = 0)
     {
         ArgumentNullException.ThrowIfNull(gfx);
         int target = Math.Clamp(targetGlyphCount, 0, PublishableGlyphCount);
         for (int index = PublishedGlyphCount; index < target; index++)
+        {
+            Grow(index, primaryCellGrowth, everyRecord: false);
             Bind(gfx, index);
+        }
         PublishedGlyphCount = Math.Max(PublishedGlyphCount, target);
         return PublishedGlyphCount;
     }
 
-    /// <summary>Recreate every currently revealed binding after op 0x20a or temporary suspension.</summary>
-    public int Republish(GfxState gfx)
+    /// <summary>
+    /// Recreate every currently revealed binding. With <paramref name="layoutCellGrowth"/> it is op 0x20a's
+    /// adv_text_publish_layout, which adds that many rows under every record's cell: the effect's vertical offset
+    /// while an effect is on, twice in mode 3. It tests the chain flag of the record at the reveal index, not of the
+    /// record it binds; for a chained one it moves cells instead, which the port does not model, so the cells keep
+    /// what they had. Without it (a layout coming back from a suspension, a redraw) each glyph keeps the growth it
+    /// was published with.
+    /// </summary>
+    public int Republish(GfxState gfx, int? layoutCellGrowth = null)
     {
         ArgumentNullException.ThrowIfNull(gfx);
+        bool grows = layoutCellGrowth != null
+                     && (PublishedGlyphCount >= _glyphs.Count
+                         || _glyphs[PublishedGlyphCount].Record.PublicationChainFlag == 0);
         for (int index = 0; index < PublishedGlyphCount; index++)
+        {
+            if (grows) Grow(index, layoutCellGrowth!.Value, everyRecord: true);
             Bind(gfx, index);
+        }
         return PublishedGlyphCount;
+    }
+
+    // Remember what the publisher adds under glyph index's cell, and give its run's source glyphs the same.
+    private void Grow(int index, int rows, bool everyRecord)
+    {
+        AdvRetainedGlyphPlacement placement = _glyphs[index];
+        _glyphs[index] = placement with
+        {
+            CellGrowth = everyRecord || placement.Record.PublicationChainFlag == 0 ? rows : 0,
+        };
+        for (int run = 0; run < _sourceRuns.Count; run++)
+            if (index < _sourceRuns[run].DrawnEnd)
+            {
+                _sourceRunGrowth[run] = (rows, everyRecord);
+                break;
+            }
     }
 
     public void ErasePublished(GfxState gfx)
@@ -196,7 +248,7 @@ public sealed class RetainedAdvTextLayoutPresentation
             cell.Left,
             cell.Top,
             cell.Width,
-            cell.Height,
+            checked(cell.Height + placement.CellGrowth),
             checked(placement.LayoutOriginX + cell.Left),
             checked(placement.LayoutOriginY + cell.Top));
     }

@@ -114,7 +114,7 @@ public sealed partial class GfxState
                 long handle = layout.FirstHandle + index;
                 GfxObject bound = drawn.GetValueOrDefault(handle) ?? new GfxObject();
                 bound.SourceSlot = layout.SurfaceSlot;
-                bound.SrcRect = (cell.Left, cell.Top, cell.Width, cell.Height);
+                bound.SrcRect = (cell.Left, cell.Top, cell.Width, checked(cell.Height + placement.CellGrowth));
                 bound.SrcCollapsed = false;
                 bound.V24 = (placement.LayoutOriginX + cell.Left, placement.LayoutOriginY + cell.Top, 0);
                 bound.Visible = true;

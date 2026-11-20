@@ -9,7 +9,7 @@ using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 
-const string CommandList = "save-diff, run-lock, intake, omp, oms-compile, oms-append, oms-patch, oms-rebuild, oms-temps, "
+const string CommandList = "save-diff, save-info, run-lock, intake, omp, oms-compile, oms-append, oms-patch, oms-rebuild, oms-temps, "
                           + "oms-roundtrip, oms-decompile, oms-residue, catalog-scan, run, audio, gfx, init-image, play, sweep, trace";
 if (args.Length == 0)
 {
@@ -20,8 +20,9 @@ if (args.Length == 0)
 // The command is the first argument; an option value that happens to equal a command name never selects it.
 string command = args[0];
 
-// save-diff reads only the two save files, so it runs before the game catalog loads.
+// save-diff and save-info read only save files, so they run before the game catalog loads.
 if (command == "save-diff") return SaveDiffCommand.Run(args);
+if (command == "save-info") return SaveInfoCommand.Run(args);
 // run-lock takes only a data root's lock (launcher spec §5.5): the run lock tests start it as a second process.
 if (command == "run-lock") return RunLockCommand.Run(args);
 // intake looks at an install that has no profile yet (docs/adding-a-game.md, step 1), so it runs before a game is

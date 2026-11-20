@@ -219,9 +219,13 @@ The driver is needed before the port boots: it shows what native does, and it ma
   plus named changes, each with a comment that points to its evidence.
 - Settings: bind the build's `SYS4REG.INI` keys (`SettingsRules`), and compare the game's `AGERC.DLL` menu and
   dialogs with the shell the port draws.
-- Saves: make a native save with the driver. Read its identity, version stamp and record sizes. Round-trip it
-  through the save codec. Then seed each target's sandbox from the other (`drive.py --seed`), load on both, and
-  compare decoded saves with `Ome.Cli save-diff`. Set `writesEnabled` only after that.
+- Saves: make a native save with the driver. Read its identity, version stamp and record sizes, and round-trip it
+  through the save codec: `Ome.Cli save-info <file> --game <id>` does both and says where the file differs from
+  the profile and the engine build. The port reads no save while `writesEnabled` is false, so turn it on in the
+  working tree for what follows. Seed each target's sandbox from the other (`drive.py --seed`, after the source
+  target has stopped: the shared `SAVE.DAT` is written when the game closes), load on both, and compare decoded
+  saves with `Ome.Cli save-diff --game <id>`: a save each target makes on the same page of a fresh sandbox, and a
+  save each makes after loading the other's. Commit `writesEnabled` only after that.
 - **Done when** P3's gate passes.
 
 ### Step 8: verify against native (P4)

@@ -745,6 +745,12 @@ byte for byte on SC0000 page 3 (2026-11-03). The string blob contains one NUL-te
 record; line breaks hold empty strings. The installed save has a 21-byte physical history tail, and container plus tail consume the
 file exactly.
 
+AGE 4.38D's tail has the same layout (a native save of 創刻のアテリアル read on 2026-11-19). There, DWORD 9 of a
+metadata or voice record holds a value nothing set: `0x765a0a48` in every metadata record of that save and
+`0x0049c753`, an address in the engine's code, in every voice record. The port writes 0. Native loads the port's
+save and shows the page and its History, so it does not depend on the field for those records; whether it reads
+it at all for them was not read. `save-diff` does not compare the tail.
+
 ### Numbered `SAVE%02d.STH` thumbnail — CONFIRMED
 
 The thumbnail is a separate ordinary BMP under a nonstandard extension:

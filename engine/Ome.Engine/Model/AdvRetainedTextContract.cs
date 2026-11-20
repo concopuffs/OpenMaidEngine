@@ -42,7 +42,13 @@ public readonly record struct AdvTextLayoutPresentationBinding(
 public readonly record struct AdvRetainedGlyphPlacement(
     AdvRetainedGlyphRecord Record,
     int LayoutOriginX,
-    int LayoutOriginY);
+    int LayoutOriginY)
+{
+    /// <summary>The rows the glyph's object shows below its record's cell: what the build's publisher added to the
+    /// bottom of the source rectangle when it bound the object (<c>TextRules.PublisherGrowsGlyphCells</c>); 0 before
+    /// it is published and on a build whose publisher binds the cell as it is.</summary>
+    public int CellGrowth { get; init; }
+}
 
 public readonly record struct AdvRetainedTextRunResult(
     int LayoutSlot,

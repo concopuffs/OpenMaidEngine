@@ -17,6 +17,15 @@ point = "adv.next"        # where `advance` clicks: the middle of the canvas
 "title.room" = [510, 384]        # Eushully-chan Room (回想)
 "title.option" = [510, 434]      # Option (環境設定)
 "title.quit" = [510, 484]        # Quit (ゲームを終了する)
+# The character menu a right click opens on a page (MENU > FELLOW), read from native on 2026-11-19, and the DATA SAVE
+# and DATA LOAD pages its Save and Load buttons open (the title's Load Data opens the same page). A slot asks
+# セーブしますか？ or ロードしますか？ with はい above いいえ.
+"menu.save" = [528, 22]          # セーブ Save
+"menu.load" = [528, 58]          # ロード Load
+"menu.close" = [638, 58]         # 閉じる Close
+"slot.0" = [122, 166]            # 000, the first of the page's ten
+"slot.1" = [317, 166]            # 001
+"confirm.yes" = [470, 288]       # はい
 
 # Settings written into a sandbox profile's SYS4REG.INI before every sandboxed launch (as for the other games).
 [sandbox]

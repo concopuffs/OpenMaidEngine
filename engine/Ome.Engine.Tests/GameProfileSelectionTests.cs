@@ -83,8 +83,9 @@ public sealed class GameProfileSelectionTests
         Assert.Equal(GameSupport.Supported, GameProfileRegistry.BuiltIn.Find("kamidori")!.Support);
         Assert.Throws<InvalidOperationException>(() => GameSupport.Parse("P0", "none"));
         Assert.Throws<InvalidOperationException>(() => GameSupport.Parse("P3", null));
-        Assert.False(arterial.PersistenceWritesEnabled);
-        Assert.Contains("no native save", arterial.Persistence.ReadOnlyReason);
+        // Its saves are on since a native save was read and loaded both ways (2026-11-19).
+        Assert.True(arterial.PersistenceWritesEnabled);
+        Assert.Null(arterial.Persistence.ReadOnlyReason);
         Assert.Equal(320, arterial.Persistence.ExpectedPackedSaveVersion);
         Assert.Equal([260993, 1, 231, 1, 1, 1], arterial.Persistence.BankDimensions.ToArray());
         Assert.Null(arterial.DirectSceneDiagnostics);

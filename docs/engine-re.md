@@ -426,7 +426,11 @@ differs in six lines, all names and offsets, and the reader copies each section 
 grew by 21,660 bytes. One thing is new: after it releases the surfaces,
 `save_data_deserialize_and_begin_restore@0x40fe90` calls `gfx_polygon_map_clear@0x40a760` on the manager's
 polygon map (`ctx+0x4ed2c`) when `set:CreateObject` has bit 1. So a load leaves no polygon, and a save holds
-none. No 4.38D save has been read yet.
+none. A native save was read on 2026-11-19 (`Ome.Cli save-info`): `S4SD`, the stamp `438D`, save version 3.20,
+the bank counts 260993, 1, 231, 1, 1, 1 and a graphics record of `0x2e4` bytes, all as the profile and the build
+had them, and the codec re-encodes it byte for byte. The port loads it and native loads the port's
+(`tools/drive/scenarios/arterial-save-load.steps`); what the first comparison showed is "The glyph publisher
+grows a cell" below. The port's load clears the polygons (`GfxState.ClearPolygons`).
 
 **Unread.** Two points the triage did not settle; each is listed in the game's backlog item:
 
@@ -566,6 +570,45 @@ dispatch the handler calls `screen_transition_finalize(target, 0)` and begins no
 The port keeps the two captured frames as it does for the crossfade, and its reference renderer draws the one
 `LegacyScreenTransitionTiming.MosaicAt` names and breaks it into blocks
 (`LegacyScreenTransitionComposite.Mosaic`). No frame of it has been compared with native's.
+
+### The glyph publisher grows a cell (2026-11-19)
+
+The first native save of 創刻のアテリアル differed from the port's, made on the same page, in one field: the
+bottom of every text glyph object's source rectangle was one row lower natively (76 against 75), while the two
+frames were equal in every pixel. The glyph's record is the same in both: `adv_text_append_horizontal_glyph_records`
+stores `bottom = y + size`, plus the effect's vertical offset when an effect mode is on, in 4.33G (`@0x45b710`)
+and 4.38D (`@0x466000`) alike, and the History row in the save's tail has the record's 75. The row comes from the
+function that binds the object.
+
+4.33G's and 4.38D's publishers add to the rectangle they bind, from the style the text manager holds at that
+moment (effect mode `+0x55c`, offsets `+0x568` and `+0x56c`, and a field at `+0x548`, which in 4.24J's text
+manager is the AntiFont version and was not identified in these builds):
+
+| function | 4.33G | 4.38D | what it adds |
+|---|---|---|---|
+| `adv_text_publish_next_glyph`, the timed reveal | `0x4509f0` | `0x4541b0` | for a record with chain flag 0, in an effect mode: `bottom += offset y`. In mode 3 with `+0x548` zero it also moves the object up and left by the offsets. For a chained record (a ruby character) in mode 3 it moves the cell and the object up by `offset y` unless `+0x355e8` is set. |
+| `adv_text_publish_layout`, op `0x20a` | `0x4503b0` | `0x453990` | the same, with two differences. In mode 3 it adds `offset y` to the bottom a second time. It tests the chain flag of the record at the reveal index, not of the record it binds, so it treats every record alike. It also binds the records up to the reveal index inclusive, one more than the timed publisher has shown. |
+
+With the aspect mode off (`+0x313d0 == 0`) both add the offsets to the right and the bottom once more for an
+unchained record; neither game runs that way. 4.24J's publishers (`0x451220`, `0x450c80`) bind the record's
+rectangle as it is. The two builds' functions differ from each other in one line, in a branch for a display mode
+(`[+0x40c]+0x48c == 2`) that was not followed.
+
+The port has the growth as `TextRules.PublisherGrowsGlyphCells`: `RetainedAdvTextLayoutPresentation` adds the
+rows when it binds a glyph and keeps them with it, so a layout that comes back from a suspension binds the same
+cells, and a save of presented text gives its source glyphs the growth of the run they stand for. With it:
+
+- 創刻のアテリアル's saves from SC0000's fourth page differ from native's in the time stamp, the play seconds and
+  three animation start stamps, and nothing else (`tools/drive/scenarios/arterial-save-load.steps`).
+- Kamidori's save from SC0000's first name-plate page equals native's but for the time stamp and the play
+  seconds. It had not been compared before: the port's cells were a row short there too.
+- Kamidori's History scenario (`kamidori-history-after-load.steps`) now agrees in the 27 rectangles that were 2
+  rows short. Native still has two objects the port lacks, one past each layout's last glyph: the layout
+  publisher's inclusive bound (`backlog.md`, "Kamidori: History leaves different objects in a save").
+
+Not modelled: the object's move in mode 3 while `+0x548` is zero (`backlog.md`, the 創刻のアテリアル item), the
+chained record's move at publication (the port raises ruby in its layout,
+`RubyRule.RaiseByEffectInMode3`), the aspect-off branch, and the layout publisher's extra record.
 
 ## Kamidori SYS4433 comparison image and K6 frontier (2026-08-19)
 
