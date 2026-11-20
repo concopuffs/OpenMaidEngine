@@ -19,5 +19,9 @@ namespace Ome.Engine.Text;
 /// fails a checked subscript, which ends the process (docs/engine-re.md, "Indices outside their tables").</param>
 /// <param name="LineEnd">Which characters a horizontal ADV layout keeps on the line they overflow: a fixed three
 /// (4.24J, 4.33G) or the catalog's <c>JUSTIFYCHAR</c> list (4.38D); <see cref="LineEndRule"/>.</param>
+/// <param name="ExtendedGlyphFace">The face that draws a character whose Shift-JIS code is 0xF040 to 0xF9FC, the
+/// user-defined area, whatever face the text is in (<see cref="ExtendedFaceGlyphRasterizer"/>). 4.38D's glyph
+/// drawers select <c>AGE Extend</c>, a font the game ships in its catalog; null draws such a character in the
+/// text's own face (4.24J, 4.33G).</param>
 public sealed record TextRules(GlyphCoverageAlpha GlyphCoverage, RubyRule Ruby, bool FuriganaArmsGlyphTimer,
-                               bool HistoryLookupTestsSign, LineEndRule LineEnd);
+                               bool HistoryLookupTestsSign, LineEndRule LineEnd, string? ExtendedGlyphFace);

@@ -304,8 +304,8 @@ with the build's own addresses and context offsets masked. Addresses are written
 | The same code, compiled differently | ops `0x2`, `0xae` (names only), `0x15`, `0x216` (one index expression), `0x70` (`adv_text_layout_define` is the same line for line), `0x85` (the erase loop became a library call), `0x258` (its body moved into `0x417540` unchanged); helpers `0x40ab90`=`0x40aa90`, `0x483cd0`=`0x492940` (one string paired differently), `0x40e6b0`=`0x40ea70`, `0x40b680`=`0x40b900` (the save folder helper: 4.38D's image does not resolve its imports, so the decompiler ends the function early) | noise |
 
 **Text.** 4.38D's text code is 4.33G's with these changes. The port has the first as the build's
-`TextRules.LineEnd`; the second, which 創刻のアテリアル's first page shows, it does not have yet (`backlog.md`, the
-game's item).
+`TextRules.LineEnd` and the second as `TextRules.ExtendedGlyphFace`, with the dash join that goes with it
+("The dash join" below).
 
 - **The characters that may pass the right edge come from the catalog.** 4.33G's
   `adv_text_append_horizontal_glyph_records@0x45b710` keeps `、`, `。` and `」` on the line they overflow by
@@ -322,8 +322,9 @@ game's item).
   `text_draw_glyph_string_effect@0x46b1d0` draw a character whose Shift-JIS code is `0xF040` to `0xF9FC` with that
   face (glyph cache font id `0x101`), and after a `0xF042` or `0xF043` they copy surface rectangles
   (`gfx_copy_surface_rect@0x48d2f0`) so that consecutive dashes join. The catalog ships the face as
-  `AGE-EXTEND.TTF`. `text_set_font_face@0x42ec40` (ops `0x82` and `0x1a5`) reports a face missing from the
-  catalog's font list as a script error, except this one.
+  `AGE-EXTEND.TTF`, and `engine_initialize@0x416c00` registers that file for the process
+  (`sys4-format-notes.md`, "The font list"). `text_set_font_face@0x42ec40` (ops `0x82` and `0x1a5`) reports a face
+  missing from the catalog's font list as a script error, except this one.
 - **A segment record carries its style.** The record a layout keeps per drawn run grew from `0x30` to `0x74`
   bytes: `adv_text_append_segment_record@0x459d50` (4.33G `0x454e90`) stores the face, size, colours and effect
   with the rectangle and the text, where 4.33G stored them once in the layout. The port's records have carried a
@@ -335,6 +336,32 @@ game's item).
 - `scene_context_init_reset@0x40c660` (op `0x9`) zeroes two more fields: `ctx+0x77518`, op `0x2e9`'s count, and
   `ctx+0x773a4`, the layout slot op `0x72` last waited on (4.33G keeps that at `ctx+0x71f2c` and does not zero
   it).
+
+**The dash join.** The extended font is the primary font's `LOGFONT` with the face name replaced: the same height
+and weight, and with the aspect mode on the same calibration call, which leaves a face missing from the
+installed-font list at `-height / 2` wide. A font registered for the process is not in that list. The drawers
+select it only around `GetGlyphOutline`: the caller has already read `tmAscent` with the primary font selected, so
+the glyph's baseline and the aspect mode's raise are the primary font's.
+
+After either drawer has drawn a `0xF042` or `0xF043`, it unlocks the text surface and copies a strip of it onto
+itself. With `x` the glyph's draw position, `y` the string's top, `bbw` the glyph's black box width, `(ex, ey)`
+the style's effect offset (`+0x568`, `+0x56c`), `size` the primary font size times the display's text scale,
+truncated, and `next` the pen after the glyph's advance:
+
+- the source is columns `[x + ex, x + bbw - 2)` and rows `[y, y + size + 2 × ey)`;
+- both codes copy it to end at column `x + 1`;
+- `0xF042` then copies it again to end at column `next + ex`.
+
+So `0xF043` draws its dash again over the gap before it, and `0xF042` also carries it to where the next glyph
+starts. `gfx_copy_surface_rect` clips the destination to the surface and moves the source by as much, then the
+source likewise, and copies nothing when what is left is empty; it writes the clipped rectangles back, and the
+second copy starts from them. 創刻のアテリアル's first page begins with two dashes: the first is neither of the
+two codes, and the second is `0xF043`.
+
+The port wraps each glyph rasterizer (`ExtendedFaceGlyphRasterizer`): a code of the range is drawn with the face,
+at the uncalibrated width, and the mask keeps the text font's ascent. `ExtendedDashJoin` makes the copies after
+each glyph the surface text renderer and the ADV layout engine draw. The ruby drawer does not join. Compared with
+native on that first page (2026-11-19, the GDI backend): the two dashes are equal in every pixel.
 
 **Auto pitch.** 4.38D gives Auto a delay per character of the page, from three new settings: the pitches
 `message:AutoMessagePitch0` (after a voice) and `message:AutoMessagePitch1` (an unvoiced page), and

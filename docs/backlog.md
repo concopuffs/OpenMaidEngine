@@ -562,8 +562,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     `SYS4438` snapshot in the opcode registry, operand access for every opcode its scripts use, and its workspace
     tests (`validate.py --level workspace --game arterial`).
   - **The catalog's font list** was the block the reader refused: file 37, `AGE-EXTEND.TTF`, as the face
-    `AGE Extend` (`sys4-format-notes.md`, "The font list"). The port reads the list and does not load the font.
-    4.38D's text code names `AGE Extend` and `@AGE Extend` (the revision diff's helper `0x4522c0=0x456800`).
+    `AGE Extend` (`sys4-format-notes.md`, "The font list"). The port loads the font and draws the user-defined
+    code area with it since 2026-11-19 (`engine-re.md`, "The dash join"). 4.38D also creates `@AGE Extend`
+    fonts; of the drawers read, only the two behind op `0x221` use one, and the port has no handler for that
+    opcode.
   - **The revision diff against 4.33G is triaged (2026-11-19):** every one of its 36 opcode rows and 11 helper
     rows has a disposition (`engine-re.md`, "Kamidori against Arterial, triaged"). What it found real and the port
     lacks, each done when the port does what that section says native does and a test or a scenario holds it:
@@ -582,7 +584,12 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     `SYS4REG.INI` keys 4.38D adds in its `SettingsRules`, and Auto's per-character delay with its three settings
     and four opcodes (`engine-re.md`, the same section; `LineEndCharactersTests`, `AutoMessagePitchTests`). None of
     the three is compared with native yet: no page of the game was driven with a `）` at a line's end or with a
-    pitch set (its CONFIG2 sets the pitch).
+    pitch set (its CONFIG2 sets the pitch). The catalog's font, the extended face and the dash join are in too,
+    and compared (`ExtendedGlyphTests`; the first page's dashes equal native's). Open there:
+    - **The portable text backend's extended glyphs are not looked at.** It takes the font file
+      (`GodotTextServerGlyphMaskRasterizer.AddGameFont`), and no run has drawn the game's text with it.
+    - **The ruby drawer does not join dashes.** Native's ruby goes through the same glyph drawers, so a `0xF042`
+      or `0xF043` in a ruby would be joined there. No ruby with one is known.
     - **Auto's timer is never paused.** 4.33G and 4.38D pause it while the input service's text redraw direction
       is not 0 and restart it when the direction returns to 0. The port's direction is always neutral (op `0x83`;
       `engine-re.md`, "The ordinary ADV redraw pair"), so the case does not arise until the port walks the text
@@ -639,14 +646,13 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     second through SC0000's opening, the two show the same VM position each second, and their frames are equal in
     every pixel wherever nothing is in motion (the white screen, "Eushully Presents...", the black screen). What
     differs at the pages:
-    - **「――」 is drawn as other glyphs.** SC0000's first page reads 「――重苦しい風が吹く。」 on native and
-      「✓冂重苦しい風が吹く。」 on the port. The catalog's font, `AGE-EXTEND.TTF` (face `AGE Extend`), is not
-      loaded. 4.38D draws the Shift-JIS codes `0xF040` to `0xF9FC` with that face and joins consecutive `0xF042`
-      and `0xF043` dashes by copying surface rectangles (`engine-re.md`, "Kamidori against Arterial, triaged").
-      Done when the port draws those characters as native does.
-    - **Glyph edges differ.** On page 4 the same text sits in the same place with the same ruby, and 3,061 pixels
-      of the line differ by more than 8 of 255: the port's glyphs are a little lighter. Not looked into;
-      `text_geometry_compare.py` is the tool.
+    - **Glyph edges differ.** The text sits in the same place with the same ruby, and its glyphs' edges differ:
+      1,223 pixels of page 1's line and 3,061 of page 4's by more than 8 of 255. Along one row of 重 native's ink
+      is one column wider than the port's, with a soft column at each end where the port has one at the right
+      only. The two dashes of page 1, drawn with the catalog's font, are equal in every pixel, so the difference
+      is in how the text's own face is made or drawn. Not looked into; `text_geometry_compare.py` is the tool, and
+      the unread parts of 4.38D's glyph drawers and its font calibration are where to read (`engine-re.md`,
+      "Unread").
     - **The title's leaves** (its own item, "The title's 3D leaves are not drawn"): 5,336 pixels of the title.
   - **The polygon objects are in (2026-11-19):** ops `0x320` to `0x323`, 22,324 sites, with the reference
     renderer; the logo's frames and fade timing were compared with native

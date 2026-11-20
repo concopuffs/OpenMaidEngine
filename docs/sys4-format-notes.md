@@ -125,8 +125,14 @@ strings. A catalog of an older revision ends at its settings pairs, and the load
 bytes past the stream as an empty list.
 
 `Sys4AssetCatalog.Fonts` holds the records (`Sys4CatalogFont`). The reader takes a list only when bytes remain
-after the settings pairs, and refuses any byte after the list, as it refuses any block it does not know. The port
-does not load or use these fonts yet. `Ome.Cli intake` alone reads past an unknown block, and reports its bytes.
+after the settings pairs, and refuses any byte after the list, as it refuses any block it does not know.
+`Ome.Cli intake` alone reads past an unknown block, and reports its bytes.
+
+Native uses the first record only. `engine_initialize@0x416c00` tests whether the first file id is above 0, reads
+that catalog file and registers its bytes for the process with `AddFontMemResourceEx`; a file it cannot open is
+reported in a message box. It reads no later record and never the face names: its text code names the face
+(`engine-re.md`, "Kamidori against Arterial, triaged"). The port does the same (`GameFont.Load`) and gives the
+file to each glyph rasterizer that takes font files (`IGameFontRasterizer`); a file it cannot read is a warning.
 
 The same loader also shows that the 0x90-byte "VM metadata" is not skipped natively: after its byte count, when
 that is 1 or more, two sub-blocks are each read by `0x476920`. Neither is read yet (see the header section below),

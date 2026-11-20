@@ -21,7 +21,7 @@ using Godot;
 /// (<see cref="AspectFontRealization"/>) comes out as GDI's.
 /// </remarks>
 public sealed class GodotTextServerGlyphMaskRasterizer :
-    IIdentifiedGlyphMaskRasterizer, ILanguageFontRasterizer, IFontMetricsProbe, IDisposable
+    IIdentifiedGlyphMaskRasterizer, ILanguageFontRasterizer, IGameFontRasterizer, IFontMetricsProbe, IDisposable
 {
     /// <summary>A resolved chain's key; <paramref name="LanguageFonts"/> is false for the reference glyph, which a
     /// language's fonts do not replace.</summary>
@@ -47,6 +47,9 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
     private readonly Dictionary<string, byte[]?> _fontData = new(StringComparer.OrdinalIgnoreCase);
     private readonly Dictionary<string, OpenTypeFace?> _bundledFaces = new(StringComparer.OrdinalIgnoreCase);
     private Func<string, IReadOnlyList<string>?>? _languageFonts;
+    // The font files a game ships in its catalog, by the face each provides (IGameFontRasterizer).
+    private readonly Dictionary<string, (byte[] Data, OpenTypeFace? Face)> _gameFonts =
+        new(StringComparer.OrdinalIgnoreCase);
     private bool _disposed;
 
     /// <param name="policy">The substitution list and raster settings.</param>
@@ -87,6 +90,32 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
             _fonts.Clear();
             _fontData.Clear();
             _bundledFaces.Clear();
+        }
+    }
+
+    /// <summary>
+    /// Puts a game's font file in front of everything else for the face it provides: a request for
+    /// <paramref name="faceName"/> draws from the file first, then from the policy's substitutes for characters the
+    /// file lacks. A file this cannot read as a font is still given to TextServer, with a warning.
+    /// </summary>
+    public void AddGameFont(string faceName, byte[] fontFile)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(faceName);
+        ArgumentNullException.ThrowIfNull(fontFile);
+        OpenTypeFace? face = null;
+        try
+        {
+            face = OpenTypeFace.ReadData(fontFile, $"catalog font {faceName}")[0];
+        }
+        catch (Exception error) when (error is InvalidDataException or ArgumentException or OverflowException)
+        {
+            GD.PushWarning($"[text] game font {faceName}: {error.Message}");
+        }
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _gameFonts[faceName] = (fontFile, face);
+            _fonts.Clear();
         }
     }
 
@@ -354,6 +383,11 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         }
 
         var members = new List<ChainMember>();
+        if (_gameFonts.TryGetValue(request.FontFace, out (byte[] Data, OpenTypeFace? Face) game))
+        {
+            FontFile file = FileFont(game.Data, 0);
+            members.Add(new ChainMember(file, OwnRids(file), game.Face, game.Face?.WeightClass ?? 400));
+        }
         foreach (string path in bundled)
             if (FontData(path) is { } data)
             {

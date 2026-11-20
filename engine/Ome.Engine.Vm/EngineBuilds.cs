@@ -33,7 +33,8 @@ public static class EngineBuilds
                 Ruby: RubyRule.FixedOffsets,
                 FuriganaArmsGlyphTimer: false,
                 HistoryLookupTestsSign: false,
-                LineEnd: LineEndRule.FixedThree),
+                LineEnd: LineEndRule.FixedThree,
+                ExtendedGlyphFace: null),
             Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
             Settings: SettingsRules.LoaderKeys,
             Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize)));
@@ -83,6 +84,9 @@ public static class EngineBuilds
                 // adv_text_append_horizontal_glyph_records@0x466000 asks text_is_justify_character@0x457950, whose
                 // list is the catalog trailer's JUSTIFYCHAR values.
                 LineEnd = LineEndRule.CatalogList,
+                // text_draw_glyph_string_plain@0x4692f0 and text_draw_glyph_string_effect@0x46b1d0 select the font
+                // text_rebuild_primary_font_resources@0x456800 creates with this face for codes 0xF040 to 0xF9FC.
+                ExtendedGlyphFace = "AGE Extend",
             },
             // engine_settings_save@0x47d1d0 writes four more keys; a SYS4REG.INI native 4.38D wrote has them in
             // these places.

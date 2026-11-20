@@ -59,16 +59,20 @@ public sealed class RetainedGlyphLayoutEngine
     private readonly IGlyphMaskRasterizer _rasterizer;
     private readonly GlyphCoverageAlpha _coverageAlpha;
     private readonly LineEndCharacters _lineEnd;
+    private readonly bool _joinsExtendedDashes;
 
     /// <param name="lineEnd">The characters a wrapping run keeps on the line they overflow (the build's
     /// <c>TextRules.LineEnd</c>); 、 。 and 」 when not given.</param>
+    /// <param name="joinsExtendedDashes">Whether a 0xF042 or 0xF043 dash is joined to its neighbours after it is
+    /// drawn (<see cref="ExtendedDashJoin"/>): the builds that draw the user-defined area with their own face.</param>
     public RetainedGlyphLayoutEngine(
         IGlyphMaskRasterizer rasterizer, GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths,
-        LineEndCharacters? lineEnd = null)
+        LineEndCharacters? lineEnd = null, bool joinsExtendedDashes = false)
     {
         _rasterizer = rasterizer ?? throw new ArgumentNullException(nameof(rasterizer));
         _coverageAlpha = coverageAlpha;
         _lineEnd = lineEnd ?? LineEndCharacters.FixedThree;
+        _joinsExtendedDashes = joinsExtendedDashes;
     }
 
     /// <summary>
@@ -215,11 +219,17 @@ public sealed class RetainedGlyphLayoutEngine
                     options.Style.AspectMode, fullWidth: CharacterCells.HalfCells(request) == 2))
                 : cursorX;
             if (destination != null)
+            {
+                int shiftX = shiftByEffect ? options.Style.EffectOffsetX : 0;
+                int glyphX = checked(drawX + shiftX);
+                int glyphY = checked((shiftByEffect ? cursorY + options.Style.EffectOffsetY : cursorY) - raise);
                 AgeGlyphMaskCompositor.DrawGlyph(
-                    destination, mask,
-                    shiftByEffect ? checked(drawX + options.Style.EffectOffsetX) : drawX,
-                    checked((shiftByEffect ? cursorY + options.Style.EffectOffsetY : cursorY) - raise),
+                    destination, mask, glyphX, glyphY,
                     AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), options.Style, _coverageAlpha);
+                if (_joinsExtendedDashes)
+                    ExtendedDashJoin.AfterGlyph(destination, request, mask, glyphX, glyphY,
+                                                checked(cursorX + shiftX + advanceX), options.Style);
+            }
             records.Add(new AdvRetainedGlyphRecord(0, cursorX, cursorY, right, bottom));
             cursorX = checked(cursorX + advanceX);
             if (aspectReference == null) cursorY = checked(cursorY + mask.CellAdvanceY);

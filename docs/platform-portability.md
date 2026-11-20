@@ -224,6 +224,11 @@ a self-contained linux-x64 build of the scanner: its Noto Sans and Serif CJK fil
 order, pitch byte and checker answers equal GDI's for the same files (loaded privately on Windows), and the Windows
 font folders read from Linux list the same 42 Shift-JIS families as GDI, with the same catalogs.
 
+A font a game ships in its catalog (AGE 4.38D; `docs/sys4-format-notes.md`, "The font list") reaches both
+backends as bytes, through `IGameFontRasterizer`: the GDI backend registers it for the process with
+`AddFontMemResourceEx`, as native does, and the TextServer backend puts the file first in the chain of the face it
+provides. Neither installs anything, and nothing is written to disk.
+
 ## Dependency inventory
 
 | Area | Current dependency | Runtime impact | Portability status / future action |

@@ -626,6 +626,23 @@ public partial class Main : Godot.Control
             selectedTextBackend.Detail);
         if (textBackend == "auto" && exactUnavailable != null)
             GD.Print($"[text] exact backend unavailable; selected portable: {exactUnavailable}");
+        // The font the game ships in its catalog (AGE 4.38D registers it for its own process at start-up): every
+        // rasterizer draws its face from the file.
+        GameFont? gameFont = GameFont.Load(_catalog, _assetStore, message => GD.PushWarning($"[text] {message}"));
+        if (gameFont != null)
+        {
+            bool added = false;
+            try
+            {
+                added = gameFont.AddTo(surfaceTextRasterizer);
+            }
+            catch (Exception error) when (error is InvalidDataException or ArgumentException)
+            {
+                GD.PushWarning($"[text] game font {gameFont.FaceName} ({gameFont.FileName}): {error.Message}");
+            }
+            GD.Print($"[text] game font {gameFont.FaceName} ({gameFont.FileName}, {gameFont.Data.Length} bytes)" +
+                     (added ? "" : " is not used: the text backend takes no font files"));
+        }
         // The skip and auto native the host reads and the VM's handlers call (engine layering milestone 5), and the audio
         // native over this node's players with the engine tick that runs it (milestone 6). The audio native applies the
         // mixer settings now and on every change; their Changed event persists them.
@@ -656,6 +673,7 @@ public partial class Main : Godot.Control
                 {
                     PortableTextRenderingPolicy policy = PortableTextRenderingPolicy.Load(portablePolicyResource);
                     var portable = new GodotTextServerGlyphMaskRasterizer(policy, () => installedFonts.Value);
+                    gameFont?.AddTo(portable);
                     _presentedRasterizerOwner = portable;
                     GD.Print($"[text] presented text uses {portable.BackendInfo.Id}: {portable.BackendInfo.Detail}");
                     return portable;
@@ -666,7 +684,8 @@ public partial class Main : Godot.Control
             engineBuild.Rules.Text.Ruby.For(_catalog.StartupSettings, SettingsStore?.RubyShiftMode),
             blankExtentMode: _catalog.StartupSettings.BlankExtentMode == 1,
             settings: SettingsStore, locator: _locator, timeline: _timeline,
-            lineEnd: engineBuild.Rules.Text.LineEnd.For(_catalog.StartupSettings));
+            lineEnd: engineBuild.Rules.Text.LineEnd.For(_catalog.StartupSettings),
+            extendedGlyphFace: engineBuild.Rules.Text.ExtendedGlyphFace);
         // The input and waits native (milestone 11) runs every wait the VM blocks in, over the natives above; the lifted
         // host keeps what is left (the cursor, the Auto delays' seed and the message settings' shutdown write).
         _waits = new InputAndWaits(skipAndAuto, _audio, tick, _graphics, _movies, _shell, _text, _clock, _locator,

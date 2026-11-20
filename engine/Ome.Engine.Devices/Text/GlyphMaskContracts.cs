@@ -164,6 +164,18 @@ public interface IIdentifiedGlyphMaskRasterizer : IGlyphMaskRasterizer
     GlyphRasterizerBackendInfo BackendInfo { get; }
 }
 
+/// <summary>
+/// A rasterizer that can draw with a font file a game ships in its catalog (docs/sys4-format-notes.md, "The font
+/// list"), as native AGE does after it registers the file for its own process.
+/// </summary>
+public interface IGameFontRasterizer : IGlyphMaskRasterizer
+{
+    /// <summary>Makes <paramref name="fontFile"/>'s faces answer later requests, for this rasterizer only:
+    /// <paramref name="faceName"/> is the face the catalog names for it. The fonts made so far are dropped; the caller
+    /// clears the glyph masks cached above it.</summary>
+    void AddGameFont(string faceName, byte[] fontFile);
+}
+
 /// <summary>A Unicode rasterizer that can draw a language's text in that language's fonts (localization spec §7.4).
 /// </summary>
 public interface ILanguageFontRasterizer : IGlyphMaskRasterizer

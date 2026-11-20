@@ -25,15 +25,20 @@ public sealed class ImmediateSurfaceTextRenderer
     private readonly IGlyphMaskRasterizer _rasterizer;
     private readonly GlyphRasterPolicy _policy;
     private readonly GlyphCoverageAlpha _coverageAlpha;
+    private readonly bool _joinsExtendedDashes;
 
+    /// <param name="joinsExtendedDashes">Whether a 0xF042 or 0xF043 dash is joined to its neighbours after it is
+    /// drawn (<see cref="ExtendedDashJoin"/>): the builds that draw the user-defined area with their own face.</param>
     public ImmediateSurfaceTextRenderer(
         IGlyphMaskRasterizer rasterizer,
         GlyphRasterPolicy policy = GlyphRasterPolicy.NativeCp932Gray4,
-        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths)
+        GlyphCoverageAlpha coverageAlpha = GlyphCoverageAlpha.Sixteenths,
+        bool joinsExtendedDashes = false)
     {
         _rasterizer = rasterizer ?? throw new ArgumentNullException(nameof(rasterizer));
         _policy = policy;
         _coverageAlpha = coverageAlpha;
+        _joinsExtendedDashes = joinsExtendedDashes;
     }
 
     /// <param name="antialias">message:UseAntiFont (text manager +0x544). draw_string_to_surface@0x450150 calls the
@@ -79,9 +84,14 @@ public sealed class ImmediateSurfaceTextRenderer
         {
             GlyphMask mask = _rasterizer.Rasterize(request);
             if (destination != null)
+            {
                 AgeGlyphMaskCompositor.DrawGlyph(
                     destination, mask, cursorX, cursorY,
                     AgeGlyphMaskCompositor.CellTopToBaseline(mask, request.PixelHeight), style, _coverageAlpha);
+                if (_joinsExtendedDashes)
+                    ExtendedDashJoin.AfterGlyph(destination, request, mask, cursorX, cursorY,
+                                                checked(cursorX + mask.CellAdvanceX), style);
+            }
             if (!PresentedTextPlacement.IsSpace(request.UnicodeScalar) && request.UnicodeScalar >= 0x20)
             {
                 inkLeft ??= cursorX;
@@ -153,13 +163,18 @@ public sealed class ImmediateSurfaceTextRenderer
                 continue;
             }
             GlyphMask mask = _rasterizer.Rasterize(request);
-            if (destination != null)
-                AgeGlyphMaskCompositor.DrawGlyph(destination, mask, cursorX, y, baseline, style, _coverageAlpha);
-            inkLeft ??= cursorX;
-            inkRight = checked(cursorX + mask.CellWidth);
-            cursorX = checked(cursorX + (effect
+            int next = checked(cursorX + (effect
                 ? GlyphMaskNarrowing.Scale(EffectAdvance(reference, singleByte), request.WidthPercent)
                 : mask.CellAdvanceX));
+            if (destination != null)
+            {
+                AgeGlyphMaskCompositor.DrawGlyph(destination, mask, cursorX, y, baseline, style, _coverageAlpha);
+                if (_joinsExtendedDashes)
+                    ExtendedDashJoin.AfterGlyph(destination, request, mask, cursorX, y, next, style);
+            }
+            inkLeft ??= cursorX;
+            inkRight = checked(cursorX + mask.CellWidth);
+            cursorX = next;
         }
         return new ImmediateSurfaceTextResult(requests.Count, cursorX, y)
         {

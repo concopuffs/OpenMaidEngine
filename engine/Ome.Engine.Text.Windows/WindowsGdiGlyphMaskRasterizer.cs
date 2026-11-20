@@ -14,7 +14,7 @@ namespace Ome.Engine.Text.Windows;
 /// code page.
 /// </summary>
 public sealed class WindowsGdiGlyphMaskRasterizer
-    : IIdentifiedGlyphMaskRasterizer, IFontMetricsProbe, IDisposable
+    : IIdentifiedGlyphMaskRasterizer, IGameFontRasterizer, IFontMetricsProbe, IDisposable
 {
     private const uint GgoMetrics = 0;
     private const uint GgoBitmap = 1;
@@ -26,6 +26,8 @@ public sealed class WindowsGdiGlyphMaskRasterizer
     private readonly object _gate = new();
     private readonly SafeDeviceContextHandle _displayIc;
     private readonly BoundedLruCache<FontKey, SafeGdiObjectHandle> _fonts;
+    // The handles of the game fonts added to this process (AddFontMemResourceEx), removed at disposal.
+    private readonly List<IntPtr> _gameFonts = [];
     private bool _disposed;
 
     private readonly record struct FontKey(
@@ -75,6 +77,29 @@ public sealed class WindowsGdiGlyphMaskRasterizer
 
     public int FontCacheCount => _fonts.Count;
     public int FontCacheCapacity => _fonts.Capacity;
+
+    /// <summary>
+    /// Registers a game's font file for this process, as AGE 4.38D's engine_initialize@0x416c00 does with the first
+    /// font of its catalog (AddFontMemResourceEx): CreateFontIndirectA then finds its faces by name, and no other
+    /// process or font enumeration sees them. <paramref name="faceName"/> is not needed: GDI reads the names from the
+    /// file.
+    /// </summary>
+    public void AddGameFont(string faceName, byte[] fontFile)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(faceName);
+        ArgumentNullException.ThrowIfNull(fontFile);
+        lock (_gate)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            IntPtr handle = NativeMethods.AddFontMemResourceEx(fontFile, (uint)fontFile.Length, IntPtr.Zero,
+                                                               out uint fonts);
+            if (handle == IntPtr.Zero || fonts == 0)
+                throw new InvalidDataException(
+                    $"GDI could not register the game font '{faceName}' ({fontFile.Length} bytes).");
+            _gameFonts.Add(handle);
+            _fonts.Clear();   // a font made for this face before the file was there is a substitute
+        }
+    }
 
     public GlyphMask Rasterize(GlyphRasterRequest request)
     {
@@ -141,6 +166,8 @@ public sealed class WindowsGdiGlyphMaskRasterizer
             if (_disposed) return;
             _disposed = true;
             _fonts.Clear();
+            foreach (IntPtr handle in _gameFonts) NativeMethods.RemoveFontMemResourceEx(handle);
+            _gameFonts.Clear();
             _displayIc.Dispose();
         }
         GC.SuppressFinalize(this);
@@ -416,6 +443,13 @@ public sealed class WindowsGdiGlyphMaskRasterizer
 
         [DllImport("kernel32.dll")]
         public static extern uint GetACP();
+
+        [DllImport("gdi32.dll")]
+        public static extern IntPtr AddFontMemResourceEx(byte[] fontFile, uint size, IntPtr reserved, out uint fonts);
+
+        [DllImport("gdi32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        public static extern bool RemoveFontMemResourceEx(IntPtr handle);
 
         [DllImport("gdi32.dll", EntryPoint = "CreateICA", CharSet = CharSet.Ansi, SetLastError = true)]
         public static extern IntPtr CreateICA(
