@@ -715,8 +715,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The data level, M2, is started and not reached (2026-11-20).** In: the extraction, the executed boot
     image (145 scripts), the layout tool `tools/init_arterial.py` with its tests, the layout of all 278 arrays
     of the 29 boot tables and the scene dispatch's protocol (`arterial-data-tables.md`), and the registry
-    `vm-map/globals-arterial.toml` with 93 names and seven record tables (`character`, `card`, `talent`, `skill`,
-    `item`, `area`, `deck`). No table lies in the saved prefix, and a card's numbers in play are worked out from
+    `vm-map/globals-arterial.toml` with 101 names, nine record tables (`character`, `card`, `talent`, `skill`,
+    `item`, `deck`, and `area_point`, `area_route`, `area_unit` under the scope `area`). No table lies in the saved prefix, and a card's numbers in play are worked out from
     the tables each time (`CALCARM`), not kept in a save. The manifest stays at M1. What M2's gate still asks,
     each done when `arterial-data-tables.md` and the registry say it:
     - **What most numeric fields mean.** 139 of the 278 arrays have a reading: text, references between tables,
@@ -730,8 +730,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       three games as an image file.
     - **Five boot tables have no leader** (`IMINIT`, `RFINIT`, `DUINIT`, `RTINIT`, `EUINIT`): they are listed by
       the arrays the scripts index, which can lump two arrays into one.
-    - **The four on-demand tables** (`BGINIT`, `MPINIT`, `ROINIT`, `UNINIT`) have no field layout, and the area
-      they load by (`G[0x9883]`) is not declared as a `[[scope]]`.
+    - **The area tables' numbers.** `MPINIT`, `ROINIT` and `UNINIT` have exact layouts (their own range clears
+      give them) and the scope `area`; a point's name, kind, position and target, a route's two points and a
+      unit's card are read, and the other arrays, most of `UNINIT`'s twenty, are not.
     - **Copies in saved state.** Checked for a card's numbers only (none is kept); no other field was.
     - **`SCJUMP`** is read as far as its protocol and its rule counts. Its seven contexts, the cell each rule
       tests and the story flags are not (`story_flags.py` and `scjump_decode.py` were not run on the game).

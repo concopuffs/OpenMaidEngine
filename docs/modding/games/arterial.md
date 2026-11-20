@@ -26,7 +26,7 @@ command needs the game options:
   page, ｵｰﾄﾒｯｾｰｼﾞ, with Auto mode's delays; the driver's `option` steps set its controls on both targets
   (`auto-pitch-voice`, `auto-pitch-text`, `auto-wait-voice-end`).
 - The globals registry is young: `use arterial.globals` names the page's cells, the scene dispatch and the main
-  tables' text, references and a card's and an item's numbers (93 names; [reference](../../global-reference-arterial.md)). Every
+  tables' text, references and a card's and an item's numbers (101 names; [reference](../../global-reference-arterial.md)). Every
   other cell has no name yet: name it by its address (`G[0x9883]`), as the decompiled scripts print it.
 
 ## First mod values
@@ -95,7 +95,8 @@ A language package with three translated lines of the opening scene was checked 
 
 The game has no base mod (modding level M3), so there are no data files, no events and no named patch points.
 A fragment can still patch any instruction by its offset, and it can read and write the tables the registry
-declares: `character`, `card`, `talent`, `skill`, `item`, `area` and `deck`.
+declares: `character`, `card`, `talent`, `skill`, `item` and `deck`, and for the area in play `area_point`,
+`area_route` and `area_unit`.
 
 ```text
 use arterial.globals

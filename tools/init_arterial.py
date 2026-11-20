@@ -28,6 +28,12 @@ arrays without a hand-written schema per table:
 It reads build/games/<game>/init-image.json and build/games/<game>/disasm/*.asm (tools/extract_phase2.py), and
 counts each array's consumers from the corpus's lookup-array instructions. A table with no leader (bulk arrays, or
 a shape the method does not fit) is listed with the cells it wrote and nothing more.
+
+The three tables the game runs for an area (MPINIT, ROINIT, UNINIT) are not in the boot image. Each opens by
+clearing its arrays, which gives their bases and sizes exactly, and then fills them in one branch per area; they
+are listed from the listings alone, with the areas, slots and values each array gets:
+
+  py -3.11 -X utf8 tools/init_arterial.py --game arterial MPINIT [--markdown]
 """
 from __future__ import annotations
 
@@ -55,6 +61,16 @@ WRITE = re.compile(r"^\s+0x[0-9a-f]+:\s+(\S+) \((global-int|global-string) 0x([0
 LOOKUP = re.compile(r"lookup-array \([^)]*\) \((global-int|global-string) 0x([0-9a-f]+)\)")
 LOOKUP_2D = re.compile(r"lookup-array-2d \([^)]*\) \((global-int|global-string) 0x([0-9a-f]+)\) (?:\([^)]*\)|\S+) "
                        r"(0x[0-9a-f]+)")
+
+# The tables the game runs for an area: 200 slots an array, cleared at the script's start and filled in the branch
+# for the area in play (global 0x9883).
+AREA_TABLES = ("MPINIT", "ROINIT", "UNINIT")
+SLOTS = 0xc8
+INSTRUCTION = re.compile(r"^\s+0x[0-9a-f]+:\s+(.*)$")
+CLEAR = re.compile(r"copy-to-global \(global-int 0x([0-9a-f]+)\) (0x[0-9a-f]+|\(local-int 0x0\))$")
+TIMES = re.compile(r"mul \(local-int 0x0\) 0x([0-9a-f]+) 0x([0-9a-f]+)$")
+AREA = re.compile(r"eq \(local-int 0x0\) \(global-int 0x9883\) 0x([0-9a-f]+)$")
+CONSTANT = re.compile(r"(mov|set-string) \((global-int|global-string) 0x([0-9a-f]+)\) (.+)$")
 
 
 @dataclass(frozen=True)
@@ -337,7 +353,97 @@ def by_consumers(table: str) -> list[Array]:
     return sorted(arrays.values(), key=lambda a: (a.bank, a.base))
 
 
+def cleared_arrays(lines: list[str]) -> list[tuple[int, int]]:
+    """[(base, cells per slot)] from the range clears an area table opens with: `copy-to-global BASE 0xc8` clears
+    one cell a slot, and `mul (local-int 0x0) 0xc8 N` before a clear of that many cells N a slot. The clears are
+    the script's first instructions."""
+    arrays, count = [], None
+    for line in lines:
+        instruction = INSTRUCTION.match(line)
+        if not instruction:
+            continue
+        if times := TIMES.match(instruction.group(1)):
+            count = int(times.group(1), 16) * int(times.group(2), 16)
+            continue
+        clear = CLEAR.match(instruction.group(1))
+        if not clear:
+            break
+        cells = count if clear.group(2).startswith("(") else int(clear.group(2), 16)
+        if cells is None or cells % SLOTS:
+            raise ValueError(f"a clear of {cells} cells is not a whole number of {SLOTS} slots: {line.strip()}")
+        arrays.append((int(clear.group(1), 16), cells // SLOTS))
+        count = None
+    return arrays
+
+
+def area_writes(lines: list[str]) -> list[tuple[int, str, int, str]]:
+    """[(area, bank, address, operand)]: each constant write after an area's test (`eq … (global-int 0x9883) N`),
+    up to the next area's."""
+    writes, area = [], None
+    for line in lines:
+        instruction = INSTRUCTION.match(line)
+        if not instruction:
+            continue
+        if test := AREA.match(instruction.group(1)):
+            area = int(test.group(1), 16)
+        elif area is not None and (write := CONSTANT.match(instruction.group(1))):
+            writes.append((area, BANKS[write.group(2)], int(write.group(3), 16), write.group(4)))
+    return writes
+
+
+def area_table(table: str) -> list[dict]:
+    """An area table's arrays with what the base script and its appends write into them: for each, its cells per
+    slot and the areas, slots and values it gets. The integer arrays are the ones the script clears; a string
+    array is the one the scripts index at or below the strings' cells."""
+    listing = (DISASM / f"{table}.asm").read_text(encoding="utf-8").split("\n")
+    arrays = [{"bank": "G", "base": base, "cells": cells, "areas": set(), "slots": set(), "values": []}
+              for base, cells in cleared_arrays(listing)]
+    indexed = sorted(base for (bank, base) in consumers() if bank == "GS")
+    strings: dict[int, dict] = {}
+    for layer in range(5):
+        path = DISASM / (f"{table}.asm" if layer == 0 else f"${layer}${table}.asm")
+        if not path.is_file():
+            continue
+        for area, bank, address, operand in area_writes(path.read_text(encoding="utf-8").split("\n")):
+            if bank == "GS":
+                at = bisect_right(indexed, address) - 1
+                base = indexed[at] if at >= 0 and address - indexed[at] < SLOTS else address
+                array = strings.setdefault(base, {"bank": "GS", "base": base, "cells": 1, "areas": set(),
+                                                  "slots": set(), "values": []})
+                value = operand.strip('"')
+            else:
+                array = next((a for a in arrays if a["base"] <= address < a["base"] + SLOTS * a["cells"]), None)
+                if array is None:
+                    continue
+                value = int(operand, 0) if re.fullmatch(r"-?0x[0-9a-f]+|-?\d+", operand) else None
+            array["areas"].add(area)
+            array["slots"].add((address - array["base"]) // array["cells"])
+            if value is not None:
+                array["values"].append(value)
+    return arrays + [strings[base] for base in sorted(strings)]
+
+
+def area_report(table: str, as_markdown: bool) -> None:
+    arrays = area_table(table)
+    if as_markdown:
+        print("| array | cells per slot | areas | slots | values | holds |")
+        print("|---|---|---|---|---|---|")
+    else:
+        print(f"{table}: run for an area; {len(arrays)} arrays of {SLOTS} slots")
+    for array in arrays:
+        name = f"{array['bank']}[{array['base']:#x}]"
+        slots = f"{min(array['slots'])}..{max(array['slots'])}" if array["slots"] else "none"
+        values = describe(array["values"], array["bank"]) if array["values"] else "never written"
+        if as_markdown:
+            print(f"| `{name}` | {array['cells']} | {len(array['areas'])} | {slots} | {values.replace('|', '/')} | |")
+        else:
+            print(f"  {name} x{array['cells']}: {len(array['areas'])} areas, slots {slots}: {values}")
+
+
 def report(table: str) -> None:
+    if table in AREA_TABLES:
+        area_report(table, as_markdown=False)
+        return
     leader = LEADERS.get(table)
     cells = image().get(table, {})
     if leader is None:
@@ -371,6 +477,9 @@ def report(table: str) -> None:
 def markdown(table: str) -> None:
     """The table's arrays as a Markdown table, for docs/arterial-data-tables.md: one row per array, with an empty
     cell for what it holds. `†` marks an array off the table's grid."""
+    if table in AREA_TABLES:
+        area_report(table, as_markdown=True)
+        return
     leader = LEADERS.get(table)
     arrays = infer(table, leader)[0] if leader else by_consumers(table)
     print("| array | cells per id | columns written | ids | values | holds |")

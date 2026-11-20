@@ -111,6 +111,34 @@ class InferArraysTests(unittest.TestCase):
         self.assertEqual({0x5000: True, 0x5064: True, 0x50c8: True, 0x5199: False, 0x1000: True},
                          {a.base: a.on_grid for a in arrays})
 
+    def test_an_area_tables_clears_give_its_arrays_and_their_cells_per_slot(self) -> None:
+        listing = [
+            "file        T.BIN",
+            "; ---- CODE ----",
+            "  0x00000:  copy-to-global (global-int 0x1000) 0xc8",
+            "  0x00005:  mul (local-int 0x0) 0xc8 0x3",
+            "  0x0000c:  copy-to-global (global-int 0x10c8) (local-int 0x0)",
+            "  0x00011:  copy-to-global (global-int 0x1320) 0x190",
+            "  0x00016:  eq (local-int 0x0) (global-int 0x9883) 0x1",
+            "  0x0001d:  copy-to-global (global-int 0x9999) 0xc8",
+        ]
+        self.assertEqual([(0x1000, 1), (0x10c8, 3), (0x1320, 2)], init_arterial.cleared_arrays(listing))
+        with self.assertRaises(ValueError):
+            init_arterial.cleared_arrays(["  0x00000:  copy-to-global (global-int 0x1000) 0x7"])
+
+    def test_an_area_tables_writes_belong_to_the_area_tested_before_them(self) -> None:
+        listing = [
+            "  0x00000:  mov (global-int 0x1001) 0x5",
+            "  0x00005:  eq (local-int 0x0) (global-int 0x9883) 0x2",
+            "  0x0000c:  jcc (local-int 0x0) 0xffffffff label_59",
+            '  0x00013:  set-string (global-string 0x2001) "a place"',
+            "  0x00018:  mov (global-int 0x1001) 0x3",
+            "  0x0001d:  eq (local-int 0x0) (global-int 0x9883) 0x7",
+            "  0x00024:  mov (global-int 0x1002) (local-int 0x4)",
+        ]
+        self.assertEqual([(2, "GS", 0x2001, '"a place"'), (2, "G", 0x1001, "0x3"), (7, "G", 0x1002, "(local-int 0x4)")],
+                         init_arterial.area_writes(listing))
+
     def test_every_leader_names_a_boot_table_a_bank_and_a_capacity(self) -> None:
         for name, leader in init_arterial.LEADERS.items():
             self.assertRegex(name, r"^[A-Z0-9]+INIT$")

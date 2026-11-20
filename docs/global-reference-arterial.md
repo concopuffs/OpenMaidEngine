@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals-arterial.toml by tools/globals_build.py --build -->
 # Global Variable Reference — arterial (generated)
 
-10219 globals (93 curated, 10126 auto shape-inferred). Source of truth: `vm-map/globals-arterial.toml`.
+10219 globals (101 curated, 10118 auto shape-inferred). Source of truth: `vm-map/globals-arterial.toml`.
 
 ## Tables
 
@@ -110,15 +110,39 @@ ITINIT items keyed by item id.
 | required_leader_lp | item_required_leader_lp | `0x32a37a` | `int[2000]` |
 | required_attack | item_required_attack | `0x329baa` | `int[2000]` |
 
-### area[300]
+### area_point[200]
 
-Built by: `boot`.
+Built by: `area`.
 
-AMINIT areas keyed by area id; current_area_id is the one in play.
+MPINIT's points of the area in play, keyed by point number.
 
 | field | global | address | type |
 |---|---|---|---|
-| name | area_names | `GS 0x11e28` | `string[300]` |
+| name | area_point_names | `GS 0x11f54` | `string[200]` |
+| kind | area_point_kinds | `0x330c2d` | `int[200]` |
+| target | area_point_targets | `0x330cf5` | `int[200][2]` |
+| x | area_point_x | `0x331015` | `int[200]` |
+| y | area_point_y | `0x3310dd` | `int[200]` |
+
+### area_route[200]
+
+Built by: `area`.
+
+ROINIT's routes of the area in play, keyed by route number.
+
+| field | global | address | type |
+|---|---|---|---|
+| points | area_route_points | `0x33207d` | `int[200][2]` |
+
+### area_unit[200]
+
+Built by: `area`.
+
+UNINIT's units of the area in play, keyed by unit number.
+
+| field | global | address | type |
+|---|---|---|---|
+| card | area_unit_cards | `0x33301e` | `int[200][2]` |
 
 ### deck[1000]
 
@@ -131,6 +155,18 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | name | deck_names | `GS 0x1201c` | `string[1000]` |
 | card_row | deck_card_rows | `0x334856` | `int[1000][30]` |
 | card_slot | deck_card_slots | `0x33bd86` | `int[1000][30]` |
+
+### Scope area
+
+Ids 1 to 299. A data file reaches each table below as `area.<id>.<name>.<record>` and not by its own name (data patches spec §6.2).
+
+An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its per-area arrays hold 300). MPINIT, ROINIT and UNINIT clear these tables and fill them from the branch for the area in play.
+
+| name | table |
+|---|---|
+| point | area_point |
+| route | area_route |
+| unit | area_unit |
 
 ## choice-output
 
@@ -163,6 +199,7 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | `0x2981a1` | character_voice_setting_slots | high | investigation | CVINIT: a character's voice setting. The page's voice block plays the voice only while the player's switch for that setting (0x2d57) is 0. |
 | `0x298589` | voice_setting_character_ids | med | investigation | CVINIT: a voice setting's character (an id in CHINIT's range). |
 | `0x29ee8e` | character_voice_kinds | high | investigation | CHINIT: 1, 2 or 3. The page's voice block plays a voice, and records it in the text history, only for a character with 2. |
+| `0x2b32c7` | card_row_character_ids | high | investigation | CDINIT: the character (a CHINIT id) of a card row, written where the row's first card starts. BTL reads a unit's pictures from CHINIT through it. |
 | `0x2b338f` | card_append_numbers | high | investigation | CDINIT: the append (1 to 4) that added the card; unset for the base data's. |
 | `0x2b79df` | card_rarities | med | investigation | CDINIT: 1 to 5. The card panel draws one of five marks for it. |
 | `0x2bc02f` | card_race_flags | high | investigation | CDINIT: 種族, one bit a race (bits 0 to 6: 無機, 人間, 怪物, 天使, 悪魔, 魔神, 英雄). The card panel prints race_names for each bit set on its 種族 row. |
@@ -194,6 +231,12 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | `0x32ab4a` | item_required_hp | high | investigation | ITINIT: the least card_current_hp a card may have to carry the item. |
 | `0x32b31a` | item_prices | high | investigation | ITINIT: two prices, the second a fifth of the first where there is one. ADDITEM sells what the player holds over 99 at the second; SHOPP and SHOPS read both. Columns: 0=buy, 1=sell. |
 | `0x32c2ba` | item_pictures | high | investigation | ITINIT: two pictures (resource ids); the card panel draws the second. |
+| `0x330c2d` | area_point_kinds | high | investigation | MPINIT, for the area in play: a point's kind, 1 to 3. ALLMAP reads area_point_targets for a point of kind 3. |
+| `0x330cf5` | area_point_targets | high | investigation | MPINIT, for the area in play: where a point of kind 3 leads, an area and a point of it. ALLMAP reads the pair when the player is on the point and looks the area up in AMINIT. Columns: 0=area, 1=point. |
+| `0x331015` | area_point_x | high | investigation | MPINIT, for the area in play: a point's x on the map; ALLMAP puts the point's hot area around (x, y). |
+| `0x3310dd` | area_point_y | high | investigation | MPINIT, for the area in play: a point's y on the map. |
+| `0x33207d` | area_route_points | high | investigation | ROINIT, for the area in play: the two points a route joins; DRAWMAP and ALLMAP read the pair. |
+| `0x33301e` | area_unit_cards | high | investigation | UNINIT, for the area in play: a unit's card, as its row and slot of CDINIT; BTL passes the pair to CALCARM. Columns: 0=row, 1=slot. |
 | `0x334856` | deck_card_rows | med | investigation | DEINIT: the row in CDINIT (1 to 167) of each card of the deck, slots 1 to 20. |
 | `0x33bd86` | deck_card_slots | med | investigation | DEINIT: the slot in that row (1 to 23) of the same card: card id = row * 30 + slot. |
 | `0x43f6e6` | card_max_levels | high | investigation | Computed by CALCARM: 1, or 2 + the highest step at which one of the four growth arrays has a number for the card. |
@@ -247,7 +290,6 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | `0x9ba7` | — | low | auto-shape | array |
 | `0x9c6f` | — | low | auto-shape | array |
 | `0x9d37` | — | low | auto-shape | array |
-| `GS 0x11f54` | — | low | auto-shape | array |
 | `GS 0x1265c` | — | low | auto-shape | array |
 | `GS 0x1268e` | — | low | auto-shape | array |
 | `0x1614f` | — | low | auto-shape | array |
@@ -334,7 +376,6 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | `0x29e6bc` | — | low | auto-shape | array |
 | `0x29f276` | — | low | auto-shape | array |
 | `0x29f65e` | — | low | auto-shape | array |
-| `0x2b32c7` | — | low | auto-shape | array |
 | `0x31bb70` | — | low | auto-shape | array |
 | `0x31bf58` | — | low | auto-shape | array |
 | `0x31c72a` | — | low | auto-shape | array |
@@ -365,9 +406,6 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | `0x32fbbb` | — | low | auto-shape | array |
 | `0x32fbc5` | — | low | auto-shape | array |
 | `0x330b01` | — | low | auto-shape | array |
-| `0x330c2d` | — | low | auto-shape | array |
-| `0x331015` | — | low | auto-shape | array |
-| `0x3310dd` | — | low | auto-shape | array |
 | `0x331975` | — | low | auto-shape | array |
 | `0x331a3d` | — | low | auto-shape | array |
 | `0x331b05` | — | low | auto-shape | array |
@@ -563,6 +601,7 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | `GS 0x10698` | item_lines | high | investigation | ITINIT: three lines of text; the first is the heading (【重要】美來のハンカチ). |
 | `GS 0x11e08` | condition_names | high | investigation | ILINIT: a condition's name (操血, 封印, 幻覚 …). |
 | `GS 0x11e28` | area_names | high | investigation | AMINIT: an area's name (歪秤世界, 天慶市 …). |
+| `GS 0x11f54` | area_point_names | high | investigation | MPINIT, for the area in play: a point's name (出現地点, 西蒼川商業区 …). |
 | `GS 0x1201c` | deck_names | high | investigation | DEINIT: a deck's name. |
 | `GS 0x12a7c` | race_names | high | investigation | Set by INIT2: the names of the seven races of card_race_flags, by bit; the eighth string is バトル. |
 | `GS 0xd2` | — | med | auto-shape | string-table (written by DEBUGADV) |
@@ -10245,16 +10284,13 @@ DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row and a sl
 | `0x3303f9` | — | med | auto-shape | record-table[stride 2] |
 | `0x330651` | — | med | auto-shape | record-table[stride 2] |
 | `0x3308a9` | — | med | auto-shape | record-table[stride 2] |
-| `0x330cf5` | — | med | auto-shape | record-table[stride 2] |
 | `0x330e85` | — | med | auto-shape | record-table[stride 2] |
 | `0x3311a5` | — | med | auto-shape | record-table[stride 5] |
 | `0x33158d` | — | med | auto-shape | record-table[stride 5] |
-| `0x33207d` | — | med | auto-shape | record-table[stride 2] |
 | `0x33220d` | — | med | auto-shape | record-table[stride 3] |
 | `0x332465` | — | med | auto-shape | record-table[stride 3] |
 | `0x332b6d` | — | med | auto-shape | record-table[stride 3] |
 | `0x332dc5` | — | med | auto-shape | current-entity-index? |
-| `0x33301e` | — | med | auto-shape | record-table[stride 2] |
 | `0x333726` | — | med | auto-shape | record-table[stride 7] |
 | `0x333c9e` | — | med | auto-shape | record-table[stride 7] |
 | `0x3345fe` | — | med | auto-shape | record-table[stride 2] |

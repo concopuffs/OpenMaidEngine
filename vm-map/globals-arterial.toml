@@ -489,6 +489,15 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x2b32c7"
+name = "card_row_character_ids"
+category = "data-table"
+type = "int[200]"
+usage = "CDINIT: the character (a CHINIT id) of a card row, written where the row's first card starts. BTL reads a unit's pictures from CHINIT through it."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x2cd96f"
 name = "card_pictures"
 category = "data-table"
@@ -796,6 +805,71 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x11f54"
+name = "area_point_names"
+category = "string-table"
+type = "string[200]"
+usage = "MPINIT, for the area in play: a point's name (出現地点, 西蒼川商業区 …)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x330c2d"
+name = "area_point_kinds"
+category = "data-table"
+type = "int[200]"
+usage = "MPINIT, for the area in play: a point's kind, 1 to 3. ALLMAP reads area_point_targets for a point of kind 3."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x330cf5"
+name = "area_point_targets"
+category = "data-table"
+type = "int[200][2]"
+usage = "MPINIT, for the area in play: where a point of kind 3 leads, an area and a point of it. ALLMAP reads the pair when the player is on the point and looks the area up in AMINIT."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "area", "1" = "point" }
+
+[[global]]
+address = "0x331015"
+name = "area_point_x"
+category = "data-table"
+type = "int[200]"
+usage = "MPINIT, for the area in play: a point's x on the map; ALLMAP puts the point's hot area around (x, y)."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3310dd"
+name = "area_point_y"
+category = "data-table"
+type = "int[200]"
+usage = "MPINIT, for the area in play: a point's y on the map."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x33207d"
+name = "area_route_points"
+category = "data-table"
+type = "int[200][2]"
+usage = "ROINIT, for the area in play: the two points a route joins; DRAWMAP and ALLMAP read the pair."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x33301e"
+name = "area_unit_cards"
+category = "data-table"
+type = "int[200][2]"
+usage = "UNINIT, for the area in play: a unit's card, as its row and slot of CDINIT; BTL passes the pair to CALCARM."
+source = "investigation"
+confidence = "high"
+columns = { "0" = "row", "1" = "slot" }
+
+[[global]]
 address = "0x214b71"
 name = "scene_script_ids"
 category = "data-table"
@@ -968,13 +1042,35 @@ required_leader_lp = "item_required_leader_lp"
 required_attack = "item_required_attack"
 
 [[table]]
-name = "area"
-records = 300
-built_by = "boot"
-usage = "AMINIT areas keyed by area id; current_area_id is the one in play."
+name = "area_point"
+records = 200
+built_by = "area"
+usage = "MPINIT's points of the area in play, keyed by point number."
 
 [table.fields]
-name = "area_names"
+name = "area_point_names"
+kind = "area_point_kinds"
+target = "area_point_targets"
+x = "area_point_x"
+y = "area_point_y"
+
+[[table]]
+name = "area_route"
+records = 200
+built_by = "area"
+usage = "ROINIT's routes of the area in play, keyed by route number."
+
+[table.fields]
+points = "area_route_points"
+
+[[table]]
+name = "area_unit"
+records = 200
+built_by = "area"
+usage = "UNINIT's units of the area in play, keyed by unit number."
+
+[table.fields]
+card = "area_unit_cards"
 
 [[table]]
 name = "deck"
@@ -986,3 +1082,16 @@ usage = "DEINIT decks keyed by deck id: a name and up to 20 cards, each as a row
 name = "deck_names"
 card_row = "deck_card_rows"
 card_slot = "deck_card_slots"
+
+# ---- Scopes (data patches spec §6.2): a scope of the game that keys some of its record tables ----
+
+[[scope]]
+name = "area"
+first = 1
+last = 299
+usage = "An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its per-area arrays hold 300). MPINIT, ROINIT and UNINIT clear these tables and fill them from the branch for the area in play."
+
+[scope.tables]
+point = "area_point"
+route = "area_route"
+unit = "area_unit"

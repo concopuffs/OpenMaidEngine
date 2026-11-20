@@ -110,9 +110,9 @@ the base and the ids in its row are wrong. Each `†` row says which.
 | SPINIT | 65 pairs of resource ids | boot |
 | MUINIT | the music list | boot |
 | BGINIT | picture substitution: given a picture id and `G[0x987c]` (0 to 4), another picture id | on demand |
-| MPINIT | an area's points: clears 16 arrays of 200 slots and fills them for area `G[0x9883]` | on demand |
-| ROINIT | pairs of point numbers for area `G[0x9883]` (read as the routes between its points) | on demand |
-| UNINIT | twenty more arrays for area `G[0x9883]`; not read | on demand |
+| MPINIT | the points of the area in play: names, kinds, positions, where a point leads | on demand |
+| ROINIT | the routes between the area's points | on demand |
+| UNINIT | the units on the area: a card each, and nineteen more arrays | on demand |
 
 The layouts below give, for each array: its base, the cells it has per id, which columns are written, how many
 ids have a value, and the values (for a string array, the first three).
@@ -260,7 +260,7 @@ Beside them are 所持能力1 and 所持能力2, with the names and descriptions
 
 | array | cells per id | columns written | ids | values | holds |
 |---|---|---|---|---|---|
-| `G[0x2b2866]` † | 2 | 0..1 | 19 | 1..82, 32 distinct | **not a card array.** The cells are `G[0x2b32c7 + row]`, one a row, written where the row's first card starts: rows 1 to 4 hold 1 to 4, the characters whose cards those rows hold, and the values go to 82 |
+| `G[0x2b2866]` † | 2 | 0..1 | 19 | 1..82, 32 distinct | **not a card array.** The cells are `G[0x2b32c7 + row]`, one a row, written where the row's first card starts: the row's character, a `CHINIT` id (`BTL` reads a unit's pictures from `CHINIT` through it). Rows 1 to 4 hold 1 to 4, and the values go to 82 |
 | `G[0x2b338f]` | 1 |  | 198 | 1..4, 4 distinct 1×50, 2×3, 3×32, 4×113 | the append that added the record (1 to 4); the base data leaves it unset |
 | `G[0x2b4aff]` | 1 |  | 923 | 10..60400, 923 distinct | a sort number: unique to each record, in steps of ten through the base data |
 | `G[0x2b626f]` | 1 |  | 300 | 1..1, 1 distinct 1×300 |  |
@@ -660,9 +660,73 @@ These four are not in the boot image: a game script sets a selector and runs the
 - **MPINIT**, **ROINIT** and **UNINIT** load one area (`AMINIT`) each time: they clear their arrays (200 slots,
   with 1 to 7 cells a slot) and fill them from the branch for `G[0x9883]`, the area in play. (`MPINIT` has a
   branch for each of `AMINIT`'s 150 ids and for nothing else, and scripts index `AMINIT`'s arrays with the
-  cell.) `MPINIT` writes the area's points with their names (出現地点, 西蒼川商業区). `ROINIT` writes pairs of
-  point numbers (1 and 2, 1 and 3 …), read as the routes between points. `UNINIT` fills twenty arrays that are
-  not read. No field of the three has a layout here.
+  cell.) The appends have `$n$` scripts of the same names with branches of their own (the first of
+  `$1$MPINIT` adds a point to area 1); how the game runs them after the base script is not read.
+
+The clears give each array's base and cells per slot exactly, so these layouts are not inferred. A row gives how
+many areas write the array, which slots, and the values over all areas.
+
+`MPINIT`, the area's points:
+
+| array | cells per slot | areas | slots | values | holds |
+|---|---|---|---|---|---|
+| `G[0x330c2d]` | 1 | 150 | 1..131 | 1..3, 3 distinct 1×5524, 2×240, 3×479 | the point's kind, 1 to 3. A point of kind 3 leads to another point: `ALLMAP` reads the target below for it |
+| `G[0x330cf5]` | 2 | 149 | 1..123 | 1..197, 169 distinct | where a point of kind 3 leads: an area (an `AMINIT` id) and a point of it. 479 points have one, as many as are of kind 3 |
+| `G[0x330e85]` | 2 | 7 | 1..57 | 1..9732, 5 distinct 1×15, 7007×1, 9607×2, 9731×1, 9732×1 |  |
+| `G[0x331015]` | 1 | 150 | 1..131 | 23..1000, 899 distinct | the point's x on the map (`ALLMAP` puts its hot area around x and y) |
+| `G[0x3310dd]` | 1 | 150 | 1..131 | 51..537, 459 distinct | the point's y |
+| `G[0x3311a5]` | 5 | 88 | 1..120 | 151..10000, 179 distinct |  |
+| `G[0x33158d]` | 5 | 36 | 1..120 | 151..9799, 48 distinct |  |
+| `G[0x331975]` | 1 | 1 | 2..49 | 7..24, 3 distinct 7×2, 16×6, 24×1 |  |
+| `G[0x331a3d]` | 1 | 0 | none | never written |  |
+| `G[0x331b05]` | 1 | 7 | 1..76 | 20514..50331696, 47 distinct | a picture for the point, in seven areas; the six arrays after it place it and size its hot area |
+| `G[0x331bcd]` | 1 | 7 | 1..76 | 5..923, 25 distinct |  |
+| `G[0x331c95]` | 1 | 7 | 1..76 | 20..522, 34 distinct |  |
+| `G[0x331d5d]` | 1 | 7 | 1..76 | 5..944, 24 distinct |  |
+| `G[0x331e25]` | 1 | 7 | 1..76 | 20..525, 34 distinct |  |
+| `G[0x331eed]` | 1 | 7 | 1..76 | 70..152, 3 distinct 70×43, 134×5, 152×6 |  |
+| `G[0x331fb5]` | 1 | 7 | 1..76 | 28..78, 3 distinct 28×6, 42×43, 78×5 |  |
+| `GS[0x11f54]` | 1 | 150 | 1..131 | 出現地点 / 西蒼川商業区 / ショッピングモール　東部 | the point's name (出現地点, 西蒼川商業区 …) |
+
+`ROINIT`, the routes between points:
+
+| array | cells per slot | areas | slots | values | holds |
+|---|---|---|---|---|---|
+| `G[0x33207d]` | 2 | 150 | 1..133 | 1..131, 131 distinct | the two points a route joins (`DRAWMAP` and `ALLMAP` read the pair) |
+| `G[0x33220d]` | 3 | 12 | 1..118 | 831..9799, 15 distinct |  |
+| `G[0x332465]` | 3 | 9 | 1..99 | 831..9799, 13 distinct |  |
+| `G[0x3326bd]` | 1 | 1 | 4..31 | 7..16, 2 distinct 7×3, 16×11 |  |
+| `G[0x332785]` | 1 | 150 | 1..133 | 1..3, 3 distinct 1×6404, 2×52, 3×42 |  |
+| `G[0x33284d]` | 1 | 0 | none | never written |  |
+| `G[0x332915]` | 1 | 10 | 1..82 | 1..2, 2 distinct 1×7, 2×8 |  |
+| `G[0x3329dd]` | 1 | 0 | none | never written |  |
+| `G[0x332aa5]` | 1 | 0 | none | never written |  |
+| `G[0x332b6d]` | 3 | 26 | 1..83 | 1..157, 10 distinct |  |
+
+`UNINIT`, the units on the area:
+
+| array | cells per slot | areas | slots | values | holds |
+|---|---|---|---|---|---|
+| `G[0x332dc6]` | 1 | 150 | 1..106 | 1..4, 4 distinct 1×799, 2×550, 3×203, 4×1232 |  |
+| `G[0x332e8e]` | 1 | 150 | 1..99 | 1..5, 5 distinct 1×151, 2×50, 3×112, 4×162, 5×324 |  |
+| `G[0x332f56]` | 1 | 150 | 1..99 | 1..907, 316 distinct |  |
+| `G[0x33301e]` | 2 | 96 | 2..99 | 1..167, 59 distinct | the unit's card: its row and its slot in `CDINIT` (`BTL` passes the pair to `CALCARM`) |
+| `G[0x3331ae]` | 1 | 119 | 2..100 | 2..4532, 276 distinct |  |
+| `G[0x333276]` | 1 | 97 | 2..99 | 1..999, 161 distinct |  |
+| `G[0x33333e]` | 1 | 97 | 2..99 | 10..100, 10 distinct |  |
+| `G[0x333406]` | 1 | 150 | 1..106 | 1..126, 115 distinct |  |
+| `G[0x3334ce]` | 1 | 150 | 1..85 | 1..3, 3 distinct 1×55, 2×385, 3×22 |  |
+| `G[0x333596]` | 1 | 7 | 2..62 | 1..1, 1 distinct 1×23 |  |
+| `G[0x33365e]` | 1 | 18 | 2..49 | 1..1, 1 distinct 1×51 |  |
+| `G[0x333726]` | 7 | 121 | 2..106 | 11..10000, 625 distinct |  |
+| `G[0x333c9e]` | 7 | 106 | 2..106 | 12..9805, 674 distinct |  |
+| `G[0x334216]` | 1 | 0 | none | never written |  |
+| `G[0x3342de]` | 1 | 25 | 2..66 | 15..41, 6 distinct 15×1, 19×1, 20×21, 21×6, 23×20, 41×15 |  |
+| `G[0x3343a6]` | 1 | 25 | 2..66 | 1..1, 1 distinct 1×64 |  |
+| `G[0x33446e]` | 1 | 85 | 2..104 | 1..1, 1 distinct 1×257 |  |
+| `G[0x334536]` | 1 | 88 | 2..104 | 1..3, 2 distinct 1×267, 3×1 |  |
+| `G[0x3345fe]` | 2 | 150 | 1..106 | 14962..67110630, 169 distinct | resource ids |
+| `G[0x33478e]` | 1 | 150 | 1..99 | 14970..67110517, 55 distinct | resource ids |
 
 ## Saved state
 
@@ -689,7 +753,9 @@ already holds.
   script indexes with the one before it.
 - **`ILINIT`'s sparse cells.** Its arrays are 32 cells each, from `G[0x32f96a]` on; four cells that one record
   each writes are shown as two `†` rows and two cells outside every array.
-- **The four on-demand tables** have no field layout here.
+- **The area tables' numbers.** `MPINIT`, `ROINIT` and `UNINIT` have exact layouts and a reading for the
+  points' names, kinds, positions and targets, the routes' two points and a unit's card; the other arrays,
+  most of `UNINIT`'s, are not read.
 - **Who reads the sort numbers** is not found: no script reads those arrays through a lookup.
 - **Copies in saved state** ("Saved state" above) are checked for a card's numbers only.
 - **`SCJUMP`'s contexts and per-rule cells** ("Scene dispatch" above), and with them the story flags.
