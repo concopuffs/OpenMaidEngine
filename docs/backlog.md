@@ -138,9 +138,9 @@ it; git history keeps the record.
   in the frame walk where op `0x325`'s second handle falls. The port keeps all of that state
   (`Graphics.Scene3D.cs`) and draws none of it. Only TITLE.BIN and DEBUG.BIN use the group (23 sites); DEBUG.BIN
   also builds a snow effect (`Set3DEffectSnow`, op `0x326`) and a third effect (op `0x327`).
-  Not read yet: what the leaf effect does each frame (its constructor `effect_leaf_construct@0x472020` is, its
-  update and draw are not), what the two other effects draw, and the manager's `+0xb62c`, which gates the snow
-  effect. Done when the title's leaves are drawn from the kept state and look as native's do: a reader for the
+  Native's leaf effect was read on 2026-11-20 (its motion, clock, draw and scene), and the design that draws it is
+  `superpowers/specs/2026-11-20-title-leaves-design.md` (proposed). Not read yet: what the two other effects
+  draw, and the manager's `+0xb62c`, which gates the snow effect. Done when the title's leaves are drawn from the kept state and look as native's do: a reader for the
   two meshes, the effect's motion from the native object, and the meshes transformed and lit on the engine thread
   and emitted as polygon items, so that neither renderer needs a 3D pass. Its frames cannot be compared with
   native's pixel for pixel, since the motion runs on the clock. The two effects only DEBUG.BIN builds can stay
