@@ -15,7 +15,7 @@ below P3 is still being added and is not playable. The levels' gates are in
 
 | Game | Id | Engine ABI | Play | Modding | Guide |
 |---|---|---|---|---|---|
-| Soukoku no Arterial | `arterial` | `SYS4438` | P3 (complete) | none | none yet |
+| Soukoku no Arterial | `arterial` | `SYS4438` | P3 (complete) | M1 (scripts) | [arterial.md](arterial.md) |
 | Himegari Dungeon Meister | `himegari` | `SYS4422` | P3 (complete) | M3 (base mod) | [himegari.md](himegari.md) |
 | Kamidori Alchemy Meister | `kamidori` | `SYS4433` | P3 (complete) | M3 (base mod) | [kamidori.md](kamidori.md) |
 
@@ -25,19 +25,19 @@ below P3 is still being added and is not playable. The levels' gates are in
 |---|---|
 | Game id | `arterial` (`--game arterial`) |
 | Title | Soukoku no Arterial (創刻のアテリアル) |
-| Support | play P3 (complete); modding none |
+| Support | play P3 (complete); modding M1 (scripts) |
 | Engine build | AGE `4.38D` |
 | Engine ABI | `SYS4438` |
 | Catalog revision | `S4IC438` |
 | Boot script | `SYSTEM4.BIN` |
 | Conventional install | `games/arterial/` beside the repository |
 | Port saves | enabled, in `games/arterial/` |
-| OMS modules | `arterial.globals`, `arterial.scripts` (generated); `arterial.adv` (`oms/arterial/adv.oms`) |
+| OMS modules | `arterial.scripts` (generated; no `arterial.globals`, the game has no registry yet); `arterial.adv` (`oms/arterial/adv.oms`) |
 | Speakers | no dialogue prelude yet |
 | Tables | none yet |
 | Named patch points | none yet (fragments use offsets) |
-| Publisher's page | none |
-| Guide | none yet |
+| Publisher's page | <https://www.eukleia.co.jp/eushully/> |
+| Guide | [arterial.md](arterial.md) |
 
 ## Himegari Dungeon Meister
 

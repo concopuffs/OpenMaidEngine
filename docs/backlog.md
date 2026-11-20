@@ -562,9 +562,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   since 2026-11-20 by the user's word (`adding-a-game.md` §1; its manifest's `support`), on the branch
   `feature/arterial`: the engine names its install, decodes all of it, has a handler for every opcode its scripts
   use, and boots it by its own route through the logo and the title to SC0000's first pages. Its saves load on
-  native AGE as native's load on the port. The launcher lists it, without art: the art entry and the game's guide
-  come with step 10. Its modding level is none. It has not been driven past SC0000's first pages on either
-  target: that is the sweep's (P4).
+  native AGE as native's load on the port. The launcher lists it. Its modding level is **M1** since 2026-11-20:
+  script mods and text packages work (`modding/games/arterial.md`). It has not been driven past SC0000's first
+  pages on either target: that is the sweep's (P4).
   - **Done for P0 and P1.** Its dump, its Ghidra image with 658 ported or registry names, its build in
     `operand_access.py` `ENGINES` with a fifteenth accessor, the revision diffs (`engine-re.md`, "Comparing engine
     builds"), its profile and engine build (4.33G with its own names and nothing else changed), its observation and
@@ -694,12 +694,31 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The title's 3D scene keeps its state and draws nothing (the user's decision, 2026-11-19).** Ops `0x324` to
     `0x32f`: the handlers keep what the scripts set (`Graphics.Scene3D.cs`). What that leaves undrawn is its own
     item, "The title's 3D leaves are not drawn", under Engine fidelity.
-  - **Next, by the user's word (2026-11-20): the script level, M1** (step 10's first part): `oms-rebuild --game
-    arterial` over every script, the ADV module `oms/arterial/adv.oms`, the patch points, a text catalog export and
-    one language package, the guide `modding/games/arterial.md`, and the launcher's art entry. Step 7 is done: the
-    opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page; `engine-re.md`, "4.38D's menu bar
-    and 設定 dialog") and the kept window position (`engine-re.md`, "The kept window position"). The data tables
-    (M2), the base mod (M3) and the sweep (P4) follow.
+  - **The script level, M1, is reached (2026-11-20, by the user's word that it comes next).** All 693 scripts
+    round-trip byte for byte at the core and the idiomatic level, and the canonical rebuild, the idiomatic rebuild
+    and the patch probe each run the 271 scenes equivalent to the originals. `oms/arterial/adv.oms` lifts 15,641
+    library subs and 25,438 pages, 41.0% of the instructions. `example.arterial-prologue-line` links, shows its
+    line as the first page on native AGE and on the port, and has a workspace test. A three-line language package
+    ran in the port. The guide and the launcher's art entry are in. What M1 leaves open:
+    - **No speaker names.** A line names its speaker by a face picture's id (`face: 0x16a`). An `enum` of faces
+      or speakers needs the character and face tables, which step 9 decodes. Done when a decompiled line names
+      its speaker.
+    - **No patch points and no globals registry.** `vm-map/patch-points-arterial.toml` and
+      `vm-map/globals-arterial.toml` do not exist, so fragments use offsets and addresses and there is no
+      `arterial.globals` module. Both come with steps 9 and 10's base mod survey.
+    - **About 12,000 pages stay core statements** (37,568 page starts were counted in the scenes, 25,438 lift):
+      pages with furigana, a name put into the text, several `show_text` calls, or commands between the page's
+      start and its text. The same kinds stay core in the other two games ("Prelude coverage" above).
+    - **The library's names are a first reading.** The 62 library functions were named from their bodies on
+      2026-11-20, the families by their constants (`hide_message_window_150ms`, `fade_to_black_890ms`); which
+      scene command each stands for was not traced. Rename where a better reading turns up; a module sub's name
+      is not an export.
+    - **Nothing that adds a script or a scene was tried**, on either target, and the Python script tools
+      (`sys4load.py`, `locate_page.py`'s listing) cannot read the game: its scripts are inside its archives and
+      it has no extracted copy. Step 9 needs the extraction first.
+  - **Next, by the plan:** the data tables (M2, step 9), then the base mod (M3), and the sweep (P4). Step 7 is
+    done: the opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page; `engine-re.md`, "4.38D's
+    menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept window position").
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

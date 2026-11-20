@@ -259,10 +259,17 @@ This step is static and can start once P1 is reached.
 
 ### Step 10: modding (M1, then M3)
 
-- **Scripts (M1).** Pass `oms-rebuild --game <id>`. Write the ADV module `oms/<id>/adv.oms` (speakers and the
-  dialogue idioms) so the idiomatic rebuild passes too. Name patch points in `vm-map/patch-points-<id>.toml`.
-  Export the text catalogs and run one language package. Write `docs/modding/games/<id>.md`, add the launcher's
-  art entry to the profile, and run `patch_points_build.py`, then `modding_games_build.py --build`.
+- **Scripts (M1).** Run the script toolchain's gates in order: `oms-roundtrip`, then `--level core` and
+  `--fixed-point`, then `oms-rebuild` and `oms-rebuild --patch-probe`. A script that fails one is a fault of the
+  toolchain to fix, not of the game. Write the ADV module `oms/<id>/adv.oms` so the idiomatic round trip and
+  rebuild pass too: decompile every scene at core level, collect the units the scenes share (the header's
+  handlers, the library linked behind `exit` guards, as many copies of a body as one scene links), name them, and
+  write the page template from the commonest page shapes. A speaker enum needs the name table, which may wait
+  for step 9. Name patch points in `vm-map/patch-points-<id>.toml` where a point is understood; they may also
+  wait for the base mod's survey. Export the text catalogs and run one language package. Write the first-mod
+  example (`oms/examples/mods/example.<id>-…`) with a workspace test that links it and runs it to its page, and
+  run it on native AGE too. Write `docs/modding/games/<id>.md`, add the launcher's art entry to the profile, and
+  run `patch_points_build.py` if the game has points, then `modding_games_build.py --build`.
 - **Base mod (M3).** Survey the places the game's own appends hook (its handler chains). Write
   `mods/<id>-base/`: the manifest, the events (boot data layered and ready, the stage events, the experience
   award, and what the survey found a use for), `lua/tables.lua` for the `<id>.tables` kind, and at least one

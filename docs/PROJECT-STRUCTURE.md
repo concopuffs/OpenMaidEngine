@@ -161,6 +161,8 @@ S:\Game Hacking\Eushully\Himegari\           ← workspace root
     │   │                                       subs that the compiler links and the idiomatic decompiler lifts
     │   ├── himegari/adv.oms                    Himegari ADV prelude: scene library, `@dialogue line`, speaker enum
     │   ├── kamidori/adv.oms                    Kamidori ADV prelude (same parts, plus the name_form enum)
+    │   ├── arterial/adv.oms                    Arterial ADV prelude: scene header, library, `@dialogue line`
+    │   │                                       (a speaker is a face picture; no speaker enum yet)
     │   └── examples/                           example scripts, not modules (gate 6: himegari-gate6/,
     │                                           kamidori-gate6/; gate 7 fragment: himegari-patch/; example mod
     │                                           packages, from mod loader gate 2 to the data patches' data

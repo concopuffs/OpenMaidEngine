@@ -26,6 +26,11 @@ ran the same scenarios on native AGE.
   the first page of the translated `patch/SC0000.bin` (site 0xd0a, fingerprinted on the translated bytes).
   `NaturalBootIntegrationTests.KamidoriTranslatedPrologueFragmentIsTheFirstAdvPage` boots a new game into it.
 
+- `example.arterial-prologue-line` is Arterial's first mod (`docs/modding/games/arterial.md`): a line before the
+  first page of its opening scene (site 0xf1c, the instruction that sets `G[0x3141]`), through `arterial.adv`.
+  `NaturalBootIntegrationTests.ArterialPrologueFragmentIsTheFirstAdvPage` boots a new game into it, and the
+  exported `SC0000.BIN` shows the line on native AGE.
+
 - `example.double-exp-lua` (Lua scripting gate 4) is the Lua version of the Himegari guide's experience patch: a
   handler on `himegari.experience.after_calculation` doubles `L[0x1]`. `ModLuaLinkTests` links it and runs
   `ADDEXP.BIN` with it and with the guide's OMS patch, and both leave the same state. It targets `extended`, so it

@@ -64,11 +64,11 @@ public sealed class GameProfileSelectionTests
         Assert.True(kamidori.Matches(KamidoriIdentity));
     }
 
-    /// <summary>創刻のアテリアル is at P3 (docs/adding-a-game.md): the engine names its install, reads all of it,
-    /// has a handler for every opcode its scripts use and saves; its build is declared from 4.33G. Nothing of the
-    /// modding track is built for it yet.</summary>
+    /// <summary>創刻のアテリアル is at P3 and M1 (docs/adding-a-game.md): the engine names its install, reads all
+    /// of it, has a handler for every opcode its scripts use and saves; its build is declared from 4.33G; and script
+    /// mods and text packages work for it. Its data tables and its base mod are not built yet.</summary>
     [Fact]
-    public void ArterialIsCompleteForPlayAndHasNoModdingLevel()
+    public void ArterialIsCompleteForPlayAndTakesScriptMods()
     {
         GameProfileManifest arterial = Assert.IsType<GameProfileManifest>(GameProfileRegistry.BuiltIn.Find("arterial"));
 
@@ -76,9 +76,13 @@ public sealed class GameProfileSelectionTests
                      (arterial.SysFrontendId, arterial.EngineBuildId, arterial.EngineAbiId, arterial.NaturalBootScript));
         Assert.Equal(["SYS4438"], arterial.ScriptRevisions);
         Assert.True(arterial.Matches(new GameCatalogIdentity("S4IC438", "創刻のアテリアル")));
-        Assert.Equal(new GameSupport(PlayLevel.Complete, ModdingLevel.None), arterial.Support);
+        Assert.Equal(new GameSupport(PlayLevel.Complete, ModdingLevel.Scripts), arterial.Support);
         Assert.True(arterial.Support.IsPlayable);
-        Assert.Equal(("P3", "none"), (arterial.Support.PlayId, arterial.Support.ModdingId));
+        Assert.Equal(("P3", "M1"), (arterial.Support.PlayId, arterial.Support.ModdingId));
+        Assert.Equal("none", new GameSupport(PlayLevel.Complete, ModdingLevel.None).ModdingId);
+        // The launcher's art for it comes from the publisher's site, as the other two games' does.
+        Assert.Equal("https://www.eukleia.co.jp/eushully/eu13/banner/banner_eu13_a.jpg", arterial.Launcher!.Banner!.Url.ToString());
+        Assert.Equal("https://www.eukleia.co.jp/eushully/eu13/image/eu13_package.jpg", arterial.Launcher.Cover!.Url.ToString());
         // A game below P3 is still being added: the run says so, and the launcher does not offer it.
         Assert.False(new GameSupport(PlayLevel.Boots, ModdingLevel.None).IsPlayable);
         Assert.Equal(GameSupport.Supported, GameProfileRegistry.BuiltIn.Find("himegari")!.Support);

@@ -22,7 +22,9 @@ lists (empty for the default game).
 - One build: `dotnet build engine/OmeEngine.sln`.
 - The generated registries, which fragments that `use <game>.globals` need. Run
   `py -3.11 -X utf8 tools/globals_build.py --game <game> --build`, and
-  `py -3.11 -X utf8 tools/patch_points_build.py --game <game> --build` if the game has patch points.
+  `py -3.11 -X utf8 tools/patch_points_build.py --game <game> --build` if the game has patch points. A game whose
+  guide says it has no registry yet has no `<game>.globals` module: skip the first command, and leave the
+  `use <game>.globals` line out of the fragment below.
 
 Every `Ome.Cli` command selects the game with its game options: `--game`, `--game-root`, and `--overlay-root`
 for an install with a translation layer. A translation that replaces scripts changes the base your fragment edits,

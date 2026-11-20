@@ -988,6 +988,16 @@ Some scenes keep their own byte-identical copy of a library function as well (SC
 `hide_message_window`). Two of the library functions are byte-identical to each other under different names.
 `oms/kamidori/adv.oms` declares them.
 
+創刻のアテリアル's scenes carry it too (read 2026-11-20 from the core decompile of its 282 SC and SP scenes): 25
+unguarded header units, 23 subs and the two coroutine handlers, the same in 279 scenes, and 62 distinct guarded
+library functions. Most of the 62 are one of a few bodies with other constants: the message window shown or
+hidden over a duration, the screen faded to a colour or back, and the two combined. Two of them are linked twice
+by one scene, so the module declares a second copy of each. A page of this game carries a voice block of about
+thirty statements inline, and names its speaker by a face picture, which the library looks up for the
+character. `oms/arterial/adv.oms` declares all of it. One script that is no scene, DEBUGADV2,
+ends its main code with op `0x9` (exit-script) and no `exit` before the linked library: the compiler takes op
+`0x9` as an instruction control never passes, which is what the opcode does.
+
 **Code positions held as numbers.** Besides code-target operands, one idiom stores a code offset as an ordinary
 immediate. Every ADV scene's loop compares op 0x140's returned PC with a constant:
 `mov G[0x6c3], 0x45e; eq t, G[0x6c3], G[0x6be]`. The constant is always the offset of the scene loop head, a `call`

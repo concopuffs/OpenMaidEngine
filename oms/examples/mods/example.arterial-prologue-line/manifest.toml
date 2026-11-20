@@ -1,0 +1,9 @@
+omp = 1
+id = "example.arterial-prologue-line"
+name = "Arterial prologue line"
+version = "1.0.0"
+description = "Inserts a line before the first page of Arterial's opening scene."
+
+[game]
+profile = "arterial"
+target = "native"

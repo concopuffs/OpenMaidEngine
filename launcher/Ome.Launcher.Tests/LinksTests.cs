@@ -72,11 +72,17 @@ public sealed class LinksTests : IDisposable
             kamidori.SysFrontendId, kamidori.EngineBuildId, kamidori.EngineAbiId, kamidori.NaturalBootScript,
             kamidori.MetadataReferences, kamidori.Persistence,
             support: new GameSupport(PlayLevel.Boots, ModdingLevel.None));
+        // And a playable game whose profile has no art entry, which every built-in game has.
+        var artless = new GameProfileManifest(
+            "artless", "アートのないゲーム", [new GameCatalogIdentity("S4IC497", "アートのないゲーム")], kamidori.ScriptRevisions,
+            kamidori.SysFrontendId, kamidori.EngineBuildId, kamidori.EngineAbiId, kamidori.NaturalBootScript,
+            kamidori.MetadataReferences, kamidori.Persistence);
         return new GameProfileRegistry(GameProfileRegistry.BuiltIn.Profiles.Where(game => game.Id != "kamidori").Append(
             new GameProfileManifest(kamidori.Id, kamidori.DisplayTitle, kamidori.CatalogIdentities, kamidori.ScriptRevisions,
                                     kamidori.SysFrontendId, kamidori.EngineBuildId, kamidori.EngineAbiId,
                                     kamidori.NaturalBootScript, kamidori.MetadataReferences, kamidori.Persistence,
-                                    kamidori.DirectSceneDiagnostics, kamidori.DebugSceneLaunch, art)).Append(adding));
+                                    kamidori.DirectSceneDiagnostics, kamidori.DebugSceneLaunch, art)).Append(adding)
+            .Append(artless));
     }
 
     [Fact]
@@ -87,6 +93,7 @@ public sealed class LinksTests : IDisposable
         byte[] banner = Png(40, 8), cover = Png(32, 45);
         var served = new Served { ["/banner.png"] = banner, ["/cover.png"] = cover };
         GameProfileRegistry registry = Registry(banner, cover);
+        _home.Registry = registry;   // the page lists the session's games
         (MainViewModel model, RecordingHost host) = await Open(new ArtOptions(registry, served));
 
         model.Games.Execute(null);
@@ -113,12 +120,12 @@ public sealed class LinksTests : IDisposable
         Assert.True(kamidori.Download.CanExecute(null));
         Assert.False(kamidori.Remove.CanExecute(null));
         // A game whose profile has no art entry says so, and offers no download.
-        GameEntryViewModel arterial = games.Games.Single(game => game.Id == "arterial");
+        GameEntryViewModel artless = games.Games.Single(game => game.Id == "artless");
         Assert.True(kamidori.OffersArt);
-        Assert.False(arterial.OffersArt);
-        Assert.Equal("Banner: none offered · Cover: none offered", arterial.ArtText);
-        Assert.False(arterial.Download.CanExecute(null));
-        Assert.False(arterial.HasSite);
+        Assert.False(artless.OffersArt);
+        Assert.Equal("Banner: none offered · Cover: none offered", artless.ArtText);
+        Assert.False(artless.Download.CanExecute(null));
+        Assert.False(artless.HasSite);
         await kamidori.DownloadAsync();
         Assert.Equal(2, served.Requests);
         Assert.Equal("The art is downloaded.", kamidori.Status);

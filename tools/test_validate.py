@@ -201,23 +201,39 @@ class GatePlanTests(unittest.TestCase):
             installed.environment[:len(validate.LOW_MEMORY_DOTNET_ENVIRONMENT)],
         )
 
-    def test_a_game_still_being_added_is_asked_only_what_its_level_promises(self) -> None:
-        # Arterial is at P1 with no modding level (its manifest's support entry) and has no global registry yet:
-        # its catalog decodes and its installed-data tests run, and no scene is rebuilt or global reference checked.
+    def test_a_game_is_asked_only_what_its_levels_promise(self) -> None:
+        # Arterial is at M1 (its manifest's support entry) and has no global registry yet: its catalog decodes, its
+        # installed-data tests run and its scenes are rebuilt, from its ADV module too; no global reference is
+        # checked.
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             context = validate.paths.ToolContext.resolve("arterial", root / "game", root / "extract", environ={})
             plan = validate.build_gate_plan("workspace", game_root=context.game_root, tool_context=context)
+            # A game below M1 is still being added: no scene of it is rebuilt.
+            with mock.patch.object(validate, "has_script_modding", return_value=False):
+                adding = validate.build_gate_plan("workspace", game_root=context.game_root, tool_context=context)
+            manifests = root / "manifests"
+            manifests.mkdir()
+            (manifests / "adding.json").write_text('{"support": {"play": "P2", "modding": "none"}}', encoding="utf-8")
+            (manifests / "scripted.json").write_text('{"support": {"play": "P3", "modding": "M1"}}', encoding="utf-8")
+            with mock.patch.object(validate.paths, "PROFILE_MANIFEST_DIR", manifests):
+                self.assertFalse(validate.has_script_modding("adding"))
+                self.assertTrue(validate.has_script_modding("scripted"))
         keys = {gate.key for gate in plan}
-        self.assertFalse(validate.has_script_modding("arterial"))
+        self.assertTrue(validate.has_script_modding("arterial"))
         self.assertTrue(validate.has_script_modding("kamidori"))
         self.assertIn("catalog-corpus-scan", keys)
         self.assertIn("engine-workspace-tests", keys)
-        self.assertNotIn("oms-canonical-rebuild", keys)
-        self.assertNotIn("oms-idiomatic-rebuild", keys)
+        self.assertIn("oms-canonical-rebuild", keys)
+        self.assertIn("oms-idiomatic-rebuild", keys)   # oms/arterial/adv.oms
         self.assertNotIn("globals-check", keys)
         installed = next(gate for gate in plan if gate.key == "engine-workspace-tests")
         self.assertIn("Category=Workspace&Profile=arterial", installed.command)
+        adding_keys = {gate.key for gate in adding}
+        self.assertIn("catalog-corpus-scan", adding_keys)
+        self.assertIn("engine-workspace-tests", adding_keys)
+        self.assertNotIn("oms-canonical-rebuild", adding_keys)
+        self.assertNotIn("oms-idiomatic-rebuild", adding_keys)
 
     def test_kamidori_workspace_uses_only_selected_profile_gates_and_outputs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

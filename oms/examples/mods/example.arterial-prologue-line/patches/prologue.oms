@@ -1,0 +1,9 @@
+oms 1
+// A line before the first page of 創刻のアテリアル's opening scene. A page of this game starts at the instruction
+// that sets G[0x3141] (the page has text): 0xf1c is that instruction of the first page.
+patch "SC0000.BIN" fingerprint "sha256:123a8a055e79f3ec45feff5bb6edba15c365cfcefe75ee07c8a4b249f0fdcf3c"
+use arterial.adv
+
+before site 0xf1c {
+    "[OMS] A mod inserted this line before the opening scene's first page."
+}

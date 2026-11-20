@@ -23,7 +23,11 @@ internal sealed class TestHome : IDisposable
     public OmeHome Home { get; }
     public string AppData { get; }
     public LauncherEnvironment Environment { get; }
-    public CheckOptions CheckOptions => new(MachineFolder: Path.Combine(AppData, "machine"));
+    /// <summary>The games the sessions know, when a test needs others than the built-in ones (a game still being
+    /// added, a game without art).</summary>
+    public GameProfileRegistry? Registry { get; set; }
+
+    public CheckOptions CheckOptions => new(Registry, MachineFolder: Path.Combine(AppData, "machine"));
 
     public void Dispose()
     {

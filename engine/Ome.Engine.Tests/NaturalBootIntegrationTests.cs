@@ -310,6 +310,43 @@ public class NaturalBootIntegrationTests
         Assert.True(reachedAdv.VisibleObjectCount > 0);
     }
 
+    /// <summary>M1's sample package (docs/adding-a-game.md, section 1): the example fragment links against
+    /// 創刻のアテリアル's opening scene through the game's ADV module, and its line is the first ADV page of a natural
+    /// new game.</summary>
+    [Fact]
+    [Trait("Profile", "arterial")]
+    public void ArterialPrologueFragmentIsTheFirstAdvPage()
+    {
+        string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT") ?? Paths.GameInstall("arterial");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"arterial install not found at {gameRoot}");
+        GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("arterial")!;
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, profile.EngineAbiId);
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var store = new Sys4AssetStore(catalog, gameRoot, [gameRoot]);
+        Ome.Mods.Linking.ModLinkBase linkBase = Ome.Mods.Linking.ModLinkBase.ForInstall("arterial", sys4Ini, catalog,
+            store, table, Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
+            Paths.GlobalsJson("arterial"), Paths.OmsModules("arterial"), Paths.PatchPointsJson("arterial"));
+        string source = Path.Combine(Paths.Repo, "oms", "examples", "mods", "example.arterial-prologue-line");
+        using var mod = Ome.Mods.Packages.ModPackage.Open(source);
+        var link = Ome.Mods.Linking.ModLinker.Link(linkBase, [mod], []);
+        Assert.True(link.Succeeded, link.Report.Render());
+
+        string layer = Path.Combine(Path.GetTempPath(), "ome-arterial-line-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(layer);
+        try
+        {
+            File.WriteAllBytes(Path.Combine(layer, "SC0000.BIN"), link.Scripts["SC0000.BIN"].Bytes);
+            var (reachedAdv, _) = RunNewGameToFirstAdvPage("arterial", gameRoot, [layer, gameRoot], 510, 284);
+            Assert.Equal("SC0000.BIN", reachedAdv.ScriptName);
+            Assert.Equal("[OMS] A mod inserted this line before the opening scene's first page.", reachedAdv.Text);
+        }
+        finally
+        {
+            Directory.Delete(layer, recursive: true);
+        }
+    }
+
     private static (ReachedKamidoriAdvPageException Reached, List<string> Entered) RunKamidoriNewGameToFirstAdvPage(
         string gameRoot, string[] looseRoots)
         // Kamidori's 1024x576 title menu begins at x=606; its first row spans y=286..340.

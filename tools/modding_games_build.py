@@ -98,7 +98,11 @@ def identity(profile_id: str) -> list[str]:
     modules = source_modules(profile_id)
     guide = GAMES_DIR / f"{profile_id}.md"
 
-    module_cells = [f"`{profile_id}.globals`, `{profile_id}.scripts` (generated)"]
+    # <game>.globals comes from the game's registry: a game without one has no such module to `use`.
+    if globals_toml(profile_id).exists():
+        module_cells = [f"`{profile_id}.globals`, `{profile_id}.scripts` (generated)"]
+    else:
+        module_cells = [f"`{profile_id}.scripts` (generated; no `{profile_id}.globals`, the game has no registry yet)"]
     module_cells += [f"`{name}` (`{path}`)" for name, path, _ in modules]
     speakers = [f"{count} in `{name}`'s `enum speaker`" for name, _, count in modules if count is not None]
     table_cell = ", ".join(f"`{t['name']}[{t['records']}]` ({len(t.get('fields', {}))} fields)" for t in tables)
