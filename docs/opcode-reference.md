@@ -3471,7 +3471,7 @@ Both native handlers directly return the input manager field populated from the 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x10e`; scope=SYS4438 handler and worker; 4.33G's handler pairs with it at similarity 1.00. op_0x10e_handler@0x42c1e0 passes operand 2 to 0x4710c0, which returns 0 when the input manager's +0x1820 is zero and else GetAsyncKeyState(table[+0x1420 + index * 4]) sign-extended from 16 bits, and writes the result to operand 1. The table is the DIK-to-VK table op 0xfd reads at the same address.
 
-The worker reads its DIK-to-VK table, 256 entries, at the operand as it comes, and returns 0 while the input manager is inactive. Windows also sets bit 0 of the result when the key was pressed since the last call; the port returns -32768 or 0. 創刻のアテリアル has 3 sites.
+The worker reads its DIK-to-VK table, 256 entries, at the operand as it comes, and returns 0 while the input manager is inactive. The result has bit 15 while the key is down and bit 0 when it was pressed since the last call for that key, which the call clears; the port keeps that bit for the game's own calls (InputBindings.KeyState), where Windows keeps it for every process. 創刻のアテリアル has 3 sites, all in PH03_PLR_ACTION, and each tests the result with and 0xff00, so bit 0 does not reach them.
 
 ### 0x10f `set-system-key-disable-mask` (set-system-key-disable-mask, argc 1)
 - **observed by:** arterial (SYS4438)

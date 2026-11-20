@@ -591,10 +591,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       (`GodotTextServerGlyphMaskRasterizer.AddGameFont`), and no run has drawn the game's text with it.
     - **The ruby drawer does not join dashes.** Native's ruby goes through the same glyph drawers, so a `0xF042`
       or `0xF043` in a ruby would be joined there. No ruby with one is known.
-    - **Auto's timer is never paused.** 4.33G and 4.38D pause it while the input service's text redraw direction
-      is not 0 and restart it when the direction returns to 0. The port's direction is always neutral (op `0x83`;
-      `engine-re.md`, "The ordinary ADV redraw pair"), so the case does not arise until the port walks the text
-      back by key or wheel. Found while reading 4.38D's poll; Kamidori has it too.
   - **File types no other game has:** two `.X` files (`LEAF0.X`, `LEAF1.X`) and the `.TTF`, among 21,349 entries
     in six archives and four appends.
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
@@ -612,8 +608,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       pattern reveal is compared with native".
     - **The music's pause** (`0xc1`, one site): whether a numbered save keeps the flag was not read, and the port
       does not save it. The Godot device holds the stream with `StreamPaused`; no run has heard it.
-    - **The key state** (`0x10e`) answers -32768 or 0. Windows also sets bit 0 when the key was pressed since the
-      last call, which the port does not model; whether a script tests more than the sign was not looked at.
     - **The horizontal wheel** (`0x2e5`) reaches the port as Godot's wheel-left and wheel-right buttons. The
       driver has no step for it, so no scenario turns it.
     - **The stepped callbacks' last row** is one value for the process natively, and the port keeps it across a

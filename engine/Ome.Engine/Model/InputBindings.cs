@@ -24,6 +24,8 @@ public sealed class InputBindings
     private readonly int[] _mouseButtonSlots = new int[2];
     private readonly int[] _joystickButtons = new int[MaximumActions];
     private readonly HashSet<int> _heldVirtualKeys = new();
+    /// <summary>The keys pressed since op 0x10e last asked for them: GetAsyncKeyState's bit 0.</summary>
+    private readonly HashSet<int> _pressedSinceKeyState = new();
     private uint _heldMouseButtons;
     private uint _heldJoystickButtons;
     private double _joystickX;
@@ -99,7 +101,11 @@ public sealed class InputBindings
     public void UpdateKeyboardVirtualKey(int virtualKey, bool pressed)
     {
         if ((uint)virtualKey >= _keyboardActions.Length) return;
-        if (pressed) _heldVirtualKeys.Add(virtualKey);
+        if (pressed)
+        {
+            _heldVirtualKeys.Add(virtualKey);
+            _pressedSinceKeyState.Add(virtualKey);
+        }
         else _heldVirtualKeys.Remove(virtualKey);
     }
 
@@ -132,14 +138,17 @@ public sealed class InputBindings
 
     /// <summary>
     /// Op 0x10e: GetAsyncKeyState for the virtual key of DirectInput scan code <paramref name="dikScanCode"/>, as
-    /// the signed 16-bit value AGE widens: -32768 while the key is down, else 0. Windows also sets bit 0 when the key
-    /// was pressed since the last call by anyone; that bit is not modelled. A scan code with no virtual key asks for
-    /// key 0, which is never down.
+    /// the signed 16-bit value AGE widens: bit 15 while the key is down, and bit 0 when it was pressed since the last
+    /// call for that key, which the call clears (so -32767, -32768, 1 or 0). Windows keeps that bit for every
+    /// process and any of them can take it; the port keeps it for the game's own calls. A scan code with no virtual
+    /// key asks for key 0, which is never down.
     /// </summary>
     public int KeyState(int dikScanCode)
     {
         int virtualKey = DikToVirtualKey(dikScanCode);
-        return virtualKey != 0 && _heldVirtualKeys.Contains(virtualKey) ? short.MinValue : 0;
+        if (virtualKey == 0) return 0;
+        int state = _heldVirtualKeys.Contains(virtualKey) ? short.MinValue : 0;
+        return _pressedSinceKeyState.Remove(virtualKey) ? state | 1 : state;
     }
 
     public int PollActionMask()

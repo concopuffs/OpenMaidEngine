@@ -398,7 +398,10 @@ The arithmetic is 32-bit. The option's other bits are not read. The port keeps t
 Auto native, computes both delays in `SkipAndAuto.AutoWaitStateFor` from the text native's glyph count for the
 waited layout, and runs the voiced timer in `AdvAutoAdvanceTimer`. With the pitches and the option 0, which is all
 4.24J and 4.33G can hold, the result is their delay, so one implementation serves every build. The port never
-pauses the timer: its redraw direction is always neutral (op `0x83`).
+pauses the timer, and native does not in these games either. The direction leaves 0 only in the text view
+(run-state `0x100000`, `adv_text_view_service_tick@0x4112a0`, 4.22 `@0x410d30`). The text view is entered from
+the wheel path under `set:ReDrawTextOnKey` 1 or from op `0x84`. All three games set `REDRAWTEXTONKEY=0`, and no
+script calls op `0x84` (2026-11-20). The port has no text view, and its op `0x83` answers a neutral direction.
 
 **Settings.** 4.38D registers nine settings 4.33G does not:
 
@@ -495,7 +498,10 @@ catalog sets neither action.
 
 **The key state.** `input_get_key_state@0x4710c0` (op `0x10e`) returns `(short)GetAsyncKeyState` of the virtual
 key its DIK table (input manager `+0x1420`, 256 entries, read unchecked) gives for a scan code, or 0 while the
-manager's `+0x1820` is zero.
+manager's `+0x1820` is zero. Bit 15 is set while the key is down, and bit 0 when the key was pressed since the last
+call for it, which the call clears. Windows keeps bit 0 for every process, so another one can take it; the port keeps
+it for the game's own calls (`InputBindings.KeyState`, 2026-11-20). The game's three sites, all in
+`PH03_PLR_ACTION`, test the result with `and 0xff00`, so bit 0 does not reach them; Himegari and Kamidori have none.
 
 **The music's pause.** The BGM object (`ctx+0xaa0d8`) holds its route at `+0x408`, its track at `+0x40c`, a pause
 flag at `+0x410` and a backend for each route at `+0x434`. `bgm_toggle_pause@0x476470` (op `0xc1`) flips the flag

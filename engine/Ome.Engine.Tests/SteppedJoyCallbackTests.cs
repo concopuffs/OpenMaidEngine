@@ -173,23 +173,28 @@ public class SteppedJoyCallbackTests
     // ---- the key state ----
 
     [Fact]
-    public void TheKeyStateIsNegativeWhileTheScanCodesKeyIsDown()
+    public void TheKeyStateIsNegativeWhileTheKeyIsDownAndOddOnceAfterAPress()
     {
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson);
         var ops = new List<(int, Operand[])>
         {
-            Op(0x10e, G(0x300), I(0x1e)),       // A
-            Op(0x10e, G(0x301), I(0x30)),       // B
-            Op(0x10e, G(0x302), I(0xff)),       // a scan code with no virtual key
+            Op(0x10e, G(0x300), I(0x1e)),       // A, pressed and held: bit 15, and bit 0 for the press
+            Op(0x10e, G(0x301), I(0x1e)),       // A again: the first call took bit 0
+            Op(0x10e, G(0x302), I(0x30)),       // B, pressed and let go before the call: bit 0 alone
+            Op(0x10e, G(0x303), I(0x30)),       // B again
+            Op(0x10e, G(0x304), I(0xff)),       // a scan code with no virtual key
             (Exit, Array.Empty<Operand>()),
         };
         var vm = new VirtualMachine(ScriptAssembler.Assemble(table, "KEYS.BIN", ops, []), table, new RecordingWaits());
         vm.UpdateKeyboardVirtualKeyState(0x41, true);
+        vm.UpdateKeyboardVirtualKeyState(0x42, true);
+        vm.UpdateKeyboardVirtualKeyState(0x42, false);
 
         vm.Run();
 
         Assert.Equal("exit", vm.HaltReason);
-        Assert.Equal((-32768L, 0L, 0L),
-            (vm.Globals[0x300], vm.Globals.GetValueOrDefault(0x301, -1), vm.Globals.GetValueOrDefault(0x302, -1)));
+        Assert.Equal((-32767L, -32768L, 1L, 0L, 0L),
+            (vm.Globals[0x300], vm.Globals[0x301], vm.Globals[0x302], vm.Globals.GetValueOrDefault(0x303, -1),
+             vm.Globals.GetValueOrDefault(0x304, -1)));
     }
 }
