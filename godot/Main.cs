@@ -728,7 +728,8 @@ public partial class Main : Godot.Control
         }
         // --lua-trace (Lua scripting spec §12): a line per handler call in diagnostics/lua-trace.jsonl.
         bool luaTrace = userArgs.Contains("--lua-trace");
-        _scripting = new Scripting(new ScriptMemory(vmOptions.NativeStringCodePage), new ScriptingSetup
+        // Script memory draws op 0x60 and Lua from the graphics native's generator, as the title's leaves do.
+        _scripting = new Scripting(new ScriptMemory(vmOptions.NativeStringCodePage, _graphics.GameRandom), new ScriptingSetup
         {
             Runtime = _luaRuntime,
             Stack = _modLayer?.LuaStack ?? ModRuntimeStack.Empty,

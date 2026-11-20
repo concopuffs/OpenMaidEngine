@@ -92,6 +92,9 @@ public class SceneReloadTests
             // AGE 4.38D's 3D scene (mesh slots, camera, lights, the display's effects): native's scene reset touches
             // none of it, and the scripts release what they built (Graphics.Scene3D.cs).
             "_scene3D",
+            // The leaves' 60 Hz clock, which the display keeps and the step reads after every frame walk; the lowering's
+            // scratch arrays; and the skipped-light report, once a run (Graphics.Scene3DLowering.cs).
+            "_sceneEffectsLastMs", "_leafClip", "_leafLight", "_skippedLightReported",
             // Parts set after construction, and tracing.
             "_movies", "_listeners", "TraceOps", "OpTrace",
         ],

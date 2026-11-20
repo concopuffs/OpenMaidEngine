@@ -216,7 +216,9 @@ code, the frame loop and the C runtime's own. Read by hand since: `engine_load_s
 catalog loader (`sys4-format-notes.md`, "The font list"), which `WinMain@0x4a0d40` calls for `SYS4INI.BIN` and,
 when that fails, for `SYS3INI.BIN`; the polygon objects, ops `0x320` to `0x323` and their seventeen functions
 (`superpowers/specs/2026-11-19-polygon-objects-design.md`, §2), with the erase, clear and clone workers that carry a
-handle's polygon with its object; the title's 3D scene, ops `0x324` to `0x32f` (the same design, §4); the
+handle's polygon with its object; the title's 3D scene, ops `0x324` to `0x32f` (the same design, §4), and its leaf
+effect: the leaves' birth from the C runtime's `rand`, their 60 Hz step, the camera, lights and the draw in the frame
+walk (`superpowers/specs/2026-11-20-title-leaves-design.md`, §2); the
 accessors' float cases ("Float cells as arrays, and float references"); and op `0x252` with the two present
 workers, `gfx_render_frame@0x49ab00` and `gfx_present_object_range@0x49adf0`; and the small opcodes of the boot
 route, `0x2c7` (native's `SBSubstr`), `0x2eb`, `0x2ec` and `0x2e9` with the Auto pitch settings it belongs to
@@ -7359,10 +7361,16 @@ Op `0x60` (`op_0x60_handler@0x426970`) writes `rand() % bound`. `_rand@0x550fe4`
 
 - the main tick, at entry (`0x4118af`) and, while its registration check runs, at each lapse of that timer
   (`0x4119d1`);
-- screen transitions (`FUN_00440530`), the save encoder and the catalog parse.
+- screen transitions (`FUN_00440530`), the save encoder and the catalog parse;
+- in AGE 4.38D, the leaf effect of op `0x328`: fourteen draws a leaf at its birth and two a leaf at each 1/60 s step
+  (`superpowers/specs/2026-11-20-title-leaves-design.md` §2).
 
-A native run's draws therefore depend on when it started and what ran before, and the port draws from
-`System.Random.Shared`. Kamidori's enemy scripts (MVRTN, RTN_M0xx, STAGEROUND, STAGEREADY, SETEN, ADDEN) and battle
+A native run's draws therefore depend on when it started and what ran before. The port models the generator once
+(`Ome.Engine/Hosting/CrtRandom.cs`, seeded from the tick count) and gives the same one to op `0x60`, Lua's
+`math.random` and the leaf effect, so the leaves advance op `0x60`'s stream as native's do; the main tick, the
+transitions, the save encoder and the catalog parse are not modelled, so the two sequences still differ. Under
+`rand-seed`, op `0x60` and Lua leave that generator for their per-site streams, and the leaves alone draw from it.
+Kamidori's enemy scripts (MVRTN, RTN_M0xx, STAGEROUND, STAGEREADY, SETEN, ADDEN) and battle
 scripts (BTL, CALCDMG, COMMITBTL) use op `0x60`, as do FIELD, ROOM, TOWN, USEITEM and ALCHEMY. From the first enemy
 phase on, native and the port place enemies differently, and the same click can lead
 into a battle by a different path. In the 2026-11-07 sweep, native's slime attacked Wilfred, through FIELD's turn

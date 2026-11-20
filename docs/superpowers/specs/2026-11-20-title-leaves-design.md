@@ -1,8 +1,9 @@
 # The title's leaves — design
 
-**Status: proposed 2026-11-20.** Draws the leaves that drift over 創刻のアテリアル's title: AGE 4.38D's leaf effect,
-op `0x328`, which the polygon objects design left as state only (`2026-11-19-polygon-objects-design.md` §4; the
-backlog item "The title's 3D leaves are not drawn"). Everything in §2 was read in `/arterial/4.38D/range_00400000.bin`
+**Status: accepted 2026-11-20, with the user's three changes** (§7), **and built the same day** (§8). Draws the
+leaves that drift over 創刻のアテリアル's title: AGE 4.38D's leaf effect, op `0x328`, which the polygon objects design
+left as state only (`2026-11-19-polygon-objects-design.md` §4; the backlog item "The title's 3D leaves are not drawn",
+which the build resolved). Everything in §2 was read in `/arterial/4.38D/range_00400000.bin`
 on 2026-11-20, unless it says otherwise; each function named carries its reading in the Ghidra image.
 
 ## 1. Purpose
@@ -164,8 +165,11 @@ the title releases the effects first.
 **The effect** (`Graphics.Scene3D.cs` and a new `Scene3DLeaves.cs` beside it):
 
 - **Building.** `SetLeafEffect(count, slots)` builds the leaves with native's respawn and its fourteen draws.
-- **The random source.** It is the effect's own MSVC `rand`: the same linear congruence, seeded with 1 for the first
-  effect and continuing across rebuilds. Op `0x60` does not draw from it (§4).
+- **The random source.** It is the game's generator, the one op `0x60` and Lua's `math.random` draw from when no
+  `rand-seed` is set: a new `CrtRandom` (`Hosting/CrtRandom.cs`), MSVC's `rand` seeded from the tick count when the
+  engine starts, as native's context constructor seeds it. It replaces `System.Random.Shared` there. Composition
+  gives the graphics native and script memory the same one, so the leaves' draws advance op `0x60`'s stream as they
+  do on native (§7).
 - **Edge cases.** A count below 1 builds no leaves. With no mesh the effect draws nothing; native would divide by
   zero there.
 
@@ -198,9 +202,9 @@ is not saved, since native saves none of it.
 
 ## 4. Departures, and what it leaves out
 
-- **The random source.** Native draws the leaves and op `0x60` from one C-runtime stream. The port keeps them apart,
-  so an op `0x60` draw at the title gives what it would without the leaves. Native's own sequence is seeded at run
-  time and cannot be matched anyway, and the driver's `rand-seed` replaces op `0x60`'s draws on native.
+- **The rest of the C runtime's draws.** On native the main tick, the screen transitions, the save encoder and the
+  catalog parse draw from the same stream too (`engine-re.md`, "Op 0x60 randomness"). The port does not model them,
+  so its sequence never matches native's, which is seeded from the tick count anyway.
 - **The face order.** D3DX's strip reorder changes the order of a mesh's faces; the port draws them in the file's
   order. With depth off, this changes only which of a leaf's overlapping triangles lands last. Both are within a few
   levels of the same colour.
@@ -241,3 +245,49 @@ is not saved, since native saves none of it.
 2. The effect: the leaves, the random source and the step (tests).
 3. The lowering and its place in the walk (tests, title shots on the port, `reference-diff`).
 4. The native comparison, then the references: the backlog item removed, a pointer in `engine-re.md`, the status.
+
+## 7. The user's changes (2026-11-20)
+
+- **One stream.** "I think drawing them from the same random number stream should be kept, if they influence RNG then
+  that behavior should remain the same. If it'll cause testing issues, maybe use a parameter or something for dev
+  drives to split them to their own stream." The leaves draw from the game's generator (§3). No parameter is needed:
+  under the driver's `rand-seed`, op `0x60` already draws from streams of its own on both targets (and Lua does on the
+  port), which no other draw shifts, so a seeded drive is the same with the leaves as without them.
+- **One item a leaf**: "fine as long as it doesn't impact anything". `--perf-log` on the title checks it.
+- **What §4 leaves out** is backlogged: "fine to leave out today but we should make sure we backlog it, at least the
+  ones within DEBUG.BIN are testable. If the others have no script that exercises them, then its fine to leave out
+  today. technically we can build a script to test them with OMS, but we can backlog that for later". The backlog
+  item "The 3D scene's other effects and cases are not drawn" lists them: the two effects DEBUG.BIN builds, which a
+  run of DEBUG.BIN can test, and the cases no shipped script reaches, for an OMS test script.
+
+## 8. The build (2026-11-20)
+
+The four milestones were built on `feature/arterial`: `Sys4/XMeshDecoder.cs`, `Hosting/CrtRandom.cs`,
+`Natives/Scene3DLeaves.cs` and `Natives/Graphics.Scene3DLowering.cs`, with `Scene3DLeavesTests` for §5's tests.
+
+**What the checks found.**
+
+- **The renderers.** `reference-diff` on the title, three frames with the leaves: no pixel over the tolerance, the
+  largest difference 3 levels.
+- **Against native.** Twelve shots of each title, a second apart; each shot's leaves are its difference from the
+  per-pixel median of its twelve:
+
+  | | native AGE | the port |
+  |---|---|---|
+  | leaves seen in a shot, median (range) | 19 (15 to 24) | 20 (15 to 26) |
+  | leaf pixels in a shot, median (range) | 2,564 (1,706 to 3,895) | 3,368 (1,999 to 4,736) |
+  | mean level of the leaf pixels | 213 | 212 |
+
+  Zoomed, the leaves have the same white, feathered shape and size on both.
+- **The cost of one item a leaf** (`--perf-log`, an optimized build, 2,454 frames of the title): the engine's turn
+  0.51 ms at the median (0.93 ms at the 95th percentile), the lowering to the draw 1.15 ms (1.58 ms), the GPU
+  renderer's item updates, the leaves' mesh rebuilds among them, 0.63 ms (0.82 ms). The leaves allocate about 0.28 MB a frame on the engine thread and
+  0.46 MB on the front end: 37 gen-0, 11 gen-1 and no gen-2 collections over the run. Frames stayed at 10 ms.
+
+**What the build adds to §3.**
+
+- Op `0x328` halts the VM on a leaf count above 2^20 (`set-3d-effect-leaf-leaves-too-many`), as it already did on a
+  slot count that large: native would allocate that many leaves.
+- The lowering drops a triangle with a corner past the far plane as well as the near one: Direct3D clips both.
+- The leaves' 60 Hz clock and the lowering's scratch arrays are kept across op `0x9`'s reload, as the effect is:
+  native's scene reset touches none of the display's effects.

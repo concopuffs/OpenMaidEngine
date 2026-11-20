@@ -857,7 +857,7 @@ The setter replaces the single pending request, marks it active, and clears its 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x60`; scope=Himegari SYS4422. Ghidra /v2: op_0x60_handler@0x426970 calls imported CRT rand(), fetches operand 2, takes signed remainder, and writes operand 1. The zero-bound branch writes zero then throws error 0x10005. ROOM@0x5 calls (local 0x110,4), and its following branches select one of four character surface sets; variants 0..2 also select voice-id sextets. /v2 annotated and saved 2026-07-21.
 
-Native draws are not reproducible: _rand@0x550fe4 is the MSVC LCG (seed * 0x343fd + 0x269ec3), seeded from the tick count by _srand@0x550fd7 (0x413b7f, 0x413c8d, 0x44e5d4), and the main tick, screen transitions, the save encoder and the catalog parse draw from the same generator. The port draws from System.Random.Shared. Kamidori's enemy movement, spawns and battle rolls therefore differ between native and the port from the first enemy phase on. The drive step rand-seed gives both targets the same per-call-site streams (Ome.Engine/Natives/ScriptMemory.Random.cs; native: a Frida probe after the rand() call, SYS4422 0x4269af, SYS4433 0x42768f), and a seeded Kamidori enemy turn and battle end alike on both (docs/engine-re.md, 'Op 0x60 randomness', 2026-11-07).
+Native draws are not reproducible: _rand@0x550fe4 is the MSVC LCG (seed * 0x343fd + 0x269ec3), seeded from the tick count by _srand@0x550fd7 (0x413b7f, 0x413c8d, 0x44e5d4), and the main tick, screen transitions, the save encoder and the catalog parse draw from the same generator, as AGE 4.38D's leaf effect does. The port draws from its model of that generator (Ome.Engine/Hosting/CrtRandom.cs), seeded from the tick count and shared with the leaf effect and Lua's math.random; the main tick, transitions, save encoder and catalog parse are not modelled, so the sequences still differ. Kamidori's enemy movement, spawns and battle rolls therefore differ between native and the port from the first enemy phase on. The drive step rand-seed gives both targets the same per-call-site streams (Ome.Engine/Natives/ScriptMemory.Random.cs; native: a Frida probe after the rand() call, SYS4422 0x4269af, SYS4433 0x42768f), and a seeded Kamidori enemy turn and battle end alike on both (docs/engine-re.md, 'Op 0x60 randomness', 2026-11-07).
 
 ### 0x61 `lookup-array` (lookup-array, argc 3)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
@@ -2988,7 +2988,7 @@ The port keeps the fade in the graphics state (GfxState.FadePolygonColor) and sa
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x324`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x324_release_scene_effects@0x419640 calls display_release_scene_effects@0x44f300, which deletes the objects at the display's +0x408, +0x40c and +0x410 and clears the drawn flags at +0x4e0. The two handles of op 0x325 stay. Besides the opcode only the display's destructor calls it: a scene reset does not.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x325 `set-3d-effect-handles` (u0043AA70, argc 2)
 - **observed by:** arterial (SYS4438)
@@ -3000,7 +3000,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x325`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x325_set_scene_effect_handles@0x4252a0 stores operand 1 at the display's +0x4d8 and operand 2 at +0x4dc. display_scene_effects_at_handle@0x44f7a0, which the frame walk calls with each handle it reaches and with -1 at its end, starts the first effect once the walk reaches the first handle and draws the three effects once it reaches the second. TITLE@0x647 gives 2 and 2.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x326 `set-3d-effect-snow` (u0043AA80, argc 4)
 - **observed by:** arterial (SYS4438)
@@ -3012,7 +3012,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x326`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x326_set_3d_effect_snow@0x4252f0 reads operands 2 and 4 as integers and 3 as a float and calls gfx_set_3d_effect_snow@0x417640, which acts only when the manager's +0xb62c is above 0, traces 「関数：Set3DEffectSnow エラー：テクスチャが作成されていません． TEXTURE=%d」 for a slot with no texture, and otherwise builds the effect object at the display's +0x40c (0xe4 bytes) in place of the one there. What the effect draws, the two other operands and +0xb62c were not read. Only DEBUG.BIN uses it.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x327 `set-3d-effect-slot0` (u0043AA90, argc 1)
 - **observed by:** arterial (SYS4438)
@@ -3024,19 +3024,19 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x327`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x327_create_scene_effect_a@0x425350 calls 0x44f430, which deletes the object at the display's +0x408 and builds a new one (0x29c bytes, constructor 0x47abc0) that allocates operand 1 elements of 0x70 bytes. Only DEBUG.BIN uses it.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x328 `set-3d-effect-leaf` (u0043AAA0, argc 3)
 - **observed by:** arterial (SYS4438)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4438`
 - **semantic status:** investigated
-- **summary:** (id)(mesh_slots)(count) — native's Set3DEffectLeaf: build the display's leaf effect and give it the meshes of count mesh slots, read from integer cells. The engine then moves and draws the leaves.
+- **summary:** (leaves)(mesh_slots)(count) — native's Set3DEffectLeaf: build the display's leaf effect with that many leaves and give it the meshes of count mesh slots, read from integer cells. The engine then moves and draws the leaves.
 - **operand access:** `1` read · `2` address · `3` read
 - **control (port handler):** waits never; leaves falls
 - **grounding:** source=investigation, confidence=high
-- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x328`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x328_set_3d_effect_leaf@0x42e650 resolves operand 2's address, decodes operand 3 integer cells from it and calls gfx_set_3d_effect_leaf@0x4176f0, which builds the effect object at the display's +0x410 (effect_leaf_construct@0x472020) in place of the one there and adds the mesh of each slot (manager +0xc5f4 + slot * 4, indexed unchecked); a slot with no mesh is traced as 「関数：Set3DEffectLeaf エラー：メッシュが作成されていません． MESH=%d」. The effect's update and draw were not read. TITLE@0x692 gives it the two meshes LEAF0.X and LEAF1.X: the white leaves that drift over the title.
+- **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x328`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x328_set_3d_effect_leaf@0x42e650 resolves operand 2's address, decodes operand 3 integer cells from it and calls gfx_set_3d_effect_leaf@0x4176f0, which builds the effect object at the display's +0x410 (effect_leaf_construct@0x472020) in place of the one there and adds the mesh of each slot (manager +0xc5f4 + slot * 4, indexed unchecked); a slot with no mesh is traced as 「関数：Set3DEffectLeaf エラー：メッシュが作成されていません． MESH=%d」. The first operand is the number of leaves (leaf_effect_create_particles@0x472440 allocates that many); the leaves' birth, step and draw are read in docs/superpowers/specs/2026-11-20-title-leaves-design.md §2. TITLE@0x692 gives it 30 leaves and the two meshes LEAF0.X and LEAF1.X: the white leaves that drift over the title.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port builds the leaves on the game's generator (Hosting/CrtRandom.cs), drawing in native's order so that they advance op 0x60's stream as native's do, steps them 60 times a second after each frame, and lowers each into a polygon item where the walk reaches the second effect handle (Natives/Scene3DLeaves.cs, Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). A leaf count above 2^20 halts the VM.
 
 ### 0x329 `load-mesh` (u0043AAB0, argc 2)
 - **observed by:** arterial (SYS4438)
@@ -3048,7 +3048,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x329`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x329_load_mesh@0x425390 opens the catalog entry of operand 1 and calls gfx_mesh_slot_load@0x48b5d0, which releases the slot's mesh, loads the file with D3DX (mesh_load_from_x_memory@0x472630: the materials are kept, each one's ambient set to its diffuse, and no texture is loaded) and stores the mesh at manager +0xc5f4 + slot * 4, unchecked. When the load fails the handler throws 「メッシュファイル %s の読み込みに失敗しました」 with flags 0x10007. TITLE@0x683 and @0x688 load the two leaf meshes.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x32a `release-mesh` (32A, argc 1)
 - **observed by:** none in recorded corpora
@@ -3059,7 +3059,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32a`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32a_release_mesh@0x425460 calls gfx_mesh_slot_release@0x48b6c0, which releases the mesh at manager +0xc5f4 + slot * 4, unchecked, and clears the slot. No script of the game uses it.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x32b `release-all-meshes` (u0043AAD0, argc 0)
 - **observed by:** arterial (SYS4438)
@@ -3070,7 +3070,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32b`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32b_release_all_meshes@0x419670 calls gfx_mesh_slot_release for slots 0 to 999. A scene reset does not release them: only this, op 0x32a, a load into the slot and a lost device do.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x32c `set-camera-look-at` (u0043AAE0, argc 6)
 - **observed by:** arterial (SYS4438)
@@ -3082,7 +3082,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32c`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32c_set_camera_look_at@0x4254a0 reads six floats and calls gfx_set_view_look_at@0x486440, which builds the view matrix from the eye (operands 1 to 3) and the target (4 to 6) with the up vector (0, 1, 0), keeps it at manager +0xa3a8 and sets it as the device's view transform.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x32d `set-ambient-light` (u0043AAF0, argc 2)
 - **observed by:** arterial (SYS4438)
@@ -3094,7 +3094,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32d`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32d_set_ambient_light@0x425520 clamps the alpha and calls gfx_set_ambient_light@0x486510, which keeps the packed colour at manager +0xd9cc and sets the device's ambient render state.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x32e `set-light` (u0043AB10, argc 11)
 - **observed by:** arterial (SYS4438)
@@ -3106,7 +3106,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32e`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32e_set_light@0x4255f0 reads the position and the direction (operands 3 to 8) and the range (11) as floats and the colour as an alpha, clamped to 0xff, and an RGB, and calls gfx_set_light@0x4867a0, which fills a D3DLIGHT9 (the direction normalized, the colour as its diffuse), keeps it at manager +0xd5bc + index * 0x68 with an enabled flag at +0xd594 + index * 4, both unchecked, and calls the device's SetLight and LightEnable.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ### 0x32f `disable-light` (u0043AB11, argc 1)
 - **observed by:** none in recorded corpora
@@ -3117,7 +3117,7 @@ The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws 
 - **grounding:** source=investigation, confidence=high
 - **evidence:** method=native-re; confidence=high; profiles=arterial; revisions=SYS4438; artifact=`Arterial SYS4438 Ghidra /arterial/4.38D and the complete Arterial catalog`; site=`vm-map/opcodes.toml opcode 0x32f`; scope=SYS4438 3D scene handlers and workers; the opcodes exist only in AGE 4.38D among the builds read, and only TITLE.BIN and DEBUG.BIN use the group. op_0x32f_disable_light@0x425790 calls gfx_disable_light@0x486870, which clears the enabled flag at manager +0xd594 + index * 4, unchecked, and calls the device's LightEnable with 0. No script of the game uses it.
 
-The port keeps the state in the graphics native (Graphics.Scene3D.cs) and draws none of it yet, by the user's decision of 2026-11-19 (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4; docs/backlog.md, 'The title's 3D leaves are not drawn').
+The port keeps the state in the graphics native (Graphics.Scene3D.cs), and the frame lowering draws the leaf effect with it (Graphics.Scene3DLowering.cs; docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow, the first effect, point and spot lights, op 0x222's range presents and a screen transition's source keep their state and draw nothing (docs/backlog.md, 'The 3D scene's other effects and cases are not drawn').
 
 ## input
 

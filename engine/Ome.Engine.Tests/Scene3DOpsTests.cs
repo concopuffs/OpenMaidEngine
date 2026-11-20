@@ -11,8 +11,8 @@ using Xunit;
 
 /// <summary>
 /// AGE 4.38D's 3D scene, ops 0x324 to 0x32f (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4), which
-/// 創刻のアテリアル's title builds its drifting leaves with. The port keeps what the scripts set and draws none of it
-/// yet (docs/backlog.md, "The title's 3D leaves are not drawn"): these hold the state to what native keeps.
+/// 創刻のアテリアル's title builds its drifting leaves with: these hold the state the handlers keep to what native keeps.
+/// The leaves themselves, their motion and their drawing are Scene3DLeavesTests'.
 /// </summary>
 public class Scene3DOpsTests
 {
@@ -65,7 +65,7 @@ public class Scene3DOpsTests
         // The direction is normalized, as native keeps it.
         Assert.Equal(new Scene3DLight(3, (1, 2, 3), (0, -1, 0), 0xffffeedd, 100), scene.Lights[0]);
         Assert.Equal([0, 1], scene.Meshes.Keys.Order());
-        Assert.Equal(7L, scene.Leaf!.Id);
+        Assert.Equal(7L, scene.Leaf!.Count);                 // op 0x328's first operand is the number of leaves
         Assert.Equal([0x1234L, 0x1235L], scene.Leaf.Meshes.Select(mesh => mesh.ResourceId));
     }
 
@@ -159,6 +159,15 @@ public class Scene3DOpsTests
         Assert.True(graphics.LoadMesh(leaf0.PackedId, 0, out string first));
         Assert.True(graphics.LoadMesh(leaf1.PackedId, 1, out _));
         Assert.Equal("LEAF0.X", first, ignoreCase: true);
+        // Each is one frame's mesh of 181 positions and 556 triangles with one grey material.
+        foreach (int slot in new[] { 0, 1 })
+        {
+            XMesh mesh = Assert.IsType<XMesh>(graphics.Scene3D.Meshes[slot].Geometry);
+            Assert.Equal(556, mesh.TriangleCount);
+            XMeshMaterial material = Assert.Single(mesh.Materials);
+            Assert.Equal(0.866667f, material.Diffuse.X, 5);
+            Assert.Equal(1f, material.Diffuse.W);
+        }
         // A load that fails has released the slot's mesh, and names the file for native's error.
         Assert.False(graphics.LoadMesh(picture.PackedId, 1, out string failed));
         Assert.Equal(picture.Name, failed);

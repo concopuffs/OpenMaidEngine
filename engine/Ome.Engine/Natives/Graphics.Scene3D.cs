@@ -3,16 +3,14 @@ using Ome.Engine.Sys4;
 
 namespace Ome.Engine.Natives;
 
-/// <summary>A mesh slot's file (AGE 4.38D, op 0x329): the catalog record it was loaded from.</summary>
-public readonly record struct Scene3DMesh(long ResourceId, string Name);
+/// <summary>A mesh slot's file (AGE 4.38D, op 0x329): the catalog record it was loaded from and the mesh read from it,
+/// which a run with no catalog has none of.</summary>
+public readonly record struct Scene3DMesh(long ResourceId, string Name, XMesh? Geometry = null);
 
 /// <summary>A Direct3D light as op 0x32e sets it (native keeps a D3DLIGHT9): its type, its position, its direction
 /// (normalized, as native stores it), its diffuse colour (0xAARRGGBB) and its range.</summary>
 public readonly record struct Scene3DLight(int Type, (float X, float Y, float Z) Position,
                                            (float X, float Y, float Z) Direction, uint DiffuseArgb, float Range);
-
-/// <summary>The leaf effect op 0x328 builds (native's Set3DEffectLeaf): its id and the meshes it was given.</summary>
-public sealed record Scene3DLeafEffect(long Id, IReadOnlyList<Scene3DMesh> Meshes);
 
 /// <summary>The snow effect op 0x326 builds (native's Set3DEffectSnow): its id, the surface slot whose texture it
 /// draws with, and its two other operands, a float and an integer, whose meaning is not read.</summary>
@@ -21,9 +19,9 @@ public sealed record Scene3DSnowEffect(long Id, int TextureSlot, float Value, lo
 /// <summary>
 /// AGE 4.38D's 3D scene as the scripts set it (ops 0x324 to 0x32f): mesh slots, a camera, an ambient colour, lights,
 /// and the display's three effect objects with the two handles the frame walk draws them at. 創刻のアテリアル's title
-/// builds its drifting leaves with it. The port keeps this state and draws none of it yet: the user decided so on
-/// 2026-11-19, and drawing the leaves is owed (docs/backlog.md, "The title's 3D leaves are not drawn";
-/// docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4).
+/// builds its drifting leaves with it, which the frame lowering draws (Graphics.Scene3DLowering.cs;
+/// docs/superpowers/specs/2026-11-20-title-leaves-design.md). The snow and the first effect keep their state only
+/// (docs/backlog.md, "The 3D scene's other effects and cases are not drawn").
 /// </summary>
 /// <remarks>Native keeps all of it across a scene reset: only the opcodes, the manager's constructor and a lost device
 /// touch the mesh slots, the lights and the camera, and only op 0x324 and the display's destructor release the
@@ -66,24 +64,35 @@ public sealed partial class Graphics
 {
     private readonly Scene3DState _scene3D = new();
 
-    /// <summary>The 3D scene the scripts have set. Nothing draws it yet.</summary>
+    /// <summary>The 3D scene the scripts have set.</summary>
     public Scene3DState Scene3D => _scene3D;
 
     /// <summary>Op 0x329: load a catalog file into a mesh slot. Native releases the slot's mesh first, whether or not
-    /// the load then succeeds. False when the file is no Direct3D .X mesh; <paramref name="name"/> is then the file
-    /// native's error names. With no catalog (a headless run) every load succeeds.</summary>
+    /// the load then succeeds. False when the file is no text Direct3D .X mesh (<see cref="XMeshDecoder"/>);
+    /// <paramref name="name"/> is then the file native's error names. With no catalog (a headless run) every load
+    /// succeeds, and the slot holds no geometry.</summary>
     public bool LoadMesh(long resourceId, int slot, out string name)
     {
         _scene3D.RemoveMesh(slot);
         name = resourceId.ToString(CultureInfo.InvariantCulture);
+        XMesh? geometry = null;
         if (_res != null)
         {
             name = _res.RecordName(resourceId) ?? name;
             AssetEntry? entry = _res.ResolveMesh(resourceId);
-            if (entry == null || !_res.IsMesh(entry)) return false;
+            if (entry == null) return false;
             name = entry.Name;
+            try
+            {
+                geometry = _res.DecodeMesh(entry);
+            }
+            catch (XMeshFormatException error)
+            {
+                _print(error.Message);
+                return false;
+            }
         }
-        _scene3D.SetMesh(slot, new Scene3DMesh(resourceId, name));
+        _scene3D.SetMesh(slot, new Scene3DMesh(resourceId, name, geometry));
         _timeline?.Event("mesh-load", new() { ["slot"] = slot, ["resource"] = resourceId, ["name"] = name });
         return true;
     }
@@ -140,9 +149,10 @@ public sealed partial class Graphics
         return true;
     }
 
-    /// <summary>Op 0x328 (Set3DEffectLeaf): build the leaf effect, in place of the one the display had, and give it
-    /// the mesh of each named slot. Returns the slots that hold no mesh, which native traces and skips.</summary>
-    public IReadOnlyList<int> SetLeafEffect(long id, IReadOnlyList<int> meshSlots)
+    /// <summary>Op 0x328 (Set3DEffectLeaf): build the leaf effect with <paramref name="count"/> leaves, in place of
+    /// the one the display had, and give it the mesh of each named slot. Its leaves draw from the game's generator
+    /// (<see cref="GameRandom"/>). Returns the slots that hold no mesh, which native traces and skips.</summary>
+    public IReadOnlyList<int> SetLeafEffect(long count, IReadOnlyList<int> meshSlots)
     {
         var meshes = new List<Scene3DMesh>(meshSlots.Count);
         List<int>? empty = null;
@@ -151,8 +161,8 @@ public sealed partial class Graphics
             if (_scene3D.Meshes.TryGetValue(slot, out Scene3DMesh mesh)) meshes.Add(mesh);
             else (empty ??= new List<int>()).Add(slot);
         }
-        _scene3D.Leaf = new Scene3DLeafEffect(id, meshes);
-        _timeline?.Event("leaf-effect", new() { ["id"] = id, ["meshes"] = meshes.Count });
+        _scene3D.Leaf = new Scene3DLeafEffect(count, meshes, GameRandom);
+        _timeline?.Event("leaf-effect", new() { ["leaves"] = count, ["meshes"] = meshes.Count });
         return empty ?? (IReadOnlyList<int>)System.Array.Empty<int>();
     }
 }

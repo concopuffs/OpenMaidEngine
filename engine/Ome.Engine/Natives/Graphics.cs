@@ -36,9 +36,13 @@ public sealed partial class Graphics
     /// <param name="print">Where diagnostics go (a failed decode).</param>
     /// <param name="decodedImageBudgetBytes">The bytes of decoded catalog images kept (<see
     /// cref="DecodedImageBudgetBytes"/> by default).</param>
+    /// <param name="gameRandom">The game's generator (<see cref="GameRandom"/>); a new one seeded from the tick count
+    /// when none is given.</param>
     public Graphics(ResourceMap? resources, FrameClock clock, Sys4LogicalCanvas canvas, TimelineLog? timeline = null,
-                    Action<string>? print = null, long decodedImageBudgetBytes = DecodedImageBudgetBytes)
+                    Action<string>? print = null, long decodedImageBudgetBytes = DecodedImageBudgetBytes,
+                    CrtRandom? gameRandom = null)
     {
+        GameRandom = gameRandom ?? CrtRandom.FromTickCount();
         _images = new ByteBudgetCache<int, RgbaImage?>(decodedImageBudgetBytes);
         _res = resources;
         _clock = clock ?? throw new ArgumentNullException(nameof(clock));
@@ -55,6 +59,10 @@ public sealed partial class Graphics
 
     /// <summary>The retained objects, the surface records and the presentation channels.</summary>
     public GfxState State { get; } = new();
+
+    /// <summary>The game's generator, the C runtime's <c>rand()</c> (<see cref="CrtRandom"/>): the title's leaves draw
+    /// from it, and script memory takes the same one for op 0x60 and Lua.</summary>
+    public CrtRandom GameRandom { get; }
 
     /// <summary>The logical screen.</summary>
     public Sys4LogicalCanvas Canvas => new(_screenWidth, _screenHeight);

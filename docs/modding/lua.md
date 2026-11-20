@@ -676,8 +676,9 @@ or `string.dump`: nothing reaches files, processes, the clock or the network.
 - `math.random()` gives a number from 0 up to, not including, 1.
 - `math.randomseed` is absent: the seed is the engine's.
 
-**Without a seed** the draws come from the system's generator. Your mod's rolls differ from run to run, and between
-two loads of one save, as the game's own do.
+**Without a seed** the draws come from the game's generator, which the engine seeds from the clock when it starts and
+which the game's own random instruction and effects draw from too. Your mod's rolls differ from run to run, and
+between two loads of one save, as the game's own do.
 
 **Under the driver's `rand-seed`** ([cli.md](cli.md), "Automated testing") each mod draws from a stream of its own,
 made from the seed and the mod's id. So a scenario that runs your mod rolls the same every time, inside a `pairs`

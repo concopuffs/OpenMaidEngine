@@ -129,22 +129,18 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
-- **The title's 3D leaves are not drawn (創刻のアテリアル).** Owed by the user's word on 2026-11-19: "state only is
-  fine as long as we keep in mind we need to finish that functionality at some point". Native's title shows white
-  leaves drifting over it (native screenshots a few seconds apart show them moved); the port's shows everything
-  else. They are AGE 4.38D's 3D scene, ops `0x324` to `0x32f` (`superpowers/specs/2026-11-19-polygon-objects-design.md`
-  §4): the script loads two `.X` meshes (`LEAF0.X`, `LEAF1.X`), sets a look-at camera, an ambient colour and
-  Direct3D lights, and builds one effect object, native's `Set3DEffectLeaf`, which the engine then moves and draws
-  in the frame walk where op `0x325`'s second handle falls. The port keeps all of that state
-  (`Graphics.Scene3D.cs`) and draws none of it. Only TITLE.BIN and DEBUG.BIN use the group (23 sites); DEBUG.BIN
-  also builds a snow effect (`Set3DEffectSnow`, op `0x326`) and a third effect (op `0x327`).
-  Native's leaf effect was read on 2026-11-20 (its motion, clock, draw and scene), and the design that draws it is
-  `superpowers/specs/2026-11-20-title-leaves-design.md` (proposed). Not read yet: what the two other effects
-  draw, and the manager's `+0xb62c`, which gates the snow effect. Done when the title's leaves are drawn from the kept state and look as native's do: a reader for the
-  two meshes, the effect's motion from the native object, and the meshes transformed and lit on the engine thread
-  and emitted as polygon items, so that neither renderer needs a 3D pass. Its frames cannot be compared with
-  native's pixel for pixel, since the motion runs on the clock. The two effects only DEBUG.BIN builds can stay
-  state only.
+- **The 3D scene's other effects and cases are not drawn (AGE 4.38D).** Left out of the title's leaves by the user's
+  word on 2026-11-20 ("fine to leave out today but we should make sure we backlog it";
+  `superpowers/specs/2026-11-20-title-leaves-design.md` §4 and §7). Two groups:
+  - **What DEBUG.BIN builds**, testable by running it: the snow effect (`Set3DEffectSnow`, op `0x326`, from a
+    surface's texture) and the display's first effect (op `0x327`). Neither is read (the manager's `+0xb62c`, which
+    gates the snow, among them); the port keeps their state only (`Graphics.Scene3D.cs`).
+  - **What no shipped script reaches**, for an OMS test script later: a point light or a spotlight on the leaves
+    (op `0x32e` types 1 and 2); leaves in op `0x222`'s range present, which native draws when the range's walk
+    reaches the handle (`gfx_present_object_range@0x49adf0`, its drawn flag `+0x4e0`); and leaves during a screen
+    transition's source walk.
+  Done when each is drawn as native draws it and a run shows it: DEBUG.BIN for the first group, an OMS script for the
+  second.
 - **The range wipe `0x24f` is drawn as a crossfade, and no pattern reveal is compared with native.** Two parts:
   - The type-2 range wipe `0x24f` (Kamidori's story-portrait helper in ten scripts; `engine-re.md`, "Patterned
     retained-range transition opcode `0x24f`") keeps its mode, thickness, timing and blocking, but goes through
@@ -680,8 +676,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     every pixel wherever nothing is in motion (the white screen, "Eushully Presents...", the black screen), and
     since 2026-11-19 at the pages too: the scenario's shots of pages 1 and 4 equal native's in every pixel. What
     differs:
-    - **The title's leaves** (its own item, "The title's 3D leaves are not drawn"): about 2,000 to 5,000 pixels of
-      the title, as the leaves move.
+    - **The title's leaves**, drawn since 2026-11-20 (`superpowers/specs/2026-11-20-title-leaves-design.md` §8):
+      where each leaf is depends on the clock and the generator's seed, so about 2,000 to 5,000 pixels of each title
+      frame differ. Over twelve shots a second apart, native shows 15 to 24 leaves at once and the port 15 to 26, of
+      the same size and level.
   - **The polygon objects are in (2026-11-19):** ops `0x320` to `0x323`, 22,324 sites, with the reference
     renderer; the logo's frames and fade timing were compared with native
     (`superpowers/specs/2026-11-19-polygon-objects-design.md` §7). Open:
@@ -696,9 +694,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - **Five points of native's are not read** (the design's §2): saves, the depth test, culling by winding, a
       texture larger than its image, and the position rewrite for two render targets.
 
-  - **The title's 3D scene keeps its state and draws nothing (the user's decision, 2026-11-19).** Ops `0x324` to
-    `0x32f`: the handlers keep what the scripts set (`Graphics.Scene3D.cs`). What that leaves undrawn is its own
-    item, "The title's 3D leaves are not drawn", under Engine fidelity.
+  - **The title's 3D scene draws its leaves (2026-11-20).** Ops `0x324` to `0x32f`: the handlers keep what the
+    scripts set (`Graphics.Scene3D.cs`), and the frame lowering draws the leaf effect from it
+    (`superpowers/specs/2026-11-20-title-leaves-design.md`). What it leaves undrawn is its own item, "The 3D scene's
+    other effects and cases are not drawn", under Engine fidelity.
   - **The script level, M1, is reached (2026-11-20, by the user's word that it comes next).** All 693 scripts
     round-trip byte for byte at the core and the idiomatic level, and the canonical rebuild, the idiomatic rebuild
     and the patch probe each run the 271 scenes equivalent to the originals. `oms/arterial/adv.oms` lifts 15,641

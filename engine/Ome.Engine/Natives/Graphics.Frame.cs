@@ -79,7 +79,8 @@ public sealed partial class Graphics
                 // refuses on the first period.
                 (bool showsTarget, int dot) = transition.Periods <= 0
                     ? (false, 1) : LegacyScreenTransitionTiming.MosaicAt(transition.Periods);
-                LowerObjects(showsTarget ? transition.Target : transition.Source, screen.Source, perf, decisions);
+                LowerObjects(showsTarget ? transition.Target : transition.Source, screen.Source, perf, decisions,
+                             sceneEffects: showsTarget);
                 screen.Alpha = 0;
                 screen.MosaicDot = dot;
             }
@@ -95,11 +96,14 @@ public sealed partial class Graphics
                     screen.Alpha = screen.Reveal.Count == 0 ? 0 : 256;
                 }
                 else screen.Alpha = LegacyScreenTransitionComposite.Alpha(transition.Progress);
-                if (screen.Alpha != 0) LowerObjects(transition.Target, screen.Target, perf, decisions);
+                if (screen.Alpha != 0)
+                    LowerObjects(transition.Target, screen.Target, perf, decisions, sceneEffects: true);
             }
             frame.ScreenTransition = screen;
         }
-        else LowerObjects(_frameObjects, frame.Items, perf, decisions);
+        else LowerObjects(_frameObjects, frame.Items, perf, decisions, sceneEffects: true);
+        // Native draws the 3D effects in the walk, then steps them (display_scene_effects_step_60hz@0x44f6f0).
+        StepSceneEffects(nowMs);
         perf?.RecordCompositeAllocation(PerformanceFrameLog.AllocatedBytes() - allocated);
         _images.Trim();
         return frame;
@@ -108,9 +112,15 @@ public sealed partial class Graphics
     // The objects in z-order (ascending handle). Native scale and translation channels are already sampled; an
     // object's opacity comes only from its blend and colour. The decision strings exist only for --gfx-log and the
     // timeline: DEBUGMAP visits about a thousand objects per frame, so they are formatted only when asked for.
+    // A walk with sceneEffects draws the leaves where native's frame walk does (display_scene_effects_at_handle@0x44f7a0):
+    // before the first object or polygon whose handle is at or past op 0x325's second handle, or after the last. A
+    // screen transition's source walk and op 0x222's range presents draw none (docs/backlog.md, "The 3D scene's other
+    // effects and cases are not drawn").
     private void LowerObjects(IReadOnlyList<RenderObject> visible, List<FrameItem> items,
-                              PerformanceFrameLog? perf, Dictionary<long, string>? decisions)
+                              PerformanceFrameLog? perf, Dictionary<long, string>? decisions, bool sceneEffects = false)
     {
+        bool leavesPending = sceneEffects && HasLeavesToDraw;
+        long leavesHandle = _scene3D.EffectHandles.Second;
         long started = perf != null ? PerformanceFrameLog.Timestamp() : 0;
         long allocated = perf != null ? PerformanceFrameLog.AllocatedBytes() : 0;
         _blurSources.Collect(visible);
@@ -120,6 +130,11 @@ public sealed partial class Graphics
         for (int index = 0; index < visible.Count; index++)
         {
             RenderObject v = visible[index];
+            if (leavesPending && v.Handle >= leavesHandle)
+            {
+                LowerLeaves(items);
+                leavesPending = false;
+            }
             perf?.RecordObject(v.TimeVarying);
             if (v.Polygon is { } polygon)
             {
@@ -267,6 +282,7 @@ public sealed partial class Graphics
             if (decisions != null) decisions[v.Handle] = $"z{z} {outcome}";
             z++;
         }
+        if (leavesPending) LowerLeaves(items);
     }
 
     // Native type-0 surface commands first leave range A in normal z-order, then alpha-composite range B into the

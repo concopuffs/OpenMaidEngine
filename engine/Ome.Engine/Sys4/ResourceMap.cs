@@ -48,13 +48,9 @@ public sealed class ResourceMap
         => ResolveTypedPacked(resourceId, "mesh", "an X record",
             entry => entry.Name.EndsWith(".X", StringComparison.OrdinalIgnoreCase));
 
-    /// <summary>Whether the record's bytes are a Direct3D .X file: they begin with its <c>xof </c> signature.</summary>
-    public bool IsMesh(AssetEntry entry)
-    {
-        byte[] bytes = _store.ReadAll(entry);
-        return bytes.Length >= 4 && bytes[0] == (byte)'x' && bytes[1] == (byte)'o' && bytes[2] == (byte)'f'
-               && bytes[3] == (byte)' ';
-    }
+    /// <summary>Decode a Direct3D .X record (<see cref="XMeshDecoder"/>). Throws <see cref="XMeshFormatException"/> for
+    /// bytes that are no text .X file, as D3DX's load fails for a file it cannot read.</summary>
+    public XMesh DecodeMesh(AssetEntry entry) => XMeshDecoder.Decode(_store.ReadAll(entry), entry.Name);
 
     /// <summary>The name of the record a packed id selects, for an error that names the file; null when it selects
     /// none.</summary>

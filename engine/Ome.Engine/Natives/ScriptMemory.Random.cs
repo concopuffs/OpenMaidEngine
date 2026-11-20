@@ -17,8 +17,9 @@ public sealed record DeterministicRandomSummary(uint? Seed, int Draws, IReadOnly
 
 /// <summary>Op 0x60's deterministic mode, for comparing the port with native AGE (drive step <c>rand-seed</c>;
 /// docs/engine-re.md, "Op 0x60 randomness"). Native draws from the CRT's shared generator, seeded from the tick count
-/// and also drawn by the main tick and transitions, and the port from <see cref="System.Random.Shared"/>, so the two
-/// never agree on their own. Under a seed both targets give every call site, a script's packed id P and the op's dword
+/// and also drawn by the main tick, transitions and the title's leaves; the port draws from its model of it,
+/// <see cref="GameRandom"/>, which the leaves share but nothing else native draws with does, so the two never agree
+/// on their own. Under a seed both targets give every call site, a script's packed id P and the op's dword
 /// offset O, its own MSVC <c>rand()</c> stream starting from <c>seed ^ (P * 0x9E3779B1 + O * 0x85EBCA77)</c>, mod 2^32.
 /// The k-th draw at a site is then the same on both targets whatever else ran, and a site drawn a different number
 /// of times on the two (a timed loop) cannot shift any other. tools/drive/native-agent.js computes the same streams
@@ -27,6 +28,10 @@ public sealed record DeterministicRandomSummary(uint? Seed, int Draws, IReadOnly
 /// the sites' or another mod's.</summary>
 public sealed partial class ScriptMemory
 {
+    /// <summary>The game's generator: op 0x60 and Lua's <c>math.random</c> draw from it when no seed is set, and the
+    /// title's leaves always (docs/superpowers/specs/2026-11-20-title-leaves-design.md §3).</summary>
+    public Hosting.CrtRandom GameRandom { get; }
+
     private uint? _deterministicRandomSeed;
     private int _deterministicRandomDraws;
     private readonly Dictionary<(uint PackedId, int Offset), DeterministicRandomStream> _deterministicRandomSites = new();
@@ -87,7 +92,7 @@ public sealed partial class ScriptMemory
     /// return to title, a reload) does not restart it; the next <c>rand-seed</c> does.</summary>
     public int DrawForMod(string modId)
     {
-        if (_deterministicRandomSeed is not uint seed) return System.Random.Shared.Next(0x8000);
+        if (_deterministicRandomSeed is not uint seed) return GameRandom.Next();
         if (!_deterministicRandomMods.TryGetValue(modId, out DeterministicRandomStream? stream))
         {
             stream = new DeterministicRandomStream(modId, DeterministicModInitialState(seed, modId));
@@ -104,7 +109,7 @@ public sealed partial class ScriptMemory
     /// <paramref name="offset"/> in <paramref name="script"/> (packed id <paramref name="packedId"/>).</summary>
     public int DrawRandom(string script, uint packedId, int offset)
     {
-        if (_deterministicRandomSeed is not uint seed) return System.Random.Shared.Next(0x8000);
+        if (_deterministicRandomSeed is not uint seed) return GameRandom.Next();
         if (!_deterministicRandomSites.TryGetValue((packedId, offset), out DeterministicRandomStream? stream))
         {
             stream = new DeterministicRandomStream(script, DeterministicRandomInitialState(seed, packedId, offset));

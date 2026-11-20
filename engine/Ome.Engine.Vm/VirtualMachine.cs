@@ -225,7 +225,8 @@ public sealed partial class VirtualMachine
         // reaches the banks through the same script memory (Lua scripting spec §8.1).
         if (memory != null && scripting != null && !ReferenceEquals(memory, scripting.Memory))
             throw new ArgumentException("The scripting native works over the VM's script memory.", nameof(scripting));
-        _memory = memory ?? scripting?.Memory ?? new ScriptMemory(_o.NativeStringCodePage);
+        // The script memory draws op 0x60 from the graphics native's generator, which the leaf effect draws from too.
+        _memory = memory ?? scripting?.Memory ?? new ScriptMemory(_o.NativeStringCodePage, _graphics.GameRandom);
         // Without a scripting native the VM has no hooks, as one without an audio native is silent (spec §14.1).
         _scripting = scripting;
         scripting?.AttachInterpreter(this);

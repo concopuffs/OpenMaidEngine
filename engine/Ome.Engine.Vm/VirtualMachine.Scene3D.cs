@@ -5,8 +5,8 @@ namespace Ome.Engine.Vm;
 
 // AGE 4.38D's 3D scene, ops 0x324 to 0x32f (docs/superpowers/specs/2026-11-19-polygon-objects-design.md §4): mesh
 // slots, a camera, lights, and the display's three effects. Each handler reads its operands as native's does and
-// calls the graphics native, which keeps the state. Nothing draws it yet (docs/backlog.md, "The title's 3D leaves are
-// not drawn").
+// calls the graphics native, which keeps the state and draws the leaf effect in the frame lowering
+// (docs/superpowers/specs/2026-11-20-title-leaves-design.md).
 public sealed partial class VirtualMachine
 {
     // 0x324: release the display's three effects
@@ -42,15 +42,22 @@ public sealed partial class VirtualMachine
         _graphics.SetFirstEffect(unchecked((int)Read(ins.Args[0]))); return StepResult.Next;
     }
 
-    // 0x328 (id)(mesh slots)(count): Set3DEffectLeaf. The handler copies count integer cells from the array operand's
-    // address; the worker indexes the mesh table with each, unchecked, and traces a slot that holds no mesh.
+    // 0x328 (leaves)(mesh slots)(slot count): Set3DEffectLeaf. The handler copies slot-count integer cells from the
+    // array operand's address; the worker builds the effect with that many leaves (native allocates them), indexes the
+    // mesh table with each slot, unchecked, and traces a slot that holds no mesh.
     private StepResult OpSet3DEffectLeaf(Instruction ins, int pc)
     {
         var a = ins.Args;
+        int leaves = unchecked((int)Read(a[0]));
         int count = unchecked((int)Read(a[2]));
         if (count > MaxScriptRunLength)
         {
             HaltReason ??= $"set-3d-effect-leaf-count-too-large:{count}";
+            return StepResult.Halt;
+        }
+        if (leaves > MaxScriptRunLength)
+        {
+            HaltReason ??= $"set-3d-effect-leaf-leaves-too-many:{leaves}";
             return StepResult.Halt;
         }
         VmAddress array = BaseAddr(a[1]);
@@ -62,7 +69,7 @@ public sealed partial class VirtualMachine
                 return refused;
             slots[index] = (int)slot;
         }
-        foreach (int empty in _graphics.SetLeafEffect(Read(a[0]), slots))
+        foreach (int empty in _graphics.SetLeafEffect(leaves, slots))
             _waits.ReportWarning($"{At(ins)}: mesh slot {empty} holds no mesh; skipped, as AGE skips it with the trace "
                                  + $"「関数：Set3DEffectLeaf エラー：メッシュが作成されていません． MESH={empty}」");
         return StepResult.Next;

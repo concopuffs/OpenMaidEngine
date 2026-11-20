@@ -66,8 +66,12 @@ public sealed partial class ScriptMemory
 
     /// <param name="codePage">The code page the string ops measure bytes and characters in (VmOptions'
     /// NativeStringCodePage; 932 for both games).</param>
-    public ScriptMemory(int codePage = 932)
+    /// <param name="gameRandom">The game's generator, which op 0x60 and Lua draw from when no seed is set: the graphics
+    /// native's (<see cref="Graphics.GameRandom"/>), so the title's leaves draw from it too. A new one seeded from the
+    /// tick count when none is given.</param>
+    public ScriptMemory(int codePage = 932, Hosting.CrtRandom? gameRandom = null)
     {
+        GameRandom = gameRandom ?? Hosting.CrtRandom.FromTickCount();
         Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
         // Code page 932 keeps every byte of a script string (Sys4TextEncoding).
         _encoding = codePage == 932 ? Sys4.Sys4TextEncoding.Replacing : Encoding.GetEncoding(codePage);
