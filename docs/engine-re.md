@@ -446,14 +446,16 @@ had them, and the codec re-encodes it byte for byte. The port loads it and nativ
 (`tools/drive/scenarios/arterial-save-load.steps`); what the first comparison showed is "The glyph publisher
 grows a cell" below. The port's load clears the polygons (`GfxState.ClearPolygons`).
 
-**Unread.** Two points the triage did not settle; each is listed in the game's backlog item:
+**The sprite's alpha test and surface `0x27` (read 2026-11-20).** The triage left two points of
+`gfx_draw_surface_through_sprite@0x48c6d0` unread:
 
-- `gfx_draw_surface_through_sprite@0x48c6d0` now sets render state 15 (`D3DRS_ALPHATESTENABLE`) to 0 before it
-  draws. Whether 4.33G draws with the alpha test on was not read. With it on, a texel of alpha 0 is not written
-  even in a blend that ignores alpha.
-- The same function treats a draw whose target is surface `0x27` as it treats one to the back buffer: the
-  display's matrix applies and the text scale's inverse does not. What uses surface `0x27` as a target was not
-  read.
+- It sets render state 15 (`D3DRS_ALPHATESTENABLE`) to 0 before it draws, where 4.33G's and 4.24J's leave on the test
+  the sprite's `Begin` turns on. The difference shows only in a mode-2 copy: "Object blend modes" has it, and the build
+  rule the port keeps (`GfxRules.SpriteAlphaTest`).
+- It treats a draw whose target is surface `0x27` as one to the back buffer: the display's matrix applies and the text
+  scale's inverse does not. Surface `0x27` is the screenshot's temporary with a multisampled back buffer
+  (`gfx_save_screen_bmp@0x49b400`), which renders the frame into it: "Polygon objects: winding, depth, texture size
+  and the render targets".
 
 The two glyph string drawers are 564 and 379 lines against 4.33G's 220 and 150, and past the `AGE Extend` range
 and the dash join their differences were not read. With the calibration above, the port's frames of
@@ -3253,13 +3255,12 @@ Ghidra functions renamed + plate-commented, saved).
 - **Blit** (`gfx_object_blit_d3d9` `0x4774c0`): selects a **blend mode** from `obj+0x30`, the value written
   by op `0x203`, and passes a modulation color/alpha to the device draw. Correcting the D3D9 constants:
   mode 1 writes `SRCBLEND=SRCALPHA` (5) and `DESTBLEND=ONE` (2), so it is additive glow—not ordinary
-  `SRCALPHA/INVSRCALPHA`. Mode 2 conditionally writes `ONE/ZERO` for a selected render target; mode 3 adds
-  the subtract blend operation to the mode-1 factors. The port implements mode-1 additive composition,
-  where packed alpha scales source contribution and packed RGB multiplicatively modulates it. For a
-  **textured mode-0** object, preserved `0xffffffff` is opaque
+  `SRCALPHA/INVSRCALPHA`. Mode 2 writes `ONE/ZERO` while a kind-1 surface is the render target; mode 3 adds
+  the subtract blend operation to the mode-1 factors ("Object blend modes" below has both). The port implements
+  mode-1 additive composition, where packed alpha scales source contribution and packed RGB multiplicatively
+  modulates it. For a **textured mode-0** object, preserved `0xffffffff` is opaque
   identity, not a request to replace the texture with white; the packed alpha byte is therefore not a
-  generic tint-strength control. Mode 3 remains separately scoped beyond the completed mode-1 path, and
-  surfaceless mode-0 fills remain a distinct consumer case.
+  generic tint-strength control. Surfaceless mode-0 fills remain a distinct consumer case.
 
 Created/render-target surfaces are a third mode-0 consumer, distinct from both loaded textures and an object
 with no surface. SYSTEM4 creates and fills surface 3; BUNKI draws it with alpha `0xd0`, while FIELD draws it
@@ -3268,6 +3269,40 @@ the latter allowing the sidebar paper through. Therefore created surfaces consum
 opacity and packed RGB as multiplicative modulation. The port retains created-surface identity separately
 even though these surfaces have resource id zero; their no-colorkey sentinel is `-1`, not active key-black
 zero. Loaded mode-0 textures keep the established opaque/alpha-inert behavior above.
+
+##### Object blend modes (2026-11-20)
+
+Read in the three builds' sprite draws: 4.24J's `gfx_object_blit_d3d9@0x4774c0`, 4.33G's and 4.38D's
+`gfx_draw_surface_through_sprite` (`0x47dac0`, `0x48c6d0`). Each begins the sprite with `D3DXSPRITE_ALPHABLEND`, which
+sets `SRCALPHA/INVSRCALPHA` and turns on the alpha test (a texel whose alpha, after the colour's, is 0 is not written),
+then sets the blend from the object's colour mode (`obj+0x30`, op `0x203`'s operand 2):
+
+| Mode | Blend | What it does |
+|---|---|---|
+| 0 | the sprite's `SRCALPHA/INVSRCALPHA` | the source over the target by its alpha |
+| 1 | `SRCALPHA/ONE` | the source, scaled by its alpha, added to the target |
+| 2 | `ONE/ZERO` when the render target is a surface of kind 1, else the sprite's | a copy: the source replaces the target, its alpha with it |
+| 3 | `SRCALPHA/ONE` with `D3DBLENDOP_REVSUBTRACT` | the source, scaled by its alpha, taken from the target |
+
+The colour modulates the texture in every mode. A surface's kind is op `0x1f8`'s fourth operand, which the surface
+keeps at `+0x418` (`gfx_surface_texture_create`, `0x465fa0` in 4.24J and `0x477490` in 4.38D): 1 is a render target
+with an alpha channel (A8R8G8B8), 2 a render target that is X8R8G8B8 when display `+0x464` is set, and anything else a
+managed texture, which no script draws into. 4.38D sets `D3DRS_ALPHATESTENABLE` to 0 after the sprite's `Begin`;
+4.24J and 4.33G leave the test on. Only the copy can show the difference, since the other blends leave the target as
+it is for a texel of alpha 0: on 4.24J and 4.33G a transparent texel of a copied object leaves the target, and on 4.38D
+it writes its colour at alpha 0. 4.38D also draws `ONE/ZERO` into the back buffer when display `+0x48c` is 1, a mode the
+port does not have (surface `0x26` in "Polygon objects: winding, depth, texture size and the render targets").
+
+The scripts use both. 創刻のアテリアル's draw mode 3 at ten sites: COUPANIME's movies and one of ATTACK's surfaces. Its
+BUNKIMOVE and SBUNKIMOVE set the choice window's objects (`0xc35a` to `0xc362`, `0x13892` to `0x1389a`) to mode 2,
+present their range into surface `0xe`, made with kind 1, and scale that surface in. So the window lands in the surface
+with its own alpha, where a blend over the cleared surface would darken its translucent parts. Every other render
+target the game's scripts select was made with kind 2 (486 selections against 4).
+
+The port (`BlendKind.Subtractive`, `Copy`, `CopyAll`; `ObjectBlendModeTests`) draws mode 3 subtractively in both
+renderers, keeping the target's alpha where native also takes the alpha's square from it. A render target's drawing
+(ops `0x20c` and `0x222` with a surface selected) copies a mode-2 object into a surface op `0x1f8` made with kind 1,
+leaving out its texels of alpha 0 where the build keeps the alpha test (`GfxRules.SpriteAlphaTest`).
 
 **TITLE SO022 additive proof (2026-07-20).** TITLE loads type-1 8-bpp `SO022.AGF` with no alpha plane and
 no color key, binds two 140×140 spritesheet objects, and calls `0x203(handle,1,255,0xffffff)` for both.

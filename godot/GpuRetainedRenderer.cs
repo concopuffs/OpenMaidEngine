@@ -67,6 +67,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
     private readonly ImageTexture _whiteTexture;
     private readonly Shader _lerpShader;
     private readonly Shader _additiveLerpShader;
+    private readonly Shader _subtractiveLerpShader;
     private PerformanceFrameLog? _perf;
     private int _used;
     private int _textureUploads;
@@ -146,6 +147,7 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
 
         _lerpShader = new Shader { Code = LerpShaderCode("blend_mix") };
         _additiveLerpShader = new Shader { Code = LerpShaderCode("blend_add") };
+        _subtractiveLerpShader = new Shader { Code = LerpShaderCode("blend_sub") };
     }
 
     // A polygon's source colour, as the reference renderer has it (SoftwareAffineRasterizer.Polygons.cs): its texture
@@ -174,7 +176,8 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
     };
 
     // A LERP tint moves texel RGB toward the tint by the strength, then the item's opacity scales alpha and the item
-    // blends source-over or, additive, SRCALPHA/ONE: the reference renderer's order (SoftwareAffineRasterizer).
+    // blends source-over or, additive, SRCALPHA/ONE, or subtractive, SRCALPHA/ONE reverse-subtracted: the reference
+    // renderer's order (SoftwareAffineRasterizer).
     private static string LerpShaderCode(string blendMode) => $$"""
         shader_type canvas_item;
         render_mode {{blendMode}}, unshaded;
@@ -476,7 +479,12 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
             {
                 material = new ShaderMaterial
                 {
-                    Shader = blend == BlendKind.Additive ? _additiveLerpShader : _lerpShader,
+                    Shader = blend switch
+                    {
+                        BlendKind.Additive => _additiveLerpShader,
+                        BlendKind.Subtractive => _subtractiveLerpShader,
+                        _ => _lerpShader,
+                    },
                 };
                 material.SetShaderParameter("ome_tint", new Vector3(
                     ((tint >> 16) & 0xff) / 255f,
@@ -487,7 +495,14 @@ internal sealed class GpuRetainedRenderer : IDisposable, IFrameRenderer
             }
             return material;
         }
-        return blend == BlendKind.Additive ? _additiveMaterial : _alphaMaterial;
+        // The copies (BlendKind.Copy, CopyAll) come only from a render target's drawing, which the reference renderer
+        // does: a frame for the screen has none.
+        return blend switch
+        {
+            BlendKind.Additive => _additiveMaterial,
+            BlendKind.Subtractive => _subtractiveMaterial,
+            _ => _alphaMaterial,
+        };
     }
 
     private static Color Modulation(long tint, float opacity, bool multiplyTint)

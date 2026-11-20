@@ -665,6 +665,7 @@ public partial class Main : Godot.Control
         _graphics = new Graphics(resources, _clock, logicalCanvas, _timeline, message => GD.Print(message))
         {
             TraceOps = _gfxLogPath != null,
+            SpriteAlphaTest = engineBuild.Rules.Gfx.SpriteAlphaTest,
             PixelShaderLevel = Graphics.PixelShaderLevelFor(SettingsStore?.LoadInt("display", "PixelShader", -1) ?? -1),
         };
         _movies = new Movies(_graphics, new ResourceMovieAssets(resources), new FfmpegMovieDecoderFactory(),

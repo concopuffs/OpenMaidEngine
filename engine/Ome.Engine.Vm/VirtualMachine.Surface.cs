@@ -27,12 +27,12 @@ public sealed partial class VirtualMachine
         return StepResult.Next;
     }
 
-    // 0x1f8 (slot)(w)(h) — allocate a blank surface at the slot
+    // 0x1f8 (slot)(w)(h)(kind) — allocate a blank surface at the slot; kinds 1 and 2 are render targets
     private StepResult OpCreateTexture(Instruction ins, int pc)
     {
         var a = ins.Args;
         if (SurfaceSlotRefused(ins, Read(a[0])) is { } refused) return refused;
-        _graphics.CreateSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]));
+        _graphics.CreateSurface((int)Read(a[0]), (int)Read(a[1]), (int)Read(a[2]), a.Count > 3 ? Read(a[3]) : 0);
         return StepResult.Next;
     }
 

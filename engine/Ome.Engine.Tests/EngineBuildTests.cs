@@ -77,7 +77,9 @@ public sealed class EngineBuildTests
             ExtendedGlyphFace = "AGE Extend",
             AspectCalibration = AspectCalibration.BlackBoxRatio,
         }, child.Text);
-        Assert.Equal(parent.Gfx, child.Gfx);
+        // Its sprite draw turns off the alpha test the sprite's Begin turns on.
+        Assert.True(parent.Gfx.SpriteAlphaTest);
+        Assert.Equal(parent.Gfx with { SpriteAlphaTest = false }, child.Gfx);
         Assert.Equal(parent.Audio, child.Audio);
         // Its 設定 has the ｵｰﾄﾒｯｾｰｼﾞ page and its menu the command that opens it; the other two builds' do not.
         Assert.False(EngineBuilds.Age424J.Rules.Shell.AutoMessagePage);

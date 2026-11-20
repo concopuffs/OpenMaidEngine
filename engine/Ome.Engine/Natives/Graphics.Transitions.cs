@@ -170,7 +170,8 @@ public sealed partial class Graphics
         IReadOnlyList<RenderObject> visible = sampled ?? State.SnapshotVisibleObjects(_clock.NowMs);
         // Native's frame render and range present draw the 3D effects into the render target too, then step them
         // (display_scene_effects_step_60hz@0x44f6f0), as a frame on the screen does.
-        int rendered = DrawObjectRange(destination, visible, firstHandle, count, sceneEffects: true);
+        int rendered = DrawObjectRange(destination, visible, firstHandle, count, sceneEffects: true,
+                                       copyTarget: _alphaRenderTargets.Contains(targetSlot));
         StepSceneEffects(_clock.NowMs);
 
         _surfaceImages[targetSlot] = destination;

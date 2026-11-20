@@ -39,7 +39,8 @@ public static class EngineBuilds
                 ExtendedGlyphFace: null,
                 AspectCalibration: AspectCalibration.BlackBoxOverCellIncrement,
                 PublisherGrowsGlyphCells: false),
-            Gfx: new GfxRules(UnboundObjectReadsAbsent: false),
+            // gfx_object_blit_d3d9@0x4774c0 never sets D3DRS_ALPHATESTENABLE, so the sprite's alpha test holds.
+            Gfx: new GfxRules(UnboundObjectReadsAbsent: false, SpriteAlphaTest: true),
             Audio: new AudioRules(PlayComparesStartMode: false),
             Settings: SettingsRules.LoaderKeys,
             Saves: new SaveRules(versionStamp: "424J", numberedGfxRecordSize: NativeGfxSaveLayout.BaseRecordSize),
@@ -118,6 +119,9 @@ public static class EngineBuilds
                                   floatSectionsFromMinor: 20),
             // Its AGERC menu 110 and 設定 dialog, read from the running game.
             Shell = new ShellRules(AutoMessagePage: true),
+            // gfx_draw_surface_through_sprite@0x48c6d0 sets D3DRS_ALPHATESTENABLE to 0 after the sprite's Begin;
+            // 4.33G's (0x47dac0) does not.
+            Gfx = Age433G.Rules.Gfx with { SpriteAlphaTest = false },
         },
     };
 

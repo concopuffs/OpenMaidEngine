@@ -27,6 +27,14 @@ public sealed partial class Graphics
     // slot -> dimensions of the currently allocated surface. Slot 0 begins as the selected game's logical canvas, but
     // op 0x1fa releases it like any other slot; later queries return 0x0.
     private readonly Dictionary<int, (int W, int H)> _slotDims = new();
+    // The slots op 0x1f8 made with kind 1, an A8R8G8B8 render target (the surface's +0x418): native draws a colour
+    // mode 2 object into one ONE/ZERO (gfx_object_blit_d3d9; docs/engine-re.md, "Object blend modes").
+    private readonly HashSet<int> _alphaRenderTargets = new();
+
+    /// <summary>The engine build's <c>GfxRules.SpriteAlphaTest</c>: whether an object's draw keeps the alpha test
+    /// D3DX's sprite turns on, so a copy (colour mode 2 into a kind-1 render target) leaves out its texels of alpha
+    /// 0.</summary>
+    public bool SpriteAlphaTest { get; init; } = true;
 
     /// <summary><c>--gfx-log</c>: print set-texture/create-texture slot assignments.</summary>
     public bool TraceOps { get; set; }
@@ -36,13 +44,16 @@ public sealed partial class Graphics
 
     // ---- the ops ----
 
-    /// <summary>Op 0x1f8: release the slot, then allocate a blank surface of the given size there.</summary>
-    public void CreateSurface(int slot, int width, int height)
+    /// <summary>Op 0x1f8: release the slot, then allocate a blank surface of the given size there. Its
+    /// <paramref name="kind"/> is native's texture kind (gfx_surface_texture_create: 1 and 2 are render targets, 1 with
+    /// an alpha channel; anything else a managed texture); the port keeps whether it is 1.</summary>
+    public void CreateSurface(int slot, int width, int height, long kind = 0)
     {
         ReleaseSurfacePixels(slot);
         State.CreateSurface(slot);
         CreateSurfacePixels(slot, width, height);
-        OpTrace?.Invoke($"create-texture slot={slot} {width}x{height}");
+        if (kind == 1) _alphaRenderTargets.Add(slot);
+        OpTrace?.Invoke($"create-texture slot={slot} {width}x{height}" + (kind != 0 ? $" kind={kind}" : ""));
     }
 
     /// <summary>Ops 0x1f9 and 0x249: release the slot, then load a resource into it with a colour key. Op 0x249
@@ -242,6 +253,7 @@ public sealed partial class Graphics
     private void CreateSurfacePixels(int slot, int width, int height)
     {
         _surfaceResources.Remove(slot);
+        _alphaRenderTargets.Remove(slot);
         int safeWidth = System.Math.Max(0, width);
         int safeHeight = System.Math.Max(0, height);
         _surfaceImages[slot] = new RgbaImage(safeWidth, safeHeight,
@@ -255,6 +267,7 @@ public sealed partial class Graphics
     private void LoadSurfacePixels(long resourceId, int slot, long colorKey)
     {
         _surfaceImages.Remove(slot);
+        _alphaRenderTargets.Remove(slot);
         _surfaceColorKeys[slot] = colorKey;
         _surfaceResources[slot] = resourceId;
         var asset = _res?.ResolveTexture(resourceId);
@@ -274,6 +287,7 @@ public sealed partial class Graphics
         _surfaceColorKeys.Remove(slot);
         _surfaceResources.Remove(slot);
         _slotDims.Remove(slot);
+        _alphaRenderTargets.Remove(slot);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceReleased(slot);
     }
 
@@ -287,6 +301,7 @@ public sealed partial class Graphics
             _surfaceImages.Remove(slot);
             _surfaceColorKeys.Remove(slot);
             _slotDims.Remove(slot);
+            _alphaRenderTargets.Remove(slot);
         }
         for (int slot = firstSlot; slot < end; slot++) _surfaceResources.Remove(slot);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceRangeReleased(firstSlot, count);

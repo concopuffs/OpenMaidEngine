@@ -437,9 +437,12 @@ public sealed partial class Graphics
     // effects (a transition or blur on an object in the range is the backbuffer's) and fills sized to the
     // destination. An object whose source rectangle starts off its texture, or misses it, draws nothing. With
     // sceneEffects the 3D effects are drawn in the walk, as native's frame render and range present draw them into the
-    // render target, at its size (SceneEffectWalk). Returns how many objects drew.
+    // render target, at its size (SceneEffectWalk). With copyTarget the destination is a kind-1 render target, into
+    // which a colour mode 2 object is copied (BlendKind.Copy, or CopyAll where the build has no alpha test). Returns how
+    // many objects drew.
     private int LowerPublishedRange(IReadOnlyList<RenderObject> visible, long firstHandle, long count,
-                                    int width, int height, List<FrameItem> items, bool sceneEffects)
+                                    int width, int height, List<FrameItem> items, bool sceneEffects,
+                                    bool copyTarget = false)
     {
         if (count <= 0) return 0;
         var effects = new SceneEffectWalk(this, sceneEffects, width, height);
@@ -475,7 +478,10 @@ public sealed partial class Graphics
                 || System.Math.Min(item.W, image.Width - item.SrcX) <= 0
                 || System.Math.Min(item.H, image.Height - item.SrcY) <= 0)
                 continue;
-            items.Add(TextureItem(item, texture.Value, rawSlot, matrix, opacity, item.Blend));
+            BlendKind blend = copyTarget && item.CopiesIntoAlphaTarget
+                ? SpriteAlphaTest ? BlendKind.Copy : BlendKind.CopyAll
+                : item.Blend;
+            items.Add(TextureItem(item, texture.Value, rawSlot, matrix, opacity, blend));
             lowered++;
         }
         effects.End(WalkEnd(firstHandle, count), items);
@@ -485,16 +491,17 @@ public sealed partial class Graphics
     /// <summary>Draw the objects of <paramref name="visible"/> whose handles fall in the range into
     /// <paramref name="destination"/>, as a render-target publication does: lowered plainly (no object effects, fills
     /// sized to the destination) and drawn by the reference renderer's rules. With <paramref name="sceneEffects"/> the 3D
-    /// effects are drawn where the walk reaches their handles. Returns how many objects drew.</summary>
+    /// effects are drawn where the walk reaches their handles. With <paramref name="copyTarget"/> the destination is a
+    /// kind-1 render target, which a colour mode 2 object is copied into. Returns how many objects drew.</summary>
     public int DrawObjectRange(RgbaImage destination, IReadOnlyList<RenderObject> visible, long firstHandle, long count,
-                               bool sceneEffects = false)
+                               bool sceneEffects = false, bool copyTarget = false)
     {
         if (destination.Width <= 0 || destination.Height <= 0
             || destination.Pixels.Length != checked(destination.Width * destination.Height * 4))
             return 0;
         var items = new List<FrameItem>();
         int lowered = LowerPublishedRange(visible, firstHandle, count, destination.Width, destination.Height, items,
-                                          sceneEffects);
+                                          sceneEffects, copyTarget);
         ReferenceRenderer.DrawItems(destination, items);
         return lowered;
     }

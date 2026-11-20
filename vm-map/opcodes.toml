@@ -5622,14 +5622,14 @@ abi_source = "kelebek+decode-validated"
 [opcode.semantics]
 name = "create-texture"
 category = "draw"
-summary = "Allocate/prepare a texture slot: (slot, width, height, flag). e.g. `create-texture 0xd 0x190 0x1e 0x0` = slot 13, 400x30."
+summary = "Allocate a blank surface in a texture slot: (slot, width, height, kind). e.g. `create-texture 0xd 0x190 0x1e 0x0` = slot 13, 400x30, a managed texture. Kind 1 is a render target with an alpha channel and kind 2 a render target; anything else is a managed texture, and 3 makes the mode-1 surface class."
 noop_headless = false
 waits = "never"
 leaves = ["falls"]
 source = "investigation"
-confidence = "med"
+confidence = "high"
 depends_on = []
-evidence = "SC0000 CG/UI-draw path disasm; slot/w/h roles read off the operands (400x30 text bars, etc.)."
+evidence = "SC0000 CG/UI-draw path disasm; slot/w/h roles read off the operands (400x30 text bars, etc.). Ghidra /v2 (2026-11-20): gfx_op_0x1f8_create_surface@0x4222d0 passes operand 4 to gfx_surface_create_blank@0x477370, which builds the mode-1 class for 3 and the mode-0 class otherwise; its gfx_surface_texture_create@0x465fa0 keeps the kind at +0x418 (1: D3DUSAGE_RENDERTARGET A8R8G8B8; 2: the same, X8R8G8B8 when display +0x464 is set; else a managed texture). gfx_object_blit_d3d9 copies a colour mode 2 object (ONE/ZERO) into a kind-1 target (docs/engine-re.md, 'Object blend modes'). 4.38D: gfx_surface_texture_create@0x477490, the same."
 
 [[opcode.semantics.args]]
 i = 1
@@ -5652,7 +5652,7 @@ access = ["read"]
 
 [[opcode.semantics.args]]
 i = 4
-role = "flag"
+role = "surface kind"
 observed_types = ["imm"]
 access = ["read"]
 

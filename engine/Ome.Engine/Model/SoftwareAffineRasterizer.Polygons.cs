@@ -149,10 +149,7 @@ public static partial class SoftwareAffineRasterizer
                 if (a != 0) Blend(d, i, r, g, b, a, BlendKind.Additive);
                 return;
             case FramePolygonBlend.Subtractive:
-                if (a == 0) return;
-                d[i] = (byte)System.Math.Max(0, d[i] - r * a / 255);
-                d[i + 1] = (byte)System.Math.Max(0, d[i + 1] - g * a / 255);
-                d[i + 2] = (byte)System.Math.Max(0, d[i + 2] - b * a / 255);
+                if (a != 0) Blend(d, i, r, g, b, a, BlendKind.Subtractive);
                 return;
             default:
                 if (a != 0) Blend(d, i, r, g, b, a);

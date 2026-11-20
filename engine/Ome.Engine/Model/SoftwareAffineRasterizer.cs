@@ -21,9 +21,11 @@ public static partial class SoftwareAffineRasterizer
         if (width <= 0 || height <= 0) return;
         int istr = (int)(System.Math.Clamp(tintStrength, 0f, 1f) * 255);
         int ia = (int)(System.Math.Clamp(opacity, 0f, 1f) * 255);
-        if (ia == 0) return;
+        // A copy that writes every texel (BlendKind.CopyAll) writes even at opacity 0.
+        if (ia == 0 && blend != BlendKind.CopyAll) return;
         int tr=(int)(tint>>16&255), tg=(int)(tint>>8&255), tb=(int)(tint&255);
-        bool unmodulatedSourceOver = ia == 255 && istr == 0 && !multiplyTint && blend != BlendKind.Additive;
+        bool unmodulatedSourceOver = ia == 255 && istr == 0 && !multiplyTint
+                                     && blend is BlendKind.Alpha or BlendKind.Opaque;
         if (TryIntegerTranslation(localToDest, out int tx, out int ty))
         {
             BlitTranslated(dst, dstW, dstH, src, srcW, srcX, srcY, width, height,
@@ -135,7 +137,7 @@ public static partial class SoftwareAffineRasterizer
             return;
         }
         int sa = a * ia / 255;
-        if (sa == 0) return;
+        if (sa == 0 && blend != BlendKind.CopyAll) return;
         int sr = multiplyTint ? r * tr / 255 : (r * (255 - istr) + tr * istr) / 255;
         int sg = multiplyTint ? g * tg / 255 : (g * (255 - istr) + tg * istr) / 255;
         int sb = multiplyTint ? b * tb / 255 : (b * (255 - istr) + tb * istr) / 255;
@@ -163,7 +165,7 @@ public static partial class SoftwareAffineRasterizer
                 int u = x - tx;
                 int si = ((srcY + v) * srcW + (srcX + u)) * 4, di = (y * dstW + x) * 4;
                 int sa = src[si + 3] * ia / 255;
-                if (sa == 0) continue;
+                if (sa == 0 && blend != BlendKind.CopyAll) continue;
                 int sr = multiplyTint ? src[si] * tr / 255 : (src[si] * (255 - istr) + tr * istr) / 255;
                 int sg = multiplyTint ? src[si + 1] * tg / 255 : (src[si + 1] * (255 - istr) + tg * istr) / 255;
                 int sb = multiplyTint ? src[si + 2] * tb / 255 : (src[si + 2] * (255 - istr) + tb * istr) / 255;
@@ -301,7 +303,19 @@ public static partial class SoftwareAffineRasterizer
         x1=System.Math.Min(dw,(int)System.Math.Ceiling(System.Math.Max(System.Math.Max(a.X,b.X),System.Math.Max(c.X,d.X))));
         y1=System.Math.Min(dh,(int)System.Math.Ceiling(System.Math.Max(System.Math.Max(a.Y,b.Y),System.Math.Max(c.Y,d.Y))));
     }
+    // Copy and CopyAll write the source, alpha included (ONE/ZERO); their callers have already left out what the alpha
+    // test keeps out. Subtractive takes the source scaled by its alpha from the target's colour and leaves the target's
+    // alpha, as the polygon's subtract does: native takes a * a from it too.
     private static void Blend(byte[] d,int i,int r,int g,int b,int a,BlendKind blend=BlendKind.Alpha){
+        if(blend is BlendKind.Copy or BlendKind.CopyAll){
+            d[i]=(byte)r;d[i+1]=(byte)g;d[i+2]=(byte)b;d[i+3]=(byte)a;
+            return;
+        }
+        if(blend==BlendKind.Subtractive){
+            d[i]=(byte)System.Math.Max(0,d[i]-r*a/255);d[i+1]=(byte)System.Math.Max(0,d[i+1]-g*a/255);
+            d[i+2]=(byte)System.Math.Max(0,d[i+2]-b*a/255);
+            return;
+        }
         if(blend==BlendKind.Additive){
             d[i]=(byte)System.Math.Min(255,d[i]+r*a/255);d[i+1]=(byte)System.Math.Min(255,d[i+1]+g*a/255);
             d[i+2]=(byte)System.Math.Min(255,d[i+2]+b*a/255);d[i+3]=(byte)System.Math.Min(255,d[i+3]+a);

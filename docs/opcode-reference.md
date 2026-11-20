@@ -2083,11 +2083,11 @@ The handler clears the map embedded at retained-gfx owner+0x408, resets its coun
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)
 - **ABI applicability:** upstream catalog framing is available; proven revision `SYS4422`, `SYS4433`, `SYS4438`
 - **semantic status:** investigated
-- **summary:** Allocate/prepare a texture slot: (slot, width, height, flag). e.g. `create-texture 0xd 0x190 0x1e 0x0` = slot 13, 400x30.
+- **summary:** Allocate a blank surface in a texture slot: (slot, width, height, kind). e.g. `create-texture 0xd 0x190 0x1e 0x0` = slot 13, 400x30, a managed texture. Kind 1 is a render target with an alpha channel and kind 2 a render target; anything else is a managed texture, and 3 makes the mode-1 surface class.
 - **operand access:** `1` read (surface 0..999, untested) · `2` read · `3` read · `4` read
 - **control (port handler):** waits never; leaves falls
-- **grounding:** source=investigation, confidence=med
-- **evidence:** method=native-re; confidence=med; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1f8`; scope=Himegari SYS4422. SC0000 CG/UI-draw path disasm; slot/w/h roles read off the operands (400x30 text bars, etc.).
+- **grounding:** source=investigation, confidence=high
+- **evidence:** method=native-re; confidence=high; profiles=himegari; revisions=SYS4422; artifact=`Himegari AGE.EXE Ghidra /v2 and decoded script corpus`; site=`vm-map/opcodes.toml opcode 0x1f8`; scope=Himegari SYS4422. SC0000 CG/UI-draw path disasm; slot/w/h roles read off the operands (400x30 text bars, etc.). Ghidra /v2 (2026-11-20): gfx_op_0x1f8_create_surface@0x4222d0 passes operand 4 to gfx_surface_create_blank@0x477370, which builds the mode-1 class for 3 and the mode-0 class otherwise; its gfx_surface_texture_create@0x465fa0 keeps the kind at +0x418 (1: D3DUSAGE_RENDERTARGET A8R8G8B8; 2: the same, X8R8G8B8 when display +0x464 is set; else a managed texture). gfx_object_blit_d3d9 copies a colour mode 2 object (ONE/ZERO) into a kind-1 target (docs/engine-re.md, 'Object blend modes'). 4.38D: gfx_surface_texture_create@0x477490, the same.
 
 ### 0x1f9 `set-texture` (set-texture, argc 3)
 - **observed by:** arterial (SYS4438), himegari (SYS4422), kamidori (SYS4433)

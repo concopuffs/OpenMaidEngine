@@ -712,6 +712,12 @@ public sealed partial class GfxState
                     // while the high byte scales the additive source contribution.
                     alpha = a; strength = 0; blend = BlendKind.Additive; multiplyTint = true;
                 }
+                else if (o.StaticColorMode == 3)
+                {
+                    // Native mode 3 adds the reverse-subtract operation to mode 1's SRCALPHA/ONE: the modulated
+                    // source, scaled by its alpha, is taken from what is under it (COUPANIME's movies, ATTACK).
+                    alpha = a; strength = 0; blend = BlendKind.Subtractive; multiplyTint = true;
+                }
                 else if (o.StaticColorMode == 0 && o.OneShotColorBlend)
                 {
                     alpha = a; strength = 0; blend = BlendKind.Alpha; multiplyTint = true;
@@ -858,7 +864,8 @@ public sealed partial class GfxState
                                           o.TranslationCycleEnabled,
                                           o.TranslationCyclePeriodMs,
                                           cycleTranslationX, cycleTranslationY,
-                                          cycleTranslationZ), patternedTransition));
+                                          cycleTranslationZ), patternedTransition,
+                                      CopiesIntoAlphaTarget: o.StaticColorMode == 2));
         }
         while (nextPolygon < polygons.Count) SnapshotPolygon(polygons[nextPolygon++], nowMs, list);
     }

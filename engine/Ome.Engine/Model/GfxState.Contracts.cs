@@ -128,7 +128,8 @@ public readonly record struct PolygonRenderState(
 /// <paramref name="MultiplyTint"/> selects the latter compositor path.</summary>
 /// <remarks>An entry with <paramref name="Polygon"/> set is a polygon object in its place of the walk, not a quad: only
 /// its handle, its time-varying flag and the polygon mean anything, and the rest reads as an object that draws
-/// nothing.</remarks>
+/// nothing. <paramref name="CopiesIntoAlphaTarget"/> marks an object in colour mode 2, which native draws ONE/ZERO
+/// while a kind-1 surface is the render target and with its blend elsewhere.</remarks>
 public readonly record struct RenderObject(long Handle, long SurfaceResId, long ColorKey,
                                            int SrcX, int SrcY, int W, int H, double DstX, double DstY,
                                            TransformState Transform, RotationCycleState Rotation,
@@ -143,7 +144,8 @@ public readonly record struct RenderObject(long Handle, long SurfaceResId, long 
                                            DirectionalBlurRangeTransitionState? DirectionalBlurTransition = null,
                                            TranslationCycleState TranslationCycle = default,
                                            PatternedSurfaceTransitionState? PatternedSurfaceTransition = null,
-                                           PolygonRenderState? Polygon = null);
+                                           PolygonRenderState? Polygon = null,
+                                           bool CopiesIntoAlphaTarget = false);
 
 /// <summary>The retained handle interval selected by an op-0x222 backbuffer publication.</summary>
 public readonly record struct GfxHandleRange(long First, long Count)

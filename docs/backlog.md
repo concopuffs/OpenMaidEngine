@@ -575,8 +575,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     lacks, each done when the port does what that section says native does and a test or a scenario holds it:
     - **Op `0x2c7` on 4.33G** is a plain byte substring; the port runs 4.38D's `SBSubstr` on every build. No script
       of Kamidori has a site.
-    - **Two points left unread:** whether 4.33G draws a surface through a sprite with the alpha test on (4.38D
-      turns it off), and what draws into surface `0x27` (4.38D treats that target as the back buffer).
 
     In since the triage (2026-11-19): the `JUSTIFYCHAR` list as the build's `TextRules.LineEnd`, the four
     `SYS4REG.INI` keys 4.38D adds in its `SettingsRules`, and Auto's per-character delay with its three settings
@@ -586,7 +584,12 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     on both targets). The kept window position (`SAVEWINPOS`) is in too, in `OME.INI` (`engine-re.md`, "The kept
     window position"; `WindowPositionTests`). The catalog's font, the extended face, the dash join and 4.38D's
     aspect-mode font calibration are in too, and compared (`ExtendedGlyphTests`, `AspectFontRealizationTests`; the
-    frames of pages 1 and 4 equal native's in every pixel). Open there:
+    frames of pages 1 and 4 equal native's in every pixel). So are the sprite's alpha test as a build rule, and object
+    colour modes 2 and 3 (2026-11-20; `engine-re.md`, "Object blend modes"; `ObjectBlendModeTests`). Open there:
+    - **Object modes 2 and 3 are not compared with native.** No run has shown COUPANIME's movies (mode 3) or
+      BUNKIMOVE's choice window scaling in (mode 2 into a kind-1 surface) on both targets. Into a render target the
+      port's mode 3 keeps the target's alpha, where native takes the alpha's square from it. Done when a frame of each
+      equals native's.
     - **The portable text backend's extended glyphs are not looked at.** It takes the font file
       (`GodotTextServerGlyphMaskRasterizer.AddGameFont`), and no run has drawn the game's text with it.
   - **File types no other game has:** two `.X` files (`LEAF0.X`, `LEAF1.X`) and the `.TTF`, among 21,349 entries
