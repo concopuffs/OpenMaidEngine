@@ -114,9 +114,9 @@ public class MovieSurfaceRegistryTests
 
         Assert.Equal(holds, registry.HoldsServiceWait);   // pending start: native tests the stored flags
         Assert.True(registry.Complete(binding.PlaybackId));
-        Assert.Equal(holds, registry.HoldsServiceWait);   // DirectShow's end leaves the flags word as it was
+        Assert.False(registry.HoldsServiceWait);          // the tick that sees the end frees the movie object
         Assert.Equal(MovieSurfaceReleaseKind.Released, registry.Release(0x2a).Kind);
-        Assert.False(registry.HoldsServiceWait);          // releasing the surface removes the movie
+        Assert.False(registry.HoldsServiceWait);
     }
 
     [Fact]

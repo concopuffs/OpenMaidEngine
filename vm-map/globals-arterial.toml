@@ -1792,6 +1792,24 @@ source = "investigation"
 confidence = "high"
 
 [[global]]
+address = "0x3d467"
+name = "battle_result"
+category = "index-pointer"
+type = "int"
+usage = "Saved: how the last battle ended, 1 won and 2 lost. BTL clears it before each try and ANIMEDRAW sets it when the battle is decided; BTL runs RESULT on a win, offers a lost battle again, and plays G[0x3d46a + result - 1], the battle's scene for that result, when it has one."
+source = "investigation"
+confidence = "high"
+
+[[global]]
+address = "0x3fba3"
+name = "shared_loop_index"
+category = "counter"
+type = "int"
+usage = "The loop index 364 scripts share, the walks of the append chains among them (ALLMAP, BTL and the scenes go through slots 0 to 31 with it), so a script keeps it only while it calls no other script that loops. ADDCARD loops over a card's two talents with it; the base mod's give_card helper puts it back after ADDCARD."
+source = "investigation"
+confidence = "high"
+
+[[global]]
 address = "0x469105"
 name = "battle_rule_id"
 category = "index-pointer"

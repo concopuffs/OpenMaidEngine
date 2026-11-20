@@ -30,6 +30,10 @@ ran the same scenarios on native AGE.
   first page of its opening scene (site 0xf1c, the instruction that sets `G[0x3141]`), through `arterial.adv`.
   `NaturalBootIntegrationTests.ArterialPrologueFragmentIsTheFirstAdvPage` boots a new game into it, and the
   exported `SC0000.BIN` shows the line on native AGE.
+- `example.arterial-character-name` is Arterial's base mod example (M3): a data file of `arterial.tables` that
+  renames 龍司's third name, the one his name plate shows in the opening, at `arterial.data.layered`.
+  `tools/drive/scenarios/port/arterial-character-name.steps` plays a new game to his first line, SC0000's 24th
+  page, and checks the cell at the title. It targets `extended`, so it runs in the port only.
 
 - `example.double-exp-lua` (Lua scripting gate 4) is the Lua version of the Himegari guide's experience patch: a
   handler on `himegari.experience.after_calculation` doubles `L[0x1]`. `ModLuaLinkTests` links it and runs

@@ -124,6 +124,15 @@ it; git history keeps the record.
   holds) would let them map. Done when either makes a fact strong without raising the 4.33F/4.33G noise floor
   (one differing opcode).
 
+- **A movie's end does not clear its surface.** At a movie's end without the loop flag, native's tick detaches the
+  movie, frees it and, unless `(flags & 3) == 2`, fills the whole surface with 0 (4.38D `engine_main_tick@0x41223c`;
+  `engine-re.md`, "Movie flags decide the effect wait", the correction of 2026-11-20). The port keeps the movie's
+  last frame on the surface until the surface is released. Flags 2 (Himegari's chapter movie) and 6 (op `0x24d`'s
+  mask) keep their surface natively too, so only movies with flags 0 differ: Kamidori's ADDEXP, SHOWGROW and BTL
+  effect movies, whose last frame the port shows until the script releases the surface and native shows nothing.
+  Found on `feature/arterial` while fixing the mask movie's hold, and owed before that branch merges. Done when the
+  port clears the surface at the end where native does, and a Kamidori level-up or battle movie's end is compared
+  with native's.
 - **The title's 3D leaves are not drawn (創刻のアテリアル).** Owed by the user's word on 2026-11-19: "state only is
   fine as long as we keep in mind we need to finish that functionality at some point". Native's title shows white
   leaves drifting over it (native screenshots a few seconds apart show them moved); the port's shows everything
@@ -562,9 +571,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   since 2026-11-20 by the user's word (`adding-a-game.md` §1; its manifest's `support`), on the branch
   `feature/arterial`: the engine names its install, decodes all of it, has a handler for every opcode its scripts
   use, and boots it by its own route through the logo and the title to SC0000's first pages. Its saves load on
-  native AGE as native's load on the port. The launcher lists it. Its modding level is **M2** since 2026-11-20:
-  script mods and text packages work, and its data tables are decoded and named (`modding/games/arterial.md`). It has not been driven past SC0000's first
-  pages on either target: that is the sweep's (P4).
+  native AGE as native's load on the port. The launcher lists it. Its modding level is **M3** since 2026-11-20:
+  script mods, text packages, Lua mods and data files work through its base mod `arterial-base`
+  (`modding/games/arterial.md`). Native AGE has not been driven past SC0000's first pages, and the port only to its
+  24th page; the rest is the sweep's (P4).
   - **Done for P0 and P1.** Its dump, its Ghidra image with 658 ported or registry names, its build in
     `operand_access.py` `ENGINES` with a fifteenth accessor, the revision diffs (`engine-re.md`, "Comparing engine
     builds"), its profile and engine build (4.33G with its own names and nothing else changed), its observation and
@@ -702,8 +712,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     - **No speaker names.** A line names its speaker by a face picture's id (`face: 0x16a`). The character and
       face tables are decoded (`arterial-data-tables.md`, "CFINIT"), and nothing turns a face id into a name in
       a decompiled line yet. Done when a decompiled line names its speaker.
-    - **No patch points.** `vm-map/patch-points-arterial.toml` does not exist, so fragments use offsets. It
-      comes with step 10's base mod survey.
     - **About 12,000 pages stay core statements** (37,568 page starts were counted in the scenes, 25,438 lift):
       pages with furigana, a name put into the text, several `show_text` calls, or commands between the page's
       start and its text. The same kinds stay core in the other two games ("Prelude coverage" above).
@@ -738,8 +746,21 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       cells (`scene_played_flags`), the area in play and the point unit 1 stands on. Its seven contexts are
       not read, nor the story cells outside the played cells (`story_flags.py` lists 836 candidates), and
       `scjump_decode.py`, written for Himegari's `SCJUMP`, was not run on the game.
-    - **No table edit was run in the game**, on either target.
-  - **Next, by the plan:** the base mod (M3, step 10), then the sweep (P4).
+    - **One table edit was run in the game**, in the port: M3's example (below). None on native AGE.
+  - **The base mod level, M3, is reached (2026-11-20).** `mods/arterial-base/` declares seven events at seven named
+    points (`vm-map/patch-points-arterial.toml`): the boot's data layered and ready, an area loaded and its READY
+    chain run, a battle's start and close, and one character's experience award, whose amount is an operand. It
+    accepts `arterial.tables` (boot tables at `arterial.data.layered`, an area's part at `arterial.area.loaded`)
+    and gives `give_item` and `give_card`. `ModLuaLinkTests` binds every event on the install, runs INIT2 with the
+    boot events and runs both helpers; `example.arterial-character-name` renames a name plate the opening shows, and
+    `tools/drive/scenarios/port/arterial-character-name.steps` drives the port to it. Driving it found the port
+    stuck in the opening's first movie-mask transition, now fixed (`engine-re.md`, "Movie flags decide the effect
+    wait", the correction of 2026-11-20). What M3 leaves open:
+    - **The area, battle and experience events were not raised in a run.** They bind, and no run has reached a map
+      or a battle. Done when the sweep's runs raise each, and an area part of a data file is applied in one.
+    - **Chains without an event:** `OPEN`, `SCJUMP`'s chain, `BGINIT`, `TUMES`, the item actions and the 奥義 and
+      talent scripts, and RESULT's card experience. Done when a mod needs one and it is added, or never.
+  - **Next, by the plan:** the sweep (P4).
     Step 7 is done: the opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page;
     `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept
     window position").

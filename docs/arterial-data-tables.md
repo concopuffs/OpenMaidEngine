@@ -45,7 +45,10 @@ items, 奥義 and talents have their effects in that append's scripts. Other slo
 `SETMAPDATA` runs slots 0 to 31 of `MPINIT` (`G[0x45275d]`), `ROINIT` (`G[0x45277d]`) and `UNINIT`
 (`G[0x45279d]`), and `SCJUMP`'s chain is the same kind (`G[0x4525dd]`, "Scene dispatch" below). `INIT2` also
 fills the slots of `TUMES` (`G[0x45263d]`), `BGINIT` (`G[0x45273d]`), `READY` and `OPEN` (`G[0x4525fd]` and
-`G[0x4525fe]`, two cells an append), and each `$n$AUTORUN` sets bit n of `G[0x4525dc]`.
+`G[0x4525fe]`, two cells an append), and each `$n$AUTORUN` sets bit n of `G[0x4525dc]`. `ALLMAP` walks `READY`'s
+slots when it sets an area up and in three places of its map loop, each time followed by `READYEND` and `SETFATE`,
+and `OPEN`'s once the area's map is shown. The base mod's events sit after these chains
+(`vm-map/patch-points-arterial.toml`).
 
 Four more tables run on demand, not at boot: BGINIT, MPINIT, ROINIT and UNINIT ("On-demand tables" below).
 
@@ -733,7 +736,7 @@ These four are not in the boot image: a game script sets a selector and runs the
   with 1 to 7 cells a slot) and fill them from the branch for `G[0x9883]`, the area in play. (`MPINIT` has a
   branch for each of `AMINIT`'s 150 ids and for nothing else, and scripts index `AMINIT`'s arrays with the
   cell.) The appends have `$n$` scripts of the same names with branches of their own (the first of
-  `$1$MPINIT` adds a point to area 1); how the game runs them after the base script is not read.
+  `$1$MPINIT` adds a point to area 1), which `SETMAPDATA` runs after the base script, each layer in turn.
 
 The clears give each array's base and cells per slot exactly, so these layouts are not inferred. A row gives how
 many areas write the array, which slots, and the values over all areas.

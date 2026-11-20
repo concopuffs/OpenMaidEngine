@@ -1,0 +1,38 @@
+omp = 4
+id = "arterial-base"
+name = "創刻のアテリアル base"
+version = "1.0.0"
+description = "Names the game's cells for Lua mods (the layout the engine builds a mod's game.g and game.table from), and gives helpers that change the game through its own scripts."
+
+[game]
+profile = "arterial"
+target = "extended"
+
+[lua]
+api = 1
+capabilities = ["vm"]
+# The game scripts the helpers in lua/init.lua call (spec §10); omp check walks each.
+calls = ["ADDITEM", "ADDCARD"]
+
+# The library tables.lua applies the record tables with (data patches spec §6.4); the engine ships it too.
+[[requires]]
+id = "ome-records"
+version = ">=1, <2"
+
+# Data files of the game's record tables (data patches spec §6): a mod that requires this base mod ships them under
+# data/, and tables.lua checks and applies each, by the record map lua/generated/tables.lua: the boot's tables at
+# arterial.data.layered, and an area's part each time its loaders have run (arterial.area.loaded). The link checks
+# each file against shapes/tables.schema.json first, which base_mod_build.py generates from the same record map
+# (spec §7).
+[[accepts]]
+kind = "arterial.tables"
+description = "Edits to the game's record tables: cards, characters, items, skills and battles, which the boot builds, and each area's points, routes and units, which its loaders write."
+shape = "tables.schema.json"
+
+[[accepts.at]]
+event = "arterial.data.layered"
+handler = "tables.lua:apply_boot"
+
+[[accepts.at]]
+event = "arterial.area.loaded"
+handler = "tables.lua:apply_area"

@@ -1,0 +1,32 @@
+# An area's map (Lua scripting spec §9.2). Hand-written: each event names its point and gives each field's cell, by the
+# names layout/globals.json exports.
+
+[[event]]
+name = "arterial.area.loaded"
+point = "arterial.area.after_loaders"
+description = """
+The loaders of the area in play have run (MPINIT, ROINIT and UNINIT, the base's and each append's): its points, \
+routes and units are written, and the player's unit has its pictures. A handler that rewrites them changes the map \
+that is set up next. The game runs the loaders, and raises this, each time it sets the area up: when the party \
+enters it, after a battle whose next scene is played on a map, and when a save made on a map is loaded (during the \
+boot, after arterial.data.layered and before arterial.data.ready). The loaders write their tables afresh each time, \
+so a handler makes the same change each time. The data files of arterial.tables write their parts for the area \
+here."""
+
+[[event.field]]
+name = "area"
+at = "current_area_id"
+type = "int"
+
+[[event]]
+name = "arterial.area.ready"
+point = "arterial.area.after_ready_handlers"
+description = """
+Every layer's READY handler has run (READY and each append's $n$READY), which set story cells from the progress. \
+The map walks the READY chain when it sets an area up and again after some of its actions, so this is raised more \
+than once in an area: a handler makes the same change each time."""
+
+[[event.field]]
+name = "area"
+at = "current_area_id"
+type = "int"

@@ -158,7 +158,7 @@ public sealed partial class Movies : IGraphicsMovies, ISurfaceListener
     }
 
     /// <summary>engine_main_tick's surface_movie_is_playing scan: a bound movie whose flags have bit 2 set and bit 0
-    /// clear holds an effect wait (<see cref="MovieSurfaceRegistry.HoldsServiceWait"/>).</summary>
+    /// clear holds an effect wait until it completes (<see cref="MovieSurfaceRegistry.HoldsServiceWait"/>).</summary>
     public bool HoldsServiceWait => _surfaces.HoldsServiceWait;
 
     /// <summary>Op 0x20f's movie, before the input and waits native's modal wait begins; null, with a log line, when the resource names

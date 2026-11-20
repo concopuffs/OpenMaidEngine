@@ -1,0 +1,21 @@
+# Port only (scenarios/port/): Arterial's base mod and its data files (docs/adding-a-game.md, M3).
+# example.arterial-character-name renames 龍司's (character 12) third name, character_names[12][2], from
+# 無数の傷を持つ男 to [MOD] 傷だらけの男 at arterial.data.layered. A new game's opening first shows his name plate on
+# SC0000's 24th page (wait SC0000@0x3d41), whose lines use that name (form 2). On the way the opening plays its first
+# movie-mask transition (SC0000@0x2b21), whose op 0x21c waits for the movie. Run on a fresh sandbox:
+#   py -3.11 -X utf8 tools/drive.py --game arterial port start --mod oms/examples/mods/example.arterial-character-name
+#   py -3.11 -X utf8 tools/drive.py --game arterial port run tools/drive/scenarios/port/arterial-character-name.steps
+#   py -3.11 -X utf8 tools/drive.py --game arterial port stop
+
+rand-seed 13
+wait 5
+click adv.next                                   # skips the logo
+wait-state script=TITLE timeout=90
+lua local name = maid.vm.gs[0x4154 + 12 * 6 + 2] assert(name == "[MOD] 傷だらけの男", name) return name
+wait 6
+click title.start
+wait-state top=SC0000@0xfff timeout=90           # page 1
+settle timeout=20
+wait-state top=SC0000@0x3d44 click=adv.next every=2.5 timeout=240   # page 24: 龍司's first line
+settle timeout=20
+shot arterial-character-name

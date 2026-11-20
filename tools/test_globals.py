@@ -266,12 +266,18 @@ def test_scopes_lint():
                    "'upside': first and last must be", "'upside': defined twice", "'empty': needs a [scope.tables] map",
                    "table hero is named by scope 'hero' already"):
         check(any(needle in e for e in errors), f"lint_scopes flags {needle!r} ({errors})")
+    # Each registry's scopes: the two dungeon games key stage_enemy by stage; Arterial keys its area tables by area.
+    expected = {
+        "globals.toml": [("stage", 1, 999, {"enemy": "stage_enemy"})],
+        "globals-kamidori.toml": [("stage", 1, 999, {"enemy": "stage_enemy"})],
+        "globals-arterial.toml": [("area", 1, 299, {"point": "area_point", "route": "area_route", "unit": "area_unit"})],
+    }
     for toml in sorted(Path(G.TOML_DEFAULT).parent.glob("globals*.toml")):
         entries, _ = G.load_toml(toml)
         scopes = G.load_scopes(toml)
         check(G.lint_scopes(scopes, G.load_tables(toml), entries) == [], f"{toml.name} scopes lint clean")
-        check([(s["name"], s["first"], s["last"], s["tables"]) for s in scopes]
-              == [("stage", 1, 999, {"enemy": "stage_enemy"})], f"{toml.name} keys stage_enemy by stage, ids 1 to 999")
+        check([(s["name"], s["first"], s["last"], s["tables"]) for s in scopes] == expected.get(toml.name),
+              f"{toml.name} declares the scopes {expected.get(toml.name)}")
     registry = paths.VM_MAP / "globals.toml"
     merged = G.merge(G.load_toml(registry)[0], {})
     tables, scopes = G.load_tables(registry), G.load_scopes(registry)

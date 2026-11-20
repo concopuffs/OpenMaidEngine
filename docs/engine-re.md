@@ -7032,6 +7032,18 @@ SC0000's chapter wait is unchanged: native 1.63 s, port 1.68 s. Test:
 wait is not the movie's. The wait that should cover the movie fell to 5 s on the port once the movie stopped holding
 it, because op `0x23f` read the wrong surface. See "SC0000's chapter movie plays on surface 5", below.
 
+*Correction (2026-11-20): a completed movie holds nothing.* The port kept a completed playback holding the wait until
+its surface was released, while native frees the object at the movie's end: 4.38D's `engine_main_tick` scans
+`ctx+0x5c2d8[slot]` (the array op `0x24d` fills too), calls `surface_movie_is_playing@0x404eb0` for each object, and
+at `0x4121f3` compares the position with the stop time. At the end, with `+0x43c` (loop) clear, it calls
+`movie_stop_and_detach_surface@0x475890`, clears the surface with `gfx_fill_surface_rect_worker@0x48e5e0` (slot, the
+whole surface, 0, 0) unless `(+0x440 & 3) == 2`, and deletes the object and clears the slot (`0x41223c` to `0x41228f`).
+Op `0x24d`'s mask movie has flags 6, so the hold mattered for the first time with 創刻のアテリアル: SC0000's first
+movie-mask transition (`SC0000@0x2b21`, `MVE001A.MPG`, 2,033 ms) left its `0x21c` waiting for good, at
+`SC0000@0xcb37`, about fourteen pages into a new game. `HoldsServiceWait` now skips a completed playback, and the
+transition ends when its movie does (`MoviesNativeTests.AMaskMovieEndsItsTransitionWhenTheMovieEnds`). The port
+still does not clear the surface at a movie's end (backlog, "A movie's end does not clear its surface").
+
 #### A surface release deletes its movie (2026-11-07)
 
 **Native.** Ops `0x1f8` create-texture, `0x1f9` set-texture, `0x249` and `0x1fa` gfx-elem-release delete the slot's

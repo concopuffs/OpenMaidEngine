@@ -1723,4 +1723,115 @@ public sealed class ModLuaLinkTests : IDisposable
         Assert.Equal(16, GameSession.FromJson(withEvent).Globals[0x64391 + 1]);
         Assert.Equal(withPatch, withEvent);
     }
+
+    // ------------------------------------------------------------------------------------------- a third game: Arterial
+
+    private static readonly OpcodeTable ArterialTable = OpcodeTableJson.Load(Paths.OpcodesJson, "SYS4438");
+
+    /// <summary>Arterial's install, the one docs/modding/games/arterial.md lists, with the script provider its scripts'
+    /// calls resolve through.</summary>
+    private (ModLinkBase Base, Sys4ScriptProvider Scripts) ArterialBase()
+    {
+        string gameRoot = Paths.GameInstall("arterial");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"Arterial install not found at {gameRoot}");
+        var catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var store = new Sys4AssetStore(catalog, gameRoot, [gameRoot]);
+        ModLinkBase linkBase = ModLinkBase.ForInstall("arterial", sys4Ini, catalog, store, ArterialTable, Contracts,
+            Paths.GlobalsJson("arterial"), Paths.OmsModules("arterial"), Paths.PatchPointsJson("arterial")) with
+        {
+            Lua = _runtime,
+        };
+        return (linkBase, new Sys4ScriptProvider(ArterialTable, catalog, store));
+    }
+
+    /// <summary>A mod of Arterial's that subscribes to <paramref name="events"/> with <paramref name="body"/> as the
+    /// handler, which has the base mod as <c>game</c>, and the shipped packages it requires.</summary>
+    private IReadOnlyList<ModPackage> ArterialSubscriber(string[] events, string body)
+    {
+        string hooks = "[[requires]]\nid = \"arterial-base\"\nversion = \">=1.0, <2\"\n"
+                       + string.Concat(events.Select(name => $"[[hooks]]\nevent = \"arterial.{name}\"\nhandler = \"hooks.lua:on_event\"\n"));
+        ModPackage user = Mod("arterial-user", hooks,
+                              Hooks($"local game = require(\"arterial-base\")\nfunction on_event(e)\n{body}\nend\n"),
+                              lua: "api = 1", profile: "arterial");
+        IReadOnlyList<ModPackage> shipped = ShippedPackages.Required([user], new ModLinkReport());
+        _opened.AddRange(shipped);
+        return [user, .. shipped];
+    }
+
+    /// <summary>Runs Arterial's INIT2 with <paramref name="linked"/>'s Lua and returns its session and its log's texts.</summary>
+    private (GameSession Session, string[] Log) RunArterialInit2(ModLinkResult linked, Sys4ScriptProvider scripts)
+    {
+        using var scripting = new Scripting(new ScriptMemory(), new ScriptingSetup
+        {
+            Runtime = _runtime, Stack = linked.Lua.Stack, Plan = linked.Lua.Plan, Errors = LuaErrorPolicy.Halt,
+        });
+        var session = new GameSession();
+        SceneResult result = session.RunScene(scripts.RequireByName("INIT2.BIN"), ArterialTable, new HeadlessWaits(),
+                                              provider: scripts, build: EngineBuilds.Age438D, scripting: scripting);
+        Assert.True(result.Halt is null or "exit" or "end", result.Halt);
+        Assert.DoesNotContain(scripting.RecentLog, line => line.Contains(" error ", StringComparison.Ordinal));
+        return (session, scripting.RecentLog.Select(line => line[(line.LastIndexOf(": ", StringComparison.Ordinal) + 2)..]).ToArray());
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "arterial")]
+    public void ArterialsBaseModRaisesEachOfItsEventsAtTheInstalledScripts()
+    {
+        // The M3 gate (docs/adding-a-game.md): each event binds on the install the guide lists.
+        var (linkBase, scripts) = ArterialBase();
+        string[] events = ["data.layered", "data.ready", "area.loaded", "area.ready", "battle.start", "battle.close", "experience.award"];
+        // The scene dispatch chain's slot 1 is $1$SCJUMP's id, which only the first append's AUTORUN writes.
+        ModLinkResult linked = ModLinker.Link(linkBase, ArterialSubscriber(events,
+            "maid.log.info(e.event .. \" \" .. tostring(game.table(\"scjump_chain_script_ids\")[1]))"), []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        Assert.DoesNotContain(linked.Report.Lines, line => line.Message.Contains("not raised in this install", StringComparison.Ordinal));
+        Assert.Equal([0x17f, 0x3a4], Offsets(linked, "INIT2"));
+        Assert.Equal([0xc1], Offsets(linked, "SETMAPDATA"));
+        Assert.Equal([0x0], Offsets(linked, "READYEND"));
+        Assert.Equal([0x51e, 0x521], Offsets(linked, "BTL"));
+        Assert.Equal([0xb00], Offsets(linked, "RESULT"));
+
+        // The award's amount is the add's third operand, a pointer into RESULT's own array; the battle's result a
+        // saved cell.
+        GameEvent award = linked.Lua.Stack.Event("arterial.experience.award")!;
+        Assert.Equal(["amount", "character", "level"], award.Fields.Select(field => field.Name));
+        Assert.Equal(new FieldLocation.Operand(2), award.Field("amount")!.Location);
+        var level = Assert.IsType<FieldLocation.Element>(award.Field("level")!.Location);
+        Assert.Equal(("party_member_levels", 0x3ba8), (level.Table.Name, level.Table.Address));
+        Assert.Equal(new FieldLocation.Global(CellKind.Integer, 0x3d467, "battle_result"),
+                     linked.Lua.Stack.Event("arterial.battle.close")!.Field("result")!.Location);
+        Assert.Equal(["area"], linked.Lua.Stack.Event("arterial.area.loaded")!.Fields.Select(field => field.Name));
+
+        // At boot each data event comes once, after the appends' AUTORUNs; a boot without a save sets no area up.
+        var (_, log) = RunArterialInit2(linked, scripts);
+        Assert.Equal([$"arterial.data.layered {0x10001df}", $"arterial.data.ready {0x10001df}"],
+                     log.Where(text => text.StartsWith("arterial.", StringComparison.Ordinal)));
+    }
+
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "arterial")]
+    public void ArterialsHelpersRunTheGamesAddItemAndAddCardAndPutTheirCellsBack()
+    {
+        // 青粒片 (item 301) is a material that sells for 20: two gifts of 60 keep 99, and the 21 past it are paid out.
+        var (linkBase, scripts) = ArterialBase();
+        ModLinkResult linked = ModLinker.Link(linkBase, ArterialSubscriber(["data.ready"], """
+            local names = { "item_arg_id", "item_arg_count", "card_arg_row", "card_arg_slot", "card_arg_count", "shared_loop_index" }
+            local before = {}
+            for i, name in ipairs(names) do before[i] = game.g[name] end
+            local money = game.g.money
+            local first, second = game.give_item(301, 60), game.give_item(301, 60)
+            maid.log.info("counts " .. first .. " " .. second .. " " .. game.give_card(31, 2) .. " money " .. (game.g.money - money))
+            for i, name in ipairs(names) do
+                if game.g[name] ~= before[i] then error(name .. " changed") end
+            end
+            """), []);
+        Assert.True(linked.Succeeded, linked.Report.Render());
+        var (session, log) = RunArterialInit2(linked, scripts);
+        Assert.Contains("counts 60 99 2 money 420", log);
+        Assert.Equal(1, session.Globals[0x4760 + 301]);   // item_obtained_flags: the item is marked obtained
+        Assert.Equal(1, session.Globals[0x66a0 + 31]);    // card_obtained_flags: so is the card
+    }
 }

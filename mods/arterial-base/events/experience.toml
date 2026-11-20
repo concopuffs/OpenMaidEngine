@@ -1,0 +1,25 @@
+# One experience award (Lua scripting spec §9.2). Hand-written: the event names its point and gives each field's cell,
+# by the names layout/globals.json exports.
+
+[[event]]
+name = "arterial.experience.award"
+point = "arterial.experience.after_calculation"
+description = "One party character's experience from a won battle, after the leader's and the skills' bonuses and before it is applied."
+
+[[event.field]]
+name = "amount"
+at = "arg[3]"                    # the add's third operand: the experience the character receives (RESULT's local array)
+type = "int"
+access = "rw"
+
+[[event.field]]
+name = "character"
+at = "character_arg_id"          # the party character the award goes to
+type = "int"
+access = "r"
+
+[[event.field]]
+name = "level"
+at = "party_member_levels[character_arg_id]"
+type = "int"
+access = "r"

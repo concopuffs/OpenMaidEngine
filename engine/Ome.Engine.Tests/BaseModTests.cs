@@ -60,7 +60,7 @@ public sealed class BaseModTests : IDisposable
     public void TheEngineShipsABaseModForEachGameWithARegistryAndItIsTheRepositorysFolder()
     {
         // The base mods, and ome-records, the library they apply record tables with (data patches spec §6.4).
-        Assert.Equal(["himegari-base", "kamidori-base", "ome-records"], ShippedPackages.Ids);
+        Assert.Equal(["arterial-base", "himegari-base", "kamidori-base", "ome-records"], ShippedPackages.Ids);
         foreach (string id in ShippedPackages.Ids.Where(id => id.EndsWith("-base", StringComparison.Ordinal)))
         {
             using ModPackage shipped = ShippedPackages.Open(id)!;
@@ -77,12 +77,14 @@ public sealed class BaseModTests : IDisposable
             Assert.Contains(shipped.Manifest.Requires, requirement => requirement.Id == "ome-records");
             // Each accepts its game's record tables as data files, applied at the boot's data.layered and at each
             // stage's stage.loaded (data patches spec §6.2), by the same handlers; Kamidori's stage part at its stage
-            // list's preview too (plan §12.6).
+            // list's preview too (plan §12.6). Arterial's scope is an area, whose part comes at area.loaded.
             string game = shipped.Manifest.Profile!;
             Assert.Equal(ModManifest.DataOmpVersion, shipped.Manifest.OmpVersion);
             ModKind kind = Assert.Single(shipped.Manifest.Accepts);
             Assert.Equal($"{game}.tables", kind.Kind);
-            (string, string)[] at = [($"{game}.data.layered", "tables.lua:apply_boot"), ($"{game}.stage.loaded", "tables.lua:apply_stage")];
+            (string, string)[] at = game == "arterial"
+                ? [("arterial.data.layered", "tables.lua:apply_boot"), ("arterial.area.loaded", "tables.lua:apply_area")]
+                : [($"{game}.data.layered", "tables.lua:apply_boot"), ($"{game}.stage.loaded", "tables.lua:apply_stage")];
             if (game == "kamidori") at = [.. at, ("kamidori.stage.previewed", "tables.lua:apply_stage")];
             Assert.Equal(at, kind.At.Select(entry => (entry.Event, entry.Handler.ToString())));
             Assert.Empty(shipped.Manifest.Data);

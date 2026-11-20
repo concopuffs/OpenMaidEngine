@@ -1,0 +1,39 @@
+# arterial-base
+
+The engine's base mod for 創刻のアテリアル (Lua scripting spec §9,
+`docs/superpowers/specs/2026-11-10-lua-scripting-design.md`). The engine ships it and mounts it only when an
+enabled mod requires it. A Lua mod reads and writes the game's cells by name through it.
+
+- `manifest.toml` is hand-written. Its major version is the version of the names the base mod exports.
+- `layout/` is generated from `vm-map/globals-arterial.toml` and `vm-map/patch-points-arterial.toml` by
+  `py -3.11 -X utf8 tools/base_mod_build.py --build`. Do not edit it.
+- `events/` is hand-written: the game events the base mod declares, with each field's cell by an exported name:
+  `boot.toml` (`arterial.data.layered`, once every layer has written its data tables and before the boot uses them,
+  and `arterial.data.ready`, once the boot's own work on them is done), `area.toml` (`arterial.area.loaded`, when
+  the loaders of the area in play have run, and `arterial.area.ready`, after every layer's READY handler),
+  `battle.toml` (`arterial.battle.start` and `arterial.battle.close`, around the call that plays a card battle out)
+  and `experience.toml` (one party character's award from a won battle, at
+  `arterial.experience.after_calculation`). The patch points file says where each chain of the appends is walked.
+- `lua/init.lua` is hand-written: the helpers the base mod returns to a mod that requires it, each changing the game
+  through one of its own scripts (`give_item` through ADDITEM, `give_card` through ADDCARD). `[lua] calls` in the
+  manifest lists those scripts.
+- `lua/tables.lua` is hand-written: the handlers of the `arterial.tables` format (data patches spec §6,
+  `docs/superpowers/specs/2026-11-17-data-patches-design.md`), which the manifest's `[[accepts]]` declares.
+  `apply_boot`, bound at `arterial.data.layered`, checks a data file's document against the record map and writes
+  its boot tables, and `apply_area`, bound at `arterial.area.loaded`, writes its part for the area whose loaders have
+  run (`area.<id>.point`, `.route` and `.unit`), both through `ome-records`, the library the manifest requires. The
+  modder's guide to the format is `docs/modding/data-files.md`.
+- `lua/generated/tables.lua` is the record map, generated with `layout/` by `tools/base_mod_build.py --build` from
+  the registry's `[[table]]` and `[[scope]]` entries and the profile's saved prefix, with the old names of tables
+  and fields. Do not edit it. `lua/tables.lua` hands the applier `maid.log.warn`, so a file that writes an old name
+  gets a line for it in `lua.log`.
+- `shapes/tables.schema.json` is the kind's shape (data patches spec §7), generated with the record map by
+  `tools/base_mod_build.py --build`, and named by the manifest's `[[accepts]] shape`. The link checks each data file
+  of `arterial.tables` against it before any code runs; what it cannot say (text code page 932 cannot encode, one
+  cell named twice through an old name, a part at an event this install does not raise) `lua/tables.lua` checks at
+  the file's first delivery. Do not edit it. `omp lua-stubs` writes a copy for an editor.
+- `layout/exports.txt` is the list of exported names, checked in: the globals, then the record tables
+  (`table NAME`) and their fields (`field TABLE.FIELD`), then the scopes (`scope NAME`) and their tables' short
+  names (`scope NAME.SHORT`). A name in it stays exported, as a global's name or one of its `aliases`, a table's
+  name or one of its `aliases`, or a field's name or an old name in its table's `[table.field_aliases]`, until the
+  major version is raised; a scope and a short name have no old-name form.

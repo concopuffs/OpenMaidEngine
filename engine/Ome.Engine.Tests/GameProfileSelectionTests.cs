@@ -69,7 +69,7 @@ public sealed class GameProfileSelectionTests
     /// mods and text packages work for it, and its data tables are decoded and named. Its base mod is not built
     /// yet.</summary>
     [Fact]
-    public void ArterialIsCompleteForPlayAndHasItsDataNamed()
+    public void ArterialIsCompleteForPlayAndHasItsBaseMod()
     {
         GameProfileManifest arterial = Assert.IsType<GameProfileManifest>(GameProfileRegistry.BuiltIn.Find("arterial"));
 
@@ -77,9 +77,9 @@ public sealed class GameProfileSelectionTests
                      (arterial.SysFrontendId, arterial.EngineBuildId, arterial.EngineAbiId, arterial.NaturalBootScript));
         Assert.Equal(["SYS4438"], arterial.ScriptRevisions);
         Assert.True(arterial.Matches(new GameCatalogIdentity("S4IC438", "創刻のアテリアル")));
-        Assert.Equal(new GameSupport(PlayLevel.Complete, ModdingLevel.Data), arterial.Support);
+        Assert.Equal(new GameSupport(PlayLevel.Complete, ModdingLevel.BaseMod), arterial.Support);
         Assert.True(arterial.Support.IsPlayable);
-        Assert.Equal(("P3", "M2"), (arterial.Support.PlayId, arterial.Support.ModdingId));
+        Assert.Equal(("P3", "M3"), (arterial.Support.PlayId, arterial.Support.ModdingId));
         Assert.Equal("none", new GameSupport(PlayLevel.Complete, ModdingLevel.None).ModdingId);
         // The launcher's art for it comes from the publisher's site, as the other two games' does.
         Assert.Equal("https://www.eukleia.co.jp/eushully/eu13/banner/banner_eu13_a.jpg", arterial.Launcher!.Banner!.Url.ToString());

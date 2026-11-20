@@ -1,0 +1,705 @@
+# DO NOT EDIT -- generated from vm-map/globals-arterial.toml by tools/base_mod_build.py --build
+# The names arterial-base 1 exports (Lua scripting spec §9.1): its globals, then its
+# record tables and their fields (data patches plan §9.1), then its scopes and their tables' short names
+# (data patches spec §6.2). Each stays until the major version changes: a renamed global, table or field
+# keeps its old name, listed as OLD = NAME.
+major = 1
+adv_face_id
+adv_name_form
+adv_page_has_text
+adv_speaker_character_id
+adv_voice_id
+area_battle_backgrounds
+area_battle_rules
+area_map_pictures
+area_music
+area_names
+area_places
+area_point_kinds
+area_point_names
+area_point_targets
+area_point_x
+area_point_y
+area_route_points
+area_unit_battle_music
+area_unit_cards
+area_unit_deck_copies
+area_unit_decks
+area_unit_extra_pictures
+area_unit_icons
+area_unit_kinds
+area_unit_pictures
+area_unit_routines
+area_unit_scales
+area_unit_state_ids
+arena_place_id
+battle_backgrounds
+battle_decks
+battle_experience
+battle_id
+battle_leader_cards
+battle_music
+battle_opponent_ultimate_levels
+battle_opponent_ultimate_picture_x
+battle_opponent_ultimate_picture_y
+battle_opponent_ultimate_pictures
+battle_opponent_ultimates
+battle_result
+battle_rule_attack_ranges
+battle_rule_banned_card_rows
+battle_rule_control_ranges
+battle_rule_cost_ranges
+battle_rule_deck_sizes
+battle_rule_hand_sizes
+battle_rule_hp_ranges
+battle_rule_hp_recovery_flags
+battle_rule_id
+battle_rule_lines
+battle_rule_outcomes
+battle_rule_race_masks
+battle_rule_turn_limits
+battle_rule_use_bans
+battle_rules
+battle_uses_player_deck_flags
+bginit_script_ids
+card_append_numbers
+card_arg_count
+card_arg_row
+card_arg_slot
+card_attack
+card_attack_effects
+card_attack_growth
+card_attack_pictures
+card_book_flags
+card_control
+card_copyable_flags
+card_costs
+card_current_attack
+card_current_control
+card_current_costs
+card_current_hp
+card_current_leader_lp
+card_current_slots
+card_experience
+card_flavor_lines
+card_hp
+card_hp_growth
+card_leader_lp
+card_leader_lp_growth
+card_leader_pictures
+card_level_progress
+card_levels
+card_max_levels
+card_names
+card_obtained_flags
+card_owned_counts
+card_pictures
+card_prices
+card_race_flags
+card_rarities
+card_recipe_icons
+card_requires_party_flags
+card_row_character_ids
+card_row_locks
+card_slot_growth
+card_slots
+card_sort_keys
+card_subtractive_effect_flags
+card_talent_ids
+card_voice_clips
+cg_groups
+cg_pictures
+cg_places
+cg_sections
+chapter
+character_arg_id
+character_book_pictures
+character_face_history_pictures
+character_face_ids
+character_fellow_pictures
+character_full_names
+character_level_experience
+character_menu_pictures
+character_names
+character_pictures
+character_sort_keys
+character_ultimate_ids
+character_unit_extra_pictures
+character_unit_pictures
+character_unit_pictures_2
+character_voice_character_ids
+character_voice_clips
+character_voice_kinds
+character_voice_setting_slots
+condition_attack_changes
+condition_hp_changes
+condition_icons
+condition_kinds
+condition_names
+condition_turn_hp_changes
+condition_turn_hp_changes_2
+cpu_profile_action_choices
+cpu_profile_attack_choices
+cpu_profile_attack_lists
+cpu_profile_move_choices
+cpu_profile_settings
+current_area_id
+current_goal_id
+current_opponent_id
+current_scene_id
+day
+deck_card_copies
+deck_card_copy_chances
+deck_card_max_copies
+deck_card_max_once_scenes
+deck_card_max_unless_scenes
+deck_card_rows
+deck_card_slots
+deck_cpu_profiles
+deck_drop_card_rows
+deck_drop_card_slots
+deck_drop_items
+deck_drop_weights
+deck_names
+deck_start_boards
+face_character_ids
+face_slots
+glossary_picture_x
+glossary_picture_y
+glossary_pictures
+glossary_scenes
+glossary_scripts
+glossary_sort_keys
+glossary_titles
+goal_bit1_scenes_not_played
+goal_bit1_scenes_played
+goal_bit2_scenes_not_played
+goal_bit2_scenes_played
+goal_kinds
+goal_least_chapters
+goal_lines
+goal_open_scenes_not_played
+goal_open_scenes_played
+goal_reward_card_rows
+goal_reward_card_slots
+goal_reward_counts
+goal_reward_items
+goal_reward_money
+goal_sort_keys
+goal_states
+goal_titles
+goal_titles_2
+item_action_script_ids
+item_append_numbers
+item_arg_count
+item_arg_id
+item_attack_bonuses
+item_book_flags
+item_card_rows
+item_card_slots
+item_condition_ids
+item_control_bonuses
+item_cost_bonuses
+item_effect_draw_modes
+item_effect_movies
+item_effect_styles
+item_excluded_races
+item_hp_bonuses
+item_kinds
+item_leader_lp_bonuses
+item_lines
+item_names
+item_no_carry_over_flags
+item_obtained_flags
+item_owned_counts
+item_pictures
+item_prices
+item_rarities
+item_required_attack
+item_required_control
+item_required_costs
+item_required_hp
+item_required_leader_lp
+item_required_races
+item_required_slots
+item_sort_keys
+item_talent_ids
+item_targets
+map_agent_character_id
+money
+mounted_append_flags
+mpinit_script_ids
+music_resources
+music_titles
+opponent_arenas
+opponent_battles
+opponent_names
+opponent_places
+opponent_required_opponents
+opponent_reward_card_rows
+opponent_reward_card_slots
+opponent_reward_counts
+opponent_reward_items
+opponent_scenes
+opponent_scenes_not_played
+opponent_scenes_played
+opponent_sort_keys
+opponent_states
+opponent_tournament_groups
+opponent_weekdays
+party_leader_id
+party_member_experience
+party_member_flags
+party_member_level_card_rows
+party_member_level_card_slots
+party_member_level_items
+party_member_level_skills
+party_member_level_ultimate_levels
+party_member_levels
+party_member_picture_sets
+party_member_skill_lines
+party_member_start_skill_lines
+party_member_ultimate_levels
+party_skill_counts
+party_ultimate_character_id
+points
+profile_character_ids
+profile_lines
+profile_names
+profile_pictures
+profile_scripts
+profile_sort_keys
+race_names
+random_condition_switches
+random_conditions
+rank
+rank_point_thresholds
+ready_open_script_ids
+recipe_card_rows
+recipe_card_slots
+recipe_ingredient_card_rows
+recipe_ingredient_card_slots
+recipe_ingredient_counts
+recipe_ingredient_items
+recipe_items
+recipe_least_chapters
+recipe_least_days
+recipe_least_ranks
+recipe_party_character_levels
+recipe_party_characters
+recipe_places
+recipe_points
+recipe_required_card_rows
+recipe_required_card_slots
+recipe_required_items
+recipe_scenes_not_played
+recipe_scenes_played
+recipe_skills
+recipe_time_slots
+recipe_weekdays
+roinit_script_ids
+scene_played_flags
+scene_script_ids
+scene_seen_flags
+scjump_chain_pending
+scjump_chain_script_ids
+scjump_context_id
+shared_loop_index
+shop_entry_card_rows
+shop_entry_card_slots
+shop_entry_items
+shop_entry_least_chapters
+shop_entry_least_days
+shop_entry_least_ranks
+shop_entry_party_character_levels
+shop_entry_party_characters
+shop_entry_scenes_not_played
+shop_entry_scenes_played
+shop_entry_shops
+shop_entry_skills
+shop_entry_time_slots
+shop_entry_weekdays
+shop_place_id
+skill_amounts
+skill_book_flags
+skill_kinds
+skill_lines
+skill_names
+skill_sort_keys
+talent_append_numbers
+talent_book_flags
+talent_descriptions
+talent_names
+talent_script_ids
+talent_sort_keys
+talent_timings
+time_slot
+tip_picture_x
+tip_picture_y
+tip_pictures
+tip_scenes
+tip_scripts
+tip_sort_keys
+tip_titles
+tumes_script_ids
+ultimate_amounts
+ultimate_append_numbers
+ultimate_book_flags
+ultimate_gauge_gains
+ultimate_level_lines
+ultimate_movies
+ultimate_names
+ultimate_picture_x
+ultimate_picture_y
+ultimate_pictures
+ultimate_pictures_2
+ultimate_script_ids
+ultimate_sort_keys
+uninit_script_ids
+unit_routine_actions
+unit_routine_args
+unit_routine_args_2
+unit_routine_args_3
+unit_routine_chances
+unit_routine_scenes_not_played
+unit_routine_scenes_played
+voice_setting_character_ids
+voice_setting_labels
+voice_setting_sample_voices
+voice_setting_text_colors
+table area_map
+table area_point
+table area_route
+table area_unit
+table battle
+table battle_rule
+table card
+table cg
+table character
+table condition
+table cpu_profile
+table deck
+table glossary
+table goal
+table item
+table music
+table opponent
+table party_member
+table profile
+table recipe
+table scene
+table shop_entry
+table skill
+table talent
+table tip
+table ultimate
+table unit_routine
+field area_map.battle_background
+field area_map.battle_rule
+field area_map.map_pictures
+field area_map.music
+field area_map.name
+field area_map.place
+field area_map.unit_scale
+field area_point.kind
+field area_point.name
+field area_point.target
+field area_point.x
+field area_point.y
+field area_route.points
+field area_unit.battle_music
+field area_unit.card
+field area_unit.deck
+field area_unit.extra_picture
+field area_unit.icon
+field area_unit.kind
+field area_unit.picture
+field area_unit.routine
+field area_unit.state_id
+field battle.background
+field battle.deck
+field battle.leader_card
+field battle.music
+field battle.opponent_ultimate
+field battle.opponent_ultimate_level
+field battle.opponent_ultimate_picture
+field battle.opponent_ultimate_picture_x
+field battle.opponent_ultimate_picture_y
+field battle.rule
+field battle.uses_player_deck
+field battle_rule.attack_range
+field battle_rule.banned_card_rows
+field battle_rule.control_range
+field battle_rule.cost_range
+field battle_rule.deck_size
+field battle_rule.hand_size
+field battle_rule.hp_range
+field battle_rule.hp_recovery
+field battle_rule.outcomes
+field battle_rule.race_masks
+field battle_rule.text
+field battle_rule.turn_limit
+field battle_rule.use_bans
+field card.append_number
+field card.attack
+field card.attack_effect
+field card.attack_growth
+field card.attack_picture
+field card.control
+field card.copyable
+field card.cost
+field card.current_attack
+field card.current_control
+field card.current_cost
+field card.current_hp
+field card.current_leader_lp
+field card.current_slots
+field card.experience
+field card.flavor
+field card.hp
+field card.hp_growth
+field card.in_book
+field card.leader_lp
+field card.leader_lp_growth
+field card.leader_picture
+field card.level
+field card.level_progress
+field card.max_level
+field card.name
+field card.obtained
+field card.owned_count
+field card.picture
+field card.price
+field card.race_flags
+field card.rarity
+field card.recipe_icon
+field card.requires_party
+field card.slot_growth
+field card.slots
+field card.sort_key
+field card.subtractive_effect
+field card.talent_id
+field card.voice_clips
+field cg.group
+field cg.pictures
+field cg.place
+field cg.section
+field character.book_picture
+field character.face_history_picture
+field character.face_id
+field character.fellow_picture
+field character.full_name
+field character.menu_picture
+field character.name
+field character.picture
+field character.sort_key
+field character.ultimate_id
+field character.unit_extra_picture
+field character.unit_picture
+field character.unit_picture_2
+field character.voice_character_id
+field character.voice_clips
+field character.voice_kind
+field character.voice_setting_slot
+field condition.attack_change
+field condition.hp_change
+field condition.icon
+field condition.kind
+field condition.name
+field condition.turn_hp_change
+field condition.turn_hp_change_2
+field cpu_profile.action_choices
+field cpu_profile.attack_choices
+field cpu_profile.attack_list
+field cpu_profile.move_choices
+field cpu_profile.settings
+field deck.card_copies
+field deck.card_copy_chance
+field deck.card_max_copies
+field deck.card_max_once_scene
+field deck.card_max_unless_scene
+field deck.card_row
+field deck.card_slot
+field deck.cpu_profile
+field deck.drop_card_row
+field deck.drop_card_slot
+field deck.drop_item
+field deck.drop_weight
+field deck.name
+field deck.start_board
+field glossary.picture
+field glossary.picture_x
+field glossary.picture_y
+field glossary.scenes
+field glossary.script
+field glossary.sort_key
+field glossary.title
+field goal.bit1_scenes_not_played
+field goal.bit1_scenes_played
+field goal.bit2_scenes_not_played
+field goal.bit2_scenes_played
+field goal.kind
+field goal.least_chapter
+field goal.lines
+field goal.open_scenes_not_played
+field goal.open_scenes_played
+field goal.reward_card_row
+field goal.reward_card_slot
+field goal.reward_count
+field goal.reward_item
+field goal.reward_money
+field goal.sort_key
+field goal.state
+field goal.title
+field goal.title_2
+field item.append_number
+field item.attack_bonus
+field item.card_row
+field item.card_slot
+field item.condition_id
+field item.control_bonus
+field item.cost_bonus
+field item.effect_draw_mode
+field item.effect_movie
+field item.effect_style
+field item.excluded_races
+field item.hp_bonus
+field item.in_book
+field item.kind
+field item.leader_lp_bonus
+field item.name
+field item.no_carry_over
+field item.obtained
+field item.owned_count
+field item.picture
+field item.price
+field item.rarity
+field item.required_attack
+field item.required_control
+field item.required_cost
+field item.required_hp
+field item.required_leader_lp
+field item.required_races
+field item.required_slots
+field item.sort_key
+field item.talent_id
+field item.target
+field item.text
+field music.resource
+field music.title
+field opponent.arena
+field opponent.battle
+field opponent.name
+field opponent.places
+field opponent.required_opponent
+field opponent.reward_card_row
+field opponent.reward_card_slot
+field opponent.reward_count
+field opponent.reward_item
+field opponent.scenes
+field opponent.scenes_not_played
+field opponent.scenes_played
+field opponent.sort_key
+field opponent.state
+field opponent.tournament_group
+field opponent.weekdays
+field party_member.experience
+field party_member.flags
+field party_member.level
+field party_member.level_card_row
+field party_member.level_card_slot
+field party_member.level_item
+field party_member.level_skills
+field party_member.level_ultimate_level
+field party_member.picture_set
+field party_member.skill_lines
+field party_member.start_skill_lines
+field party_member.ultimate_level
+field profile.character_id
+field profile.lines
+field profile.name
+field profile.picture
+field profile.script
+field profile.sort_key
+field recipe.card_row
+field recipe.card_slot
+field recipe.ingredient_card_row
+field recipe.ingredient_card_slot
+field recipe.ingredient_count
+field recipe.ingredient_item
+field recipe.item
+field recipe.least_chapter
+field recipe.least_day
+field recipe.least_rank
+field recipe.party_character
+field recipe.party_character_level
+field recipe.places
+field recipe.points
+field recipe.required_card_row
+field recipe.required_card_slot
+field recipe.required_item
+field recipe.scenes_not_played
+field recipe.scenes_played
+field recipe.skill
+field recipe.time_slots
+field recipe.weekdays
+field scene.played
+field scene.script_id
+field scene.seen
+field shop_entry.card_row
+field shop_entry.card_slot
+field shop_entry.item
+field shop_entry.least_chapter
+field shop_entry.least_day
+field shop_entry.least_rank
+field shop_entry.party_character
+field shop_entry.party_character_level
+field shop_entry.scenes_not_played
+field shop_entry.scenes_played
+field shop_entry.shops
+field shop_entry.skill
+field shop_entry.time_slots
+field shop_entry.weekdays
+field skill.amount
+field skill.in_book
+field skill.kind
+field skill.name
+field skill.party_count
+field skill.sort_key
+field skill.text
+field talent.append_number
+field talent.description
+field talent.in_book
+field talent.name
+field talent.sort_key
+field talent.timing
+field tip.picture
+field tip.picture_x
+field tip.picture_y
+field tip.scenes
+field tip.script
+field tip.sort_key
+field tip.title
+field ultimate.amount
+field ultimate.append_number
+field ultimate.gauge_gain
+field ultimate.in_book
+field ultimate.level_lines
+field ultimate.movie
+field ultimate.name
+field ultimate.picture
+field ultimate.picture_2
+field ultimate.picture_x
+field ultimate.picture_y
+field ultimate.sort_key
+field unit_routine.action
+field unit_routine.arg
+field unit_routine.arg_2
+field unit_routine.arg_3
+field unit_routine.chance
+field unit_routine.scenes_not_played
+field unit_routine.scenes_played
+scope area
+scope area.point
+scope area.route
+scope area.unit

@@ -516,6 +516,6 @@ public sealed partial class DataPatchTests
             Assert.Equal(mod.Layout.Data.Count, result.Lua.Stack.ContributionList.Count(found => found.Mod == mod.Id));
             linked++;
         }
-        Assert.Equal(6, linked);
+        Assert.Equal(7, linked);
     }
 }

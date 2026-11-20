@@ -1,0 +1,7 @@
+# Applied at arterial.data.layered, at each boot and each load. A character's names are a row of six columns; a line
+# shows the one its form names (docs/modding/games/arterial.md, "Dialogue lines"), and the opening's lines of 龍司 use
+# form 2, descriptor_2. The game does not save the names, so the edit lasts while the mod is enabled, in a new game
+# and in a loaded one. The comment gives the game's own value.
+
+[character.12]                          # 龍司
+name.descriptor_2 = "[MOD] 傷だらけの男"   # 無数の傷を持つ男

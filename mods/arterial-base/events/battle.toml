@@ -1,0 +1,46 @@
+# A card battle (Lua scripting spec §9.2). Hand-written: each event names its point and gives each field's cell, by the
+# names layout/globals.json exports.
+
+[[event]]
+name = "arterial.battle.start"
+point = "arterial.battle.before_phases"
+description = """
+A battle is about to be played: its rule, its skills and the decks are set up and its music plays. Raised at each \
+try, so again when the player fights a lost battle again."""
+
+[[event.field]]
+name = "battle"
+at = "battle_id"                  # a DUINIT id
+type = "int"
+
+[[event.field]]
+name = "rule"
+at = "battle_rule_id"             # a REINIT id
+type = "int"
+
+[[event.field]]
+name = "opponent"
+at = "current_opponent_id"        # an arena opponent (ARINIT), 0 outside the arena
+type = "int"
+
+[[event]]
+name = "arterial.battle.close"
+point = "arterial.battle.after_phases"
+description = """
+A battle is decided, before any of its outcome is applied: on a win the rewards and the experience come next \
+(arterial.experience.award), on a loss the offer to fight again. Raised at each try."""
+
+[[event.field]]
+name = "battle"
+at = "battle_id"
+type = "int"
+
+[[event.field]]
+name = "result"
+at = "battle_result"              # 1 won, 2 lost
+type = "int"
+
+[[event.field]]
+name = "opponent"
+at = "current_opponent_id"
+type = "int"

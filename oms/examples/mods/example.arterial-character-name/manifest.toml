@@ -1,0 +1,17 @@
+omp = 4
+id = "example.arterial-character-name"
+name = "Character name (Arterial)"
+version = "1.0.0"
+description = "A data file that renames the name plate the opening scene first shows: 龍司's (character 12) third name, which his lines in the opening use."
+
+[game]
+profile = "arterial"
+target = "extended"
+
+[[requires]]
+id = "arterial-base"
+version = ">=1.0, <2"
+
+[[data]]
+kind = "arterial.tables"
+file = "characters.toml"

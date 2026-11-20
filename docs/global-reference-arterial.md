@@ -1,7 +1,7 @@
 <!-- DO NOT EDIT -- generated from vm-map/globals-arterial.toml by tools/globals_build.py --build -->
 # Global Variable Reference — arterial (generated)
 
-10240 globals (361 curated, 9879 auto shape-inferred). Source of truth: `vm-map/globals-arterial.toml`.
+10241 globals (363 curated, 9878 auto shape-inferred). Source of truth: `vm-map/globals-arterial.toml`.
 
 ## Tables
 
@@ -582,6 +582,7 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x3ad8` | points | high | investigation | Saved: a points total, 0 to 99999; ALCHEMY adds recipe_points to it, and CALCPR sets rank from it. |
 | `0x3ad9` | rank | high | investigation | Saved: the rank, 1 to 99, which CALCPR sets from points by rank_point_thresholds. |
 | `0x987b` | day | med | investigation | Saved: the day; its day of the week is day % 7, which the weekday bits test. |
+| `0x3fba3` | shared_loop_index | high | investigation | The loop index 364 scripts share, the walks of the append chains among them (ALLMAP, BTL and the scenes go through slots 0 to 31 with it), so a script keeps it only while it calls no other script that loops. ADDCARD loops over a card's two talents with it; the base mod's give_card helper puts it back after ADDCARD. |
 
 ## data-table
 
@@ -1083,6 +1084,7 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x9883` | current_area_id | high | investigation | The area in play, an id of AMINIT: scripts index AMINIT's arrays with it, MPINIT, ROINIT and UNINIT fill their arrays for it (MPINIT has a branch for each of AMINIT's 150 ids), and most SCJUMP rules test it. |
 | `0x1831e` | arena_place_id | med | investigation | Saved: the arena place in use; opponent_places has one bit a place. |
 | `0x18323` | current_opponent_id | high | investigation | Saved: the arena opponent in play, an ARINIT id. |
+| `0x3d467` | battle_result | high | investigation | Saved: how the last battle ended, 1 won and 2 lost. BTL clears it before each try and ANIMEDRAW sets it when the battle is decided; BTL runs RESULT on a win, offers a lost battle again, and plays G[0x3d46a + result - 1], the battle's scene for that result, when it has one. |
 | `0x3fb90` | adv_face_id | med | investigation | A page's face id before set_page_face (a row of CFINIT); other library subs pass a picture id in the same cell. |
 | `0x3fb91` | adv_voice_id | high | investigation | The page's voice clip: the page's voice block sets it, clears it when the speaker's voice setting mutes it, and plays it. |
 | `0x260700` | current_goal_id | high | investigation | The goal GETFATE makes current: the open kind-1 goal latest in the sort order. |
@@ -10282,7 +10284,6 @@ An area, by current_area_id (an id of AMINIT; the game's are 1 to 197 and its pe
 | `0x1db50` | — | med | auto-shape | record-table[stride 1000] |
 | `0x36da8` | — | med | auto-shape | record-table[stride 30] |
 | `0x39db4` | — | med | auto-shape | record-table[stride 30] |
-| `0x3fba3` | — | low | auto-shape | index/counter? |
 | `0x3fba7` | — | low | auto-shape | index/counter? |
 | `0x21480c` | — | low | auto-shape | index/counter? |
 | `0x22d5f9` | — | med | auto-shape | record-table[stride 100] |

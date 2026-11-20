@@ -78,17 +78,18 @@ internal sealed class MovieSurfaceRegistry
     }
 
     /// <summary>Whether a surface movie holds AGE's effect-service wait (op 0x21c, run-state 0x400), as
-    /// surface_movie_is_playing@0x405150 (SYS4433 0x404ec0) answers for each movie in ctx+0x52bd4: the movie's
-    /// flags word has bit 2 set and bit 0 clear. That word is the op's movie-flags operand from the play op until
-    /// the surface releases the movie, whether the start is still pending or DirectShow has reached its end, so
-    /// completion does not change the answer. No shipped script passes such flags (Kamidori passes 0, Himegari's
-    /// SC0000 2 and sets the anim clock to the movie's length itself), so their movies play on while the script
-    /// continues.</summary>
+    /// surface_movie_is_playing@0x405150 (SYS4433 0x404ec0, 4.38D 0x404eb0) answers for each movie object the tick
+    /// scans: the movie's flags word has bit 2 set and bit 0 clear. The answer lasts the object's lifetime, from the
+    /// play op, its start still pending, to the tick that sees the movie at its end: without the loop flag that tick
+    /// detaches the movie and frees the object (4.38D engine_main_tick@0x41223c), so a completed playback holds
+    /// nothing. Op 0x24d's mask movie has flags 6, so Arterial SC0000's transitions wait for their movie; the other
+    /// shipped movies pass 0 (Kamidori) or 2 (Himegari's SC0000, which sets the anim clock to the movie's length
+    /// itself) and play on while the script continues.</summary>
     public bool HoldsServiceWait
     {
         get
         {
-            return _bySurface.Values.Any(binding => (binding.MovieFlags & 5) == 4);
+            return _bySurface.Values.Any(binding => (binding.MovieFlags & 5) == 4 && !_completed.Contains(binding.PlaybackId));
         }
     }
 

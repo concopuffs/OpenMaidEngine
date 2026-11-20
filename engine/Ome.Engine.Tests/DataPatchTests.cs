@@ -42,14 +42,16 @@ public sealed partial class DataPatchTests : IDisposable
     /// mods' <c>[lua] calls</c> name. The base mod's own copy of the patch points is used, and binds nothing here.</summary>
     private ModLinkBase LinkBase(string profile)
     {
-        string abi = profile == "himegari" ? "SYS4422" : "SYS4433";
+        string abi = profile switch { "himegari" => "SYS4422", "arterial" => "SYS4438", _ => "SYS4433" };
         OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, abi);
-        byte[] addItem = ScriptAssembler.AssembleBytes(new List<(int, Operand[])> { (0x5, []) }, [], abi);
+        // The scripts the base mods' Lua calls ([lua] calls), each a bare ret.
+        byte[] helper = ScriptAssembler.AssembleBytes(new List<(int, Operand[])> { (0x5, []) }, [], abi);
+        string[] helpers = ["ADDITEM.BIN", "ADDCARD.BIN"];
         return new ModLinkBase
         {
             Profile = profile,
             CatalogFingerprint = "sha256:" + new string('1', 64),
-            ReadScript = name => name.Equals("ADDITEM.BIN", StringComparison.OrdinalIgnoreCase) ? addItem : null,
+            ReadScript = name => helpers.Contains(name, StringComparer.OrdinalIgnoreCase) ? helper : null,
             Table = table,
             Contracts = Contracts,
             Intrinsics = new IntrinsicCatalog(table, Contracts),

@@ -107,8 +107,9 @@ public class MoviesNativeTests
         Assert.False(rig.Movies.IsSurfaceActive(9));
         Assert.Equal([1L], rig.Movies.CompletedPlaybackIds());
         Assert.Equal(2, rig.Wakes);   // the frame service hands the completion over, and the completion wakes the waits
-        // A completed movie stays bound, and still holds the effect wait until its surface is released.
-        Assert.True(rig.Movies.HoldsServiceWait);
+        // A completed movie stays bound until its surface is released, and holds the effect wait no more: native's tick
+        // frees a movie object at its end (Arterial SC0000's mask transitions wait for exactly their movie).
+        Assert.False(rig.Movies.HoldsServiceWait);
         Assert.False(decoder.Disposed);
     }
 
@@ -275,6 +276,8 @@ public class MoviesNativeTests
         Assert.False(rig.Graphics.State.SnapshotMovieMaskTransitions().Single().Completed);
         Assert.True(rig.Graphics.State.TryGetMovieStopTime(45, out long? stopTime));
         Assert.Equal(1000, stopTime);
+        // The mask movie's flags are 6, which hold op 0x21c's wait while it plays (Arterial SC0000@0x2b21 waits so).
+        Assert.True(rig.Movies.HoldsServiceWait);
 
         decoder.Frame = Frame();
         rig.ServiceFrame();
@@ -283,6 +286,7 @@ public class MoviesNativeTests
 
         Assert.True(rig.Graphics.State.SnapshotMovieMaskTransitions().Single().Completed);
         Assert.False(rig.Movies.IsSurfaceActive(45));
+        Assert.False(rig.Movies.HoldsServiceWait);   // and the movie's end lets it go
         // The waits wake for the first mask, the decoded frame's, the terminal one and the completion, and the frame
         // service wakes the engine thread to publish the frame and the completion it took.
         Assert.Equal(6, rig.Wakes);

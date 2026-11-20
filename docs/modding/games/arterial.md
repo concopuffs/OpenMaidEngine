@@ -3,9 +3,9 @@
 Arterial-specific facts for the generic guides. The identity block (game id, engine ABI, modules, tables,
 patch points) is generated in [README.md](README.md#soukoku-no-arterial).
 
-Script mods and text packages work for this game, and its data tables are decoded and named (modding level M2).
-It has no base mod yet, so Lua mods and data files are not available: the generated page says which level it is
-at.
+Script mods, text packages, Lua mods and data files work for this game (modding level M3). Its base mod,
+`arterial-base`, names its cells for Lua, declares its events and applies its data files; the generated page says
+which level it is at.
 
 ## Install and options
 
@@ -92,11 +92,22 @@ matches nothing. A translation leaves them out or keeps them as it likes.
 A language package with three translated lines of the opening scene was checked and run in the port
 (2026-11-20, `--mod … --language en`); nothing larger has been tried on this game.
 
-## Data edits and patch points
+## Data edits
 
-The game has no base mod (modding level M3), so there are no data files, no events and no named patch points.
-A fragment can still patch any instruction by its offset, and it can read and write the tables the registry
-declares (the generated page lists them with their fields):
+A data file ([../data-files.md](../data-files.md)) changes the game's record tables with no Lua and no script.
+`arterial-base` accepts the kind `arterial.tables`. It applies each file's boot tables at
+`arterial.data.layered`, after every layer has written them and before INIT2's own work reads them, and an area's
+part each time the area's loaders have run, at `arterial.area.loaded`. This one renames the name plate 龍司
+(character 12) shows in the opening scene; the comment gives the game's own value:
+
+```toml
+# data/characters.toml; the manifest names it with [[data]] kind = "arterial.tables", file = "characters.toml"
+[character.12]
+name.descriptor_2 = "[MOD] 傷だらけの男"   # 無数の傷を持つ男
+```
+
+A fragment can read and write the same tables (`use arterial.globals`). The tables, by what they hold (the
+generated page lists them with their fields):
 
 | Kind | Tables |
 |---|---|
@@ -113,6 +124,28 @@ use arterial.globals
 card[31].cost = 0x1
 battle_rule[1].turn_limit = 0x14
 ```
+
+- **Tables and fields** are those of `../../global-reference-arterial.md`, "Tables", by the names in its `field`
+  column. A field with a row takes its columns by the names the reference gives (`name.descriptor_2`: a
+  character's names are a row of six, `name` and five descriptors, and a line shows the one its form names), and
+  by number only where a column has no name.
+- **Saved fields are refused:** `card.experience`, `card.obtained`, `card.owned_count`, `item.obtained`,
+  `item.owned_count`, `goal.state`, `opponent.state`, `scene.played`, `scene.seen` and the `party_member` fields
+  `experience`, `flags`, `level`, `picture_set`, `skill_lines` and `ultimate_level`. They lie below the saved
+  prefix, so a load would bring the saved value back over the edit. Change them from Lua, or with the helpers
+  below.
+- **The shape.** `arterial-base` ships the kind's shape, `shapes/tables.schema.json`
+  ([../data-files.md](../data-files.md), "Shapes"), so the link, `omp check` and `omp build` refuse a table, field
+  or column the reference does not name, a saved field, an id or a column out of range and a value of the wrong
+  kind, with the file's line. `omp lua-stubs --game arterial` writes a copy and prints the `#:schema` line for an
+  editor.
+- **An area's tables** are `area_point`, `area_route` and `area_unit`, which a file names through the area:
+  `area.1.unit.2.deck` is area 1's unit 2's deck (area ids 1 to 299, of which `AMINIT` has 150). The area's
+  loaders (`MPINIT`, `ROINIT`, `UNINIT`, the base's and each append's) clear and fill them each time the game sets
+  the area up: when the party enters it, after a battle whose next scene is played on a map, and when a save
+  made on a map is loaded. The part is applied each of those times, after the loaders. SETMAPDATA gives
+  `area_unit[1]`, the player's unit, the pictures of the map agent or the leader before the part is applied, so a
+  file that sets them wins.
 
 - A card's id is `row * 30 + slot`: 200 rows of 30 slots, and a deck names a card by its row and its slot
   (`deck[<id>].card_row`, `deck[<id>].card_slot`).
@@ -138,8 +171,51 @@ battle_rule[1].turn_limit = 0x14
   brings (given once), the 奥義 level a level brings (`level_ultimate_level`: the saved level is raised to it
   and never lowered), and a map unit's deck.
 - A fragment's write to a table is not saved, and it lasts until the game builds the tables again, at its next
-  start at the latest. No table edit was run in the game, on either target, and no way to make a lasting one
-  was tried.
+  start at the latest. A data file's edit is made again at each boot and each load, while its mod is enabled.
+- **Run in the game:** the example's boot edit, in the port
+  (`tools/drive/scenarios/port/arterial-character-name.steps`). No area part has been applied in a run, and no
+  edit was run on native AGE (data files are port-only).
+
+## Patch points and events
+
+The named points (`../../patch-point-reference-arterial.md` gives each one's description and fingerprint) sit
+after the chains the appends hook, so a fragment or a Lua hook there sees every layer's work:
+
+| Point | Script | Where |
+|---|---|---|
+| `arterial.boot.data_layered` | `INIT2.BIN` | after every layer's data tables (op `0x143` runs the appends') |
+| `arterial.boot.data_ready` | `INIT2.BIN` | INIT2's exit, after its own work on the tables |
+| `arterial.area.after_loaders` | `SETMAPDATA.BIN` | after the area's loaders, each layer's `MPINIT`, `ROINIT` and `UNINIT` |
+| `arterial.area.after_ready_handlers` | `READYEND.BIN` | after every layer's `READY`, more than once in an area |
+| `arterial.battle.before_phases` | `BTL.BIN` | the call that plays a battle out, at each try |
+| `arterial.battle.after_phases` | `BTL.BIN` | the battle decided, nothing of its outcome applied |
+| `arterial.experience.after_calculation` | `RESULT.BIN` | one party character's award from a won battle, before it is applied |
+
+The award's amount is the third operand of the add that applies it, a pointer into RESULT's own array, so a
+fragment reaches it through a local pointer; a Lua subscriber of `arterial.experience.award` reads and writes it
+as `e.amount`.
+
+`arterial-base` declares seven game events ([../lua.md](../lua.md), "Game events"):
+
+| Event | Fields |
+|---|---|
+| `arterial.data.layered`, `arterial.data.ready` | none |
+| `arterial.area.loaded`, `arterial.area.ready` | `area` (`current_area_id`) |
+| `arterial.battle.start` | `battle` (`battle_id`), `rule` (`battle_rule_id`), `opponent` (`current_opponent_id`, 0 outside the arena) |
+| `arterial.battle.close` | `battle`, `result` (`battle_result`: 1 won, 2 lost), `opponent` |
+| `arterial.experience.award` | `amount` (rw), `character` (`character_arg_id`), `level` (`party_member_levels[character_arg_id]`) |
+
+Its helpers change the game through its own scripts: `give_item(item, count)` runs `ADDITEM` and
+`give_card(card, count)` runs `ADDCARD` (a card's id is `row * 30 + slot`). Each keeps a count from 0 to 99, pays
+what passes 99 out as money at the selling price, marks the item or the card obtained and records it in the
+shared collection, as the game's own gifts do, and puts back the cells it used. Each returns the new count.
+
+The boot events, the helpers and the data file's boot edit were run (`ModLuaLinkTests`, the scenario above). The
+area, battle and experience events bind on the install, and no run has reached a map or a battle yet.
+
+Other chains the appends hook have no event: `OPEN` (an area's opening, after the map is shown), `SCJUMP`'s
+chain (the scene dispatch), `BGINIT` (the scenes' pictures), `TUMES`, the item actions, and the 奥義 and the
+talents in battle (`docs/arterial-data-tables.md`, "How the data gets into memory").
 
 ## Catalogs, scenes and saves
 
@@ -153,3 +229,4 @@ battle_rule[1].turn_limit = 0x14
 | Path | What it shows |
 |---|---|
 | `oms/examples/mods/example.arterial-prologue-line` | a line inserted before the opening scene's first page |
+| `oms/examples/mods/example.arterial-character-name` | a data file that renames 龍司's name plate at `arterial.data.layered`; `tools/drive/scenarios/port/arterial-character-name.steps` plays a new game to his first line with it |
