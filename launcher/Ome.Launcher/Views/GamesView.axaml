@@ -36,8 +36,9 @@
                 <TextBlock Classes="muted" Text="{Binding S[games.no-installs]}" IsVisible="{Binding !HasInstalls}" />
                 <TextBlock Classes="heading" Margin="0,6,0,0" Text="{Binding S[games.art]}" />
                 <TextBlock TextWrapping="Wrap" Text="{Binding ArtText}" />
-                <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding DownloadText}" />
-                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                <TextBlock Classes="help" TextWrapping="Wrap" Text="{Binding DownloadText}"
+                           IsVisible="{Binding OffersArt}" />
+                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0" IsVisible="{Binding OffersArt}">
                   <Button Content="{Binding S[games.download]}" Command="{Binding Download}" />
                   <Button Content="{Binding S[games.remove]}" Command="{Binding Remove}" />
                 </StackPanel>

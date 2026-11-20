@@ -558,11 +558,13 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     after that edit; `--check` does not exist for it.
 
   Done when each is fixed or dropped with a reason, and `adding-a-game.md` describes no workaround.
-- **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P2**
-  since 2026-11-19 (`adding-a-game.md` §1; its manifest's `support`), on the branch `feature/arterial`: the engine
-  names its install, decodes all of it, and boots it by its own route through the logo and the title to SC0000's
-  first pages, with no opcode skipped. It saves since 2026-11-19, and its saves load on native AGE as native's
-  load on the port. The launcher does not list it.
+- **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P3**
+  since 2026-11-20 by the user's word (`adding-a-game.md` §1; its manifest's `support`), on the branch
+  `feature/arterial`: the engine names its install, decodes all of it, has a handler for every opcode its scripts
+  use, and boots it by its own route through the logo and the title to SC0000's first pages. Its saves load on
+  native AGE as native's load on the port. The launcher lists it, without art: the art entry and the game's guide
+  come with step 10. Its modding level is none. It has not been driven past SC0000's first pages on either
+  target: that is the sweep's (P4).
   - **Done for P0 and P1.** Its dump, its Ghidra image with 658 ported or registry names, its build in
     `operand_access.py` `ENGINES` with a fifteenth accessor, the revision diffs (`engine-re.md`, "Comparing engine
     builds"), its profile and engine build (4.33G with its own names and nothing else changed), its observation and
@@ -692,11 +694,12 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
   - **The title's 3D scene keeps its state and draws nothing (the user's decision, 2026-11-19).** Ops `0x324` to
     `0x32f`: the handlers keep what the scripts set (`Graphics.Scene3D.cs`). What that leaves undrawn is its own
     item, "The title's 3D leaves are not drawn", under Engine fidelity.
-  - **Next, by the plan:** step 7 is done: the opcodes, the build's rules, the saves, the shell (4.38D's
-    ｵｰﾄﾒｯｾｰｼﾞ page; `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position
-    (`engine-re.md`, "The kept window position"). Whether the manifest's `support` entry says P3 is the user's to
-    decide: it makes the launcher list the game and drops the run's warning. After P3 come the sweep (P4) and the
-    modding track.
+  - **Next, by the user's word (2026-11-20): the script level, M1** (step 10's first part): `oms-rebuild --game
+    arterial` over every script, the ADV module `oms/arterial/adv.oms`, the patch points, a text catalog export and
+    one language package, the guide `modding/games/arterial.md`, and the launcher's art entry. Step 7 is done: the
+    opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page; `engine-re.md`, "4.38D's menu bar
+    and 設定 dialog") and the kept window position (`engine-re.md`, "The kept window position"). The data tables
+    (M2), the base mod (M3) and the sweep (P4) follow.
 
   Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`

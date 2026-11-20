@@ -66,11 +66,17 @@ public sealed class LinksTests : IDisposable
         GameProfileManifest kamidori = GameProfileRegistry.BuiltIn.Find("kamidori")!;
         var art = new GameLauncherArt("https://art.test/", new GameArtSource("https://art.test/banner.png", Sha(banner)),
                                       new GameArtSource("https://art.test/cover.png", Sha(cover)));
+        // And a game still being added (below P3), which no built-in game is any more.
+        var adding = new GameProfileManifest(
+            "adding", "追加中のゲーム", [new GameCatalogIdentity("S4IC498", "追加中のゲーム")], kamidori.ScriptRevisions,
+            kamidori.SysFrontendId, kamidori.EngineBuildId, kamidori.EngineAbiId, kamidori.NaturalBootScript,
+            kamidori.MetadataReferences, kamidori.Persistence,
+            support: new GameSupport(PlayLevel.Boots, ModdingLevel.None));
         return new GameProfileRegistry(GameProfileRegistry.BuiltIn.Profiles.Where(game => game.Id != "kamidori").Append(
             new GameProfileManifest(kamidori.Id, kamidori.DisplayTitle, kamidori.CatalogIdentities, kamidori.ScriptRevisions,
                                     kamidori.SysFrontendId, kamidori.EngineBuildId, kamidori.EngineAbiId,
                                     kamidori.NaturalBootScript, kamidori.MetadataReferences, kamidori.Persistence,
-                                    kamidori.DirectSceneDiagnostics, kamidori.DebugSceneLaunch, art)));
+                                    kamidori.DirectSceneDiagnostics, kamidori.DebugSceneLaunch, art)).Append(adding));
     }
 
     [Fact]
@@ -80,14 +86,15 @@ public sealed class LinksTests : IDisposable
         Settings(settings => settings with { Art = ArtConsent.Never });
         byte[] banner = Png(40, 8), cover = Png(32, 45);
         var served = new Served { ["/banner.png"] = banner, ["/cover.png"] = cover };
-        (MainViewModel model, RecordingHost host) = await Open(new ArtOptions(Registry(banner, cover), served));
+        GameProfileRegistry registry = Registry(banner, cover);
+        (MainViewModel model, RecordingHost host) = await Open(new ArtOptions(registry, served));
 
         model.Games.Execute(null);
         GamesViewModel games = Assert.IsType<GamesViewModel>(model.Dialog);
         // The page lists the games a player can play: one still being added (below P3) is left out.
-        Assert.Equal(GameProfileRegistry.BuiltIn.Profiles.Where(game => game.Support.IsPlayable).Select(game => game.Id),
+        Assert.Equal(registry.Profiles.Where(game => game.Support.IsPlayable).Select(game => game.Id),
                      games.Games.Select(game => game.Id));
-        Assert.Contains(GameProfileRegistry.BuiltIn.Profiles, game => !game.Support.IsPlayable);
+        Assert.Equal(["adding"], registry.Profiles.Where(game => !game.Support.IsPlayable).Select(game => game.Id));
         GameEntryViewModel kamidori = games.Games.Single(game => game.Id == "kamidori");
         GameEntryViewModel himegari = games.Games.Single(game => game.Id == "himegari");
 
@@ -105,6 +112,13 @@ public sealed class LinksTests : IDisposable
         Assert.Equal("Banner: not downloaded · Cover: not downloaded", kamidori.ArtText);
         Assert.True(kamidori.Download.CanExecute(null));
         Assert.False(kamidori.Remove.CanExecute(null));
+        // A game whose profile has no art entry says so, and offers no download.
+        GameEntryViewModel arterial = games.Games.Single(game => game.Id == "arterial");
+        Assert.True(kamidori.OffersArt);
+        Assert.False(arterial.OffersArt);
+        Assert.Equal("Banner: none offered · Cover: none offered", arterial.ArtText);
+        Assert.False(arterial.Download.CanExecute(null));
+        Assert.False(arterial.HasSite);
         await kamidori.DownloadAsync();
         Assert.Equal(2, served.Requests);
         Assert.Equal("The art is downloaded.", kamidori.Status);

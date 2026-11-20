@@ -56,6 +56,10 @@ public sealed class GameEntryViewModel : ViewModel
         : Missing(kind) ? "games.art-missing" : "games.art-own",
         S[kind == ArtKind.Banner ? "games.banner" : "games.cover"])));
 
+    /// <summary>Whether the game's profile names art to download. A game without an art entry says that none is
+    /// offered, and shows neither the download's host line nor its buttons.</summary>
+    public bool OffersArt => Kinds.Any(Offered);
+
     /// <summary>The host a download contacts, named before the player asks for one (spec §8.7).</summary>
     public string HostsText => string.Join(", ", Kinds.Select(kind => _main.Art.Source(Id, kind)?.Url.Host)
                                                      .OfType<string>().Distinct(StringComparer.OrdinalIgnoreCase));

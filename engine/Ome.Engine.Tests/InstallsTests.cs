@@ -65,11 +65,18 @@ public sealed class InstallsTests : IDisposable
         Assert.Null(found.Game);
         Assert.Empty(found.Titles);
 
-        // A game the engine is still being taught has a profile, and is not offered either.
-        GameProfileManifest adding = GameProfileRegistry.BuiltIn.Profiles.First(game => !game.Support.IsPlayable);
+        // A game the engine is still being taught has a profile, and is not offered either. Every built-in game is
+        // past that, so the profile is a made one, below P3.
+        GameProfileManifest template = GameProfileRegistry.BuiltIn.Find("kamidori")!;
+        var adding = new GameProfileManifest(
+            "adding", "追加中のゲーム", [new GameCatalogIdentity("S4IC498", "追加中のゲーム")], template.ScriptRevisions,
+            template.SysFrontendId, template.EngineBuildId, template.EngineAbiId, template.NaturalBootScript,
+            template.MetadataReferences, template.Persistence,
+            support: new GameSupport(PlayLevel.Boots, ModdingLevel.None));
+        var registry = new GameProfileRegistry(GameProfileRegistry.BuiltIn.Profiles.Append(adding));
         string beingAdded = Install("being-added", adding.CatalogIdentities[0].CatalogRevision.PadRight(8),
                                     adding.CatalogIdentities[0].Title, ["SC0000.BIN"]);
-        InstallRecognition early = Installs.Recognize(beingAdded, GameProfileRegistry.BuiltIn, NoRegistry);
+        InstallRecognition early = Installs.Recognize(beingAdded, registry, NoRegistry);
         Assert.Equal((InstallKind.Unsupported, null), (early.Kind, early.Game));
         Assert.Contains("still being added", early.Problem);
         Assert.Contains("does not support", early.Problem);
