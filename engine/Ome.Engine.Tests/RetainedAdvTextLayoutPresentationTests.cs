@@ -200,7 +200,7 @@ public class RetainedAdvTextLayoutPresentationTests
         var gfx = new GfxState();
         gfx.CreateSurface(21);
 
-        presentation.PublishThrough(gfx, 3, primaryCellGrowth: 1);
+        presentation.PublishThrough(gfx, 3, new GlyphPublication(1));
 
         Assert.Equal([7, 7, 4], Heights(gfx));
         // The cell's place does not move.
@@ -213,7 +213,7 @@ public class RetainedAdvTextLayoutPresentationTests
         RetainedAdvTextLayoutPresentation presentation = WithOneRubyGlyph();
         var gfx = new GfxState();
         gfx.CreateSurface(21);
-        presentation.PublishThrough(gfx, 2, primaryCellGrowth: 1);
+        presentation.PublishThrough(gfx, 2, new GlyphPublication(1));
         presentation.PublishThrough(gfx, 3);                      // the effect was turned off before the ruby glyph
 
         gfx.EraseRange(100, 8);
@@ -229,12 +229,12 @@ public class RetainedAdvTextLayoutPresentationTests
         RetainedAdvTextLayoutPresentation presentation = WithOneRubyGlyph();
         var gfx = new GfxState();
         gfx.CreateSurface(21);
-        presentation.PublishThrough(gfx, 3, primaryCellGrowth: 1);
+        presentation.PublishThrough(gfx, 3, new GlyphPublication(1));
 
-        presentation.Republish(gfx, layoutCellGrowth: 2);
+        presentation.Republish(gfx, new GlyphPublication(2));
         Assert.Equal([8, 8, 6], Heights(gfx));
 
-        presentation.Republish(gfx, layoutCellGrowth: 0);         // no effect mode: the cells as recorded
+        presentation.Republish(gfx, new GlyphPublication(0));     // no effect mode: the cells as recorded
         Assert.Equal([6, 6, 4], Heights(gfx));
     }
 
@@ -255,10 +255,51 @@ public class RetainedAdvTextLayoutPresentationTests
         var gfx = new GfxState();
         gfx.CreateSurface(21);
 
-        presentation.PublishThrough(gfx, 1, primaryCellGrowth: 1);
+        presentation.PublishThrough(gfx, 1, new GlyphPublication(1, 1, 1));
 
-        Assert.Equal([1, 0], presentation.PublishedSourceGlyphs().Select(glyph => glyph.CellGrowth));
+        Assert.Equal([(1, 1), (0, 0)],
+                     presentation.PublishedSourceGlyphs().Select(glyph => (glyph.CellGrowth, glyph.ObjectShiftX)));
     }
+
+    [Fact]
+    public void ThePublishersMoveEveryGlyphButARubyOneBackByTheirMove()
+    {
+        // In effect mode 3 with glyphs not antialiased, 4.33G's and 4.38D's publishers move an object that is not ruby
+        // left and up by the effect offsets (TextRules.PublisherMovesAliasedEffectGlyphs); the layout publisher moves
+        // every record's object.
+        RetainedAdvTextLayoutPresentation presentation = WithOneRubyGlyph();
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+
+        presentation.PublishThrough(gfx, 3, new GlyphPublication(1, 1, 2));
+        Assert.Equal([(30, 48.0), (34, 48.0), (31, 44.0)], Places(gfx));
+
+        presentation.Republish(gfx, new GlyphPublication(2, 1, 2));
+        Assert.Equal([(30, 48.0), (34, 48.0), (30, 42.0)], Places(gfx));
+
+        gfx.EraseRange(100, 8);
+        presentation.Republish(gfx);                              // a layout coming back keeps the move
+        Assert.Equal([(30, 48.0), (34, 48.0), (30, 42.0)], Places(gfx));
+    }
+
+    [Fact]
+    public void TheRedrawPublishesEveryGlyphButARubyOneAgain()
+    {
+        // Op 0x82's redraw on 4.33G and 4.38D binds each record that is not ruby as the layout publisher does, and a
+        // ruby record as it is, whatever the record at the reveal index is.
+        RetainedAdvTextLayoutPresentation presentation = WithOneRubyGlyph();
+        var gfx = new GfxState();
+        gfx.CreateSurface(21);
+        presentation.PublishThrough(gfx, 3);
+
+        presentation.RepublishEach(gfx, new GlyphPublication(2, 1, 2));
+
+        Assert.Equal([8, 8, 4], Heights(gfx));
+        Assert.Equal([(30, 48.0), (34, 48.0), (31, 44.0)], Places(gfx));
+    }
+
+    private static (double X, double Y)[] Places(GfxState gfx)
+        => gfx.SnapshotVisibleObjects().Select(item => (item.DstX, item.DstY)).ToArray();
 
     private static RetainedAdvTextLayoutPresentation Presentation(int capacity)
     {

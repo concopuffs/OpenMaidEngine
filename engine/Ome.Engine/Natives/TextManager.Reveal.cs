@@ -153,24 +153,50 @@ public sealed partial class TextManager
         if (!IsRevealing)
         {
             _scene.Reveal = null;
-            presentation.PublishThrough(gfx, checked(result.FirstGlyphIndex + revealGlyphCount), TimedPublishCellGrowth);
+            presentation.PublishThrough(gfx, checked(result.FirstGlyphIndex + revealGlyphCount), TimedPublication);
             _graphics.RequestPresentation();
             _timeline?.State("running", new() { ["text_reveal_complete"] = true });
         }
         return result;
     }
 
-    /// <summary>What adv_text_publish_next_glyph adds under the cell of a glyph that is not ruby, from the style the
-    /// text manager holds when it publishes: the effect's vertical offset while an effect mode is on (4.33G, 4.38D).
-    /// </summary>
-    private int TimedPublishCellGrowth
-        => _publisherGrowsGlyphCells && Style.RenderMode > 0 ? Style.EffectOffsetY : 0;
+    /// <summary>What adv_text_publish_next_glyph does to a glyph that is not ruby, from the style the text manager
+    /// holds when it publishes: it adds the effect's vertical offset under the cell while an effect mode is on, and in
+    /// mode 3 with glyphs not antialiased it moves the object left and up by the offsets (4.33G, 4.38D).</summary>
+    private GlyphPublication TimedPublication
+        => new(_publisherGrowsGlyphCells && Style.RenderMode > 0 ? Style.EffectOffsetY : 0,
+               AliasedEffectShift.X, AliasedEffectShift.Y);
 
-    /// <summary>What adv_text_publish_layout (op 0x20a) adds under every cell: the same offset, and once more in
-    /// effect mode 3; null on a build whose publisher binds the cells as they are.</summary>
-    private int? LayoutPublishCellGrowth
+    /// <summary>What adv_text_publish_layout (op 0x20a) does to every glyph, and op 0x82's redraw to each that is not
+    /// ruby: the same offset under the cell, once more in effect mode 3, and the same move; null on a build whose
+    /// publishers bind the cells as they are.</summary>
+    private GlyphPublication? LayoutPublication
         => !_publisherGrowsGlyphCells ? null
-            : Style.RenderMode > 0 ? Style.EffectOffsetY * (Style.RenderMode == 3 ? 2 : 1) : 0;
+            : new GlyphPublication(
+                Style.RenderMode > 0 ? Style.EffectOffsetY * (Style.RenderMode == 3 ? 2 : 1) : 0,
+                AliasedEffectShift.X, AliasedEffectShift.Y);
+
+    /// <summary>What text_history_render_records (op 0x1d1; 4.33G @0x456490, 4.38D @0x461ea0) does to each History
+    /// row that is not ruby: it binds the row's top plus the primary size, plus the effect's vertical offset in an effect
+    /// mode and again in mode 3, which is one offset more than the port's cell in mode 3, and makes the move. 4.24J's
+    /// renderer binds the cells as they are.</summary>
+    private GlyphPublication HistoryPublication(AdvTextStyle style)
+    {
+        (int shiftX, int shiftY) = AliasedEffectShiftOf(style);
+        return new GlyphPublication(_publisherGrowsGlyphCells && style.RenderMode == 3 ? style.EffectOffsetY : 0,
+                                    shiftX, shiftY);
+    }
+
+    private (int X, int Y) AliasedEffectShift => AliasedEffectShiftOf(Style);
+
+    // The publishers of 4.33G and 4.38D move the object by the effect offsets, over the text scale (1 in the port), in
+    // effect mode 3 while message:UseAntiFont (their text manager's +0x548) is 0: the drawer then starts the string at
+    // the offsets (text_draw_string_primary_or_ruby), and the move takes the glyph back to its place. So do History's
+    // renderer and op 0x82's redraw, each as it binds a record that is not ruby.
+    private (int X, int Y) AliasedEffectShiftOf(AdvTextStyle style)
+        => _publisherMovesAliasedEffectGlyphs && style.RenderMode == 3 && !_textAntialias
+            ? (style.EffectOffsetX, style.EffectOffsetY)
+            : (0, 0);
 
     /// <summary>
     /// One engine tick of the reveal (adv_text_reveal_service_tick@0x406fa0, draw mode 1): poll the glyph timer and
@@ -190,7 +216,7 @@ public sealed partial class TextManager
         int before = presentation.PublishedGlyphCount;
         presentation.PublishThrough(
             gfx, presentation.PublicationTarget(reveal.FirstGlyphIndex, reveal.GlyphCount, reveal.Ticks),
-            TimedPublishCellGrowth);
+            TimedPublication);
         if (presentation.PublishedGlyphCount != before)
             _graphics.RequestPresentation();
         if (!IsRevealing)

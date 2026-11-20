@@ -729,7 +729,7 @@ Its field layout comes from `text_history_append_text_record@0x456000`:
 | 6 | effect color, BGR (`+0x550`) | same | type / voice argument |
 | 7 | text manager `+0x554` (unidentified; always `0` observed) | same | `0` |
 | 8 | render mode (`+0x558`) | same | `0` |
-| 9 | primary pixel height (`-LOGFONT.lfHeight`) | `0` | `0` |
+| 9 | primary pixel height (`-LOGFONT.lfHeight`) | `0` | never written (below) |
 | 10 | flags | `8` | `0x20000000` / `0x40000000` |
 
 Flag `1` marks a group start (a pending `0x70`/`0x71` boundary), flag `2` is navigation-filtered, and flag
@@ -747,9 +747,14 @@ file exactly.
 
 AGE 4.38D's tail has the same layout (a native save of 創刻のアテリアル read on 2026-11-19). There, DWORD 9 of a
 metadata or voice record holds a value nothing set: `0x765a0a48` in every metadata record of that save and
-`0x0049c753`, an address in the engine's code, in every voice record. The port writes 0. Native loads the port's
-save and shows the page and its History, so it does not depend on the field for those records; whether it reads
-it at all for them was not read. `save-diff` does not compare the tail.
+`0x0049c753`, an address in the engine's code, in every voice record. The appenders never write it, in any of the
+three builds (read 2026-11-20): `text_history_append_typed_metadata` (op `0x1d2`; 4.24J `0x455f00`, 4.33G
+`0x4552d0`, 4.38D `0x45a420`) and `text_history_append_voice_pair` (op `0x1bd`; `0x455e00`, `0x4551e0`,
+`0x45a330`) build the record in a local array, set every DWORD but the tenth, and push it, so it keeps whatever
+the stack held. Nothing reads it for these records: History's renderer skips a metadata record and plays a voice
+record's DWORDs 5 and 6, and ops `0x1d3` and `0x1d4` read DWORDs 5, 6 and 10. The port writes 0, which is as good as
+any value the stack could leave. Native loads the port's save and shows the page and its History.
+`save-diff` does not compare the tail.
 
 ### Numbered `SAVE%02d.STH` thumbnail — CONFIRMED
 

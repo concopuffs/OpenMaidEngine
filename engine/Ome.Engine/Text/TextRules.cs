@@ -28,9 +28,16 @@ namespace Ome.Engine.Text;
 /// <param name="PublisherGrowsGlyphCells">Whether the glyph publisher makes a glyph object's source rectangle taller
 /// than the glyph's record when a text effect is on, by the effect's vertical offset as the text manager holds it at
 /// that moment. 4.33G's and 4.38D's publishers do (adv_text_publish_next_glyph@0x4509f0 and @0x4541b0 once for a
-/// record that is not ruby; adv_text_publish_layout@0x4503b0 and @0x453990 once, and once more in effect mode 3).
-/// 4.24J's (@0x451220, @0x450c80) bind the record's rectangle as it is (docs/engine-re.md, "The glyph publisher
-/// grows a cell").</param>
+/// record that is not ruby; adv_text_publish_layout@0x4503b0 and @0x453990 once, and once more in effect mode 3; op
+/// 0x82's redraw as the layout publisher, to each record that is not ruby; History's renderer once more than the record
+/// in effect mode 3). 4.24J's (@0x451220, @0x450c80) bind the record's rectangle as it is (docs/engine-re.md, "The
+/// glyph publisher grows a cell").</param>
+/// <param name="PublisherMovesAliasedEffectGlyphs">Whether the glyph publishers move a glyph object that is not ruby
+/// left and up by the effect offsets in effect mode 3 while glyphs are not antialiased (<c>message:UseAntiFont</c> 0,
+/// the text manager's +0x548 in these builds). 4.33G's and 4.38D's do, all four: the timed and layout publishers, op
+/// 0x82's redraw and History's renderer; 4.24J's do not, so its text drawn with AntiFont off lands one pixel right and
+/// down (docs/engine-re.md, "AntiFont off in 4.33G and 4.38D").</param>
 public sealed record TextRules(GlyphCoverageAlpha GlyphCoverage, RubyRule Ruby, bool FuriganaArmsGlyphTimer,
                                bool HistoryLookupTestsSign, LineEndRule LineEnd, string? ExtendedGlyphFace,
-                               AspectCalibration AspectCalibration, bool PublisherGrowsGlyphCells);
+                               AspectCalibration AspectCalibration, bool PublisherGrowsGlyphCells,
+                               bool PublisherMovesAliasedEffectGlyphs = false);

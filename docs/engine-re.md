@@ -369,7 +369,8 @@ second copy starts from them. 創刻のアテリアル's first page begins with 
 not joined, and the second is `0xF043` (`tools/frida/capture_gdi_fonts.py`).
 
 **A ruby's user-defined characters (read 2026-11-20).** `adv_text_draw_ruby_over_row@0x460760` draws each ruby
-character through `text_draw_string_primary_or_ruby@0x4525c0` (or `0x469aa0` while `+0x548` is set), and both reach
+character through `text_draw_string_primary_or_ruby@0x4525c0` (or `0x469aa0` while `+0x548`, `message:UseAntiFont`,
+is set), and both reach
 the two drawers. So a ruby character of the range is drawn with the extended font, which is still the primary font's
 (`+0x3963c`): at the primary font's height and weight, with the ruby font's ascent, which the ruby drawer read. A
 `0xF042` or `0xF043` in a ruby is joined as above. The strip is again the primary font size (`+0x313d4`) tall. The
@@ -719,13 +720,16 @@ and 4.38D (`@0x466000`) alike, and the History row in the save's tail has the re
 function that binds the object.
 
 4.33G's and 4.38D's publishers add to the rectangle they bind, from the style the text manager holds at that
-moment (effect mode `+0x55c`, offsets `+0x568` and `+0x56c`, and a field at `+0x548`, which in 4.24J's text
-manager is the AntiFont version and was not identified in these builds):
+moment (effect mode `+0x55c`, offsets `+0x568` and `+0x56c`, and `+0x548`, which is `message:UseAntiFont` in these
+builds, where 4.24J keeps it at `+0x544` and its `+0x548` is the AntiFont version; "AntiFont off in 4.33G and 4.38D"
+below):
 
 | function | 4.33G | 4.38D | what it adds |
 |---|---|---|---|
 | `adv_text_publish_next_glyph`, the timed reveal | `0x4509f0` | `0x4541b0` | for a record with chain flag 0, in an effect mode: `bottom += offset y`. In mode 3 with `+0x548` zero it also moves the object up and left by the offsets. For a chained record (a ruby character) in mode 3 it moves the cell and the object up by `offset y` unless `+0x355e8` is set. |
 | `adv_text_publish_layout`, op `0x20a` | `0x4503b0` | `0x453990` | the same, with two differences. In mode 3 it adds `offset y` to the bottom a second time. It tests the chain flag of the record at the reveal index, not of the record it binds, so it treats every record alike. It also binds the records up to the reveal index inclusive, one more than the timed publisher has shown. |
+| `text_redraw_retained_group`, op `0x82` | `0x4553c0` | `0x460cd0` | as the layout publisher, but it tests each record's own ruby bit (`+0x28` bit 2), so a ruby record is bound as it is. |
+| `text_history_render_records`, op `0x1d1` | `0x456490` | `0x461ea0` | one object per History row: for a row that is not ruby, `bottom = top + primary size`, then `offset y` in an effect mode and again in mode 3, and the move. Against the record's bottom, which has one `offset y` in an effect mode, that is one more row in mode 3. |
 
 With the aspect mode off (`+0x313d0 == 0`) both add the offsets to the right and the bottom once more for an
 unchained record; neither game runs that way. 4.24J's publishers (`0x451220`, `0x450c80`) bind the record's
@@ -744,9 +748,29 @@ cells, and a save of presented text gives its source glyphs the growth of the ru
   rows short. Native still has two objects the port lacks, one past each layout's last glyph: the layout
   publisher's inclusive bound (`backlog.md`, "Kamidori: History leaves different objects in a save").
 
-Not modelled: the object's move in mode 3 while `+0x548` is zero (`backlog.md`, the 創刻のアテリアル item), the
-chained record's move at publication (the port raises ruby in its layout,
-`RubyRule.RaiseByEffectInMode3`), the aspect-off branch, and the layout publisher's extra record.
+Not modelled: the chained record's move at publication (the port raises ruby in its layout,
+`RubyRule.RaiseByEffectInMode3`), the aspect-off branch, and the layout publisher's extra record. The object's move
+in mode 3 with `UseAntiFont` 0 is modelled (below).
+
+**AntiFont off in 4.33G and 4.38D (read 2026-11-20).** `+0x548` has two writers in each build,
+`text_set_use_anti_font` (`0x413de0`, `0x414d80`): the startup settings reader, which applies `message:UseAntiFont`
+only when `set:EnableAntiFont` is nonzero, as 4.24J does, and 設定's toggle, which writes the key first. On a change
+it rebuilds the fonts and empties both glyph caches, as 4.24J's `text_set_antialias_enabled` does. With it 0 the
+builders draw through `text_draw_string_primary_or_ruby`, which starts a mode 1–3 string at the effect offsets ("AntiFont
+off" below has 4.24J's), and all four binders in the table move the object of a record that is not ruby back by the
+offsets, each over the text scale (`+0x355e0`, `+0x355e4`, 1 in the port), in effect mode 3. Op `0x82`'s redraw draws
+a record outside mode 3 at its corner less the offsets, so the drawer's start puts it in place without a move. So
+4.33G's and 4.38D's aliased text sits where antialiased text does, where 4.24J's lands one pixel right and down.
+
+The port has the move as `TextRules.PublisherMovesAliasedEffectGlyphs`, and History's and the redraw's growth under
+`PublisherGrowsGlyphCells` (`RetainedAdvTextLayoutPresentation`, `GlyphPublication`, `RepublishEach`;
+`RetainedAdvTextLayoutPresentationTests`). `tools/drive/scenarios/arterial-antifont-off.steps` and
+`kamidori-antifont-off.steps` turn the setting off on a page, take the next two pages and History, and Kamidori's
+also has CONFIG's 初期設定 redraw the page through op `0x82`; both games run their ADV text in mode 3 with offsets
+(1, 1). Every shot equals native's apart from the wait indicator's phase (2026-11-20), and Kamidori's antialiased
+History (`kamidori-furigana.steps`) still does. Before the change, 創刻のアテリアル's two pages differed in 4,136 and
+5,998 pixels and its History in 11,982, each put right by a shift of (−1, −1). With the move but no growth, Kamidori's
+History lacked 22 outline pixels, one row under some glyphs.
 
 ### Polygon objects: winding, depth, texture size and the render targets (2026-11-20)
 
@@ -5142,7 +5166,8 @@ the configured outline color.
   every record at its rectangle into a cleared layout surface (`RetainedGlyphLayoutEngine.RenderRedraw`; ruby through
   `RubyTextLayout.DrawAt`).
 - Unless flag 4 is set, it binds the published glyphs again over the new pixels. Native binds one object per record,
-  which covers the same cells.
+  which covers the same cells. On 4.33G and 4.38D it grows and moves each that is not ruby as the layout publisher
+  does ("AntiFont off in 4.33G and 4.38D"; `RetainedAdvTextLayoutPresentation.RepublishEach`).
 - Flag 8's voice replay is not modelled (`docs/backlog.md`).
 - It is not a History presentation, which History's exit would erase.
 
@@ -9051,7 +9076,11 @@ unused leads; a unit led by `0x80` or `0xFD`-`0xFF`, which CP932 reads as two ch
 with nothing after it. That scalar encodes back to its bytes. A glyph
 request carries its code, so GDI draws the same glyph, and it takes the half cells of its bytes. Over the patched line
 the port's frame matched native's except in the animated wait cursor. Godot's portable rasterizer draws a raw unit
-blank, with a space's or an ideographic space's room. Python's `cp932` codec encodes a character with both a
+blank, with a space's or an ideographic space's room. It draws a character of the user-defined area that no face of
+its chain has the same way, with an ideographic space's room (2026-11-20). `ExtendedFaceGlyphRasterizer` asks the
+text's own face for such a character for its ascent and a ruby's cell, and the portable policy had stopped the VM on
+創刻のアテリアル's first page, whose dashes are `0xF041` and `0xF043` in メイリオ. The glyph comes from the build's
+extended face, the game's `AGE-EXTEND.TTF`, which the portable backend loads as a catalog font. Python's `cp932` codec encodes a character with both a
 NEC-selected IBM and an IBM code to the former, Windows' to the latter, so the twin in `tools/sys4load.py` follows
 Windows; `tools/test_sys4load.py` checks all 16,575 units against that rule.
 

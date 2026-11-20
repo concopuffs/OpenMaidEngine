@@ -208,11 +208,18 @@ public sealed class GodotTextServerGlyphMaskRasterizer :
         _ = font.GetCharSize(request.UnicodeScalar, request.PixelHeight);
         // A control character no face draws (a tab in a script's string) takes a space's room and draws nothing,
         // as the layout counts it. So does a script string's raw unit (Sys4TextEncoding), a code with no Unicode
-        // character: a single byte a space's room, two bytes an ideographic space's.
+        // character: a single byte a space's room, two bytes an ideographic space's. So does a character of Shift-JIS's
+        // user-defined area (0xF040 to 0xF9FC, U+E000 up) that no face of the chain has, as GDI draws the face's
+        // default glyph: ExtendedFaceGlyphRasterizer asks the text's own face for one only for its ascent and a ruby's
+        // cell, and draws the glyph from the build's extended face.
         bool raw = Ome.Engine.Sys4.Sys4TextEncoding.TryGetRawCode(request.UnicodeScalar, out int rawCode);
-        if (raw || request.UnicodeScalar is < 0x20 or 0x7f && !HasGlyph(font, request.UnicodeScalar))
+        bool userDefined = ExtendedFaceGlyphRasterizer.IsExtended(request.Cp932Code)
+                           && !HasGlyph(font, request.UnicodeScalar);
+        if (raw || userDefined || request.UnicodeScalar is < 0x20 or 0x7f && !HasGlyph(font, request.UnicodeScalar))
         {
-            (int scalar, ushort code) = raw && rawCode > 0xff ? ('\u3000', (ushort)0x8140) : (' ', (ushort)0x20);
+            (int scalar, ushort code) = raw && rawCode > 0xff || userDefined
+                ? ('\u3000', (ushort)0x8140)
+                : (' ', (ushort)0x20);
             (GlyphMask space, bool spaceDrawnRegular, OpenTypeFace? spaceFace) = RasterizeNatural(
                 new GlyphRasterRequest(request.FontFace, request.PixelHeight, request.RequestedWidth, request.Weight,
                                        scalar, code, request.Policy, request.Antialias),

@@ -116,7 +116,7 @@ public sealed partial class GfxState
                 bound.SourceSlot = layout.SurfaceSlot;
                 bound.SrcRect = (cell.Left, cell.Top, cell.Width, checked(cell.Height + placement.CellGrowth));
                 bound.SrcCollapsed = false;
-                bound.V24 = (placement.LayoutOriginX + cell.Left, placement.LayoutOriginY + cell.Top, 0);
+                bound.V24 = (placement.ObjectPosition.X, placement.ObjectPosition.Y, 0);
                 bound.Visible = true;
                 bound.PostBindStaticColorBlend = false;
                 objects[handle] = bound;

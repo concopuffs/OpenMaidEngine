@@ -34,6 +34,9 @@ public sealed class EngineBuildTests
         Assert.False(EngineBuilds.Age424J.Rules.Text.PublisherGrowsGlyphCells);
         Assert.True(EngineBuilds.Age433G.Rules.Text.PublisherGrowsGlyphCells);
         Assert.True(EngineBuilds.Age438D.Rules.Text.PublisherGrowsGlyphCells);
+        Assert.False(EngineBuilds.Age424J.Rules.Text.PublisherMovesAliasedEffectGlyphs);
+        Assert.True(EngineBuilds.Age433G.Rules.Text.PublisherMovesAliasedEffectGlyphs);
+        Assert.True(EngineBuilds.Age438D.Rules.Text.PublisherMovesAliasedEffectGlyphs);
     }
 
     [Fact]

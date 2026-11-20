@@ -62,6 +62,7 @@ public sealed partial class TextManager : ISurfaceListener
     private readonly RubyLayoutRules _rubyRules;
     private readonly AspectCalibration _aspectCalibration;
     private readonly bool _publisherGrowsGlyphCells;   // the build's TextRules.PublisherGrowsGlyphCells
+    private readonly bool _publisherMovesAliasedEffectGlyphs;   // the build's TextRules.PublisherMovesAliasedEffectGlyphs
     private readonly bool _blankExtentMode;
     private Func<bool> _inputWaiting = static () => false;
     private ITextListener[] _listeners = [];
@@ -176,16 +177,19 @@ public sealed partial class TextManager : ISurfaceListener
     /// (<see cref="ExtendedDashJoin"/>).</param>
     /// <param name="aspectCalibration">The engine build's <c>TextRules.AspectCalibration</c>.</param>
     /// <param name="publisherGrowsGlyphCells">The engine build's <c>TextRules.PublisherGrowsGlyphCells</c>.</param>
+    /// <param name="publisherMovesAliasedEffectGlyphs">The engine build's
+    /// <c>TextRules.PublisherMovesAliasedEffectGlyphs</c>.</param>
     public TextManager(Graphics graphics, SkipAndAuto skip, FrameClock clock, TextDevices? devices,
                        RubyLayoutRules ruby, bool blankExtentMode = false, Sys4RegIniStore? settings = null,
                        PageLocatorState? locator = null, TimelineLog? timeline = null, AdvTextHistory? history = null,
                        LineEndCharacters? lineEnd = null, string? extendedGlyphFace = null,
                        AspectCalibration aspectCalibration = AspectCalibration.BlackBoxOverCellIncrement,
-                       bool publisherGrowsGlyphCells = false)
+                       bool publisherGrowsGlyphCells = false, bool publisherMovesAliasedEffectGlyphs = false)
     {
         lineEnd ??= LineEndCharacters.FixedThree;
         _aspectCalibration = aspectCalibration;
         _publisherGrowsGlyphCells = publisherGrowsGlyphCells;
+        _publisherMovesAliasedEffectGlyphs = publisherMovesAliasedEffectGlyphs;
         IGlyphMaskRasterizer Faces(IGlyphMaskRasterizer rasterizer)
             => extendedGlyphFace == null ? rasterizer : new ExtendedFaceGlyphRasterizer(rasterizer, extendedGlyphFace);
         History = history ?? new AdvTextHistory();

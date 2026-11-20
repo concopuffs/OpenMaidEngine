@@ -698,7 +698,8 @@ public partial class Main : Godot.Control
             lineEnd: engineBuild.Rules.Text.LineEnd.For(_catalog.StartupSettings),
             extendedGlyphFace: engineBuild.Rules.Text.ExtendedGlyphFace,
             aspectCalibration: engineBuild.Rules.Text.AspectCalibration,
-            publisherGrowsGlyphCells: engineBuild.Rules.Text.PublisherGrowsGlyphCells);
+            publisherGrowsGlyphCells: engineBuild.Rules.Text.PublisherGrowsGlyphCells,
+            publisherMovesAliasedEffectGlyphs: engineBuild.Rules.Text.PublisherMovesAliasedEffectGlyphs);
         // The input and waits native (milestone 11) runs every wait the VM blocks in, over the natives above; the lifted
         // host keeps what is left (the cursor, the Auto delays' seed and the message settings' shutdown write).
         _waits = new InputAndWaits(skipAndAuto, _audio, tick, _graphics, _movies, _shell, _text, _clock, _locator,

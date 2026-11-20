@@ -103,7 +103,7 @@ public sealed partial class TextManager
         if (_scene.RetainedTextLayouts.TryGetValue(
                 binding.LayoutSlot, out RetainedAdvTextLayoutPresentation? presentation)
             && presentation.Binding == binding)
-            presentation.Republish(gfx, LayoutPublishCellGrowth);
+            presentation.Republish(gfx, LayoutPublication);
         if (_scene.RetainedWaitIndicators.TryGetValue(
                 binding.LayoutSlot,
                 out RetainedAdvWaitIndicatorPresentation? indicator))

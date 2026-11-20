@@ -38,7 +38,8 @@ public static class EngineBuilds
                 LineEnd: LineEndRule.FixedThree,
                 ExtendedGlyphFace: null,
                 AspectCalibration: AspectCalibration.BlackBoxOverCellIncrement,
-                PublisherGrowsGlyphCells: false),
+                PublisherGrowsGlyphCells: false,
+                PublisherMovesAliasedEffectGlyphs: false),
             // gfx_object_blit_d3d9@0x4774c0 never sets D3DRS_ALPHATESTENABLE, so the sprite's alpha test holds.
             Gfx: new GfxRules(UnboundObjectReadsAbsent: false, SpriteAlphaTest: true),
             Audio: new AudioRules(PlayComparesStartMode: false),
@@ -68,6 +69,9 @@ public static class EngineBuilds
                 // adv_text_publish_next_glyph@0x4509f0 and adv_text_publish_layout@0x4503b0 add the effect's vertical
                 // offset to the bottom of the rectangle they bind.
                 PublisherGrowsGlyphCells = true,
+                // ...and in effect mode 3 with message:UseAntiFont 0 (text_set_use_anti_font@0x413de0) move the object
+                // back by the effect offsets.
+                PublisherMovesAliasedEffectGlyphs = true,
             },
             // Worker 0x486120 tests the record's bound bit before it returns the slot.
             Gfx = Age424J.Rules.Gfx with { UnboundObjectReadsAbsent = true },

@@ -584,14 +584,13 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     on both targets). The kept window position (`SAVEWINPOS`) is in too, in `OME.INI` (`engine-re.md`, "The kept
     window position"; `WindowPositionTests`). The catalog's font, the extended face, the dash join and 4.38D's
     aspect-mode font calibration are in too, and compared (`ExtendedGlyphTests`, `AspectFontRealizationTests`; the
-    frames of pages 1 and 4 equal native's in every pixel). So are the sprite's alpha test as a build rule, and object
+    frames of pages 1 and 4 equal native's in every pixel); the portable text backend draws the extended dashes too
+    (2026-11-20; `engine-re.md`, the raw units' paragraph). So are the sprite's alpha test as a build rule, and object
     colour modes 2 and 3 (2026-11-20; `engine-re.md`, "Object blend modes"; `ObjectBlendModeTests`). Open there:
     - **Object modes 2 and 3 are not compared with native.** No run has shown COUPANIME's movies (mode 3) or
       BUNKIMOVE's choice window scaling in (mode 2 into a kind-1 surface) on both targets. Into a render target the
       port's mode 3 keeps the target's alpha, where native takes the alpha's square from it. Done when a frame of each
       equals native's.
-    - **The portable text backend's extended glyphs are not looked at.** It takes the font file
-      (`GodotTextServerGlyphMaskRasterizer.AddGameFont`), and no run has drawn the game's text with it.
   - **File types no other game has:** two `.X` files (`LEAF0.X`, `LEAF1.X`) and the `.TTF`, among 21,349 entries
     in six archives and four appends.
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436
@@ -636,14 +635,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     a fresh sandbox differs in the time stamp, the play seconds and three animation start stamps; so does the save
     each makes after loading the other's. Getting there took one fix that Kamidori shares
     (`engine-re.md`, "The glyph publisher grows a cell") and the load's polygon clear. Open:
-    - **The publisher's move of a mode-3 glyph is not modelled.** 4.33G's and 4.38D's publishers move a glyph
-      object up and left by the effect offsets in effect mode 3 while the text manager's `+0x548` is zero. The
-      field was not identified in these builds (it is the AntiFont version in 4.24J's), and no page was driven
-      with it zero. If it is the anti-aliasing switch, text with `UseAntiFont` off sits one pixel down and right
-      of native's in Kamidori and here. Done when the field is named and a page drawn with it zero equals
-      native's.
-    - **The History tail's unset field.** Native leaves DWORD 9 of a metadata or voice record as it was; the port
-      writes 0 (`sys4-format-notes.md`, "Appended text-history tail"). Nothing was seen to read it.
     - **Only one page was saved.** No save from a map, a battle or a later chapter has been compared; that is
       the sweep's work (P4).
   - **Numbered saves: the six bank sections are native's (2026-11-19).** The fifth and sixth carry their right

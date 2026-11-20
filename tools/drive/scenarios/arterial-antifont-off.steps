@@ -1,0 +1,42 @@
+# 創刻のアテリアル with message:UseAntiFont 0, set with `option smooth-text off` on SC0000's first page: natively 設定's
+# ﾒｯｾｰｼﾞ tab (文字の縁をなめらかにする), on the port the options panel's ﾒｯｾｰｼﾞ section. OK applies it at once
+# (text_set_use_anti_font@0x414d80, the text manager's +0x548), and later text is drawn from GGO_BITMAP glyphs.
+#
+# With it 0, the builders draw through text_draw_string_primary_or_ruby, which starts the string at the effect
+# offset, and both publishers move each glyph object that is not ruby back by the offsets in effect mode 3, so the
+# text sits where antialiased text does (TextRules.PublisherMovesAliasedEffectGlyphs; docs/engine-re.md, "AntiFont
+# off in 4.33G and 4.38D"). History's renderer moves its glyphs the same way. Himegari's 4.24J has no such move: its
+# text lands one pixel right and down (himegari-antifont-off.steps).
+#
+# Run on a fresh sandbox, on both targets, and compare the shots:
+#   py -3.11 -X utf8 tools/drive.py --game arterial native start
+#   py -3.11 -X utf8 tools/drive.py --game arterial native run tools/drive/scenarios/arterial-antifont-off.steps
+#   py -3.11 -X utf8 tools/drive.py --game arterial native stop
+
+rand-seed 13
+wait 5
+click adv.next
+wait-state script=TITLE timeout=90
+wait 6
+click title.start
+wait-state top=SC0000@0xfff timeout=90
+settle timeout=20
+shot arterial-antifont-page1            # antialiased
+
+option smooth-text off                  # clears message:UseAntiFont, then OK
+wait 1
+dialogs                                 # none
+expect top=SC0000@0xfff
+
+advance
+state
+shot arterial-antifont-off-page2        # aliased, in its place
+advance
+state
+shot arterial-antifont-off-page3
+
+move adv.next
+wheel up                                # History redraws the pages, aliased from page 2 on
+wait 1.5
+settle
+shot arterial-antifont-off-history

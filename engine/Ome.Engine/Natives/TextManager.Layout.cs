@@ -519,7 +519,8 @@ public sealed partial class TextManager
 
         presentation.PublishThrough(
             gfx,
-            checked(result.FirstGlyphIndex + result.GlyphCount));
+            checked(result.FirstGlyphIndex + result.GlyphCount),
+            HistoryPublication(batch.Style));
         _scene.RetainedHistoryLayouts.Add(batch.LayoutSlot);
         _graphics.RequestPresentation();
         _timeline?.Event("history-render", new()
@@ -588,8 +589,13 @@ public sealed partial class TextManager
         gfx.EraseRange(binding.FirstObjectHandle, binding.ObjectCapacity);
         if (bind && presentation != null)
         {
-            if (presentation.PublishedGlyphCount > 0) presentation.Republish(gfx);
-            else presentation.PublishThrough(gfx, presentation.Glyphs.Count);
+            // 4.33G's and 4.38D's redraw binds each record that is not ruby as the layout publisher does
+            // (LayoutPublication); 4.24J's binds the cells as they are, as the glyphs were published.
+            GlyphPublication? redrawn = LayoutPublication;
+            if (presentation.PublishedGlyphCount == 0)
+                presentation.PublishThrough(gfx, presentation.Glyphs.Count, redrawn ?? default);
+            else if (redrawn is { } publication) presentation.RepublishEach(gfx, publication);
+            else presentation.Republish(gfx);
         }
         _graphics.RequestPresentation();
         _timeline?.Event("text-redraw", new()

@@ -1,0 +1,55 @@
+# Kamidori with message:UseAntiFont 0, set with `option smooth-text off` on SC0000's first page, as
+# arterial-antifont-off.steps does for 創刻のアテリアル: 4.33G's publishers move each glyph object that is not ruby back by
+# the effect offsets in effect mode 3 (text_set_use_anti_font@0x413de0 writes the text manager's +0x548;
+# TextRules.PublisherMovesAliasedEffectGlyphs). So do op 0x82's redraw, which CONFIG's 初期設定 runs on page 1 once the
+# setting is off (kamidori-config-redraw.steps), and History's renderer. Run on a fresh sandbox, on both targets, and
+# compare the shots:
+#   py -3.11 -X utf8 tools/drive.py --game kamidori native start
+#   py -3.11 -X utf8 tools/drive.py --game kamidori native run tools/drive/scenarios/kamidori-antifont-off.steps
+#   py -3.11 -X utf8 tools/drive.py --game kamidori native stop
+
+rand-seed 13
+wait-state script=TITLE click=adv.next every=3 timeout=120   # click through the logos and opening movie
+wait 4
+click title.start
+wait-state script=GAMESTART timeout=30
+wait 3
+click newgame.begin
+wait-state script=SC0000 timeout=60
+wait-state at=SC0000@0xfa2 click=adv.next every=2.5 timeout=180   # the first page with furigana
+wait 3
+move 512 288
+wait 1
+shot kamidori-antifont-page1            # antialiased
+
+option smooth-text off                  # clears message:UseAntiFont, then OK
+wait 1
+dialogs                                 # none
+
+rclick adv.next                         # op 0x82: CONFIG's 初期設定 redraws page 1, aliased now
+wait 3
+click menu.config
+wait-state script=CONFIG1 timeout=10
+wait 2
+click config.defaults
+wait 3
+rclick adv.next
+wait 3
+rclick adv.next
+wait-state top=SC0000@0xfa2 timeout=15
+move adv.next
+wait 1
+shot kamidori-antifont-off-redraw
+
+advance
+state
+shot kamidori-antifont-off-page2        # aliased, in its place
+advance
+state
+shot kamidori-antifont-off-page3
+
+move adv.next
+wheel up                                # History redraws the pages, aliased from page 2 on
+wait 1.5
+settle
+shot kamidori-antifont-off-history

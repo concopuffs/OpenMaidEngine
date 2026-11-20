@@ -48,7 +48,23 @@ public readonly record struct AdvRetainedGlyphPlacement(
     /// bottom of the source rectangle when it bound the object (<c>TextRules.PublisherGrowsGlyphCells</c>); 0 before
     /// it is published and on a build whose publisher binds the cell as it is.</summary>
     public int CellGrowth { get; init; }
+
+    /// <summary>How far left and up the build's publisher moved the glyph's object from its cell when it bound it
+    /// (<c>TextRules.PublisherMovesAliasedEffectGlyphs</c>); 0 before it is published.</summary>
+    public int ObjectShiftX { get; init; }
+
+    /// <inheritdoc cref="ObjectShiftX"/>
+    public int ObjectShiftY { get; init; }
+
+    /// <summary>The object's place: the layout origin plus the cell's corner, less the publisher's move.</summary>
+    public (int X, int Y) ObjectPosition
+        => (checked(LayoutOriginX + Record.Left - ObjectShiftX), checked(LayoutOriginY + Record.Top - ObjectShiftY));
 }
+
+/// <summary>What a build's publisher changes as it binds a glyph that is not ruby: the rows it adds under the cell
+/// (<c>TextRules.PublisherGrowsGlyphCells</c>), and how far it moves the object left and up
+/// (<c>TextRules.PublisherMovesAliasedEffectGlyphs</c>). The default changes nothing.</summary>
+public readonly record struct GlyphPublication(int CellGrowth, int ShiftX = 0, int ShiftY = 0);
 
 public readonly record struct AdvRetainedTextRunResult(
     int LayoutSlot,

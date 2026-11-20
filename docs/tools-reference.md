@@ -1483,6 +1483,12 @@ page 1. It takes four shots:
 On both targets, each shot matches the other target's pixel for pixel apart from the wait indicator's phase. After
 `close`, both `SYS4REG.INI` files are identical, with `UseAntiFont=0` (`engine-re.md`, "AntiFont off").
 
+`arterial-antifont-off.steps` and `kamidori-antifont-off.steps` (`--game arterial`, `--game kamidori`) do the same
+on 創刻のアテリアル's first page and on Kamidori's first page with furigana (`SC0000@0xfa2`), then take the next two
+pages and History. Kamidori's also has CONFIG's 初期設定 redraw the first page through op `0x82`. There the aliased
+text stays in its place, and each shot matches the other target's apart from the wait indicator's phase (2026-11-20;
+`engine-re.md`, "AntiFont off in 4.33G and 4.38D").
+
 Kamidori's scenarios run with `--game kamidori`, on a fresh sandbox, on the clean install (`games/kamidori/`, the
 default for both targets; the fan translation blanks every ruby). Each file's header gives its start commands.
 - `kamidori-furigana.steps` reaches the prologue page `SC0000@0xfa2` (はんらん over 叛乱) and opens its History. Shots
