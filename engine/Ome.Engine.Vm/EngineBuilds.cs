@@ -108,6 +108,8 @@ public static class EngineBuilds
                 ExtendedGlyphFace = "AGE Extend",
                 // text_calibrate_mode1_glyph_font@0x454ab0 divides the two black box widths.
                 AspectCalibration = AspectCalibration.BlackBoxRatio,
+                // op_0x2c7_byte_substring@0x42fe10 is SBSubstr; 4.33G's op 0x2c7 (@0x42d220) is std::string's substr.
+                SubstringKeepsDoubleByteCharacters = true,
             },
             // engine_settings_save@0x47d1d0 writes four more keys; a SYS4REG.INI native 4.38D wrote has them in
             // these places.

@@ -571,10 +571,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     fonts; of the drawers read, only the two behind op `0x221` use one, and the port has no handler for that
     opcode.
   - **The revision diff against 4.33G is triaged (2026-11-19):** every one of its 36 opcode rows and 11 helper
-    rows has a disposition (`engine-re.md`, "Kamidori against Arterial, triaged"). What it found real and the port
-    lacks, each done when the port does what that section says native does and a test or a scenario holds it:
-    - **Op `0x2c7` on 4.33G** is a plain byte substring; the port runs 4.38D's `SBSubstr` on every build. No script
-      of Kamidori has a site.
+    rows has a disposition (`engine-re.md`, "Kamidori against Arterial, triaged"), and the port has every row it
+    found real. The last, op `0x2c7`'s plain byte substring on 4.24J and 4.33G, came in 2026-11-20 as the build's
+    `TextRules.SubstringKeepsDoubleByteCharacters` (`Age438StringOpsTests`); no script of either game has a site.
 
     In since the triage (2026-11-19): the `JUSTIFYCHAR` list as the build's `TextRules.LineEnd`, the four
     `SYS4REG.INI` keys 4.38D adds in its `SettingsRules`, and Auto's per-character delay with its three settings

@@ -37,7 +37,12 @@ namespace Ome.Engine.Text;
 /// the text manager's +0x548 in these builds). 4.33G's and 4.38D's do, all four: the timed and layout publishers, op
 /// 0x82's redraw and History's renderer; 4.24J's do not, so its text drawn with AntiFont off lands one pixel right and
 /// down (docs/engine-re.md, "AntiFont off in 4.33G and 4.38D").</param>
+/// <param name="SubstringKeepsDoubleByteCharacters">Whether op 0x2c7 keeps a double-byte character whole when the
+/// byte interval cuts it. 4.38D's handler is SBSubstr (op_0x2c7_byte_substring@0x42fe10). 4.24J's (@0x42c2f0) and
+/// 4.33G's (@0x42d220) are std::string's substr of the bytes, with no care for such a character, and they throw
+/// out_of_range for a start past the end, which ends the program (docs/engine-re.md, "The substring").</param>
 public sealed record TextRules(GlyphCoverageAlpha GlyphCoverage, RubyRule Ruby, bool FuriganaArmsGlyphTimer,
                                bool HistoryLookupTestsSign, LineEndRule LineEnd, string? ExtendedGlyphFace,
                                AspectCalibration AspectCalibration, bool PublisherGrowsGlyphCells,
-                               bool PublisherMovesAliasedEffectGlyphs = false);
+                               bool PublisherMovesAliasedEffectGlyphs = false,
+                               bool SubstringKeepsDoubleByteCharacters = false);

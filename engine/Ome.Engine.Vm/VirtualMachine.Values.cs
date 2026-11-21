@@ -274,10 +274,12 @@ public sealed partial class VirtualMachine
     }
 
     // 0x2c7, native's SBSubstr (AGE 4.38D): a byte interval of the string, kept from splitting a double-byte
-    // character; native traces a warning when it moves an end.
+    // character; native traces a warning when it moves an end. Older builds take the bytes plainly
+    // (TextRules.SubstringKeepsDoubleByteCharacters).
     private StepResult OpByteSubstring(Instruction ins, int pc)
     {
         var a = ins.Args;
+        if (!_rules.Text.SubstringKeepsDoubleByteCharacters) return OpPlainByteSubstring(ins);
         string result = Cp932Text.ByteSubstring(
             ReadStr(a[1]), unchecked((int)Read(a[2])), unchecked((int)Read(a[3])), _memory.Encoding,
             out bool startMoved, out bool endMoved);
@@ -289,6 +291,26 @@ public sealed partial class VirtualMachine
             _waits.ReportWarning($"{At(ins)}: the substring ends inside a double-byte character; its last byte is "
                                  + "dropped, as AGE drops it with the trace 「関数：SBSubstr 警告：切り出した文字列が全角文字の"
                                  + "途中で終了するため、最終バイトを切り捨てました。」");
+        WriteStr(a[0], result);
+        return StepResult.Next;
+    }
+
+    // 0x2c7 in AGE 4.24J and 4.33G: std::string's substr of the bytes. A start past the end throws out_of_range, which
+    // neither the main tick's catches (AGE's own five exception types) nor the window's catch-all (around a command's
+    // delete) take, so the program ends; the run halts there.
+    private StepResult OpPlainByteSubstring(Instruction ins)
+    {
+        var a = ins.Args;
+        string source = ReadStr(a[1]);
+        int start = unchecked((int)Read(a[2]));
+        string? result = Cp932Text.PlainByteSubstring(source, start, unchecked((int)Read(a[3])), _memory.Encoding);
+        if (result is null)
+        {
+            HaltReason ??= $"string-position: {At(ins)}: the substring starts at byte {unchecked((uint)start)}, past the "
+                           + "string's end, where AGE's std::string throws out_of_range (invalid string position) and "
+                           + "the program ends";
+            return StepResult.Halt;
+        }
         WriteStr(a[0], result);
         return StepResult.Next;
     }

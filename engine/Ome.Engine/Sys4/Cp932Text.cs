@@ -117,6 +117,22 @@ public static class Cp932Text
         }
     }
 
+    /// <summary>
+    /// AGE 4.24J's and 4.33G's op 0x2c7: std::string's substr(<paramref name="start"/>, <paramref name="count"/>) of the
+    /// string's bytes, with no care for double-byte characters. The count is unsigned, so a negative one takes the rest
+    /// of the string. A start past the end, compared unsigned, is null: native throws out_of_range there. A start at the
+    /// end gives the empty string. An interval that cuts a double-byte character keeps the lone byte, as native does;
+    /// the VM's <see cref="Sys4TextEncoding"/> holds it as a private-use character.
+    /// </summary>
+    public static string? PlainByteSubstring(string value, int start, int count, Encoding encoding)
+    {
+        byte[] bytes = EncodeCString(value, encoding);
+        if (unchecked((uint)start) > (uint)bytes.Length) return null;
+        int available = bytes.Length - start;
+        int length = unchecked((uint)count) < (uint)available ? count : available;
+        return encoding.GetString(bytes, start, length);
+    }
+
     public static FullwidthTextValidationError ValidateFullwidthName(
         string value, Encoding encoding, int byteLimit = NativeNameByteLimit)
     {
