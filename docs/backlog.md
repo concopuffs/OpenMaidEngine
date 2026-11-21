@@ -726,9 +726,10 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       the arrays the scripts index, which can lump two arrays into one (`RFINIT`'s `G[0x32fb16]` holds such a
       lump).
     - **`SCJUMP`** is read as far as its protocol, its rule counts and what its rules test: the scenes' played
-      cells (`scene_played_flags`), the area in play and the point unit 1 stands on. Its seven contexts are
-      not read, nor the story cells outside the played cells (`story_flags.py` lists 836 candidates), and
-      `scjump_decode.py`, written for Himegari's `SCJUMP`, was not run on the game.
+      cells (`scene_played_flags`), the area in play and the point unit 1 stands on, and its seven contexts
+      (2026-11-20, `arterial-data-tables.md`, "Scene dispatch"). The story cells outside the played cells are not
+      read (`story_flags.py` lists 836 candidates), and `scjump_decode.py`, written for Himegari's `SCJUMP`, was not
+      run on the game.
   - **The base mod level, M3, is reached (2026-11-20).** `mods/arterial-base/` declares seven events at seven named
     points (`vm-map/patch-points-arterial.toml`): the boot's data layered and ready, an area loaded and its READY
     chain run, a battle's start and close, and one character's experience award, whose amount is an operand. It

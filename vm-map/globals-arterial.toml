@@ -920,9 +920,9 @@ address = "0x352f"
 name = "scjump_context_id"
 category = "index-pointer"
 type = "int"
-usage = "Which of SCJUMP's seven rule lists runs (1 to 7); the caller sets it before running the chain. What each context is has not been read."
+usage = "Which of SCJUMP's seven rule lists runs; the caller sets it before running the chain. 1: ALLMAP entered other than back from its own scene; 2 and 3: AFFAIR's two passes, where 3's rules gather scenes into a list; 4: the map ready for a command; 5: a moving unit arrived; 6: a battle's result known (BTL, or ALLMAP for two units the player is not in); 7: a unit's move begins. 0 (ARENA, GAMESTART) is tested by no rule (docs/arterial-data-tables.md, Scene dispatch)."
 source = "investigation"
-confidence = "med"
+confidence = "high"
 
 [[global]]
 address = "0x4525dd"

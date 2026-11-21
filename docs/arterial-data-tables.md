@@ -185,9 +185,30 @@ offers scene 3000 when unit 1 is on point 1 of area 3. So the played cells are t
 flags, first of all: of the 836 candidates `tools/story_flags.py` lists on this game, 372 lie in the played
 cells' range (`0x5e0` to `0x2cef`).
 
-Not decoded: what the seven contexts are, what `G[0x9ae0]`'s bit is, and the story cells outside the played
-cells. `tools/scjump_decode.py` was written for Himegari's `SCJUMP` and was not run;
-`docs/scjump-progression.md` is Himegari's, and nothing of it is assumed here.
+**The contexts** say when the chain runs, and each script branches on them in the order 1 to 7. `SYSTEM4` runs one
+mode a pass, from `G[0x0]`: 1 a scene, 2 `ALLMAP` (the map), 3 `BTL` (a battle), 4 `AFFAIR`, 5 `ARENA`. A rule that
+holds sets `G[0x0]` to 1, and the caller then hands the turn back to `SYSTEM4`. After the scene, `SYSTEM4` sets the
+mode from `G[0x1]` and, unless the context is 0 or 3, runs the chain once more in the same context, so a scene can
+lead straight into the next. Read from the scripts that set `G[0x352f]` (2026-11-20):
+
+| context | set by | when | rules (`SCJUMP`, `$1$`, `$3$`, `$4$`) |
+|---|---|---|---|
+| 1 | `ALLMAP` | the map is entered other than back from a scene it started (`G[0x1]` is 0) | 35, 2, 8, 3 |
+| 2 | `AFFAIR` | its first pass | 17, 0, 0, 0 |
+| 3 | `AFFAIR` | its second pass. These rules gather instead of taking the turn: each appends its scene to `G[0x97b0]` (count `G[0x9878]`, up to 200), `AFFAIR` sorts them by kind and `G[0x219991]`, and `SYSTEM4` plays the list in turn (`G[0x3600]`, `G[0x36c8]`, `G[0x36c9]`) | 40 gathers, 0, 0, 0 |
+| 4 | `ALLMAP` | the map is ready for a command: after an area is set up (`G[0x9882]` set), each time no move is in progress (`G[0x9881]` is 0), at each point a moving unit passes, and after a move's `READYEND`, `SETFATE` and `READY` chain | 463, 28, 1, 1481 |
+| 5 | `ALLMAP` | a moving unit has arrived (`label_2462` redrew the map) | 583, 44, 1, 19 |
+| 6 | `BTL`, `ALLMAP` | a battle's result is known (`battle_result`, `G[0x3d467]`): after a battle the player fought, unless it was an arena match (`G[0x3ad5]`, which plays the match's own scene), or after a fight between two units the player is not in, which `ALLMAP` settles by their strength | 19, 0, 0, 0 |
+| 7 | `ALLMAP` | a unit's move begins, before it leaves its point | 122, 2, 0, 2 |
+
+`ALLMAP` keeps a move's phase in `G[0x9881]`'s bits: bit 2 once context 7 has run, bit 3 after the arrival, bit 4
+after the `READY` chain; `label_308b` clears them when the move ends. `ALLMAP` enters `AFFAIR` when `G[0x987f]`
+reaches 50, and a few scenes enter it too (`SC0010`, `$1$SC0510`). `ARENA` and `GAMESTART` set the context to 0,
+which no rule tests. Scenes that `SC0010` and the battles start themselves do not pass through the chain.
+
+Not decoded: what `G[0x9ae0]`'s bit is, what `G[0x987f]` counts, and the story cells outside the played cells.
+`tools/scjump_decode.py` was written for Himegari's `SCJUMP` and was not run; `docs/scjump-progression.md` is
+Himegari's, and nothing of it is assumed here.
 
 ## Characters
 
@@ -871,5 +892,5 @@ local of another script, is not ruled out.
   `ROINIT`'s and ten of `UNINIT`'s, are not read.
 - **Copies in saved state** ("Saved state" above) are found by three scans of the scripts, which cannot see a
   copy that passes through another script's local.
-- **`SCJUMP`'s seven contexts** ("Scene dispatch" above), and the story cells that are not a scene's played
-  cell.
+- **The story cells that are not a scene's played cell** ("Scene dispatch" above); `SCJUMP`'s seven contexts are
+  read (2026-11-20).
