@@ -718,10 +718,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       other `PH*` scripts, `ATTACK`) are where to read them.
     - **The area tables' numbers.** Eleven of `MPINIT`'s arrays, nine of `ROINIT`'s and ten of `UNINIT`'s are not
       read; `ALLMAP`, `DRAWOBJ` and the routine scripts are their readers.
-    - **`AGF2BMP2AGF.exe` does not convert this game's pictures** (`tools/convert_agf.py`; it failed on
-      `SO019.AGF`, the card panel's sheet, which the port's decoder reads). The panel's labels were looked at
-      with a scratch port of `AgfDecoder.cs`. Done when a tool of the repository writes a picture of any of the
-      three games as an image file.
     - **Five boot tables have no leader** (`IMINIT`, `RFINIT`, `DUINIT`, `RTINIT`, `EUINIT`): they are listed by
       the arrays the scripts index, which can lump two arrays into one (`RFINIT`'s `G[0x32fb16]` holds such a
       lump).

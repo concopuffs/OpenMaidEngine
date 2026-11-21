@@ -10,7 +10,7 @@ using Ome.Engine.Sys4;
 using Ome.Engine.Vm;
 
 const string CommandList = "save-diff, save-info, run-lock, intake, omp, oms-compile, oms-append, oms-patch, oms-rebuild, oms-temps, "
-                          + "oms-roundtrip, oms-decompile, oms-residue, catalog-scan, run, audio, gfx, init-image, play, sweep, trace";
+                          + "oms-roundtrip, oms-decompile, oms-residue, catalog-scan, run, audio, gfx, picture, init-image, play, sweep, trace";
 if (args.Length == 0)
 {
     Console.Error.WriteLine("usage: Ome.Cli COMMAND [options] (docs/tools-reference.md); commands: " + CommandList);
@@ -782,6 +782,77 @@ if (command == "gfx")
     foreach (var v in vis)
         Console.WriteLine($"    h=0x{v.Handle:x} surf=0x{v.SurfaceResId:x} ({res.ResolveTexture(v.SurfaceResId)?.Name ?? "?"}) src=({v.SrcX},{v.SrcY} {v.W}x{v.H}) dst=({v.DstX},{v.DstY})");
     return 0;
+}
+
+if (command == "picture")
+{
+    // picture <NAME...> | --all [--output-dir DIR] — decode the game's pictures as the port draws them
+    // (ResourceMap.DecodeTexture: a loose file first, then the archives, and a language package's PNG) and write each
+    // as NAME.png. A name is the catalog record's, with an append's $n$ prefix; --all writes every AGF record of the
+    // catalog and its appends. The default folder is build/games/<game>/pictures.
+    string outputDir = Path.GetFullPath(OptionValue("--output-dir")
+                                        ?? Path.Combine(Paths.GameBuild(selectedProfile.Profile.Id), "pictures"));
+    var pictures = new ResourceMap(catalog, assetStore, Console.Error.WriteLine, assetOptions.AllowBmpAsAgf);
+    var names = new List<string>();
+    for (int k = 1; k < args.Length; k++)
+    {
+        if (args[k] is "--output-dir" or "--game" or "--profile" or "--game-root" or "--overlay-root") { k++; continue; }
+        if (!args[k].StartsWith("--", StringComparison.Ordinal)) names.Add(args[k]);
+    }
+    List<AssetEntry> entries;
+    if (args.Contains("--all"))
+        entries = catalog.Files.Concat(catalog.AppendPacks.OrderBy(pair => pair.Key).SelectMany(pair => pair.Value.Files))
+            .Where(entry => entry.Name.EndsWith(".AGF", StringComparison.OrdinalIgnoreCase)).ToList();
+    else
+    {
+        if (names.Count == 0)
+        {
+            Console.Error.WriteLine("usage: Ome.Cli --game <game> picture <NAME...> | --all [--output-dir DIR]");
+            return 2;
+        }
+        entries = [];
+        foreach (string name in names)
+        {
+            if (catalog.ResolveMountedName(name) is { IsPlaceholder: false } entry) entries.Add(entry);
+            else { Console.Error.WriteLine($"picture: no record {name} in the catalog or its appends"); return 1; }
+        }
+    }
+    Directory.CreateDirectory(outputDir);
+    bool all = args.Contains("--all");
+    int written = 0, failed = 0, movies = 0;
+    foreach (AssetEntry entry in entries)
+    {
+        try
+        {
+            RgbaImage image = pictures.DecodeTexture(entry);
+            string file = Path.Combine(outputDir, Path.GetFileNameWithoutExtension(entry.Name) + ".png");
+            File.WriteAllBytes(file, PngWriter.Write(image));
+            written++;
+            if (!all) Console.WriteLine($"{entry.Name}: {image.Width}x{image.Height} -> {file}");
+        }
+        // A movie is an MPEG stream under an AGF name (ResourceMap.ReadMovie): --all passes over it.
+        catch (InvalidDataException) when (IsMoviePayload(entry))
+        {
+            movies++;
+            if (all) continue;
+            failed++;
+            Console.Error.WriteLine($"picture: {entry.Name} is a movie (an MPEG stream), not a picture");
+        }
+        catch (Exception error) when (error is InvalidDataException or IOException)
+        {
+            failed++;
+            Console.Error.WriteLine($"picture: {entry.Name}: {error.Message}");
+        }
+    }
+    Console.WriteLine($"picture: {written} written to {outputDir}" + (all && movies > 0 ? $", {movies} movies passed over" : "")
+                      + (failed > 0 ? $", {failed} failed" : ""));
+    return failed > 0 ? 1 : 0;
+
+    bool IsMoviePayload(AssetEntry entry)
+    {
+        try { pictures.ReadMovie(entry); return true; }
+        catch (InvalidDataException) { return false; }
+    }
 }
 
 if (command == "init-image")

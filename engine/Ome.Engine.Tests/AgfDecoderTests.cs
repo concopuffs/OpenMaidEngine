@@ -112,6 +112,33 @@ public class AgfDecoderTests
         Assert.Equal(oracle.Pixels, image.Pixels);
     }
 
+    /// <summary><c>Ome.Cli picture</c> writes a picture as a PNG that reads back to the decoder's pixels. 創刻のアテリアル's
+    /// card panel sheet is one that tools/convert_agf.py's converter fails on.</summary>
+    [Fact]
+    [Trait("Category", "Workspace")]
+    [Trait("Profile", "arterial")]
+    public void ThePictureCommandWritesAnArterialPictureAsPng()
+    {
+        string gameRoot = Paths.GameInstall("arterial");
+        string output = Path.Combine(Path.GetTempPath(), "ome-picture-" + Guid.NewGuid().ToString("N"));
+        try
+        {
+            var (exit, _, error) = OmeCliProcess.Run(Paths.Repo, "picture", "SO019.AGF", "--game", "arterial",
+                                                     "--output-dir", output);
+            Assert.True(exit == 0, error);
+            var catalog = Sys4AssetCatalog.Load(Path.Combine(gameRoot, "SYS4INI.BIN"));
+            var store = new Sys4AssetStore(catalog, gameRoot, gameRoot);
+            RgbaImage expected = AgfDecoder.Decode(store, catalog.ResolveName("SO019.AGF")!);
+            RgbaImage written = PngDecoder.Decode(File.ReadAllBytes(Path.Combine(output, "SO019.png")), "SO019.png");
+            Assert.Equal((1024, 642), (written.Width, written.Height));
+            Assert.Equal(expected.Pixels, written.Pixels);
+        }
+        finally
+        {
+            if (Directory.Exists(output)) Directory.Delete(output, recursive: true);
+        }
+    }
+
     [Fact]
     [Trait("Category", "Workspace")]
     public void InstalledSo001HasExpectedAlphaBearingDimensions()
