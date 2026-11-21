@@ -552,6 +552,14 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     pairs (the window procedure, the main tick, import call sites) would reach them.
 
   Done when each is fixed or dropped with a reason, and `adding-a-game.md` describes no workaround.
+- **The port driver's `settle` never settles on a screen whose mouse callback presents a frame.** It needs 700 ms in
+  which every poll finds the VM at an input or menu wait (`DriveDispatcher.SettleOperation`). 創刻のアテリアル's
+  reward screen (`RECEIPT`) polls in a `sleep 1` loop and its op `0xcc` callback runs every 50 ms and ends in
+  `present-frame`, which counts as neither wait, so the quiet window restarts each time and `settle` waits out its
+  timeout (20 s, `settled=False`, 2026-11-20). Native's `settle` compares screens and settles there in under a second.
+  Scenarios wait on `wait-state` at such screens instead. Done when the port's `settle` treats a frame presented
+  from inside a polled menu loop as part of that wait, or compares screens as native's does, with a test on a
+  synthetic callback loop.
 - **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P3**
   since 2026-11-20 by the user's word (`adding-a-game.md` §1; its manifest's `support`), on the branch
   `feature/arterial`: the engine names its install, decodes all of it, has a handler for every opcode its scripts
@@ -739,12 +747,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     (`tools/drive/scenarios/port/arterial-debug-events.steps`). What M3 leaves open:
     - **Chains without an event:** `OPEN`, `SCJUMP`'s chain, `BGINIT`, `TUMES`, the item actions and the 奥義 and
       talent scripts, and RESULT's card experience. Done when a mod needs one and it is added, or never.
-  - **The tutorial's reward screen takes one click more on the port** (found 2026-11-20 driving
-    `tools/drive/scenarios/arterial-new-scene.steps`, which clicks `receipt` until the scene starts, so it passes on
-    both). Native left `RECEIPT@0x7c` for `$5$SCENE@0x529` on one click; after the same click the port sat at
-    `RECEIPT@0x86`, did not settle in 20 s (something still drew), and needed another. Not read further: whether the
-    port's wait there is the native one, or the click lands while an animation holds input. Done when the same
-    clicks bring both targets to the scene, or the difference is shown to be timing alone.
   - **Next, by the plan:** the sweep (P4).
     Step 7 is done: the opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page;
     `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept

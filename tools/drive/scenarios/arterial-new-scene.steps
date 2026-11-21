@@ -28,6 +28,9 @@ wait-state script=TUTORIAL timeout=60            # OPEN's tutorial (怪しいお
 wait 2
 wait-state script=RECEIPT click=tutorial-next every=2 timeout=30
 wait 2
+# ALLMAP shows a RECEIPT screen for each reward met (three here: 配下純悪魔総数800, 配下純天使総数800, then a third),
+# one click each, and only then runs SCJUMP's chain. How many of them the clicks above close depends on when the
+# tutorial ends, so this clicks until the scene starts.
 wait-state top=$5$SCENE@0x529 click=receipt every=3 timeout=60   # the rewards, then the mod's scene
 settle timeout=20
 shot arterial-new-scene-page1
