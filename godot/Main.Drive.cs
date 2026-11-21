@@ -152,13 +152,7 @@ public partial class Main
         {
             IReadOnlyList<DriveFrame> frames = DriveFrame.FromVm(main._vm.CaptureFrameLocations());
             WaitsDiagnosticSnapshot waits = main._waits.CaptureDiagnosticSnapshot();
-            string? waiting =
-                waits.IsModalMovieWaiting ? DriveWaiting.Movie
-                : waits.IsTransitionWaiting ? DriveWaiting.Transition
-                : waits.IsInputWaiting ? DriveWaiting.Input
-                : waits.IsSleeping && main._vm.IsRawInputCallbackActive ? DriveWaiting.Menu
-                : waits.IsSleeping ? DriveWaiting.Sleep
-                : null;
+            string? waiting = DriveWaiting.Of(waits, main._vm.IsRawInputCallbackActive);
             return new DriveState(frames, waiting, waits.IsTextRevealing || waits.IsScreenTransitionActive);
         });
 

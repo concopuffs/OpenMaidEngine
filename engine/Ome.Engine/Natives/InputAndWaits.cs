@@ -51,6 +51,7 @@ public sealed partial class InputAndWaits : IFastForwardListener
         public volatile bool Waiting;
         public volatile bool TransitionWaiting;
         public volatile bool Sleeping;
+        public volatile bool PresentingFrame;   // waiting for the front end to take a presented frame
         public volatile bool ModalMovieWaiting;
         public bool ModalMovieCancelled;
         public bool ModalMovieCancelPending;   // CancelNextModalMovie: a held action 4 stops the next movie
@@ -134,6 +135,7 @@ public sealed partial class InputAndWaits : IFastForwardListener
             _scene.Waiting,
             _scene.TransitionWaiting,
             _scene.Sleeping,
+            _scene.PresentingFrame,
             _text.IsRevealing,
             _scene.ModalMovieWaiting,
             _text.IsAdvPagePresentationSuspended,
@@ -213,9 +215,11 @@ public sealed partial class InputAndWaits : IFastForwardListener
     }
 }
 
-/// <summary>The waits' state for a diagnostic (<see cref="InputAndWaits.CaptureDiagnosticSnapshot"/>).</summary>
+/// <summary>The waits' state for a diagnostic (<see cref="InputAndWaits.CaptureDiagnosticSnapshot"/>).
+/// <see cref="IsPresentingFrame"/> is true while the engine thread waits for the front end to take a frame it presented
+/// (op 0x20c, or a sleep's synchronized present).</summary>
 public sealed record WaitsDiagnosticSnapshot(
-    bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping,
+    bool IsInputWaiting, bool IsTransitionWaiting, bool IsSleeping, bool IsPresentingFrame,
     bool IsTextRevealing, bool IsModalMovieWaiting, bool IsAdvPagePresentationSuspended,
     bool IsMessageSkipActive, bool IsScreenTransitionActive, long TransitionStartedAtMs,
     IReadOnlyList<MovieSurfaceDiagnostic> MovieSurfaces, IReadOnlyList<long> CompletedMoviePlaybackIds);

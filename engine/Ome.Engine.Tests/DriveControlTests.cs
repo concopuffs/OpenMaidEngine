@@ -160,6 +160,34 @@ public class DriveControlTests
         Assert.Throws<DriveProtocolException>(() => Condition("{}"));
     }
 
+    /// <summary>A polled menu's loop sleeps and its 50 ms mouse callback may present a frame: in a raw input-callback
+    /// frame both are the menu's wait, so <c>settle</c> sees no gap at each callback. Outside such a frame a present is
+    /// no wait.</summary>
+    [Theory]
+    [InlineData(true, false, true, DriveWaiting.Menu)]
+    [InlineData(false, true, true, DriveWaiting.Menu)]
+    [InlineData(true, true, true, DriveWaiting.Menu)]
+    [InlineData(true, false, false, DriveWaiting.Sleep)]
+    [InlineData(false, true, false, null)]
+    [InlineData(false, false, true, null)]
+    public void APolledMenusSleepAndItsCallbacksPresentAreBothItsWait(bool sleeping, bool presenting,
+                                                                       bool rawInputCallbackActive, string? expected)
+        => Assert.Equal(expected, DriveWaiting.Of(Waits(sleeping: sleeping, presenting: presenting), rawInputCallbackActive));
+
+    [Fact]
+    public void AnInputMovieOrTransitionWaitIsNamedBeforeAMenu()
+    {
+        Assert.Equal(DriveWaiting.Input, DriveWaiting.Of(Waits(input: true, presenting: true), true));
+        Assert.Equal(DriveWaiting.Transition, DriveWaiting.Of(Waits(transition: true, sleeping: true), true));
+        Assert.Equal(DriveWaiting.Movie, DriveWaiting.Of(Waits(movie: true, presenting: true), true));
+    }
+
+    private static Ome.Engine.Natives.WaitsDiagnosticSnapshot Waits(
+        bool input = false, bool transition = false, bool sleeping = false, bool presenting = false, bool movie = false)
+        => new(input, transition, sleeping, presenting, IsTextRevealing: false, IsModalMovieWaiting: movie,
+               IsAdvPagePresentationSuspended: false, IsMessageSkipActive: false, IsScreenTransitionActive: false,
+               TransitionStartedAtMs: -1, MovieSurfaces: [], CompletedMoviePlaybackIds: []);
+
     [Fact]
     public void StateJsonCarriesFramesTopLocationAndWaiting()
     {

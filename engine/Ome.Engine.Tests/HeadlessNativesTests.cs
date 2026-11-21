@@ -148,6 +148,47 @@ public class HeadlessNativesTests
         Assert.Equal(background, Pixel(renderer, 9, 6));
     }
 
+    /// <summary>Op 0x20c parks the engine thread until a frame turn takes the frame, and the waits' snapshot says so
+    /// meanwhile: the driver counts it as a polled menu's wait when a mouse callback presents (DriveWaiting.Of).</summary>
+    [Fact]
+    public void AnExplicitPresentShowsAsPresentingUntilAFrameTurnTakesIt()
+    {
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson);
+        Script script = ScriptAssembler.Assemble(table, "PRESENT", new List<(int, Operand[])>
+        {
+            (0x20c, []),   // present-frame
+            (0x2, []),     // exit
+        }, []);
+        var clock = new FrameClock();
+        using var locator = new PageLocatorState("PRESENT", null);
+        NativeSet natives = Natives(locator, clock, synchronizeExplicitPresentation: true);
+        VirtualMachine vm = natives.Vm(script, table);
+        InputAndWaits waits = natives.Waits;
+
+        Task engine = Task.Run(() => waits.RunEngine(() => vm.Run()));
+        // With no frame turn the present cannot complete, so once the engine thread reaches it the flag holds.
+        var deadline = DateTime.UtcNow + TimeSpan.FromSeconds(20);
+        bool presenting = false;
+        while (!presenting && !engine.IsCompleted && DateTime.UtcNow < deadline)
+        {
+            presenting = waits.Invoke(() => waits.CaptureDiagnosticSnapshot().IsPresentingFrame);
+            if (!presenting) Thread.Sleep(1);
+        }
+        Assert.True(presenting, "the snapshot never showed the present's wait");
+        Assert.True(waits.Invoke(() => waits.CaptureDiagnosticSnapshot().IsPresentingFrame));
+        Assert.False(engine.IsCompleted);
+
+        while (!engine.IsCompleted && DateTime.UtcNow < deadline)
+        {
+            clock.Advance(0.016);
+            waits.RunFrameTurn(null, null, null, 4, out _);
+            Thread.Sleep(1);
+        }
+        Assert.True(engine.Wait(TimeSpan.FromSeconds(10)), "the engine thread did not end");
+        Assert.Equal("exit", vm.HaltReason);
+        Assert.False(waits.CaptureDiagnosticSnapshot().IsPresentingFrame);
+    }
+
     [Fact]
     public void TheCursorReachesTheDeviceInTheOrderSent()
     {

@@ -71,8 +71,19 @@ public sealed partial class InputAndWaits
         long now = System.Diagnostics.Stopwatch.GetTimestamp();
         if (_skip.FastForwardActive && now - _lastSynchronizedPresentationTimestamp < FastForwardPresentationInterval)
             return;
-        while (_consumedPresentationRequestGeneration < requested && !Stopping)
-            WaitAndTick(_frameSignal, 50);
+        // The driver reads the flag: a frame a polled menu's callback presents is part of that menu's wait.
+        Scene scene = _scene;
+        bool outer = scene.PresentingFrame;
+        scene.PresentingFrame = true;
+        try
+        {
+            while (_consumedPresentationRequestGeneration < requested && !Stopping)
+                WaitAndTick(_frameSignal, 50);
+        }
+        finally
+        {
+            scene.PresentingFrame = outer;
+        }
         _lastSynchronizedPresentationTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
     }
 

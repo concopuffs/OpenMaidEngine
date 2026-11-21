@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Ome.Engine.Natives;
 using Ome.Engine.Vm;
 
 namespace Ome.Engine.Frontend.Control;
@@ -55,13 +56,26 @@ public sealed record DriveFrame(string Script, int Offset)
 public static class DriveWaiting
 {
     public const string Input = "input";           // an ADV page or hotspot wait (wait-for-input)
-    public const string Menu = "menu";             // a script-polled menu: sleeping in a raw input-callback frame
+    public const string Menu = "menu";             // a script-polled menu: sleeping, or presenting a frame, in a raw
+                                                   // input-callback frame
     public const string Movie = "movie";           // a modal movie
     public const string Transition = "transition"; // a blocking presentation effect
     public const string Sleep = "sleep";           // a timed hold
 
     public static readonly IReadOnlySet<string> All =
         new HashSet<string>(StringComparer.Ordinal) { Input, Menu, Movie, Transition, Sleep };
+
+    /// <summary>What the waits' state says the game is blocked on; null when it runs. A script-polled menu loops on a
+    /// short sleep while its mouse callback (op 0xcc) runs every 50 ms, and a callback that ends in present-frame
+    /// (創刻のアテリアル's RECEIPT) waits for that frame inside the loop: both are the menu's wait, so <c>settle</c> sees
+    /// the menu as calm.</summary>
+    public static string? Of(WaitsDiagnosticSnapshot waits, bool rawInputCallbackActive)
+        => waits.IsModalMovieWaiting ? Movie
+         : waits.IsTransitionWaiting ? Transition
+         : waits.IsInputWaiting ? Input
+         : (waits.IsSleeping || waits.IsPresentingFrame) && rawInputCallbackActive ? Menu
+         : waits.IsSleeping ? Sleep
+         : null;
 }
 
 /// <summary>The backend-neutral game state. <see cref="Busy"/> is true while text reveals or a screen transition

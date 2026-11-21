@@ -1689,7 +1689,8 @@ these flags; you need them directly only to drive the port from another client.
 - The port's `hello` also carries `jit_optimized`: whether its VM assembly was compiled with the JIT optimizer on
   (`drive.py port start --optimize`); and `native_aot`: whether the engine was compiled ahead of time, as a release's
   is (`drive.py port start --package`).
-- `waiting` is `input` (an ADV page or hotspot wait), `menu` (a script-polled menu), `movie`, `transition`, `sleep`
+- `waiting` is `input` (an ADV page or hotspot wait), `menu` (a script-polled menu: its frame has a mouse callback
+  (op `0xcc`) and sleeps, or waits for a frame the callback presents), `movie`, `transition`, `sleep`
   or null. `busy` means text is still revealing or a screen transition is running. `settle` waits for `input` or
   `menu` that stays not busy for `quiet_ms`.
 - `wheel` without `x`/`y` turns at the driven cursor. Both targets send one notch at a time, 80 ms apart, and the
