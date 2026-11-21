@@ -691,7 +691,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     and the patch probe each run the 271 scenes equivalent to the originals. `oms/arterial/adv.oms` lifts 15,641
     library subs and 25,438 pages, 41.0% of the instructions. `example.arterial-prologue-line` links, shows its
     line as the first page on native AGE and on the port, and has a workspace test. A three-line language package
-    ran in the port. The guide and the launcher's art entry are in. What M1 leaves open:
+    ran in the port. The guide and the launcher's art entry are in, and so is `example.arterial-new-scene`
+    (2026-11-20): new scripts and a scene, played on both targets with a save and a load inside it; its boot script
+    is also the game's first table edit on native AGE. What M1 leaves open:
     - **No speaker names.** A line names its speaker by a face picture's id (`face: 0x16a`). The character and
       face tables are decoded (`arterial-data-tables.md`, "CFINIT"), and nothing turns a face id into a name in
       a decompiled line yet. Done when a decompiled line names its speaker.
@@ -702,7 +704,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       2026-11-20, the families by their constants (`hide_message_window_150ms`, `fade_to_black_890ms`); which
       scene command each stands for was not traced. Rename where a better reading turns up; a module sub's name
       is not an export.
-    - **Nothing that adds a script or a scene was tried**, on either target.
   - **The data level, M2, is reached (2026-11-20).** In: the extraction, the executed boot image (145
     scripts), the layout tool `tools/init_arterial.py` with its tests, the layout of all 280 arrays of the 29 boot
     tables with a reading for each, the four on-demand tables, the append dispatch and the scene dispatch's
@@ -729,8 +730,6 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
       cells (`scene_played_flags`), the area in play and the point unit 1 stands on. Its seven contexts are
       not read, nor the story cells outside the played cells (`story_flags.py` lists 836 candidates), and
       `scjump_decode.py`, written for Himegari's `SCJUMP`, was not run on the game.
-    - **Two table edits were run in the game**, in the port: M3's boot edit and an area part (below). None on
-      native AGE.
   - **The base mod level, M3, is reached (2026-11-20).** `mods/arterial-base/` declares seven events at seven named
     points (`vm-map/patch-points-arterial.toml`): the boot's data layered and ready, an area loaded and its READY
     chain run, a battle's start and close, and one character's experience award, whose amount is an operand. It

@@ -45,6 +45,10 @@ ran the same scenarios on native AGE.
   test waits: one polygon takes a second texture, one the replace blend and one the subtractive blend, which no
   script of the game uses. It targets `native`. `tools/drive/scenarios/port/arterial-debug-reference-diff.steps`
   starts with it and the debug menu, and compares the GPU renderer with the reference there.
+- `example.arterial-new-scene` adds three scripts in its own append catalog. AUTO, its record 0, runs at boot: it
+  renames 龍司's name plate, gives scene 9990 the mod's SCENE, and puts OFFER in SCJUMP's chain. OFFER offers the scene
+  on area 1's map, and SCENE is a shipped append scene's skeleton with three pages of the mod's. It targets `native`;
+  `tools/drive/scenarios/arterial-new-scene.steps` plays it with `example.arterial-debug-menu`, on both targets.
 - `example.arterial-object-blends` patches `SC0000.BIN` before the first page's text. Six panels draw the choice
   window's frame sheet in object colour modes 0 to 3: on the screen, and into render targets made with kinds 1 and 2.
   The game itself draws modes 2 and 3 only in motion. It targets `native`; `tools/drive/scenarios/arterial-object-blends.steps`

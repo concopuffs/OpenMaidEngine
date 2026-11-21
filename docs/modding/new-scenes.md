@@ -62,15 +62,19 @@ as it enters the shipped ones:
 1. **Copy a shipped scene's skeleton.** Decompile a shipped append scene with `--level idiomatic` and keep
    everything except its content. That means the ADV handlers, hotspots, save-resume mark, load-restore code, and
    the per-pass setup and teardown. Then put your pages in the content subroutine.
-2. **Register it.** Your record-0 script writes the scene's id into the SCJUMP scene registry, the table that maps
-   a story decision to the scene that plays it:
+2. **Register it.** Your record-0 script makes the game's scene dispatch reach your scene. Games differ here, and
+   your game guide gives the form. Where the dispatch reads a registry that maps a story decision to a scene, write
+   your scene's id into a row:
 
    ```text
    scjump_scene_script_resource_ids[<decision>] = asset "SCENE"
    ```
 
-3. **Unregister it when it ends.** At the end of the content, clear the row and request the next scene, so the
-   story continues:
+   Where the dispatch runs a chain of rule scripts instead, give your scene a record and add a rule script of your
+   own to the chain.
+
+3. **Let the story go on when it ends.** With a registry row, clear the row at the end of the content and request
+   the next scene:
 
    ```text
    scjump_scene_script_resource_ids[<decision>] = 0x0
@@ -78,9 +82,11 @@ as it enters the shipped ones:
    scjump_decision_out = 0x0
    ```
 
-Which decision to use depends on what the game's registry already holds there. An empty row that falls back to
-another scene lets yours play first, while a row that holds a scene is replaced. Your game guide says which games
-this recipe has been tested on, and names the example scene to copy.
+   With a rule, mark the scene played at its start, and make the rule test that mark.
+
+Which row or rule to use depends on what the game already has there. An empty registry row that falls back to
+another scene lets yours play first, while a row that holds a scene is replaced; a rule runs after the game's own.
+Your game guide says how the recipe was tested in that game, and names the example scene to copy.
 
 ## New assets
 

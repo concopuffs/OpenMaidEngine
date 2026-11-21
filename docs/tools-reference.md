@@ -1353,6 +1353,10 @@ offsets.
 `arterial-auto-options.steps` sets the five controls of its 設定's ｵｰﾄﾒｯｾｰｼﾞ page and one on the ﾒｯｾｰｼﾞ page with
 `option` on SC0000's first page. Both targets list the same `options` before and after and leave identical
 `SYS4REG.INI` files (2026-11-19).
+`arterial-new-scene.steps` plays the scene of `oms/examples/mods/example.arterial-new-scene` from the debug menu's
+map, with a quick save and load inside it, and returns to the map. Both targets reach the same offsets, and the
+scene's frames equal native's (2026-11-20). The two mods are exported for native AGE into one scratch copy, as its
+header shows.
 `arterial-object-blends.steps` takes SC0000's first page with `oms/examples/mods/example.arterial-object-blends`,
 whose six panels hold object colour modes 0 to 3 still. Native AGE runs the patch exported into its own scratch copy,
 and the file's header gives the commands. Every panel equals native's (2026-11-20; `engine-re.md`, "Object blend

@@ -1,4 +1,5 @@
 using Ome.Engine.Diagnostics;
+using Ome.Engine.Hosting;
 using Ome.Engine.Model;
 using Ome.Engine.Profiles;
 using Ome.Engine.Sys4;
@@ -340,6 +341,57 @@ public class NaturalBootIntegrationTests
             var (reachedAdv, _) = RunNewGameToFirstAdvPage("arterial", gameRoot, [layer, gameRoot], 510, 284);
             Assert.Equal("SC0000.BIN", reachedAdv.ScriptName);
             Assert.Equal("[OMS] A mod inserted this line before the opening scene's first page.", reachedAdv.Text);
+        }
+        finally
+        {
+            Directory.Delete(layer, recursive: true);
+        }
+    }
+
+    /// <summary>A script mod of 創刻のアテリアル's (docs/modding/games/arterial.md, "Catalogs, scenes and saves"): the
+    /// example's catalog takes selector 5, after the install's four appends, and op 0x143 runs its record 0 at the end
+    /// of INIT2. That writes the scene's record, the SCJUMP chain's slot 5 and 龍司's third name.</summary>
+    [Fact]
+    [Trait("Profile", "arterial")]
+    public void ArterialNewSceneModRegistersItsSceneAndRenamesAtBoot()
+    {
+        string gameRoot = Environment.GetEnvironmentVariable("OME_GAME_ROOT") ?? Paths.GameInstall("arterial");
+        string sys4Ini = Path.Combine(gameRoot, "SYS4INI.BIN");
+        Assert.True(File.Exists(sys4Ini), $"arterial install not found at {gameRoot}");
+        GameProfileManifest profile = GameProfileRegistry.BuiltIn.Find("arterial")!;
+        OpcodeTable table = OpcodeTableJson.Load(Paths.OpcodesJson, profile.EngineAbiId);
+        Sys4AssetCatalog catalog = Sys4AssetCatalog.Load(sys4Ini);
+        var store = new Sys4AssetStore(catalog, gameRoot, [gameRoot]);
+        Ome.Mods.Linking.ModLinkBase linkBase = Ome.Mods.Linking.ModLinkBase.ForInstall("arterial", sys4Ini, catalog,
+            store, table, Ome.Script.Abi.OpcodeContracts.Load(Paths.OpcodesJson),
+            Paths.GlobalsJson("arterial"), Paths.OmsModules("arterial"), Paths.PatchPointsJson("arterial"));
+        string source = Path.Combine(Paths.Repo, "oms", "examples", "mods", "example.arterial-new-scene");
+        using var mod = Ome.Mods.Packages.ModPackage.Open(source);
+        var link = Ome.Mods.Linking.ModLinker.Link(linkBase, [mod], []);
+        Assert.True(link.Succeeded, link.Report.Render());
+        Ome.Mods.Linking.LinkedCatalog linked = Assert.Single(link.Catalogs);
+        Assert.Equal(5, linked.Selector);
+
+        string layer = Path.Combine(Path.GetTempPath(), "ome-arterial-scene-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(layer);
+        try
+        {
+            var (aai, alf) = linked.Write(linkBase.AppendMagic, linkBase.CatalogTitle);
+            File.WriteAllBytes(Path.Combine(layer, linked.CatalogFile), aai);
+            File.WriteAllBytes(Path.Combine(layer, linked.ArchiveFile), alf);
+            Sys4AssetCatalog mounted = Sys4AssetCatalog.Load(sys4Ini, [layer]);
+            var scripts = new Sys4ScriptProvider(table, mounted, new Sys4AssetStore(mounted, gameRoot, [gameRoot]));
+            var session = new GameSession();
+            SceneResult result = session.RunScene(scripts.RequireByName("INIT2.BIN"), table, new HeadlessWaits(),
+                                                  provider: scripts, build: EngineBuilds.ForProfile(profile));
+            Assert.True(result.Halt is null or "exit" or "end", result.Halt);
+
+            // Records 0 to 2 are AUTO, OFFER and SCENE: scene 9990's script, the chain's slot of selector 5, and
+            // character_names[12][2] (GS[0x4154 + 6 * 12 + 2]).
+            Assert.Equal(linked.PackedId(2), (uint)session.Globals[0x214b71 + 0x2706]);
+            Assert.Equal(linked.PackedId(1), (uint)session.Globals[0x4525dd + 5]);
+            Assert.Equal(0x10001df, session.Globals[0x4525dd + 1]);   // the first append's $1$SCJUMP stays
+            Assert.Equal("[MOD] 傷だらけの男", session.GlobalStrings[0x4154 + 6 * 12 + 2]);
         }
         finally
         {

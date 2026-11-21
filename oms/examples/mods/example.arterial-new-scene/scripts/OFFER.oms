@@ -1,0 +1,15 @@
+oms 1
+// A rule of SCJUMP's chain, in the shipped rules' form (docs/arterial-data-tables.md, "Scene dispatch"). ALLMAP runs
+// the chain in context 4 once it has set a map up; this rule offers the mod's scene there while area 1 is in play,
+// until the scene has been played. A rule of the game's own that holds first takes the turn, and this one waits.
+script "OFFER"
+use arterial.globals
+
+    if scjump_context_id == 0x4 && current_area_id == 0x1 && scene[0x2706].played != 0x1 {
+        if scjump_chain_pending > 0x0 {
+            G[0x0] = 0x1
+            current_scene_id = 0x2706
+            scjump_chain_pending = 0x0
+        }
+    }
+    exit

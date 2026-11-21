@@ -1,0 +1,12 @@
+omp = 1
+id = "example.arterial-new-scene"
+name = "A scene of its own (Arterial)"
+version = "1.0.0"
+description = "Adds a scene from the mod's own append catalog, which the map of area 1 plays once, and renames 龍司's name plate at boot: new scripts, a new scene and a table edit, on native AGE and in the port."
+
+[game]
+profile = "arterial"
+target = "native"
+
+[scripts]
+names = ["AUTO", "OFFER", "SCENE"]

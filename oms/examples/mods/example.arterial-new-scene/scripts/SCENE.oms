@@ -1,0 +1,255 @@
+oms 1
+// A scene from the mod's own append catalog, which ALLMAP's map of area 1 plays once (OFFER picks it). SYSTEM4
+// plays it as it plays the shipped scenes, so the ADV menu, saving and loading work inside it.
+//
+// The skeleton is the shipped append scene $4$SC8770's, from `Ome.Cli oms-decompile --level idiomatic`: the yield
+// handlers, the hotspots, the save-resume mark, the load-restore loop, and each pass's setup and teardown. Only
+// the content (label_b6a, where SC8770 branches on current_scene_id to its ten scenes) and the script's own id
+// (G[0x5ca]) are the mod's.
+script "SCENE"
+use arterial.globals
+use arterial.scripts
+use arterial.adv
+
+    atomic {
+        script_entry()
+        set_surface_persistence_flags(0x4, 0x1)
+        set_surface_persistence_flags(0x5, 0x1)
+        set_surface_persistence_flags(0x6, 0x1)
+        set_surface_persistence_flags(0x7, 0x1)
+        set_surface_persistence_flags(0x8, 0x1)
+        set_surface_persistence_flags(0x9, 0x1)
+        set_surface_persistence_flags(0xa, 0x1)
+        set_surface_persistence_flags(0xb, 0x1)
+        set_surface_persistence_flags(0x2b, 0x1)
+        set_surface_persistence_flags(0x2c, 0x1)
+        set_surface_persistence_flags(0x2d, 0x1)
+        set_surface_persistence_flags(0x2e, 0x1)
+        set_surface_persistence_flags(0x2f, 0x1)
+        set_surface_persistence_flags(0x30, 0x1)
+        set_surface_persistence_flags(0x31, 0x1)
+        set_surface_persistence_flags(0x32, 0x1)
+        set_surface_persistence_flags(0x33, 0x1)
+        set_surface_persistence_flags(0x34, 0x1)
+        set_surface_persistence_flags(0x35, 0x1)
+        set_surface_persistence_flags(0x36, 0x1)
+        set_surface_persistence_flags(0x37, 0x1)
+        set_surface_persistence_flags(0x38, 0x1)
+        set_surface_persistence_flags(0x39, 0x1)
+        set_surface_persistence_flags(0x3a, 0x1)
+        set_surface_persistence_flags(0x3e, 0x1)
+        set_surface_persistence_flags(0x3f, 0x1)
+        set_surface_persistence_flags(0x40, 0x1)
+        coroutine_save_yield_handlers(adv_hide_window_handler, adv_show_window_handler)
+    }
+    register_adv_hotspots()
+    mark_save_resume_frame()
+    goto label_706
+label_706:
+    continue_save_load_stack_restore()
+    if G[0x4527de] == 0x1 goto label_719
+label_715:
+    loop {
+        label_b6a()
+        exit
+    label_719:
+        if !0x1 goto label_b65
+        note "ループ開始"
+        instruction_marker_noop()
+        G[0x5cb] = coroutine_label_yield("LABEL", "J", G[0x5cb])
+        G[0x5d0] = &label_715
+        if !(G[0x5d0] == G[0x5cb]) break
+        G[0x4527de] = 0x0
+    }
+    G[0x0] = 0x1
+    atomic {
+        set_tick_presentation(0x1)
+        if G[0x4527de] == 0x0 && G[0x4527e0] == 0x0 && G[0x4527df] == 0x0 {
+            if current_scene_id >= 0x0 && current_scene_id < 0x2710 {
+                scene[current_scene_id].seen = 0x1
+                store_shared_profile_int(scene[current_scene_id].seen)
+            }
+        }
+        if G[0x3582] == 0x0 {
+            gfx_elem_erase(0xa7f8, 0x1)
+            G[0x35fb] = 0x0
+            G[0x35fc] = 0x0
+            G[0x35fd] = 0x0
+            G[0x35fe] = G[0x35fc]
+            G[0x35ff] = G[0x35fd]
+            if G[0x36ca] {
+                gfx_elem_erase(0xa410, 0x15f90 - 0xa410)
+                clear_speaker_shown_flags()
+            } else {
+                set_gfx_range_transform(0x0, 0x0, 0x0, 0x0, 0x0)
+                clear_retained_gfx_objects()
+                release_transient_surfaces()
+                if G[0x3fc01] {
+                    if G[0x2] == 0x1 {
+                        GF[0x4] = mov_float(0x0)
+                        GF[0x5] = mov_float(0x400)
+                        GF[0x6] = mov_float(0x0)
+                        GF[0x7] = mov_float(0x400)
+                        GF[0x8] = mov_float(0x0)
+                        GF[0x9] = mov_float(0x0)
+                        GF[0xa] = mov_float(0x240)
+                        GF[0xb] = mov_float(0x240)
+                        create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+                        set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+                        G[0x35fb] = 0x0
+                        G[0x35fc] = 0xff
+                        G[0x35fd] = 0x0
+                        G[0x35fe] = G[0x35fc]
+                        G[0x35ff] = G[0x35fd]
+                        draw_texture(0x15f90, 0x1, 0x0, 0x0, 0x400, 0x240, 0x0, 0x0)
+                        gfx_blit_color(0x15f90, 0x0, 0x258, 0x0, 0xffffff)
+                        mark_frame_yield()
+                        gfx_elem_erase(0x15f90, 0x1)
+                    } else {
+                        draw_texture(0xa7f8, 0x1, 0x0, 0x0, 0x400, 0x240, 0x0, 0x0)
+                    }
+                } else {
+                    GF[0x4] = mov_float(0x0)
+                    GF[0x5] = mov_float(0x400)
+                    GF[0x6] = mov_float(0x0)
+                    GF[0x7] = mov_float(0x400)
+                    GF[0x8] = mov_float(0x0)
+                    GF[0x9] = mov_float(0x0)
+                    GF[0xa] = mov_float(0x240)
+                    GF[0xb] = mov_float(0x240)
+                    create_polygon(0xa7f8, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+                    set_polygon_color(0xa7f8, 0x0, 0xff, 0x0)
+                    G[0x35fb] = 0x0
+                    G[0x35fc] = 0xff
+                    G[0x35fd] = 0x0
+                    G[0x35fe] = G[0x35fc]
+                    G[0x35ff] = G[0x35fd]
+                }
+                set_speaker_shown_flags()
+                G[0x3148] = 0x0
+            }
+            clear_render_target()
+            init_adv_layer_slots()
+            G[0x5ce] = 0x1
+            set_texture(0x2b, 0x3e, -(0x1))
+            set_texture(0x2c, 0x3f, -(0x1))
+            set_texture(0x2d, 0x40, -(0x1))
+            G[0x5d2] = 0x0
+            G[0x5d4] = 0x0
+            G[0x5d5] = 0x0
+            G[0x5d3] = 0x0
+            G[0x3fb83] = 0x0
+            G[0x3fb84] = 0x0
+            G[0x3fb85] = 0x0
+            G[0x3fb86] = 0x0
+            G[0x3fb87] = 0x0
+            G[0x5d6] = 0x0
+            G[0x5d7] = 0x0
+            G[0x5d8] = 0x0
+            G[0x5d9] = 0x0
+            G[0x5da] = 0x0
+            G[0x5db] = 0x0
+            G[0x5dc] = 0x0
+            G[0x3fb8c] = 0x0
+            G[0x35fb] = 0x0
+            adv_speaker_character_id = -(0x1)
+            G[0x3145] = -(0x1)
+            G[0x3146] = -(0x1)
+            G[0x5cc] = 0x0
+            draw_message_window()
+            draw_nameplate()
+            clear_message_text()
+        }
+        G[0x3582] = 0x0
+        G[0x3fc03] = 0x3a3a3a
+        set_font_size(0x16)
+        set_text_color(0xffffff)
+        set_text_effect_color(G[0x3fc03])
+        if G[0x313f] != 0x2 {
+            set_font(GS[0xde])
+            set_font_bold(0x1)
+            set_ruby_font_size(0x8)
+            set_text_line_spacing(0xc)
+            set_text_render_mode(G[0x3fc04])
+            set_text_effect_offset(G[0x3fc05], G[0x3fc05])
+            G[0x313f] = 0x2
+        }
+        clear_message_text()
+        if G[0x36ca] == 0x0 {
+            GF[0x4] = mov_float(0x0)
+            GF[0x5] = mov_float(0x400)
+            GF[0x6] = mov_float(0x0)
+            GF[0x7] = mov_float(0x400)
+            GF[0x8] = mov_float(0x0)
+            GF[0x9] = mov_float(0x0)
+            GF[0xa] = mov_float(0x240)
+            GF[0xb] = mov_float(0x240)
+            create_polygon(0x0, GF[0x4], GF[0x8], GF[0xc], G[0x214811], G[0x214815], GF[0x10], GF[0x14], 0x4, 0x0)
+            set_polygon_color(0x0, 0x0, 0xff, 0x0)
+        }
+        resume_adv_skip_service()
+        note "loadmesskip advset"
+        instruction_marker_noop()
+    }
+    call *G[0x5cb]
+    atomic {
+        set_tick_presentation(0x0)
+        cancel_hotspot_wait()
+        set_adv_wait_indicator_enabled(0x0)
+        suspend_adv_skip_service()
+        note "savemesskip advend"
+        instruction_marker_noop()
+        G[0x3543] = 0x0
+        sfx_release(G[0x3fb99])
+        sfx_release(G[0x3fb9a])
+        sfx_release(G[0x3fb9b])
+        sfx_release(G[0x3fb9c])
+        reset_message_voice_state()
+        set_voice_bgm_duck_control(0x0)
+        G[0x3545] = 0x0
+        arm_voice_duck_release()
+        clear_run_state_0x1000()
+        if G[0x3582] == 0x0 {
+            script_entry()
+            G[0x5cc] = 0x0
+            draw_message_window()
+            draw_nameplate()
+            clear_message_text()
+            if G[0x36ca] {
+                gfx_elem_erase(0xa410, 0x15f90 - 0xa410)
+            } else {
+                clear_retained_gfx_objects()
+            }
+            clear_render_target()
+            for G[0x21480c] = 0x0; G[0x21480c] < 0x14; G[0x21480c] += 0x1 {
+                G[0x3583][G[0x21480c]] = 0x0
+                G[0x3597][G[0x21480c]] = 0x0
+                G[0x35bf][G[0x21480c]] = 0x0
+                for G[0x21480d] = 0x0; G[0x21480d] < 0x3; G[0x21480d] += 0x1 {
+                    if G[0x3546:0x3][G[0x21480c]][G[0x21480d]] {
+                        gfx_elem_release(G[0x3546:0x3][G[0x21480c]][G[0x21480d]])
+                    }
+                }
+            }
+            gfx_elem_release(0x3e)
+            gfx_elem_release(0x3f)
+            gfx_elem_release(0x40)
+        }
+        if G[0x36ca] == 0x0 {
+            set_gfx_range_transform(0x0, 0x0, 0x0, 0x0, 0x0)
+        }
+    }
+    goto label_719
+label_b65:
+    G[0x5ca] = asset "SCENE"
+label_b6a:
+    scene[0x2706].played = 0x1
+    note "the mod's scene"
+    instruction_marker_noop()
+    show_message_window_150ms()
+    "[OMS] A scene from the mod's own append catalog: the map of area 1 plays it once."
+    // Face 0x16a is 龍司's (character 12); form 2 shows his third name, which AUTO renamed at boot.
+    "「……ここは、モッドが足した場面だ」" (face: 0x16a, form: 0x2)
+    "[OMS] The scene ends after this page, and the map goes on."
+    hide_message_window_150ms()
+    return

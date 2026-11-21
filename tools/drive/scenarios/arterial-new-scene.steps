@@ -1,0 +1,51 @@
+# 創刻のアテリアル with oms/examples/mods/example.arterial-new-scene and example.arterial-debug-menu: the debug menu's
+# 全体マップ opens area 1's map, whose SCJUMP chain (context 4) runs the mod's rule OFFER after the game's own, and
+# SYSTEM4 plays the mod's scene $5$SCENE from its append catalog. The scene's second page is 龍司's line, whose name
+# plate shows the name AUTO set at boot. A quick save on that page, a page on, and a quick load bring it back; the
+# scene's last page returns to the map. Run on a fresh sandbox, on both targets, and compare the shots. Native AGE
+# takes the two mods exported into its own scratch copy:
+#   Ome.Cli omp export --output-dir build/arterial-new-scene-export --mod oms/examples/mods/example.arterial-debug-menu --mod oms/examples/mods/example.arterial-new-scene --game arterial
+#   py -3.11 -X utf8 tools/native_scratch.py --game arterial --name scenemod --replace --overlay build/arterial-new-scene-export/TITLE.BIN --overlay build/arterial-new-scene-export/APPEND05.AAI --overlay build/arterial-new-scene-export/APPEND05.ALF
+#   py -3.11 -X utf8 tools/drive.py --game arterial native start --exe build/games/arterial/native-scratch-scenemod/AGE.EXE
+#   py -3.11 -X utf8 tools/drive.py --game arterial port start --mod oms/examples/mods/example.arterial-debug-menu --mod oms/examples/mods/example.arterial-new-scene
+#   py -3.11 -X utf8 tools/drive.py --game arterial <target> run tools/drive/scenarios/arterial-new-scene.steps
+# The install has four appends, so the mod's catalog is selector 5 on both targets.
+
+point tutorial-next 580 485
+point receipt 512 300
+point qsave 601 553
+point qload 650 553
+
+rand-seed 13
+wait 5
+click adv.next                                   # skips the logo
+wait-state script=TITLE timeout=90
+wait 6
+click title.quit                                 # the debug menu
+wait 4
+click 440 270                                    # 全体マップ
+wait-state script=TUTORIAL timeout=60            # OPEN's tutorial (怪しいお店)
+wait 2
+wait-state script=RECEIPT click=tutorial-next every=2 timeout=30
+wait 2
+wait-state top=$5$SCENE@0x529 click=receipt every=3 timeout=60   # the rewards, then the mod's scene
+settle timeout=20
+shot arterial-new-scene-page1
+
+advance 1
+expect top=$5$SCENE@0x554                        # 龍司's line, his plate renamed at boot
+shot arterial-new-scene-page2
+click qsave
+wait 2
+advance 1
+expect top=$5$SCENE@0x580
+click qload
+wait-state top=$5$SCENE@0x554 timeout=30        # the load resumes the scene's second page
+settle timeout=20
+shot arterial-new-scene-loaded
+
+advance 1
+click adv.next                                   # the scene ends
+wait-state script=ALLMAP timeout=60              # back on the map, which goes on: its input wait
+settle timeout=20
+shot arterial-new-scene-map

@@ -1,0 +1,19 @@
+oms 1
+// Record 0 of the mod's append catalog. Op 0x143 runs it at boot, after INIT2 has filled the tables and the install's
+// own appends have run their $n$AUTORUN (docs/arterial-data-tables.md, "How the data gets into memory").
+script "AUTO"
+use arterial.globals
+
+    // The scene: id 9990 (0x2706), which SCINIT leaves empty (its ids end at 8932, of 10000). SYSTEM4 plays the script
+    // a scene's record names once a rule of SCJUMP's chain has picked it. The scene's played cell,
+    // scene[0x2706].played (G[0x2ce6]), lies in the saved prefix, so it plays once a game.
+    scene[0x2706].script_id = asset "SCENE"
+
+    // OFFER joins SCJUMP's chain in the slot of this catalog's selector, as each of the install's appends puts its
+    // $n$SCJUMP in slot n. The chain runs slots 0 to 31 in order, so the game's own rules come first.
+    scjump_chain_script_ids[asset "OFFER" >> 0x18] = asset "OFFER"
+
+    // A table edit: 龍司's (character 12) third name, which his lines use (form 2), in the opening and in SCENE.
+    // The game does not save the names, so boot writes it again on each start.
+    character[0xc].name.descriptor_2 = set_string("[MOD] 傷だらけの男")   // 無数の傷を持つ男
+    exit

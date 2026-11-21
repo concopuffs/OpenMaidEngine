@@ -256,8 +256,27 @@ Blade starts a new game, so the mode the entry sets takes effect. It targets `na
 
 - **Selectors.** The install ships four append catalogs (`APPEND01`–`04`), so a first mod's catalog normally gets
   selector 5.
-- **Untested.** No Arterial mod that adds a scene or a script has been tested, on either target. Start from one
-  of the game's own append scenes (`$1$SC0510.BIN` is one), and test saving on native AGE as well as in the port.
+- **Record 0 runs at boot.** Op `0x143` runs it at the end of `INIT2`, after the install's own appends have run
+  their `$n$AUTORUN`, so it sees every table filled and can edit any of them. The tables lie above the saved prefix
+  and the game does not save a character's names, so an edit made there holds after a load.
+- **A scene of your own** needs three things, and `oms/examples/mods/example.arterial-new-scene` does all three. It is
+  tested on native AGE and in the port, saving and loading inside the scene included.
+  - **A scene id.** `SCINIT` uses ids up to 8932 of its 10000. Write your scene script's id into an unused one:
+    `scene[0x2706].script_id = asset "SCENE"`. Its played cell, `scene[0x2706].played`, is in the saved prefix.
+  - **A rule in SCJUMP's chain.** The game has no registry row to fill. A caller runs every script of
+    `scjump_chain_script_ids` (32 slots) and the first rule that holds picks the next scene
+    (`../../arterial-data-tables.md`, "Scene dispatch"). Put a rule script of yours in the slot of your selector,
+    as each of the game's appends does: `scjump_chain_script_ids[asset "OFFER" >> 0x18] = asset "OFFER"`. Write the
+    rule in the shipped rules' form: test the context and your conditions, then, if `scjump_chain_pending` is still
+    over 0, set `G[0x0] = 0x1` and `current_scene_id`, and clear `scjump_chain_pending`. The game's own rules run
+    first, and one that holds takes the turn.
+  - **The scene script.** SYSTEM4 plays the script of the picked scene's record. Copy a shipped append scene's
+    skeleton (`$4$SC8770.BIN` is a small one, decompiled `--level idiomatic`) and replace its content, where it
+    branches on `current_scene_id`. Mark the scene played at its start, so the rule does not offer it again.
+    When its content returns, the caller goes on: from the map, the map.
+- The example's rule offers its scene in context 4 while area 1 is in play. The title's debug menu reaches that map at
+  once (`example.arterial-debug-menu`, 全体マップ), and `tools/drive/scenarios/arterial-new-scene.steps` plays the
+  scene there on both targets.
 
 ## Examples
 
@@ -268,5 +287,6 @@ Blade starts a new game, so the mode the entry sets takes effect. It targets `na
 | `oms/examples/mods/example.arterial-area-point` | a data file with an area part: area 1's 出現地点 moves right, applied at `arterial.area.loaded` |
 | `oms/examples/mods/example.arterial-debug-menu` | the debug menu above, for both targets |
 | `oms/examples/mods/example.arterial-polygon-blends` | a patch of `DEBUG.BIN` that gives its polygon test the replace and subtractive blends and a second texture, for both targets |
+| `oms/examples/mods/example.arterial-new-scene` | new scripts in the mod's own append catalog: a boot script that renames 龍司's name plate and registers a scene, a rule in SCJUMP's chain, and the scene, on both targets; `tools/drive/scenarios/arterial-new-scene.steps` plays it from the debug menu's map |
 | `oms/examples/mods/example.arterial-object-blends` | a patch of `SC0000.BIN` that holds object colour modes 0 to 3 still on the first page: on the screen, and into render targets of kinds 1 and 2; `tools/drive/scenarios/arterial-object-blends.steps` takes the frame on both targets |
 | `oms/examples/mods/example.arterial-event-log` | a Lua mod that logs every event of `arterial-base` with its fields; `tools/drive/scenarios/port/arterial-debug-events.steps` runs it with the two above |
