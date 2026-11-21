@@ -553,8 +553,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
 
   Done when each is fixed or dropped with a reason, and `adding-a-game.md` describes no workaround.
 - **Onboard 創刻のアテリアル (Arterial, AGE 4.38D, catalog `S4IC438`, scripts `SYS4438`).** It stands at **P3**
-  since 2026-11-20 by the user's word (`adding-a-game.md` §1; its manifest's `support`), on the branch
-  `feature/arterial`: the engine names its install, decodes all of it, has a handler for every opcode its scripts
+  since 2026-11-20 by the user's word (`adding-a-game.md` §1; its manifest's `support`), merged into `develop` the same
+  day from `feature/arterial`: the engine names its install, decodes all of it, has a handler for every opcode its scripts
   use, and boots it by its own route through the logo and the title to SC0000's first pages. Its saves load on
   native AGE as native's load on the port. The launcher lists it. Its modding level is **M3** since 2026-11-20:
   script mods, text packages, Lua mods and data files work through its base mod `arterial-base`
@@ -744,7 +744,8 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept
     window position").
 
-  Done when the game is at P3 and M3 (`adding-a-game.md`), or the user sets another target.
+  The onboarding target, P3 and M3 (`adding-a-game.md`), was reached on 2026-11-20. The item stays for the open points
+  above, each with its own end; the sweep (P4) is the next target by the plan, unless the user sets another.
 - **A launcher window test failed once in its teardown.** In one core validation run on `feature/data-patches`
   (2026-11-19, at `6c5972c4`), `WindowTests.TheFirstRunCardAndTheArtQuestionDraw` passed its checks and then failed
   in `TestHome.Dispose` (`launcher/Ome.Launcher.Tests/TestHome.cs`): `Directory.Delete` could not remove the test
