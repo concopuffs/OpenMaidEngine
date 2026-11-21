@@ -1,0 +1,9 @@
+omp = 1
+id = "example.arterial-object-blends"
+name = "Object blends (Arterial)"
+version = "1.0.0"
+description = "Holds object colour modes 0 to 3 still on the opening's first page: the choice window's frame on the screen and in render targets of kinds 1 and 2, for comparing the port with native AGE."
+
+[game]
+profile = "arterial"
+target = "native"

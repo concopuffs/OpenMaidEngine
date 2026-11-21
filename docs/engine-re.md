@@ -3323,10 +3323,39 @@ present their range into surface `0xe`, made with kind 1, and scale that surface
 with its own alpha, where a blend over the cleared surface would darken its translucent parts. Every other render
 target the game's scripts select was made with kind 2 (486 selections against 4).
 
+Direct3D 9 blends the target's alpha by the colour's factors, since nothing turns on a separate alpha blend. So in a
+surface of kind 1 mode 0 leaves `a·a + d·(1 − a)` (a translucent texel drawn over itself keeps its alpha), mode 1 adds
+`a·a` and mode 3 takes `a·a` away. A surface of kind 2 has no alpha at all: display `+0x464` holds whether
+`IDirect3D9::CheckDeviceFormat(0, type, adapter format, 0, D3DRTYPE_TEXTURE, D3DFMT_X8R8G8B8)` succeeded (`0x4858f8`
+in 4.38D, `0x4719eb` in 4.24J), which it does on any device that has the format. So the surface is X8R8G8B8 and
+samples opaque, black where it was cleared.
+
 The port (`BlendKind.Subtractive`, `Copy`, `CopyAll`; `ObjectBlendModeTests`) draws mode 3 subtractively in both
-renderers, keeping the target's alpha where native also takes the alpha's square from it. A render target's drawing
-(ops `0x20c` and `0x222` with a surface selected) copies a mode-2 object into a surface op `0x1f8` made with kind 1,
-leaving out its texels of alpha 0 where the build keeps the alpha test (`GfxRules.SpriteAlphaTest`).
+renderers. A render target's drawing (ops `0x20c` and `0x222` with a surface selected) copies a mode-2 object into a
+surface op `0x1f8` made with kind 1, leaving out its texels of alpha 0 where the build keeps the alpha test
+(`GfxRules.SpriteAlphaTest`). The software rasterizer, which draws every render target, blends the alpha as Direct3D 9
+does, and a surface made with kind 2 takes every write at alpha 255: its creation, a clear, a present, a fill (op
+`0x20b`) and a copy (ops `0x207`, `0x32`). The screen's alpha is never shown: the front end draws the canvas opaque.
+
+**Compared with native (2026-11-20).** The game draws modes 2 and 3 only in motion: BUNKIMOVE's mode-2 objects go
+back to mode 0 once the window has scaled in, and COUPANIME's movies move. So `oms/examples/mods/example.arterial-object-blends`
+holds each mode still on SC0000's first page. It draws the choice window's frame sheet (surface `0xf`) in six panels:
+
+- mode 2 into a kind-1 target;
+- modes 1 and 0 over such a copy;
+- mode 3 on the screen, over the message window;
+- mode 3 over a copy inside a kind-1 target;
+- mode 0 into a kind-2 target.
+
+`tools/drive/scenarios/arterial-object-blends.steps` takes the frame on both targets. Every panel equals native's
+within 1 of 255, apart from the wait indicator's phase. Before the fix, three panels differed:
+
+- the kind-2 panel showed the page through, where native's is opaque;
+- the two drawn over a copy were brighter, because the port added the whole source alpha to the target's;
+- mode 3 inside a target kept the alpha.
+
+The opening, save and AntiFont scenarios of all three games still equal native after the change (their wait
+indicators aside).
 
 **TITLE SO022 additive proof (2026-07-20).** TITLE loads type-1 8-bpp `SO022.AGF` with no alpha plane and
 no color key, binds two 140×140 spritesheet objects, and calls `0x203(handle,1,255,0xffffff)` for both.

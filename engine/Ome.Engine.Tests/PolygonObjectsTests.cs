@@ -253,7 +253,9 @@ public class PolygonObjectsTests
         var reference = new ReferenceRenderer(new Sys4LogicalCanvas(4, 4));
         reference.Draw(frame);
         byte[] At(int x, int y) => reference.Pixels.AsSpan((y * 4 + x) * 4, 4).ToArray();
-        Assert.Equal([227, 177, 152, 255], At(0, 0));   // white at alpha 0x80 over the picture, over the black polygon
+        // White at alpha 0x80 over the picture, over the black polygon; the alpha blends by the colour's factors, and
+        // the screen shows none.
+        Assert.Equal([227, 177, 152, 191], At(0, 0));
         Assert.Equal([200, 100, 50, 255], At(2, 2));    // object 30 above polygon 20
         Assert.Equal([0, 255, 0, 255], At(3, 3));       // polygon 40 above everything
         // The lowered triangles are the same object until the polygon changes: a renderer may keep what it built.
@@ -391,10 +393,10 @@ public class PolygonObjectsTests
     }
 
     [Theory]
-    [InlineData(FramePolygonBlend.Alpha, 150, 49, 50, 255)]           // (200, 0, 100) at alpha 0x80 over (100, 100, 0)
+    [InlineData(FramePolygonBlend.Alpha, 150, 49, 50, 191)]           // (200, 0, 100) at alpha 0x80 over (100, 100, 0)
     [InlineData(FramePolygonBlend.Additive, 200, 100, 50, 255)]
     [InlineData(FramePolygonBlend.Replace, 200, 0, 100, 0x80)]
-    [InlineData(FramePolygonBlend.Subtractive, 0, 100, 0, 255)]
+    [InlineData(FramePolygonBlend.Subtractive, 0, 100, 0, 191)]
     public void EachBlendLandsAsDirect3DsDoes(FramePolygonBlend blend, byte red, byte green, byte blue, byte alpha)
     {
         byte[] pixels = [100, 100, 0, 255];

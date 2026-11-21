@@ -45,6 +45,10 @@ ran the same scenarios on native AGE.
   test waits: one polygon takes a second texture, one the replace blend and one the subtractive blend, which no
   script of the game uses. It targets `native`. `tools/drive/scenarios/port/arterial-debug-reference-diff.steps`
   starts with it and the debug menu, and compares the GPU renderer with the reference there.
+- `example.arterial-object-blends` patches `SC0000.BIN` before the first page's text. Six panels draw the choice
+  window's frame sheet in object colour modes 0 to 3: on the screen, and into render targets made with kinds 1 and 2.
+  The game itself draws modes 2 and 3 only in motion. It targets `native`; `tools/drive/scenarios/arterial-object-blends.steps`
+  takes the frame on both targets.
 
 - `example.double-exp-lua` (Lua scripting gate 4) is the Lua version of the Himegari guide's experience patch: a
   handler on `himegari.experience.after_calculation` doubles `L[0x1]`. `ModLuaLinkTests` links it and runs

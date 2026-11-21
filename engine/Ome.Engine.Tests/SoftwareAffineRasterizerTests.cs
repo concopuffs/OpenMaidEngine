@@ -123,7 +123,7 @@ public class SoftwareAffineRasterizerTests
         Assert.InRange(dst[0], 49, 50);
         Assert.InRange(dst[1], 49, 50);
         Assert.InRange(dst[2], 5, 7);
-        Assert.InRange(dst[3], 126, 127);
+        Assert.InRange(dst[3], 63, 64);   // alpha 127 x 127 / 255 over 0
     }
 
     [Fact]
@@ -333,12 +333,12 @@ public class SoftwareAffineRasterizerTests
             dst[i] = (byte)System.Math.Min(255, dst[i] + r * a / 255);
             dst[i + 1] = (byte)System.Math.Min(255, dst[i + 1] + g * a / 255);
             dst[i + 2] = (byte)System.Math.Min(255, dst[i + 2] + b * a / 255);
-            dst[i + 3] = (byte)System.Math.Min(255, dst[i + 3] + a);
+            dst[i + 3] = (byte)System.Math.Min(255, dst[i + 3] + a * a / 255);
             return;
         }
         dst[i] = (byte)((r * a + dst[i] * (255 - a)) / 255);
         dst[i + 1] = (byte)((g * a + dst[i + 1] * (255 - a)) / 255);
         dst[i + 2] = (byte)((b * a + dst[i + 2] * (255 - a)) / 255);
-        dst[i + 3] = (byte)System.Math.Min(255, dst[i + 3] + a);
+        dst[i + 3] = (byte)((a * a + dst[i + 3] * (255 - a)) / 255);   // Direct3D 9: the alpha by the colour's factors
     }
 }

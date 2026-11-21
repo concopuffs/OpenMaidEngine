@@ -267,7 +267,7 @@ public static partial class SoftwareAffineRasterizer
         dst[di] = (byte)((r * a + dst[di] * inverse) / 255);
         dst[di + 1] = (byte)((g * a + dst[di + 1] * inverse) / 255);
         dst[di + 2] = (byte)((b * a + dst[di + 2] * inverse) / 255);
-        dst[di + 3] = (byte)System.Math.Min(255, dst[di + 3] + a);
+        dst[di + 3] = (byte)((a * a + dst[di + 3] * inverse) / 255);
     }
 
     private static void FillAxisAligned(byte[] dst, int dstW, int width, int height, Affine2D inv,
@@ -304,8 +304,9 @@ public static partial class SoftwareAffineRasterizer
         y1=System.Math.Min(dh,(int)System.Math.Ceiling(System.Math.Max(System.Math.Max(a.Y,b.Y),System.Math.Max(c.Y,d.Y))));
     }
     // Copy and CopyAll write the source, alpha included (ONE/ZERO); their callers have already left out what the alpha
-    // test keeps out. Subtractive takes the source scaled by its alpha from the target's colour and leaves the target's
-    // alpha, as the polygon's subtract does: native takes a * a from it too.
+    // test keeps out. The others blend the alpha by the colour's factors, as Direct3D 9 does with no separate alpha
+    // blend, which shows in a render target with an alpha channel: SRCALPHA/INVSRCALPHA leaves a * a + d * (1 - a),
+    // SRCALPHA/ONE adds a * a, and REVSUBTRACT takes a * a away.
     private static void Blend(byte[] d,int i,int r,int g,int b,int a,BlendKind blend=BlendKind.Alpha){
         if(blend is BlendKind.Copy or BlendKind.CopyAll){
             d[i]=(byte)r;d[i+1]=(byte)g;d[i+2]=(byte)b;d[i+3]=(byte)a;
@@ -313,15 +314,15 @@ public static partial class SoftwareAffineRasterizer
         }
         if(blend==BlendKind.Subtractive){
             d[i]=(byte)System.Math.Max(0,d[i]-r*a/255);d[i+1]=(byte)System.Math.Max(0,d[i+1]-g*a/255);
-            d[i+2]=(byte)System.Math.Max(0,d[i+2]-b*a/255);
+            d[i+2]=(byte)System.Math.Max(0,d[i+2]-b*a/255);d[i+3]=(byte)System.Math.Max(0,d[i+3]-a*a/255);
             return;
         }
         if(blend==BlendKind.Additive){
             d[i]=(byte)System.Math.Min(255,d[i]+r*a/255);d[i+1]=(byte)System.Math.Min(255,d[i+1]+g*a/255);
-            d[i+2]=(byte)System.Math.Min(255,d[i+2]+b*a/255);d[i+3]=(byte)System.Math.Min(255,d[i+3]+a);
+            d[i+2]=(byte)System.Math.Min(255,d[i+2]+b*a/255);d[i+3]=(byte)System.Math.Min(255,d[i+3]+a*a/255);
             return;
         }
         d[i]=(byte)((r*a+d[i]*(255-a))/255);d[i+1]=(byte)((g*a+d[i+1]*(255-a))/255);
-        d[i+2]=(byte)((b*a+d[i+2]*(255-a))/255);d[i+3]=(byte)System.Math.Min(255,d[i+3]+a);
+        d[i+2]=(byte)((b*a+d[i+2]*(255-a))/255);d[i+3]=(byte)((a*a+d[i+3]*(255-a))/255);
     }
 }

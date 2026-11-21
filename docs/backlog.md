@@ -586,11 +586,9 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     aspect-mode font calibration are in too, and compared (`ExtendedGlyphTests`, `AspectFontRealizationTests`; the
     frames of pages 1 and 4 equal native's in every pixel); the portable text backend draws the extended dashes too
     (2026-11-20; `engine-re.md`, the raw units' paragraph). So are the sprite's alpha test as a build rule, and object
-    colour modes 2 and 3 (2026-11-20; `engine-re.md`, "Object blend modes"; `ObjectBlendModeTests`). Open there:
-    - **Object modes 2 and 3 are not compared with native.** No run has shown COUPANIME's movies (mode 3) or
-      BUNKIMOVE's choice window scaling in (mode 2 into a kind-1 surface) on both targets. Into a render target the
-      port's mode 3 keeps the target's alpha, where native takes the alpha's square from it. Done when a frame of each
-      equals native's.
+    colour modes 2 and 3 (2026-11-20; `engine-re.md`, "Object blend modes"; `ObjectBlendModeTests`). Each mode is
+    compared with native on a still frame, with the alpha a kind-1 render target keeps and kind 2's opaque surface
+    (`example.arterial-object-blends`).
   - **File types no other game has:** two `.X` files (`LEAF0.X`, `LEAF1.X`) and the `.TTF`, among 21,349 entries
     in six archives and four appends.
   - **Its float bank is used:** the header's full bank sizes are 4,640,981 integers, 317 floats and 76,436

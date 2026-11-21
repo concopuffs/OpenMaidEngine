@@ -1,0 +1,24 @@
+# Object colour modes 0 to 3 held still on 創刻のアテリアル's first page by oms/examples/mods/example.arterial-object-blends.
+# The top row holds mode 2 copied into a render target made with kind 1, then modes 1 and 0 drawn over such a copy.
+# Mode 3 takes the frame from the message window. A mode-3 subtraction inside a kind-1 target sits over the window's
+# right end, and mode 0 into a kind-2 target over its left. docs/engine-re.md, "Object blend modes". Run on a fresh
+# sandbox, on both targets, and compare the shots: every panel equals native's (2026-11-20). Native AGE takes the
+# exported patch in its own scratch copy:
+#   Ome.Cli omp export --output-dir build/arterial-object-blends-export --mod oms/examples/mods/example.arterial-object-blends --game arterial
+#   py -3.11 -X utf8 tools/native_scratch.py --game arterial --name blendprobe --replace --overlay build/arterial-object-blends-export/SC0000.BIN
+#   py -3.11 -X utf8 tools/drive.py --game arterial native start --exe build/games/arterial/native-scratch-blendprobe/AGE.EXE
+#   py -3.11 -X utf8 tools/drive.py --game arterial port start --mod oms/examples/mods/example.arterial-object-blends
+#   py -3.11 -X utf8 tools/drive.py --game arterial <target> run tools/drive/scenarios/arterial-object-blends.steps
+
+rand-seed 13
+wait 5
+click adv.next
+wait-state script=TITLE timeout=90
+wait 6
+click title.start
+wait-state script=SC0000 timeout=90
+wait 22                                 # the white screen and Eushully Presents (the patch moves the page's offsets)
+settle timeout=20
+move 512 300
+wait 1
+shot arterial-object-blends

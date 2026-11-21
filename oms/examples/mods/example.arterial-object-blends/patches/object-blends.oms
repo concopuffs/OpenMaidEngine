@@ -1,0 +1,79 @@
+oms 1
+// Object colour modes 0 to 3 (op 0x203), held still on 創刻のアテリアル's first page for comparing the port with native
+// AGE (tools/drive/scenarios/arterial-object-blends.steps). The game draws modes 2 and 3 only in motion: BUNKIMOVE
+// copies the choice window's objects in mode 2 into surface 0xe, made with kind 1, as it scales the window in, and
+// COUPANIME takes its movies from the screen in mode 3. Here six panels hold them still, with what a render target
+// keeps of the alpha. The top row shows mode 2 copied into a kind-1 target, then modes 1 and 0 drawn over such a
+// copy. Mode 3 subtracts from the message window's middle. Over the window's right end sits a mode-3 subtraction
+// inside a kind-1 target, and over its left end mode 0 drawn into a kind-2 target, which has no alpha channel.
+// Surface 0xf is the choice window's frame sheet, which SYSTEM4 loads at boot; its middle is translucent. Objects
+// 0xc35a to 0xc367 are the choice window's and beyond, which the page does not use. docs/engine-re.md, "Object blend
+// modes".
+patch "SC0000.BIN" fingerprint "sha256:123a8a055e79f3ec45feff5bb6edba15c365cfcefe75ee07c8a4b249f0fdcf3c"
+
+// Before the first page's text (the instruction that sets G[0x3141]).
+before site 0xf1c {
+    // Mode 2: a copy into a render target with an alpha channel, the frame's alpha with it.
+    create_texture(0x2f0, 0x12c, 0xbe, 0x1)
+    draw_texture(0xc35a, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x0, 0x0)
+    gfx_draw_color(0xc35a, 0x2, 0xff, 0xffffff)
+    select_render_target(0x2f0)
+    clear_render_target()
+    present_gfx_object_range(0xc35a, 0x1)
+    select_render_target(-1)
+    gfx_elem_erase(0xc35a, 0x1)
+    draw_texture(0xc35b, 0x2f0, 0x0, 0x0, 0x12c, 0xbe, 0x40, 0x40)
+
+    // Mode 3: the frame taken from the page by its alpha, over the message window and the page's text.
+    draw_texture(0xc35c, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x180, 0x170)
+    gfx_draw_color(0xc35c, 0x3, 0xff, 0xffffff)
+
+    // Mode 3 into a render target: the frame copied in, then taken from itself, which subtracts from the alpha too.
+    // One present draws both: the page's scripts have a present clear its target first (op 0x252).
+    create_texture(0x2f1, 0x12c, 0xbe, 0x1)
+    draw_texture(0xc35d, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x0, 0x0)
+    draw_texture(0xc35e, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x0, 0x0)
+    gfx_draw_color(0xc35d, 0x2, 0xff, 0xffffff)
+    gfx_draw_color(0xc35e, 0x3, 0xff, 0xffffff)
+    select_render_target(0x2f1)
+    clear_render_target()
+    present_gfx_object_range(0xc35d, 0x2)
+    select_render_target(-1)
+    gfx_elem_erase(0xc35d, 0x2)
+    draw_texture(0xc35f, 0x2f1, 0x0, 0x0, 0x12c, 0xbe, 0x290, 0x190)
+
+    // Modes 1 and 0 into a render target the same way, top middle and top right: what each adds to the alpha.
+    create_texture(0x2f2, 0x12c, 0xbe, 0x1)
+    draw_texture(0xc360, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x0, 0x0)
+    draw_texture(0xc361, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x0, 0x0)
+    gfx_draw_color(0xc360, 0x2, 0xff, 0xffffff)
+    gfx_draw_color(0xc361, 0x1, 0xff, 0xffffff)
+    select_render_target(0x2f2)
+    clear_render_target()
+    present_gfx_object_range(0xc360, 0x2)
+    select_render_target(-1)
+    gfx_elem_erase(0xc360, 0x2)
+    draw_texture(0xc362, 0x2f2, 0x0, 0x0, 0x12c, 0xbe, 0x180, 0x40)
+
+    create_texture(0x2f3, 0x12c, 0xbe, 0x1)
+    draw_texture(0xc363, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x0, 0x0)
+    draw_texture(0xc364, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x0, 0x0)
+    gfx_draw_color(0xc363, 0x2, 0xff, 0xffffff)
+    select_render_target(0x2f3)
+    clear_render_target()
+    present_gfx_object_range(0xc363, 0x2)
+    select_render_target(-1)
+    gfx_elem_erase(0xc363, 0x2)
+    draw_texture(0xc365, 0x2f3, 0x0, 0x0, 0x12c, 0xbe, 0x2c0, 0x40)
+
+    // Mode 0 into a render target made with kind 2, over the message window's left end, the frame moved in by 0x20:
+    // what a target without an alpha channel shows where it was cleared and where the frame is translucent.
+    create_texture(0x2f4, 0x12c, 0xbe, 0x2)
+    draw_texture(0xc366, 0xf, 0x0, 0x0, 0x12c, 0xbe, 0x20, 0x20)
+    select_render_target(0x2f4)
+    clear_render_target()
+    present_gfx_object_range(0xc366, 0x1)
+    select_render_target(-1)
+    gfx_elem_erase(0xc366, 0x1)
+    draw_texture(0xc367, 0x2f4, 0x0, 0x0, 0x12c, 0xbe, 0x10, 0x1a0)
+}

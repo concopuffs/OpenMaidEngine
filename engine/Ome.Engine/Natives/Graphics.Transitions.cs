@@ -174,7 +174,7 @@ public sealed partial class Graphics
                                        copyTarget: _alphaRenderTargets.Contains(targetSlot));
         StepSceneEffects(_clock.NowMs);
 
-        _surfaceImages[targetSlot] = destination;
+        _surfaceImages[targetSlot] = KeepOpaque(targetSlot, destination);
         IReadOnlyList<RenderObject> retained = visible
             .Where(item => item.Handle >= firstHandle && item.Handle - firstHandle < count)
             .ToArray();

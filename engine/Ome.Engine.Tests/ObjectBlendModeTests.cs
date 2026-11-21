@@ -20,12 +20,13 @@ public class ObjectBlendModeTests
         RenderObject rendered = g.SnapshotVisibleObjects().Single();
         Assert.Equal((BlendKind.Subtractive, 0x80, true), (rendered.Blend, rendered.Alpha, rendered.MultiplyTint));
 
-        // 200 less 100 x 128 / 255 is 150; the target's alpha stays.
+        // 200 less 100 x 128 / 255 is 150; the alpha loses 128 x 128 / 255, as REVSUBTRACT takes it from a render
+        // target with an alpha channel.
         byte[] target = [200, 200, 200, 255];
         SoftwareAffineRasterizer.BlitRgba(target, 1, 1, [100, 0, 255, 255], 1, 1, 0, 0, 1, 1,
                                           new Affine2D(1, 0, 0, 1, 0, 0), 0xffffff, 0, 0x80 / 255f,
                                           multiplyTint: true, BlendKind.Subtractive);
-        Assert.Equal([150, 200, 72, 255], target);
+        Assert.Equal([150, 200, 72, 191], target);
     }
 
     [Fact]
@@ -39,6 +40,46 @@ public class ObjectBlendModeTests
         Assert.Equal([10, 20, 30, 128, 200, 200, 200, 255], drawn.Kind1);
         // Into kind 2 the object blends as it does on the screen: (10 x 128 + 200 x 127) / 255 is 104.
         Assert.Equal([104, 109, 114, 255, 200, 200, 200, 255], drawn.Kind2);
+    }
+
+    [Theory]
+    // (100, 0, 255) at alpha 128 over (200, 200, 200) at alpha 128: Direct3D 9 blends the alpha by the colour's factors.
+    [InlineData(BlendKind.Alpha, 149, 99, 227, 128)]        // 128 x 128 / 255 + 128 x 127 / 255
+    [InlineData(BlendKind.Additive, 250, 200, 255, 192)]    // 128 + 128 x 128 / 255
+    [InlineData(BlendKind.Subtractive, 150, 200, 72, 64)]   // 128 - 128 x 128 / 255
+    public void TheAlphaBlendsByTheColoursFactors(BlendKind blend, byte red, byte green, byte blue, byte alpha)
+    {
+        byte[] target = [200, 200, 200, 128];
+        SoftwareAffineRasterizer.BlitRgba(target, 1, 1, [100, 0, 255, 128], 1, 1, 0, 0, 1, 1,
+                                          new Affine2D(1, 0, 0, 1, 0, 0), 0xffffff, 0, 1f, multiplyTint: false, blend);
+        Assert.Equal([red, green, blue, alpha], target);
+    }
+
+    [Fact]
+    public void AKind1RenderTargetKeepsTheAlphaAndAKind2OneHasNone()
+    {
+        var graphics = new Graphics(null, new FrameClock(), new Sys4LogicalCanvas(2, 1));
+        GfxState gfx = graphics.State;
+        graphics.CreateSurface(2, 2, 1);
+        graphics.PublishSurfacePixels(2, new RgbaImage(2, 1, [10, 20, 30, 128, 90, 90, 90, 0]));
+        gfx.BindDraw(20, 2, 0, 0, 2, 1, 0, 0);
+
+        byte[] Present(int slot, long kind)
+        {
+            graphics.CreateSurface(slot, 2, 1, kind);
+            gfx.SelectRenderTarget(slot);
+            graphics.ClearRenderTarget();
+            graphics.PresentFrame();
+            gfx.SelectRenderTarget(-1);
+            return graphics.CaptureSurfacePixels(slot)!.Pixels;
+        }
+
+        // The half-transparent texel over the cleared target: (10 x 128) / 255 is 5, and its alpha 128 x 128 / 255 is
+        // 64 in kind 1. Kind 2 is X8R8G8B8: made, cleared and drawn into, it samples opaque.
+        Assert.Equal([5, 10, 15, 64, 0, 0, 0, 0], Present(5, 1));
+        graphics.CreateSurface(6, 2, 1, 2);
+        Assert.Equal([0, 0, 0, 255, 0, 0, 0, 255], graphics.CaptureSurfacePixels(6)!.Pixels);
+        Assert.Equal([5, 10, 15, 255, 0, 0, 0, 255], Present(6, 2));
     }
 
     [Fact]

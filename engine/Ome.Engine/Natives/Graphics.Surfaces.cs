@@ -30,6 +30,10 @@ public sealed partial class Graphics
     // The slots op 0x1f8 made with kind 1, an A8R8G8B8 render target (the surface's +0x418): native draws a colour
     // mode 2 object into one ONE/ZERO (gfx_object_blit_d3d9; docs/engine-re.md, "Object blend modes").
     private readonly HashSet<int> _alphaRenderTargets = new();
+    // The slots op 0x1f8 made with kind 2, an X8R8G8B8 render target on any device that has the format (display
+    // +0x464): it has no alpha channel, so what native draws into it (a clear, a present, a fill, a copy) samples
+    // opaque.
+    private readonly HashSet<int> _opaqueRenderTargets = new();
 
     /// <summary>The engine build's <c>GfxRules.SpriteAlphaTest</c>: whether an object's draw keeps the alpha test
     /// D3DX's sprite turns on, so a copy (colour mode 2 into a kind-1 render target) leaves out its texels of alpha
@@ -53,6 +57,11 @@ public sealed partial class Graphics
         State.CreateSurface(slot);
         CreateSurfacePixels(slot, width, height);
         if (kind == 1) _alphaRenderTargets.Add(slot);
+        if (kind == 2)
+        {
+            _opaqueRenderTargets.Add(slot);
+            KeepOpaque(slot, _surfaceImages[slot]);
+        }
         OpTrace?.Invoke($"create-texture slot={slot} {width}x{height}" + (kind != 0 ? $" kind={kind}" : ""));
     }
 
@@ -135,7 +144,7 @@ public sealed partial class Graphics
             if (RgbaSurfaceOps.FillRect(updated, fill.X, fill.Y, fill.Width, fill.Height,
                                         unchecked((byte)fill.Alpha), fill.Rgb))
             {
-                _surfaceImages[fill.SurfaceSlot] = updated;
+                _surfaceImages[fill.SurfaceSlot] = KeepOpaque(fill.SurfaceSlot, updated);
                 RequestPresentation();
             }
         }
@@ -208,7 +217,7 @@ public sealed partial class Graphics
                                            copy.DestinationWidth, copy.DestinationHeight);
         if (copied)
         {
-            _surfaceImages[copy.DestinationSurface] = updated;
+            _surfaceImages[copy.DestinationSurface] = KeepOpaque(copy.DestinationSurface, updated);
             RequestPresentation();
         }
         _timeline?.Event("surface-copy", new()
@@ -238,22 +247,34 @@ public sealed partial class Graphics
             // sees a changed dynamic surface by its pixel array's identity, and the front end may be drawing a frame
             // that holds the published one.
             if (_surfaceImages.TryGetValue(surfaceSlot, out var image))
-                _surfaceImages[surfaceSlot] = new RgbaImage(image.Width, image.Height, new byte[image.Pixels.Length]);
+                _surfaceImages[surfaceSlot] = KeepOpaque(
+                    surfaceSlot, new RgbaImage(image.Width, image.Height, new byte[image.Pixels.Length]));
             else if (_slotDims.TryGetValue(surfaceSlot, out var dimensions)
                      && dimensions.W > 0 && dimensions.H > 0)
-                _surfaceImages[surfaceSlot] = new RgbaImage(
+                _surfaceImages[surfaceSlot] = KeepOpaque(surfaceSlot, new RgbaImage(
                     dimensions.W, dimensions.H,
-                    new byte[checked(dimensions.W * dimensions.H * 4)]);
+                    new byte[checked(dimensions.W * dimensions.H * 4)]));
         }
         _timeline?.Event("render-target-clear", new() { ["surface"] = surfaceSlot });
     }
 
     // ---- pixels ----
 
+    // A render target without an alpha channel (kind 2) takes every write at alpha 255, as an X8R8G8B8 texture samples.
+    // The image is the caller's fresh copy, set in place.
+    private RgbaImage KeepOpaque(int slot, RgbaImage image)
+    {
+        if (!_opaqueRenderTargets.Contains(slot)) return image;
+        byte[] pixels = image.Pixels;
+        for (int index = 3; index < pixels.Length; index += 4) pixels[index] = 255;
+        return image;
+    }
+
     private void CreateSurfacePixels(int slot, int width, int height)
     {
         _surfaceResources.Remove(slot);
         _alphaRenderTargets.Remove(slot);
+        _opaqueRenderTargets.Remove(slot);
         int safeWidth = System.Math.Max(0, width);
         int safeHeight = System.Math.Max(0, height);
         _surfaceImages[slot] = new RgbaImage(safeWidth, safeHeight,
@@ -268,6 +289,7 @@ public sealed partial class Graphics
     {
         _surfaceImages.Remove(slot);
         _alphaRenderTargets.Remove(slot);
+        _opaqueRenderTargets.Remove(slot);
         _surfaceColorKeys[slot] = colorKey;
         _surfaceResources[slot] = resourceId;
         var asset = _res?.ResolveTexture(resourceId);
@@ -288,6 +310,7 @@ public sealed partial class Graphics
         _surfaceResources.Remove(slot);
         _slotDims.Remove(slot);
         _alphaRenderTargets.Remove(slot);
+        _opaqueRenderTargets.Remove(slot);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceReleased(slot);
     }
 
@@ -302,6 +325,7 @@ public sealed partial class Graphics
             _surfaceColorKeys.Remove(slot);
             _slotDims.Remove(slot);
             _alphaRenderTargets.Remove(slot);
+            _opaqueRenderTargets.Remove(slot);
         }
         for (int slot = firstSlot; slot < end; slot++) _surfaceResources.Remove(slot);
         foreach (ISurfaceListener listener in _listeners) listener.SurfaceRangeReleased(firstSlot, count);

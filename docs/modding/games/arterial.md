@@ -268,4 +268,5 @@ Blade starts a new game, so the mode the entry sets takes effect. It targets `na
 | `oms/examples/mods/example.arterial-area-point` | a data file with an area part: area 1's 出現地点 moves right, applied at `arterial.area.loaded` |
 | `oms/examples/mods/example.arterial-debug-menu` | the debug menu above, for both targets |
 | `oms/examples/mods/example.arterial-polygon-blends` | a patch of `DEBUG.BIN` that gives its polygon test the replace and subtractive blends and a second texture, for both targets |
+| `oms/examples/mods/example.arterial-object-blends` | a patch of `SC0000.BIN` that holds object colour modes 0 to 3 still on the first page: on the screen, and into render targets of kinds 1 and 2; `tools/drive/scenarios/arterial-object-blends.steps` takes the frame on both targets |
 | `oms/examples/mods/example.arterial-event-log` | a Lua mod that logs every event of `arterial-base` with its fields; `tools/drive/scenarios/port/arterial-debug-events.steps` runs it with the two above |
