@@ -739,6 +739,12 @@ test's results: `localization-import-test.md`. The future work spec §17 lists s
     (`tools/drive/scenarios/port/arterial-debug-events.steps`). What M3 leaves open:
     - **Chains without an event:** `OPEN`, `SCJUMP`'s chain, `BGINIT`, `TUMES`, the item actions and the 奥義 and
       talent scripts, and RESULT's card experience. Done when a mod needs one and it is added, or never.
+  - **The tutorial's reward screen takes one click more on the port** (found 2026-11-20 driving
+    `tools/drive/scenarios/arterial-new-scene.steps`, which clicks `receipt` until the scene starts, so it passes on
+    both). Native left `RECEIPT@0x7c` for `$5$SCENE@0x529` on one click; after the same click the port sat at
+    `RECEIPT@0x86`, did not settle in 20 s (something still drew), and needed another. Not read further: whether the
+    port's wait there is the native one, or the click lands while an animation holds input. Done when the same
+    clicks bring both targets to the scene, or the difference is shown to be timing alone.
   - **Next, by the plan:** the sweep (P4).
     Step 7 is done: the opcodes, the build's rules, the saves, the shell (4.38D's ｵｰﾄﾒｯｾｰｼﾞ page;
     `engine-re.md`, "4.38D's menu bar and 設定 dialog") and the kept window position (`engine-re.md`, "The kept
